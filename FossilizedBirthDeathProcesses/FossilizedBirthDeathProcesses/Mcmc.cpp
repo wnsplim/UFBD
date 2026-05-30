@@ -12,8 +12,10 @@
 
 Mcmc::Mcmc(int ng, int pf, int sf, PhylogeneticModel* m) : numCycles(ng), printFrequency(pf), sampleFrequency(sf), model(m) {
     UserSettings& settings = UserSettings::userSettings();
-    tracerFileName = settings.getOutputFile();
-    WriteTSV w();
+    treeOut = settings.getTreeOutput();
+    paramOut = settings.getParamOutput();
+    WriteTSV    params();
+    WriteTSV    trees();
 }
 
 void Mcmc::run(void) {
@@ -40,7 +42,7 @@ void Mcmc::run(void) {
         if (n % printFrequency == 0)
             {
             std::cout << std::fixed << std::setprecision(2);
-            std::cout << n << " -- " << curLnL << " -> " << newLnL;
+            std::cout << n << " -- " << curLnL << " -> " << newLnL << "\n";
             model->print();
             }
             
@@ -62,19 +64,24 @@ void Mcmc::run(void) {
 
 void Mcmc::sample(unsigned long n, double lnL) {
     if(n == 1){
-        w.addFilepath(tracerFileName, true);
+        params.addFilepath(paramOut, true);
         std::vector<std::string> cn = {"n", "lnL"};
         std::vector<std::string> headStr = model->getParameterNames();
         cn.insert( cn.end(), headStr.begin(), headStr.end() );
-        w.addColumnNamesTSV(cn);
+        params.addColumnNamesTSV(cn);
+        
+        trees.addFilepath(treeOut, true); // no CN for tree file
     }
 
     std::vector<double> dat = {(double)n, lnL};
     std::vector<double> parmStr = model->getParameterString();
     dat.insert( dat.end(), parmStr.begin(), parmStr.end() );
-    w.appendDataTSV(dat);
+    params.appendDataTSV(dat);
+    
+    trees.appendDataTSV(model->getTree()->getNewickString());
 
     if (n == numCycles){
-        w.closeTSV();
+        params.closeTSV();
+        trees.closeTSV();
     }
 }

@@ -20,17 +20,15 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
         Msg::warning("Settings have already been initialized");
         return;
     }
-
+        
     // Defaults
-    inputFile       = "";
-    inputTree       = "";
-    outputFile      = "";
+    treeOut         = "";
+    parametersOut   = "";
     chainLength     = 100;
     numChains       = 4;
     numThreads      = 4;
     printFrequency  = 1;
     sampleFrequency = 1;
-    logTransformData = false;
 
     std::vector<std::string> arguments;
     for (int i = 0; i < argc; i++)
@@ -40,10 +38,10 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
 
     // Known flags and whether they take a value
     std::set<std::string> knownFlags = {
-        "-i", "-it", "-o", "-n", "-p", "-s", "-c", "-nt", "-log", "-help", "-h"
+        "-to", "-po", "-n", "-p", "-s", "-c", "-nt", "-help", "-h"
     };
     std::set<std::string> valueFlags = {
-        "-i", "-it", "-o", "-n", "-p", "-s", "-c", "-nt", "-log"
+        "-to", "-po", "-n", "-p", "-s", "-c", "-nt"
     };
 
     for (int i = 1; i < (int)arguments.size(); i++) {
@@ -73,31 +71,11 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
             if (knownFlags.count(val))
                 Msg::error("Flag \"" + arg + "\" expects a value, but got another flag \"" + val + "\".");
 
-            if (arg == "-i") {
-                inputFile = val;
-                std::string ext = (val.length() >= 3) ? val.substr(val.length() - 3) : "";
-                if (ext != "tsv" && ext != "csv")
-                    Msg::warning("Input file \"" + val + "\" does not have a .tsv or .csv extension.");
-                readDatDatatype = ext;
-
-            } else if (arg == "-it") {
-                inputTree = val;
-                std::string ext = (val.length() >= 3) ? val.substr(val.length() - 3) : "";
-                if (ext != "txt")
-                    Msg::warning("Input tree file \"" + val + "\" does not have a .txt extension.");
-
-            } else if (arg == "-o") {
-                outputFile = val;
-
-            }else if (arg == "-log") {
-                if (val == "T" || val == "true")
-                    logTransformData = true;
-                else if (val == "F" || val == "false")
-                    logTransformData = false;
-                else
-                    Msg::error("Flag \"-log\" expects T/true or F/false, but got \"" + val + "\".");
-
-            } else {
+            if (arg == "-to") {
+                treeOut = val;
+            } else if (arg == "-po") {
+                parametersOut = val;
+            }else {
                 // Integer-valued flags
                 // Check all characters are digits (allowing leading minus for negative detection)
                 bool isNegative = (val[0] == '-');
@@ -167,19 +145,17 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
         numThreads = 1;
     }
 
-    if (inputFile.empty())
-        Msg::warning("No input file specified (-i). Use -help for usage.");
-    if (outputFile.empty())
-        Msg::warning("No output file specified (-o). Use -help for usage.");
-
+    if (treeOut.empty())
+        Msg::warning("No tree output file specified (-to). Use -help for usage.");
+    if (parametersOut.empty())
+        Msg::warning("No parameter output file specified (-po). Use -help for usage.");
 }
 
 void UserSettings::print(void) {
 
     checkSettings();
-    std::cout << "Input file name:                       " << inputFile << std::endl;
-    std::cout << "Input tree file name:                  " << inputTree << std::endl;
-    std::cout << "Output file name:                      " << outputFile << std::endl;
+    std::cout << "Tree output file name:                 " << treeOut << std::endl;
+    std::cout << "Parameter output file name:            " << parametersOut << std::endl;
     std::cout << "Chain length:                          " << chainLength << std::endl;
     std::cout << "Number of chains:                      " << numChains << std::endl;
     std::cout << "Number of threads:                     " << numThreads << std::endl;
@@ -190,52 +166,7 @@ void UserSettings::print(void) {
 }
 
 void UserSettings::printHelp(void){
-    std::cout << "Usage: BURL [options]\n";
+    std::cout << "Usage: XXXX [options]\n";
     std::cout << "Options:\n";
-    std::cout << "  -i  <file>    Input file        (expecting TSV or CSV)\n";
-    std::cout << "                  *Input file requires rownames labeling species and colnames labeling traits\n";
-    std::cout << "  -it <file>    Input tree file   (expecting one line text file .txt, .nwk tested)\n";
-    std::cout << "  -o  <file>    Output file       (Outputs TSV only)\n";
-    std::cout << "  -n  <int>     Chain length\n";
-    std::cout << "  -p  <int>     Print frequency\n";
-    std::cout << "  -s  <int>     Sample frequency\n";
-    std::cout << "  -c  <int>     Number of chains  (1 for MCMC, 2+ for Metropolis-coupled MCMC)\n";
-    std::cout << "  -nt <int>     Number of threads\n";
-    std::cout << "  -log <T/F>    Log-transform data (T/true or F/false)\n";
-}
-
-void UserSettings::writeLog(void){
-    const std::string tsv = ".tsv";
-    const std::string txt = "Log.txt";
-    logFile = outputFile;
-    logFile.replace(outputFile.size() - tsv.size(), tsv.size(), txt);
-    
-    std::ofstream log(logFile);
-    if (!log.is_open())
-        Msg::error("Could not open log file: " + logFile);
-
-    log << "Input file name:                       " << inputFile << "\n";
-    log << "Input tree file name:                  " << inputTree << "\n";
-    log << "Output file name:                      " << outputFile << "\n";
-    log << "Chain length:                          " << chainLength << "\n";
-    log << "Number of chains:                      " << numChains << "\n";
-    log << "Number of threads:                     " << numThreads << "\n";
-    log << "Print-to-screen frequency:             " << printFrequency << "\n";
-    log << "Chain sampling frequency:              " << sampleFrequency << "\n";
-    log << "Log-transform data:                    " << (logTransformData ? "true" : "false") << "\n";
-
-    log.close();
-
-}
-
-void UserSettings::startTiming(void){
-    startTime = std::chrono::steady_clock::now();
-}
-
-void UserSettings::endTiming(void){
-    std::ofstream log(logFile, std::ios::app);
-    auto endTime = std::chrono::steady_clock::now();
-    double elapsedMinutes = std::chrono::duration<double, std::ratio<60>>(endTime - startTime).count();
-    log << "Time elapsed (minutes):                " << std::fixed << std::setprecision(4) << elapsedMinutes << "\n";
-    log.close();
+    std::cout << "  TBD \n";
 }

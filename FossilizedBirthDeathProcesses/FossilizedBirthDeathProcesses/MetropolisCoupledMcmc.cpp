@@ -31,8 +31,10 @@ MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int pf, int sf, s
     lnAcceptanceProbabilities.resize(numModels);
     
     UserSettings& settings = UserSettings::userSettings();
-    tracerFileName = settings.getOutputFile();
-    WriteTSV w();
+    treeOut = settings.getTreeOutput();
+    paramOut = settings.getParamOutput();
+    WriteTSV    params();
+    WriteTSV    trees();
 }
 
 double MetropolisCoupledMcmc::calcHeating(int idx){
@@ -155,20 +157,25 @@ void MetropolisCoupledMcmc::run(void) {
 
 void MetropolisCoupledMcmc::sample(unsigned long n) {
     if(n == 1){
-        w.addFilepath(tracerFileName, true);
+        params.addFilepath(paramOut, true);
         std::vector<std::string> cn = {"n", "lnL"};
         std::vector<std::string> headStr = models[coldModelIdx]->getParameterNames();
         cn.insert( cn.end(), headStr.begin(), headStr.end() );
-        w.addColumnNamesTSV(cn);
-    }
+        params.addColumnNamesTSV(cn);
         
+        trees.addFilepath(treeOut, true); // no CN for tree file
+    }
+    
     std::vector<double> dat = {(double)n, currLnL[coldModelIdx]};
     std::vector<double> parmStr = models[coldModelIdx]->getParameterString();
     dat.insert( dat.end(), parmStr.begin(), parmStr.end() );
-    w.appendDataTSV(dat);
+    params.appendDataTSV(dat);
     
+    trees.appendDataTSV(models[coldModelIdx]->getTree()->getNewickString());
+
     if (n == numCycles){
-        w.closeTSV();
+        params.closeTSV();
+        trees.closeTSV();
     }
 }
 

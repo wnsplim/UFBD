@@ -13,8 +13,10 @@ class Mcmc {
     private:
         void                    sample(unsigned long n, double lnL);
         PhylogeneticModel*      model;
-        WriteTSV                w;
-        std::string             tracerFileName;
+        WriteTSV                params;
+        WriteTSV                trees;
+        std::string             treeOut;
+        std::string             paramOut;
         int                     numCycles;
         int                     printFrequency;
         int                     sampleFrequency;

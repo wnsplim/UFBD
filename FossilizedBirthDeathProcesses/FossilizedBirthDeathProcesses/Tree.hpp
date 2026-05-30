@@ -30,6 +30,7 @@ class Tree {
         double                              getBranchLength(Node* e1, Node* e2);
         std::vector<Node*>&                 getDownPassSequence(void) { return downPassSequence; }
         std::string                         getNewickString(void);
+        int                                 getNumLineagesAtTime(double t);
         int                                 getNumNodes(void) { return (int)nodes.size(); }
         int                                 getNumTaxa(void);
         Node*                               getRoot(void) { return root; }
@@ -69,6 +70,7 @@ class Tree {
         Node*                               root;
         double                              treeHeight;
         int                                 numTaxa;
+        int                                 numInternalNodes;
 };
 
 #endif

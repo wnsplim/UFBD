@@ -11,7 +11,6 @@ class PhylogeneticModel {
     public:
                                                 PhylogeneticModel(void);
                                                ~PhylogeneticModel(void);
-        std::vector<std::string>                getHeaderString(void);
         virtual std::vector<std::string>        getParameterNames(void) = 0;
         virtual std::vector<double>             getParameterString(void) = 0;
         Tree*                                   getTree(void);

@@ -1,26 +1,29 @@
-#ifndef ParameterFBDTree_hpp
-#define ParameterFBDTree_hpp
+#ifndef FBDTreeModel_hpp
+#define FBDTreeModel_hpp
 
 #include "Parameter.hpp"
 #include "ParameterTree.hpp"
+#include "PhylogeneticModel.hpp"
 #include "Tree.hpp"
 
 #include <vector>
 
 class Parameter;
+class ParameterDouble;
 
-class ParameterFBDTree : protected ParameterTree {
+class FBDTreeModel : public PhylogeneticModel {
 
     public:
-                                    ParameterFBDTree(void) = delete;
-                                    ParameterFBDTree(double prob, PhylogeneticModel* m, Tree* t);
-        bool                        getAdaptiveProposalActive(void) override;
-        double                      lnProbability(void) override;
-        void                        print(void) override;
-        double                      update(void) override;
-        void                        updateForAcceptance(void) override;
-        void                        updateForRejection(void) override;
-        
+                                    FBDTreeModel(void) = delete;
+                                    FBDTreeModel(Tree* t);
+        std::vector<std::string>    getParameterNames(void);
+        std::vector<double>         getParameterString(void);
+        double                      lnLikelihood(void);
+        double                      lnPriorProbability(void);
+        void                        print(void);
+        double                      update(void);
+        void                        updateForAcceptance(void);
+        void                        updateForRejection(void);
     private:
         double                      calculateFBDProbability(void);
         void                        calculateCs(void);
@@ -30,12 +33,11 @@ class ParameterFBDTree : protected ParameterTree {
         double                      calculatePo(double t);
         double                      calculatePoHat(double t);
         //ordered by menmory footprint
-        std::vector<Parameter*>     parameters;
-        Parameter*                  updatedParameter; //by convention, nullptr indicates topology/branch length move (i.e., ParameterTree::update())
         ParameterDouble*            lambda;
         ParameterDouble*            mu;
         ParameterDouble*            psi;
         ParameterDouble*            rho;
+        ParameterTree*              parameterTree;
         double                      c1;
         double                      c2;
         double                      lambdaVal;

@@ -9,8 +9,8 @@
 
 ParameterDouble::ParameterDouble(double prob, PhylogeneticModel* m, std::string n, double lb, double ub) :
     Parameter(prob, m, n),
-    lowerBound(std::numeric_limits<double>::lowest() / 2),
-    upperBound(std::numeric_limits<double>::max() / 2),
+    lowerBound(lb),
+    upperBound(ub),
     numRejections(0), numAcceptances(0),
     numAdaptive(10000),
     targetAr(0.43){

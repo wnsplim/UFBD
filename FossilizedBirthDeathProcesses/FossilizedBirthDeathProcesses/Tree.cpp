@@ -445,6 +445,18 @@ double Tree::getBranchLength(Node* e1, Node* e2) {
     return it->second;
 }
 
+int Tree::getNumLineagesAtTime(double t){
+    std::set<Node*> branchesContainingFossils;
+    branchesContainingFossils.clear();
+    initializeTimes();
+    for(Node* n :downPassSequence){
+        if(n != root && n->getTime() < t && n->getAncestor()->getTime() > t){
+            branchesContainingFossils.insert(n);
+        }
+    }
+    return((int)branchesContainingFossils.size());
+}
+
 std::string Tree::getNewickString(void) {
 
     std::stringstream strm;

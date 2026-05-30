@@ -33,8 +33,10 @@ class MetropolisCoupledMcmc {
         std::vector<double>                 lnAcceptanceProbabilities;
         std::vector<int>                    indices;
         ThreadPool                          threadPool;
-        std::string                         tracerFileName;
-        WriteTSV                            w;
+        WriteTSV                            params;
+        WriteTSV                            trees;
+        std::string                         treeOut;
+        std::string                         paramOut;
         unsigned long                       numCycles;
         double                              deltaT;
         int                                 coldModelIdx;
