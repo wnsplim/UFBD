@@ -11,9 +11,8 @@ class Parameter {
     public:
                             Parameter(void) = delete;
                             Parameter(double prob, PhylogeneticModel* m, std::string n);
-                            Parameter(double prob, std::string n);
+        bool                getAdaptiveProposalActive(void) { return adaptiveProposalActive; };
         virtual double      getAcceptanceRatio(void) = 0;
-        virtual bool        getAdaptiveProposalActive(void) = 0;
         std::string         getName(void) { return parmName; }
         bool                getParmPrintConsole(void) { return parmPrintsToConsole; }
         double              getProposalProbability(void) { return proposalProbability; }

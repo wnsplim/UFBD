@@ -10,23 +10,22 @@ class ParameterDouble : public Parameter {
 
     public:
                                     ParameterDouble(void) = delete;
-                                    ParameterDouble(double prob, std::string n);
+                                    ParameterDouble(double prob, PhylogeneticModel* m, std::string n, double lb, double up); //for "unbounded RVs" pass in std::numeric_limits<double>::max() / 2 and std::numeric_limits<double>::min() / 2
         double                      getAcceptanceRatio(void) { return ((double)numAcceptances)/((double)(numAcceptances+numRejections));}
-        bool                            getAdaptiveProposalActive(void) { return adaptiveProposalActive; }
-        double                      getValue(void) { return value[0]; } // 0 is the one we update, 1 is the one we don't (last currently accepted value
+        bool                        getAdaptiveProposalActive(void) { return adaptiveProposalActive; }
+        double                      getValue(void) { return value[0]; } // 0 is the one we update, 1 is the one we don't (last currently accepted value)
         double                      lnProbability(void);
         void                        print(void);
-        void                        setValue(double x) { value[0] = x;}
         double                      update(void);
         void                        updateForAcceptance(void);
         void                        updateForRejection(void);
-        void                        updateForRejectionNotDynamic(void);
     private:
-        double                      updateAdaptive(int numGen, double targetR);
+        double                      updateSlidingWindow(void);
         std::vector<double>         value;
         std::deque<bool>            recentAcceptRej;
         double                      lowerBound;
         double                      upperBound;
+        double                      targetAr;
         double                      windowSize;
         int                         numAcceptances;
         int                         numAdaptive;

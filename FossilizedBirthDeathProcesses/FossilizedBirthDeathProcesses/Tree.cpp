@@ -160,6 +160,26 @@ Node* Tree::addNode(void) {
     return newNode;
 }
  
+void Tree::calculateTreeHeight(void){
+    treeHeight = 0.0;
+    double maxHeight = 0.0;
+    for(Node* n : downPassSequence){
+        if(n->getIsTip() == true){
+            Node* p = n;
+            Node* pAnc = p->getAncestor();
+            double height = 0.0;
+            while(p != root){
+                pAnc = p->getAncestor();
+                height += getBranchLength(p, pAnc);
+                p = pAnc;
+            };
+            if(height > maxHeight)
+                maxHeight = height;
+        }
+    }
+    treeHeight = maxHeight;
+}
+
 void Tree::checkBranchLengthsNeg(void){
     for(auto const& x : branchLengths)
         if(x.second < 0)
@@ -468,6 +488,46 @@ void Tree::initializeDownPassSequence(void) {
     checkBranchLengthsNeg();
 }
 
+void Tree::initializeTimes(void){
+    calculateTreeHeight();
+    
+    //instantiate node times
+    for (std::vector<Node*>::reverse_iterator rit = downPassSequence.rbegin(); rit != downPassSequence.rend(); rit++){
+        Node* n = *rit;
+        if(n==root)
+            n->setTime(treeHeight);
+        else{
+            Node* p = n;
+            Node* pAnc = p->getAncestor();
+            double heightFromRoot = 0.0;
+            while(p != root){
+                pAnc = p->getAncestor();
+                heightFromRoot += getBranchLength(p, pAnc);
+                p = pAnc;
+            };
+            n->setTime(treeHeight - heightFromRoot);
+        }
+    }
+    
+    //instantiate fossils
+    for(Node* n : downPassSequence){
+        if(n->getIsTip() == true){
+            Node* p = n;
+            Node* pAnc = p->getAncestor();
+            double height = 0.0;
+            while(p != root){
+                pAnc = p->getAncestor();
+                height += getBranchLength(p, pAnc);
+                p = pAnc;
+            };
+            if(height < treeHeight)
+                n->setIsFossil(true);
+            else
+                n->setIsFossil(false);
+        }
+    }
+}
+
 void Tree::keepTips(std::vector<std::string> t){
     //function drops all tips but those in the vector tips
     initializeDownPassSequence();
@@ -545,6 +605,21 @@ void Tree::print(std::string header) {
     print();
 }
 
+std::pair<Node*,Node*> Tree::randomlyChooseBranch(void) {
+    RandomVariable& rng = RandomVariable::randomVariableInstance();
+
+    std::pair<Node*,Node*> nodePair;
+    
+    Node* p = nullptr;
+    do {
+        p = nodes[(int)(rng.uniformRv()*nodes.size())];
+        } while(p == root);
+    Node* pAnc = p->getAncestor();
+    nodePair = std::make_pair(p, pAnc);
+    
+    return nodePair;
+}
+
 void Tree::reindexNodes(void){
     int idx = 0;
     for (Node* p : downPassSequence)
@@ -581,6 +656,443 @@ void Tree::reroot(Node* r) {
     root = r;
     downPassSequence.clear();
     passDown(root, root);
+}
+
+void Tree::rSPR(void){
+    int startingNodeSize = nodes.size();
+    
+    RandomVariable& rng = RandomVariable::randomVariableInstance();
+    std::vector<Node*> candidateMoves = {};
+    for(Node* n : downPassSequence)
+        if(n->getIsTip() == false)
+            candidateMoves.push_back(n);
+    if(candidateMoves.size() == 0){
+        print();
+        std::cout << getNewickString() << std::endl;
+        Msg::error("number of candidate SPR moves = 0");
+    }
+    
+    bool isBinary = false;
+    if(root->getNeighbors().size() == 2)
+        isBinary = true;
+    
+    //which interior node to move around
+    Node* p = candidateMoves[(int)(rng.uniformRv() * candidateMoves.size())];
+//    Node* p = root;
+    
+    std::set<Node*> pNeighbors = p->getNeighbors();
+    if(pNeighbors.size() != 3 && p != root){
+        std::cout << p->getIndex() << std::endl;
+        print();
+        Msg::error("pNeighbor size is not 3");
+    }
+    
+    //sample neighbor at random
+    int idx = (int)(rng.uniformRv() * pNeighbors.size());
+    Node* q = *next(pNeighbors.begin(), idx);
+    
+    if(q == nullptr)
+        Msg::error("could not sample q");
+    
+//    std::cout << "Int node: " << p->getIndex() << " node to move: " << q->getIndex() << std::endl;
+    if(q == root){
+        Node* transfer = p;
+        p = q;
+        q = transfer;
+        pNeighbors = p->getNeighbors();
+    }
+    
+    //p is what we're rotating around and collapsing
+    //q is qhat actually moves
+    if(p == root){
+        if(isBinary == false){
+            //root has three descendants
+            //both neighbors of q tips with q int node?
+            bool moveRootSubtree = false;
+            pNeighbors.erase(q);
+            if((*next(pNeighbors.begin(), 0))->getIsTip() == true && (*next(pNeighbors.begin(), 1))->getIsTip() == true)
+                moveRootSubtree = true;
+            if(moveRootSubtree == false){
+    //            std::cout << "Move root subtree false " << std::endl;
+                double bl = getBranchLength(p, q);
+                q->removeNeighbor(p);
+                collapseNode(p);
+                initializeDownPassSequence();
+                //finding a reattachment point (cannot be root)
+                std::vector<Node*> candidateRegraftingLocations = {};
+                for(Node* n : downPassSequence)
+                    if(n != root && n != freeNode)
+                        candidateRegraftingLocations.push_back(n);
+                if(candidateRegraftingLocations.size() == 0){
+                    print();
+                    std::cout << getNewickString() << std::endl;
+                    Msg::error("number of candidate SPR reattachment moves = 0");
+                }
+                
+    //            Node* regraft = addNode();
+                Node* regraft = freeNode;
+                regraft->setIndex(nodes.size()+1);
+                q->addNeighbor(regraft);
+                q->setAncestor(regraft);
+                setBranch(q, regraft, bl);
+
+                
+                //reattach q on branch subtending a
+                Node* a = candidateRegraftingLocations[(int)(rng.uniformRv() * candidateRegraftingLocations.size())];
+                Node* b = a->getAncestor();
+                
+                double regraftBL = getBranchLength(a, b);
+                double regraftBottomHalf = rng.uniformRv() * regraftBL;
+                double regraftTopHalf = regraftBL-regraftBottomHalf;
+                
+                a->removeNeighbor(b);
+                removeBranch(a, b);
+                
+                a->addNeighbor(regraft);
+                a->setAncestor(regraft);
+                b->addNeighbor(regraft);
+                regraft->setAncestor(b);
+                setBranch(a, regraft, regraftTopHalf);
+                setBranch(b, regraft, regraftBottomHalf);
+            }else{
+    //            std::cout << "Move root subtree true " << std::endl;
+                //regrafting an internal node subtending the root-- really means we're moving the (tip1, tip2), root subtree
+                double bl = getBranchLength(p, q);
+                //first-- sample new root, reroot, and proceed as normal
+                std::set<Node*> qNeighbors = q->getNeighbors();
+                Node* newRoot = nullptr;
+                for(Node* n : qNeighbors)
+                    if(n->getNeighbors().size() == 3){
+                        if(n != root){
+                            newRoot = n;
+                            break;
+                        }
+                    }
+                if(newRoot == nullptr)
+                    Msg::error("could not identify new root");
+                
+                reroot(newRoot);
+                q->removeNeighbor(p);
+                collapseNode(q);
+                initializeDownPassSequence();
+                
+                //finding a reattachment point (cannot be root)
+                std::vector<Node*> candidateRegraftingLocations = {};
+                for(Node* n : downPassSequence)
+                    if(n != root && n != freeNode)
+                        candidateRegraftingLocations.push_back(n);
+                if(candidateRegraftingLocations.size() == 0){
+                    print();
+                    std::cout << getNewickString() << std::endl;
+                    Msg::error("number of candidate SPR reattachment moves = 0");
+                }
+                
+                Node* regraft = freeNode;
+    //            Node* regraft = addNode();
+                regraft->setIndex(nodes.size()+1);
+                p->addNeighbor(regraft);
+                p->setAncestor(regraft);
+                setBranch(p, regraft, bl);
+                
+                //reattach q on branch subtending a
+                Node* a = candidateRegraftingLocations[(int)(rng.uniformRv() * candidateRegraftingLocations.size())];
+                Node* b = a->getAncestor();
+                
+                double regraftBL = getBranchLength(a, b);
+                double regraftBottomHalf = rng.uniformRv() * regraftBL;
+                double regraftTopHalf = regraftBL-regraftBottomHalf;
+                
+                a->removeNeighbor(b);
+                removeBranch(a, b);
+                
+                a->addNeighbor(regraft);
+                a->setAncestor(regraft);
+                b->addNeighbor(regraft);
+                regraft->setAncestor(b);
+                setBranch(a, regraft, regraftTopHalf);
+                setBranch(b, regraft, regraftBottomHalf);
+            }
+
+        }else{
+            //we need to remove p (which is binary), reroot on an internal node, and then force binary again
+            
+            Node* newRoot = nullptr;
+            for(Node* n : pNeighbors){
+                if(n->getNeighbors().size() == 3){
+                    newRoot = n;
+                    break;
+                }
+            }
+            reroot(newRoot);
+            
+            Node* pAbove = p->getDescendants()[0];
+            double blAbove = getBranchLength(pAbove, p);
+            double blBelow = getBranchLength(p, newRoot);
+            
+            removeBranch(pAbove, p);
+            removeBranch(p, newRoot);
+            p->removeNeighbor(pAbove);
+            p->removeNeighbor(newRoot);
+            
+            pAbove->addNeighbor(newRoot);
+            pAbove->setAncestor(newRoot);
+            setBranch(pAbove, newRoot, blAbove+blBelow);
+            
+            nodes.erase(find(nodes.begin(), nodes.end(), p));
+            delete p;
+            
+            initializeDownPassSequence();
+            pNeighbors.clear();
+            p = root;
+            pNeighbors = p->getNeighbors();
+            
+            //sample new q:
+            idx = (int)(rng.uniformRv() * pNeighbors.size());
+            q = *next(pNeighbors.begin(), idx);
+            
+            //root now has three descendants
+            //both neighbors of q tips with q int node?
+            bool moveRootSubtree = false;
+            pNeighbors.erase(q);
+            if((*next(pNeighbors.begin(), 0))->getIsTip() == true && (*next(pNeighbors.begin(), 1))->getIsTip() == true)
+                moveRootSubtree = true;
+            if(moveRootSubtree == false){
+    //            std::cout << "Move root subtree false " << std::endl;
+                double bl = getBranchLength(p, q);
+                q->removeNeighbor(p);
+                collapseNode(p);
+                initializeDownPassSequence();
+                //finding a reattachment point (cannot be root)
+                std::vector<Node*> candidateRegraftingLocations = {};
+                for(Node* n : downPassSequence)
+                    if(n != root && n != freeNode)
+                        candidateRegraftingLocations.push_back(n);
+                if(candidateRegraftingLocations.size() == 0){
+                    print();
+                    std::cout << getNewickString() << std::endl;
+                    Msg::error("number of candidate SPR reattachment moves = 0");
+                }
+                
+    //            Node* regraft = addNode();
+                Node* regraft = freeNode;
+                regraft->setIndex(nodes.size()+1);
+                q->addNeighbor(regraft);
+                q->setAncestor(regraft);
+                setBranch(q, regraft, bl);
+
+                
+                //reattach q on branch subtending a
+                Node* a = candidateRegraftingLocations[(int)(rng.uniformRv() * candidateRegraftingLocations.size())];
+                Node* b = a->getAncestor();
+                
+                double regraftBL = getBranchLength(a, b);
+                double regraftBottomHalf = rng.uniformRv() * regraftBL;
+                double regraftTopHalf = regraftBL-regraftBottomHalf;
+                
+                a->removeNeighbor(b);
+                removeBranch(a, b);
+                
+                a->addNeighbor(regraft);
+                a->setAncestor(regraft);
+                b->addNeighbor(regraft);
+                regraft->setAncestor(b);
+                setBranch(a, regraft, regraftTopHalf);
+                setBranch(b, regraft, regraftBottomHalf);
+            }else{
+    //            std::cout << "Move root subtree true " << std::endl;
+                //regrafting an internal node subtending the root-- really means we're moving the (tip1, tip2), root subtree
+                double bl = getBranchLength(p, q);
+                //first-- sample new root, reroot, and proceed as normal
+                std::set<Node*> qNeighbors = q->getNeighbors();
+                Node* newRoot = nullptr;
+                for(Node* n : qNeighbors)
+                    if(n->getNeighbors().size() == 3){
+                        if(n != root){
+                            newRoot = n;
+                            break;
+                        }
+                    }
+                if(newRoot == nullptr)
+                    Msg::error("could not identify new root");
+                
+                reroot(newRoot);
+                q->removeNeighbor(p);
+                collapseNode(q);
+                initializeDownPassSequence();
+                
+                //finding a reattachment point (cannot be root)
+                std::vector<Node*> candidateRegraftingLocations = {};
+                for(Node* n : downPassSequence)
+                    if(n != root && n != freeNode)
+                        candidateRegraftingLocations.push_back(n);
+                if(candidateRegraftingLocations.size() == 0){
+                    print();
+                    std::cout << getNewickString() << std::endl;
+                    Msg::error("number of candidate SPR reattachment moves = 0");
+                }
+                
+                Node* regraft = freeNode;
+    //            Node* regraft = addNode();
+                regraft->setIndex(nodes.size()+1);
+                p->addNeighbor(regraft);
+                p->setAncestor(regraft);
+                setBranch(p, regraft, bl);
+                
+                //reattach q on branch subtending a
+                Node* a = candidateRegraftingLocations[(int)(rng.uniformRv() * candidateRegraftingLocations.size())];
+                Node* b = a->getAncestor();
+                
+                double regraftBL = getBranchLength(a, b);
+                double regraftBottomHalf = rng.uniformRv() * regraftBL;
+                double regraftTopHalf = regraftBL-regraftBottomHalf;
+                
+                a->removeNeighbor(b);
+                removeBranch(a, b);
+                
+                a->addNeighbor(regraft);
+                a->setAncestor(regraft);
+                b->addNeighbor(regraft);
+                regraft->setAncestor(b);
+                setBranch(a, regraft, regraftTopHalf);
+                setBranch(b, regraft, regraftBottomHalf);
+            }
+            forceBinary();
+//            print();
+            initializeDownPassSequence();
+        }
+    }else{
+//        std::cout << "p is not root" << std::endl;
+        if(p->getAncestor() == q){
+//            std::cout << "here" << std::endl;
+            Node* transfer = p;
+            p = q;
+            q = transfer;
+        }
+        
+        double bl = getBranchLength(p, q);
+        q->removeNeighbor(p);
+        collapseNode(p);
+        //finding a reattachment point (cannot be root)
+        std::vector<Node*> candidateRegraftingLocations = {};
+        for(Node* n : downPassSequence)
+            if(n != root && n != freeNode)
+                candidateRegraftingLocations.push_back(n);
+        if(candidateRegraftingLocations.size() == 0){
+            print();
+            std::cout << getNewickString() << std::endl;
+            Msg::error("number of candidate SPR reattachment moves = 0");
+        }
+        
+//        Node* regraft = addNode();
+        Node* regraft = freeNode;
+        regraft->setIndex(nodes.size()+1);
+        q->addNeighbor(regraft);
+        q->setAncestor(regraft);
+        setBranch(q, regraft, bl);
+        
+        //reattach q on branch subtending a
+        Node* a = candidateRegraftingLocations[(int)(rng.uniformRv() * candidateRegraftingLocations.size())];
+        Node* b = a->getAncestor();
+        
+//        std::cout << "Regrafting location: " << a->getIndex() << " to " << b->getIndex() << std::endl;
+        
+        double regraftBL = getBranchLength(a, b);
+        double regraftBottomHalf = rng.uniformRv() * regraftBL;
+        double regraftTopHalf = regraftBL-regraftBottomHalf;
+        
+        a->removeNeighbor(b);
+        removeBranch(a, b);
+        
+        a->addNeighbor(regraft);
+        a->setAncestor(regraft);
+        b->addNeighbor(regraft);
+        regraft->setAncestor(b);
+        setBranch(a, regraft, regraftTopHalf);
+        setBranch(b, regraft, regraftBottomHalf);
+    }
+    
+    int endingNodesSize = nodes.size();
+//    std::cout << "endingNodesSize " <<  endingNodesSize << std::endl;
+    if(endingNodesSize != startingNodeSize)
+        Msg::error("check node arithmatic");
+
+    freeNode = nullptr;
+    
+    initializeDownPassSequence();
+    reindexNodes();
+    
+//    print("After move");
+}
+
+void Tree::rSPR(std::string s){
+//    print("before move");
+    RandomVariable& rng = RandomVariable::randomVariableInstance();
+    Node* tip = nullptr;
+    for(Node* n : downPassSequence)
+        if(n->getName() == s){
+            tip = n;
+            break;
+        }
+    Node* p = tip->getAncestor();
+
+    std::set<Node*> pNeighbors = p->getNeighbors();
+    if(pNeighbors.size() != 3){
+        std::cout << p->getIndex() << std::endl;
+        print();
+        Msg::error("pNeighbor size is not 3");
+    }
+    
+    //sample neighbor at random
+    Node* q = tip;
+    
+    double bl = getBranchLength(p, q);
+    q->removeNeighbor(p);
+    collapseNode(p);
+    //finding a reattachment point (cannot be root)
+    std::vector<Node*> candidateRegraftingLocations = {};
+    for(Node* n : downPassSequence)
+        if(n != root && n != freeNode)
+            candidateRegraftingLocations.push_back(n);
+    if(candidateRegraftingLocations.size() == 0){
+        print();
+        std::cout << getNewickString() << std::endl;
+        Msg::error("number of candidate SPR reattachment moves = 0");
+    }
+    
+//        Node* regraft = addNode();
+    Node* regraft = freeNode;
+    regraft->setIndex(nodes.size()+1);
+    q->addNeighbor(regraft);
+    q->setAncestor(regraft);
+    setBranch(q, regraft, bl);
+    
+    //reattach q on branch subtending a
+    Node* a = candidateRegraftingLocations[(int)(rng.uniformRv() * candidateRegraftingLocations.size())];
+    Node* b = a->getAncestor();
+    
+//        std::cout << "Regrafting location: " << a->getIndex() << " to " << b->getIndex() << std::endl;
+    
+    double regraftBL = getBranchLength(a, b);
+    double regraftBottomHalf = rng.uniformRv() * regraftBL;
+    double regraftTopHalf = regraftBL-regraftBottomHalf;
+    
+    a->removeNeighbor(b);
+    removeBranch(a, b);
+    
+    a->addNeighbor(regraft);
+    a->setAncestor(regraft);
+    b->addNeighbor(regraft);
+    regraft->setAncestor(b);
+    setBranch(a, regraft, regraftTopHalf);
+    setBranch(b, regraft, regraftBottomHalf);
+    
+    int endingNodesSize = nodes.size();
+
+    freeNode = nullptr;
+    
+    initializeDownPassSequence();
+    reindexNodes();
+//    print("after move");
 }
 
 void Tree::setBranch(Node* e1, Node* e2, double x) {
@@ -629,6 +1141,28 @@ void Tree::showNode(Node* p, int indent) {
             }
             
         }
+}
+
+double Tree::update(void){
+    /*
+    rSPR();
+    return 0.0;
+     */
+    return updateBranchLength();
+}
+
+double Tree::updateBranchLength(void){
+    RandomVariable& rng = RandomVariable::randomVariableInstance();
+
+    //select branch at random
+    std::pair<Node*,Node*> branch = randomlyChooseBranch();
+    
+    double currBl = getBranchLength(branch.first, branch.second);
+    double newBl = currBl * std::exp( 4.0 *  (rng.uniformRv() - 0.5) );
+    
+    setBranch(branch.first, branch.second, newBl);
+
+    return newBl / currBl;
 }
 
 void Tree::writeTree(Node* p, std::stringstream& strm) {

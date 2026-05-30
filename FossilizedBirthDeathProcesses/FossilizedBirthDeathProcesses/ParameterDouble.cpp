@@ -7,33 +7,26 @@
 #include <iomanip>
 #include <iostream>
 
-ParameterDouble::ParameterDouble(double prob, std::string n) : Parameter(prob, n), lowerBound(std::numeric_limits<double>::lowest() / 2), upperBound(std::numeric_limits<double>::max() / 2), numRejections(0), numAcceptances(0), numAdaptive(10000){
+ParameterDouble::ParameterDouble(double prob, PhylogeneticModel* m, std::string n, double lb, double ub) :
+    Parameter(prob, m, n),
+    lowerBound(std::numeric_limits<double>::lowest() / 2),
+    upperBound(std::numeric_limits<double>::max() / 2),
+    numRejections(0), numAcceptances(0),
+    numAdaptive(10000),
+    targetAr(0.43){
+    
     adaptiveProposalActive = true;
     RandomVariable& rng = RandomVariable::randomVariableInstance();
-    double u = Probability::Normal::rv(&rng); //if no bounds provided, draw from standard normal
+    
+    double u = Probability::TruncatedNormal::rv(&rng, 0.0, 1.0, lowerBound, upperBound);
+    
     value.push_back(u);
     value.push_back(u);
     windowSize = 1;
 }
 
 double ParameterDouble::lnProbability(void){
-    double lnPro = -1.0;
-    
-    //Levi you should improve this
-    if(lowerBound != 0){
-        //placing a normal prior distribution if unbounded
-        lnPro = Probability::Normal::lnPdf(0, 100.0, getValue());
-    }else if(lowerBound == 0){
-        //placing a gamma prior distirbution if bounded > 0
-//        lnPro = Probability::Gamma::lnPdf(1.0, 1.0, getValue());
-//        lnPro = 0.0;
-    }else{
-        //tbd
-    }
-    if(lnPro == -1.0)
-        Msg::error("ParmDouble " + parmName + " prior probabiltiy is -1.0");
-    
-    return lnPro;
+    return Probability::TruncatedNormal::lnPdf(value[0], 0.0, 1.0, lowerBound, upperBound); //this is kinda sloppy but most flexible for chaning bounds
 }
 
 void ParameterDouble::print(void){
@@ -41,11 +34,10 @@ void ParameterDouble::print(void){
 }
 
 double ParameterDouble::update(void) {
-    return updateAdaptive(10000, 0.43);
+    return updateSlidingWindow(); //done this way so that if we want, we can implement other proposal mechanisms etc fairly painlessly
 }
 
-double ParameterDouble::updateAdaptive(int numGen, double targetR){
-    
+double ParameterDouble::updateSlidingWindow(){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     
     double acceptRej = 0.0;
@@ -54,13 +46,13 @@ double ParameterDouble::updateAdaptive(int numGen, double targetR){
             acceptRej++;
     acceptRej /= recentAcceptRej.size();
     
-    if((numRejections + numAcceptances) % 100 ==0 && ((numRejections + numAcceptances) < numGen)){
-            if(acceptRej < targetR - 0.2)
+    if((numRejections + numAcceptances) % 100 ==0 && ((numRejections + numAcceptances) < numAdaptive)){
+            if(acceptRej < targetAr - 0.2)
                 windowSize /= 1.1;
-            else if (acceptRej > targetR + 0.2)
+            else if (acceptRej > targetAr + 0.2)
                 windowSize *= 1.1;
             
-    }else if ((numRejections + numAcceptances) == numGen){
+    }else if ((numRejections + numAcceptances) == numAdaptive){
         std::cout << parmName << " done adaptive sampling | final acceptRej: " << acceptRej << std::endl;
         adaptiveProposalActive = false;
     }
@@ -89,8 +81,4 @@ void ParameterDouble::updateForRejection(void) {
     recentAcceptRej.push_back(false);
     if(recentAcceptRej.size() > 1000)
             recentAcceptRej.pop_front();
-}
-
-void ParameterDouble::updateForRejectionNotDynamic(void) {
-    value[0] = value[1];
 }

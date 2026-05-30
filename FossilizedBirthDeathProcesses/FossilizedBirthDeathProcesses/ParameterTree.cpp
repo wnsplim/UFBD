@@ -8,7 +8,22 @@
 #include "RandomVariable.hpp"
 #include "Tree.hpp"
 
-ParameterTree::ParameterTree(double prob, std::vector<std::string> taxonNames, double lam) :  Parameter(prob, "Tree"), lambda(lam), numRejections(0), numAcceptances(0), useCachedLnP(false){
+ParameterTree::ParameterTree(double prob, PhylogeneticModel* m) :
+    Parameter(prob, m,"Tree"),
+    numRejections(0),
+    numAcceptances(0),
+    useCachedLnP(false){
+    //constructor used in derived classes
+}
+
+ParameterTree::ParameterTree(double prob, PhylogeneticModel* m, std::vector<std::string> taxonNames, double lam) :
+    Parameter(prob, m,"Tree"),
+    lambda(lam), //exponential prior on branch length
+    numRejections(0),
+    numAcceptances(0),
+    useCachedLnP(false){
+    //ParameterTree base class is responsible for topology and branch length moves only
+
     trees[0] = new Tree(taxonNames, lambda);
     trees[1] = new Tree(*trees[0]);
 }
@@ -43,17 +58,19 @@ void ParameterTree::setTree(Tree* t){
 }
 
 double ParameterTree::update(void) {
-    Msg::error("Tried updating parameter tree, but this program is not set up to infer trees");
-    double lnP = 0.0;
-    return lnP;
+    //By convention: Tree class is responsible for ALL topology and branch length moves; responsible for nodes
+    useCachedLnP = false;
+    return trees[0]->update(); //right now, is just simple branch length update
 }
 
 void ParameterTree::updateForAcceptance(void) {
     numAcceptances++;
+    useCachedLnP = false;
     *(trees[1]) = *(trees[0]);
 }
 
 void ParameterTree::updateForRejection(void) {
     numRejections++;
+    useCachedLnP = false;
     *(trees[0]) = *(trees[1]);
 }

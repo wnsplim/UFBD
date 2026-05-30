@@ -21,6 +21,7 @@ class Tree {
                                             Tree(std::string newick);
                                            ~Tree(void);
         Tree&                               operator=(const Tree& t);
+        void                                calculateTreeHeight(void);
         void                                checkBranchLengthsNeg(void);
         void                                dropTip(std::string tip);
         void                                dropTip(int idx);
@@ -34,9 +35,12 @@ class Tree {
         Node*                               getRoot(void) { return root; }
         Node*                               getTaxonNode(std::string name);
         void                                initializeDownPassSequence(void);
+        void                                initializeTimes(void); //populates nodes with their date and fosisl status
         void                                keepTips(std::vector<std::string> t);
+        double                              update(void);
         void                                print(void);
         void                                print(std::string header);
+        std::pair<Node*,Node*>              randomlyChooseBranch(void);
         void                                reindexNodes(void);
         
     private:
@@ -49,10 +53,13 @@ class Tree {
         void                                passDown(Node* p, Node* from);
         void                                removeAllBranches(void);
         void                                removeBranch(Node* e1, Node* e2);
+        void                                rSPR(void);
+        void                                rSPR(std::string s); // for a specifc tip
         void                                reroot(Node* r);
         double                              roundDecimal(double value, int n);
         void                                setBranch(Node* e1, Node* e2, double x);
         void                                showNode(Node* p, int indent);
+        double                              updateBranchLength(void);
         void                                writeTree(Node* p, std::stringstream& strm);
         BranchLengths                       branchLengths;
         std::vector<Node*>                  downPassSequence;
@@ -60,7 +67,7 @@ class Tree {
         std::vector<Node*>                  tips;
         Node*                               freeNode;
         Node*                               root;
-        double                              logLik;
+        double                              treeHeight;
         int                                 numTaxa;
 };
 

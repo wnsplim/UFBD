@@ -12,10 +12,11 @@ class ParameterTree : public Parameter {
 
     public:
                                     ParameterTree(void) = delete;
-                                    ParameterTree(double prob, std::vector<std::string> taxonNames, double lam);
+                                    ParameterTree(double prob, PhylogeneticModel* m);
+                                    ParameterTree(double prob, PhylogeneticModel* m, std::vector<std::string> taxonNames, double lam);
         void                        forceBinary(void) { trees[0]->forceBinary(); trees[1]->forceBinary(); }
         double                      getAcceptanceRatio(void) { return ((double) numAcceptances) /( (double)numAcceptances + (double)numRejections ) ;}
-        bool                        getAdaptiveProposalActive(void) { return false; }
+        virtual bool                getAdaptiveProposalActive(void) { return false; }
         Tree*                       getTree(void) { return trees[0]; }
         double                      lnProbability(void);
         void                        print(void);
@@ -24,12 +25,11 @@ class ParameterTree : public Parameter {
         void                        updateForAcceptance(void);
         void                        updateForRejection(void);
         
-    private:
+    protected:
         //ordered by menmory footprint
-        std::vector<std::string>    outgroup;
         Tree*                       trees[2];
-        double                      lambda;
-        double                      cachedLnP;
+        double                      lambda; //branch length prior parameter exp(lambda)
+        double                      cachedLnP; 
         bool                        useCachedLnP;
         int                         numAcceptances;
         int                         numRejections;
