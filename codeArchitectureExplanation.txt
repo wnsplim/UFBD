@@ -1,18 +1,90 @@
 Program flags:
     Parsed in singleton class UserSettings
 
+Program wide convention:
+    all probabilities are log, even if not explicitly stated here.
+
+Tree:
+    By convention, the tree class knows all the nodes within it and all the branch lengths
+    The tree is the only object that should ever affect it's topology/branch lengths
+    Tree is owner of nodes and, by convention, should be the only object to affect nodes (e.g., specify which are fossils)
+
 Parameter classes: 
+    Conventions:
+        state[0] is the proposed new state, state[1] is the current state for the parameter
+        parameters know their own prior probability
+        parameters are responsible for updating themselves
+        There is no virtual "getState()" shared among all parameters
+            ParameterDouble's version is getValue()
+            ParameterTree's version is getTree()
+            use dynamic_cast<ParameterType*> where appropriate
+
     class Parameter 
         Base class. Member objects include:
             std::string         parmName: name of this parameter, used in write to file
             PhylogeneticModel*  model: what phylogenetic model owns this parameter, used if we want to do HMC etc.
             double              proposalProbability: what is the proposal probability of this parameter
             bool                adaptiveProposalActive: are we currently adaptively tuning the propasal mechansim
-            bool                parmPrintsToConsole: used to specify in diagnostics whether we want to print this parameter to console or not
+            bool                parmPrintsToConsole: whether we want to print this parameter to console or not in diagnostics
 
+        All derived parameters must have these functions:
+            virtual double      getAcceptanceRatio(void): what is this parameters acceptance ratio?
+            virtual double      lnProbability(void): what is this parameter's prior probability
+            virtual void        print(void): used in diagnostics, typically empty (not called by default anywhere)
+            virtual double      update(void): updates self, returns log proposal ratio
+            virtual void        updateForAcceptance(void): update self for acceptance
+            virtual void        updateForRejection(void): update self for rejection
+
+    
+    class ParameterDouble
+        Used to store real valued random variable. Bounds must be specified. If "unbounded": std::numeric_limits<double>::min() and ::max()
+        By default, for generality, the prior distribution is a truncated normal with mean = 0, sd = 1, and bounds.
+            Any change to prior distribution means creation of a new class that inherits from ParameterDouble and overrides lnProbability(). E.g., ParameterDoubleGamma.
+        By default, uses an adaptively tuned sliding window for the first 10k times this parameter is proposed.
+        Changes to proposal mechanism do not necessitate a new class, just include new proposal mechanism as a private function called from update()
+
+    class ParameterTree:
+        Basic ParameterTree class.
+        By default, branchlength prior distribution is exp(10.0); do not call lnProbability if ParameterTree is owned by model that overrides this prior (e.g., FBD models)
+        By convention: Tree class is responsible for ALL updates to topology or branch length. ParameterTree::update() simply calls Tree::updateSPR() or updateBranchLength() etc.
+            ParameterTree class should NEVER directly modify the tree or the nodes stored within the tree
+        
+        Also by convention, ParameterTree writes to file in seperately (MCMC, MetropolisCoupledMcmc take care of this, not the model owning ParameterTree)
+
+        ParameterTree(double prob, PhylogeneticModel* m): empty constructor; used with setTree() to fix topology
+        ParameterTree(double prob, PhylogeneticModel* m, std::vector<std::string> taxonNames, double lam): used to specify tree tip names and bl prior lambda; should be rarely used w/ fixed topology
 
 Model classes:
+    class PhylogeneticModel: 
+        Base class. Knows ALL parameters in the model that are updated, written, etc. as well as which parameter was updated in previous cycle:
+        Also knows which parameter is the ParmameterTree and returns the current Tree state for ParameterTree. 
+            std::vector<Parameter*>                 parameters;
+            Parameter*                              updatedParameter;
+        All derived class must contain:
+            virtual std::vector<std::string>        getParameterNames(void) = 0;
+                Returns all parameter names. Virtual so that parameter names can be changed/modified programatically.
+            virtual std::vector<double>             getParameterString(void) = 0;
+                Returns all parameter states as doubles. Used in saving states to file.
+            virtual double                          lnLikelihood(void) = 0;
+                Returns log likelihood under the model.
+            virtual double                          lnPriorProbability(void) = 0;
+                Returns prior probability for each parameter in the model. Virtual to override/exclude certain parameters (e.g., ParameterTree lnProbability in FBD models)
+            virtual void                            print(void) = 0;
+                Used for diagnostics, A/R ratios, etc.
+            virtual double                          update(void) = 0;
+                Choses a parameter proportional to proposal probability to update. Returns log proposal ratio. 
+            virtual void                            updateForAcceptance(void) = 0;
+                Updates chosen parameter for acceptance.
+            virtual void                            updateForRejection(void) = 0;
+                Updates chosen parameter for rejection.
 
+    class FBDTreeModel:
+        Example derived phylogenetic model class for heath et al. 2014 FBD model.
+        Multiple models can be strung together:
+            MkModel (not here, can be added) can own a FBD model and they can share the tree across them 
+                See: https://github.com/Levi-Raskin/PerikymataPhylogenetics for an example
+
+        
 
 Inferential classes:
     Mcmc
