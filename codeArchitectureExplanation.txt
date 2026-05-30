@@ -1,0 +1,49 @@
+Program flags:
+    Parsed in singleton class UserSettings
+
+Parameter classes: 
+    class Parameter 
+        Base class. Member objects include:
+            std::string         parmName: name of this parameter, used in write to file
+            PhylogeneticModel*  model: what phylogenetic model owns this parameter, used if we want to do HMC etc.
+            double              proposalProbability: what is the proposal probability of this parameter
+            bool                adaptiveProposalActive: are we currently adaptively tuning the propasal mechansim
+            bool                parmPrintsToConsole: used to specify in diagnostics whether we want to print this parameter to console or not
+
+
+Model classes:
+
+
+Inferential classes:
+    Mcmc
+        Handles all single-chained MCMC infrastructure
+        expects a PhylogeneticModel* object with the following member functions
+            //Probabilistic functions
+            model->lnLikelihood()
+            model->lnPriorProbability()
+            model->update()
+            model->updateForAcceptance()
+            model->updateForRejection()
+
+            //Miscellanea functions
+            model->print() // this is a diagnostics tool; put whatever you want here, typically void
+            model->getParameterNames()
+            model->getParameterString()
+            model->getTree() // used to get the current tree state for writing newick string to file
+
+    MetropolisCoupledMcmc
+        Expects a vector of PhylogeneticModel* objects of length = number of chains you want to run
+        These PhylogeneticModel* objects are expected to have the following member functions
+            //Probabilistic functions
+            model->lnLikelihood()
+            model->lnPriorProbability()
+            model->update()
+            model->updateForAcceptance()
+            model->updateForRejection()
+
+            //Miscellanea functions
+            model->print() // this is a diagnostics tool; put whatever you want here, typically void
+            model->getParameterNames()
+            model->getParameterString()
+            model->getTree() // used to get the current tree state for writing newick string to file
+

@@ -159,7 +159,11 @@ double FBDTreeModel::lnPriorProbability(void){
 }
 
 void FBDTreeModel::print(void){
-    
+    for(Parameter* p : parameters){
+        if(p != parameterTree && p->getParmPrintConsole() == true)
+            std::cout << p->getName() << " (A/R): " << p->getAcceptanceRatio() << "\t";
+    }
+    std::cout << "\n";
 }
 
 double FBDTreeModel::update(void){
