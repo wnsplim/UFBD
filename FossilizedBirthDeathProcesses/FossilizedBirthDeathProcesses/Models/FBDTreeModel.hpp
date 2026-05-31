@@ -36,8 +36,8 @@ class FBDTreeModel : public PhylogeneticModel {
         ParameterDouble*            lambda;
         ParameterDouble*            mu;
         ParameterDouble*            psi;
-        ParameterDouble*            rho;
         ParameterTree*              parameterTree;
+        double                      rho;
         double                      c1;
         double                      c2;
         double                      lambdaVal;

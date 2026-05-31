@@ -26,8 +26,7 @@ FBDTreeModel::FBDTreeModel(Tree* t) :
     parameters.push_back(mu);
     psi = new ParameterDouble(1.0, this, "psi", 0.0, std::numeric_limits<double>::max());
     parameters.push_back(psi);
-    rho = new ParameterDouble(1.0, this, "rho", 0.0, 1.0);
-    parameters.push_back(rho);
+    rho = 1.0;
     
     //normalize proposal probabilities
     double sum = 0.0;
@@ -46,7 +45,7 @@ double FBDTreeModel::calculateFBDProbability(void){
     
     lambdaVal = lambda->getValue();
     muVal = mu->getValue();
-    rhoVal = rho->getValue();
+    rhoVal = rho;
     psiVal = psi->getValue();
     double log4LambdaRho = std::log(4*lambdaVal*rhoVal);
     double log2Lambda = std::log(2*lambdaVal);
