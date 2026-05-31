@@ -28,6 +28,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
     treeFile        = "";
     cladesFile      = "";
     fossilFile      = "";
+    rho             = 1.0;
     chainLength     = 100;
     numChains       = 4;
     numThreads      = 4;
@@ -42,10 +43,10 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
 
     // Known flags and whether they take a value
     std::set<std::string> knownFlags = {
-        "-to", "-po", "-t", "-c", "-f", "-n", "-p", "-s", "-nc", "-nt", "-help", "-h"
+        "-to", "-po", "-t", "-c", "-f", "-rho", "-n", "-p", "-s", "-nc", "-nt", "-help", "-h"
     };
     std::set<std::string> valueFlags = {
-        "-to", "-po", "-t", "-c", "-f", "-n", "-p", "-s", "-nc", "-nt"
+        "-to", "-po", "-t", "-c", "-f", "-rho", "-n", "-p", "-s", "-nc", "-nt"
     };
 
     for (int i = 1; i < (int)arguments.size(); i++) {
@@ -85,6 +86,14 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
                 cladesFile = val;
             } else if (arg == "-f") {
                 fossilFile = val;
+            } else if (arg == "-rho") {
+                try {
+                    rho = std::stod(val);
+                } catch (...) {
+                    Msg::error("Flag \"-rho\" expects a number, but got \"" + val + "\".");
+                }
+                if (rho <= 0.0 || rho > 1.0)
+                    Msg::error("Flag \"-rho\" must be in (0, 1].");
             }else {
                 // Integer-valued flags
                 // Check all characters are digits (allowing leading minus for negative detection)
@@ -169,6 +178,7 @@ void UserSettings::print(void) {
     std::cout << "Fossils input file name:               " << fossilFile << std::endl;
     std::cout << "Tree output file name:                 " << treeOut << std::endl;
     std::cout << "Parameter output file name:            " << parametersOut << std::endl;
+    std::cout << "Extant sampling fraction (rho):        " << rho << std::endl;
     std::cout << "Chain length:                          " << chainLength << std::endl;
     std::cout << "Number of chains:                      " << numChains << std::endl;
     std::cout << "Number of threads:                     " << numThreads << std::endl;

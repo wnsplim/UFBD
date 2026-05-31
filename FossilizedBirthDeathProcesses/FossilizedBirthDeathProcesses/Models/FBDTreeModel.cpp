@@ -4,6 +4,7 @@
 #include "FBDTreeModel.hpp"
 #include "PhylogeneticModel.hpp"
 #include "RandomVariable.hpp"
+#include "UserSettings.hpp"
 
 #include <iostream>
 #include <cmath>
@@ -26,7 +27,7 @@ FBDTreeModel::FBDTreeModel(Tree* t) :
     parameters.push_back(mu);
     psi = new ParameterDouble(1.0, this, "psi", 0.0, std::numeric_limits<double>::max());
     parameters.push_back(psi);
-    rho = 1.0;
+    rho = UserSettings::userSettings().getRho();
     
     //normalize proposal probabilities
     double sum = 0.0;
