@@ -7,6 +7,8 @@
 
 
 
+thread_local RandomVariable* RandomVariable::activeInstance = nullptr;
+
 RandomVariable::RandomVariable(void) {
 
     static std::atomic<uint64_t> seed_counter{0};

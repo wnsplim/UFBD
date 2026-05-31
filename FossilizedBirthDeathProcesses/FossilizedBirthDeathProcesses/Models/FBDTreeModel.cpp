@@ -10,11 +10,15 @@
 #include <cmath>
 #include <limits>
 
-FBDTreeModel::FBDTreeModel(Tree* t) :
+FBDTreeModel::FBDTreeModel(Tree* t, unsigned int seed) :
     PhylogeneticModel(),
     c1(0.0),
     c2(0.0){
     
+    rng.setSeed(seed);
+    RandomVariable* prevRng = RandomVariable::getActiveInstance();
+    RandomVariable::setActiveInstance(&rng);
+
     parameterTree = new ParameterTree(1.0, this);
     parameterTree->setTree(t);
     parameterTree->getTree()->initializeTimes();
@@ -35,6 +39,8 @@ FBDTreeModel::FBDTreeModel(Tree* t) :
         sum += p->getProposalProbability();
     for(Parameter* p : parameters)
         p->setProposalProbability(p->getProposalProbability() / sum);
+
+    RandomVariable::setActiveInstance(prevRng);
 }
 
 double FBDTreeModel::calculateFBDProbability(void){
@@ -169,9 +175,9 @@ void FBDTreeModel::print(void){
 }
 
 double FBDTreeModel::update(void){
-    RandomVariable& rng = RandomVariable::randomVariableInstance();
-    
-    //update parameters
+    RandomVariable* prevRng = RandomVariable::getActiveInstance();
+    RandomVariable::setActiveInstance(&rng);
+
     double u = rng.uniformRv();
     double sum = 0.0;
     for(Parameter* p  : parameters){
@@ -181,7 +187,10 @@ double FBDTreeModel::update(void){
             break;
         }
     }
-    return updatedParameter->update();
+    double ratio = updatedParameter->update();
+
+    RandomVariable::setActiveInstance(prevRng);
+    return ratio;
 }
 
 void FBDTreeModel::updateForAcceptance(void){

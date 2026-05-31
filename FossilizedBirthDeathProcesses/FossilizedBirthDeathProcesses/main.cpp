@@ -7,6 +7,7 @@
 #include "UserSettings.hpp"
 
 #include <iostream>
+#include <random>
 
 int main(int argc, const char* argv[]) {
 
@@ -14,8 +15,7 @@ int main(int argc, const char* argv[]) {
     settings.initializeSettings(argc, argv);
     settings.print();
 
-    if(settings.getSeedSet())
-        RandomVariable::randomVariableInstance().setSeed(settings.getSeed());
+    unsigned int masterSeed = settings.getSeedSet() ? settings.getSeed() : std::random_device{}();
 
     FBDInput input(settings.getTreeFile(), settings.getCladesFile(), settings.getFossilFile());
 
@@ -29,13 +29,13 @@ int main(int argc, const char* argv[]) {
         std::vector<PhylogeneticModel*> models;
         models.resize(numChains);
         for(int i = 0; i < numChains; i++)
-            models[i] = new FBDTreeModel(pt);
-        MetropolisCoupledMcmc mcmc(settings.getChainLength(), settings.getPrintFrequency(), settings.getSampleFrequency(), models);
+            models[i] = new FBDTreeModel(pt, masterSeed + i);
+        MetropolisCoupledMcmc mcmc(settings.getChainLength(), settings.getPrintFrequency(), settings.getSampleFrequency(), models, masterSeed);
         mcmc.run();
     }else if (numChains == 1){
         std::cout << "Running standard MCMC \n";
         std::cout << "-----------------------------------------------------------------------" << std::endl;
-        PhylogeneticModel* model = new FBDTreeModel(pt);
+        PhylogeneticModel* model = new FBDTreeModel(pt, masterSeed);
         Mcmc mcmc(settings.getChainLength(), settings.getPrintFrequency(), settings.getSampleFrequency(), model);
         mcmc.run();
     }

@@ -4,6 +4,7 @@
 #include <fstream>
 #include <vector>
 
+#include "RandomVariable.hpp"
 #include "ThreadPool.hpp"
 #include "WriteTSV.hpp"
 
@@ -12,7 +13,7 @@ class PhylogeneticModel;
 class MetropolisCoupledMcmc {
     public:
                                             MetropolisCoupledMcmc(void) = delete;
-                                            MetropolisCoupledMcmc(unsigned long ng, int pf, int sf, std::vector<PhylogeneticModel*> m);
+                                            MetropolisCoupledMcmc(unsigned long ng, int pf, int sf, std::vector<PhylogeneticModel*> m, unsigned int masterSeed);
         void                                run(void);
     
     private:
@@ -33,6 +34,7 @@ class MetropolisCoupledMcmc {
         std::vector<double>                 lnAcceptanceProbabilities;
         std::vector<int>                    indices;
         ThreadPool                          threadPool;
+        RandomVariable                      swapRng;
         WriteTSV                            params;
         WriteTSV                            trees;
         std::string                         treeOut;

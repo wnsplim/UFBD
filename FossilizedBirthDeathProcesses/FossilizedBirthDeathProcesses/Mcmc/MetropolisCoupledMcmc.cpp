@@ -12,7 +12,7 @@
 #include <iomanip>
 #include <iostream>
 
-MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int pf, int sf, std::vector<PhylogeneticModel*> m) : numCycles(ng), printFrequency(pf),
+MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int pf, int sf, std::vector<PhylogeneticModel*> m, unsigned int masterSeed) : numCycles(ng), printFrequency(pf),
     sampleFrequency(sf),
     models(m),
     numModels(models.size()),
@@ -20,6 +20,7 @@ MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int pf, int sf, s
     numSwapsCold(0),
     deltaT(0.2),
     threadPool(models.size()){
+    swapRng.setSeed(masterSeed + numModels);
     currLnL.reserve(numModels); //needs to be reserve for pushback
     newLnL.resize(numModels);
     currLnP.reserve(numModels); //needs to be reserve for pushback
@@ -42,6 +43,7 @@ double MetropolisCoupledMcmc::calcHeating(int idx){
 }
 
 void MetropolisCoupledMcmc::run(void) {
+    RandomVariable::setActiveInstance(&swapRng);
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     
     int idx = 0;

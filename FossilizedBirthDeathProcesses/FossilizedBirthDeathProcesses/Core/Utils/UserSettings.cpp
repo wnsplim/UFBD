@@ -177,9 +177,6 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
         Msg::warning("No tree output file specified (-to). Use -help for usage.");
     if (parametersOut.empty())
         Msg::warning("No parameter output file specified (-po). Use -help for usage.");
-
-    if (seedSet && numChains > 1)
-        Msg::warning("-seed seeds only the main thread; Metropolis-coupled chains (-nc > 1) use independent thread-based RNGs, so the run is not fully reproducible.");
 }
 
 void UserSettings::print(void) {

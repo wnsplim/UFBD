@@ -26,9 +26,13 @@ class RandomVariable {
     public:
         static RandomVariable&  randomVariableInstance(void)
                                     {
-                                    thread_local RandomVariable singleRandomVariable;
-                                    return singleRandomVariable;
+                                    thread_local RandomVariable fallbackRandomVariable;
+                                    if(activeInstance == nullptr)
+                                        return fallbackRandomVariable;
+                                    return *activeInstance;
                                     }
+        static void             setActiveInstance(RandomVariable* r) { activeInstance = r; }
+        static RandomVariable*  getActiveInstance(void) { return activeInstance; }
                                 RandomVariable(void);
                                 RandomVariable(RandomVariable& r);
                                 RandomVariable(uint32_t seed);
@@ -43,6 +47,7 @@ class RandomVariable {
         void                    twist(void);
         uint16_t                index;
         uint32_t                mt[N];
+        static thread_local RandomVariable* activeInstance;
 };
 
 #endif

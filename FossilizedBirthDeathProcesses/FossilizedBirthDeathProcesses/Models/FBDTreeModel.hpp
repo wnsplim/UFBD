@@ -15,7 +15,7 @@ class FBDTreeModel : public PhylogeneticModel {
 
     public:
                                     FBDTreeModel(void) = delete;
-                                    FBDTreeModel(Tree* t);
+                                    FBDTreeModel(Tree* t, unsigned int seed);
         std::vector<std::string>    getParameterNames(void);
         std::vector<double>         getParameterString(void);
         double                      lnLikelihood(void);

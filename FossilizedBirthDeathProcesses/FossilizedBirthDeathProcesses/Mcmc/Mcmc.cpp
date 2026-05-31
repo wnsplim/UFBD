@@ -17,6 +17,7 @@ Mcmc::Mcmc(int ng, int pf, int sf, PhylogeneticModel* m) : numCycles(ng), printF
 }
 
 void Mcmc::run(void) {
+    RandomVariable::setActiveInstance(model->getRng());
     RandomVariable& rng = RandomVariable::randomVariableInstance();
 
     double curLnL = model->lnLikelihood();

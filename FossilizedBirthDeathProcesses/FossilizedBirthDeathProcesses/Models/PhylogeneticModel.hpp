@@ -3,6 +3,9 @@
 
 #include <string>
 #include <vector>
+
+#include "RandomVariable.hpp"
+
 class Parameter;
 class Tree;
 
@@ -14,6 +17,7 @@ class PhylogeneticModel {
         virtual std::vector<std::string>        getParameterNames(void) = 0;
         virtual std::vector<double>             getParameterString(void) = 0;
         Tree*                                   getTree(void);
+        RandomVariable*                         getRng(void) { return &rng; }
         const Parameter*                        getUpdatedParameter(void) { return updatedParameter; };
         virtual double                          lnLikelihood(void) = 0;
         virtual double                          lnPriorProbability(void) = 0;
@@ -23,6 +27,7 @@ class PhylogeneticModel {
         virtual void                            updateForRejection(void) = 0;
         std::vector<Parameter*>                 parameters;
         Parameter*                              updatedParameter;
+        RandomVariable                          rng;
 };
 
 #endif
