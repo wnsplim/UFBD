@@ -23,6 +23,8 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
     y[1].resize(numFossils);
     z[0].resize(numFossils);
     z[1].resize(numFossils);
+    sa[0].resize(numFossils);
+    sa[1].resize(numFossils);
 
     for(int i = 0; i < numFossils; i++){
         Fossil& f = fossils[i];
@@ -52,6 +54,8 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
         double zi = lo + rng.uniformRv() * (hi - lo);
         z[0][i] = zi;
         z[1][i] = zi;
+        sa[0][i] = 0;
+        sa[1][i] = 0;
     }
 }
 

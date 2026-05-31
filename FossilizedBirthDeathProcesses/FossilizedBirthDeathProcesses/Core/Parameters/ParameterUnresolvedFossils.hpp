@@ -19,6 +19,7 @@ class ParameterUnresolvedFossils : public Parameter {
         int                         getNumFossils(void) { return numFossils; }
         double                      getFossilAge(int i) { return y[0][i]; }
         double                      getAttachAge(int i) { return z[0][i]; }
+        bool                        isSampledAncestor(int i) { return sa[0][i] != 0; }
         double                      getMinAttachAge(int i);
         double                      getMaxAttachAge(int i);
         double                      lnProbability(void) { return 0.0; } // density is in the model's lnLikelihood, not a prior here
@@ -39,6 +40,7 @@ class ParameterUnresolvedFossils : public Parameter {
         std::vector<bool>           isCrown;
         std::vector<double>         y[2]; // 0 = working (scored), 1 = last accepted
         std::vector<double>         z[2];
+        std::vector<int>            sa[2];
         int                         lastFossil;
         bool                        lastWasAttach;
         int                         numAcceptances;
