@@ -18,6 +18,9 @@ class UserSettings {
         int                         getNumThreads(void) { return numThreads; }
         std::string                 getTreeOutput(void) { checkSettings(); return treeOut; }
         std::string                 getParamOutput(void) { checkSettings(); return parametersOut; }
+        std::string                 getTreeFile(void) { checkSettings(); return treeFile; }
+        std::string                 getCladesFile(void) { checkSettings(); return cladesFile; }
+        std::string                 getFossilFile(void) { checkSettings(); return fossilFile; }
         int                         getPrintFrequency(void) { checkSettings(); return printFrequency; }
         int                         getSampleFrequency(void) { checkSettings(); return sampleFrequency; }
         void                        print(void);
@@ -31,6 +34,9 @@ class UserSettings {
         std::string                 executablePath;
         std::string                 treeOut;
         std::string                 parametersOut;
+        std::string                 treeFile;
+        std::string                 cladesFile;
+        std::string                 fossilFile;
         unsigned long               chainLength;
         int                         numChains;
         int                         numThreads;

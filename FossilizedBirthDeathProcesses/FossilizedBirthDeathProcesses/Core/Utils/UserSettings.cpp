@@ -25,6 +25,9 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
     // Defaults
     treeOut         = "";
     parametersOut   = "";
+    treeFile        = "";
+    cladesFile      = "";
+    fossilFile      = "";
     chainLength     = 100;
     numChains       = 4;
     numThreads      = 4;
@@ -39,10 +42,10 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
 
     // Known flags and whether they take a value
     std::set<std::string> knownFlags = {
-        "-to", "-po", "-n", "-p", "-s", "-c", "-nt", "-help", "-h"
+        "-to", "-po", "-t", "-c", "-f", "-n", "-p", "-s", "-nc", "-nt", "-help", "-h"
     };
     std::set<std::string> valueFlags = {
-        "-to", "-po", "-n", "-p", "-s", "-c", "-nt"
+        "-to", "-po", "-t", "-c", "-f", "-n", "-p", "-s", "-nc", "-nt"
     };
 
     for (int i = 1; i < (int)arguments.size(); i++) {
@@ -76,6 +79,12 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
                 treeOut = val;
             } else if (arg == "-po") {
                 parametersOut = val;
+            } else if (arg == "-t") {
+                treeFile = val;
+            } else if (arg == "-c") {
+                cladesFile = val;
+            } else if (arg == "-f") {
+                fossilFile = val;
             }else {
                 // Integer-valued flags
                 // Check all characters are digits (allowing leading minus for negative detection)
@@ -91,7 +100,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
                 if (arg == "-n")        chainLength     = intVal;
                 else if (arg == "-p")   printFrequency  = intVal;
                 else if (arg == "-s")   sampleFrequency = intVal;
-                else if (arg == "-c")   numChains       = intVal;
+                else if (arg == "-nc")  numChains       = intVal;
                 else if (arg == "-nt")  numThreads      = intVal;
             }
         }
@@ -155,6 +164,9 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
 void UserSettings::print(void) {
 
     checkSettings();
+    std::cout << "Tree input file name:                  " << treeFile << std::endl;
+    std::cout << "Clades input file name:                " << cladesFile << std::endl;
+    std::cout << "Fossils input file name:               " << fossilFile << std::endl;
     std::cout << "Tree output file name:                 " << treeOut << std::endl;
     std::cout << "Parameter output file name:            " << parametersOut << std::endl;
     std::cout << "Chain length:                          " << chainLength << std::endl;

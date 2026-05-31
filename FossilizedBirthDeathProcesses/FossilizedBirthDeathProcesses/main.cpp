@@ -1,3 +1,4 @@
+#include "FBDInput.hpp"
 #include "FBDTreeModel.hpp"
 #include "Mcmc.hpp"
 #include "MetropolisCoupledMcmc.hpp"
@@ -12,12 +13,10 @@ int main(int argc, const char* argv[]) {
     settings.initializeSettings(argc, argv);
     settings.print();
 
-    std::vector<std::string> taxonNames;
-    for(int i = 0; i < 10; i++)
-        taxonNames.push_back("t" + std::to_string(i));
-        
-    Tree pt = Tree(taxonNames, 10.0);
-    pt.print();
+    FBDInput input(settings.getTreeFile(), settings.getCladesFile(), settings.getFossilFile());
+
+    Tree* pt = input.getTree();
+    pt->print();
     
     int numChains = settings.getNumChains();
     if(numChains > 1){
@@ -26,13 +25,13 @@ int main(int argc, const char* argv[]) {
         std::vector<PhylogeneticModel*> models;
         models.resize(numChains);
         for(int i = 0; i < numChains; i++)
-            models[i] = new FBDTreeModel(&pt);
+            models[i] = new FBDTreeModel(pt);
         MetropolisCoupledMcmc mcmc(settings.getChainLength(), settings.getPrintFrequency(), settings.getSampleFrequency(), models);
         mcmc.run();
     }else if (numChains == 1){
         std::cout << "Running standard MCMC \n";
         std::cout << "-----------------------------------------------------------------------" << std::endl;
-        PhylogeneticModel* model = new FBDTreeModel(&pt);
+        PhylogeneticModel* model = new FBDTreeModel(pt);
         Mcmc mcmc(settings.getChainLength(), settings.getPrintFrequency(), settings.getSampleFrequency(), model);
         mcmc.run();
     }

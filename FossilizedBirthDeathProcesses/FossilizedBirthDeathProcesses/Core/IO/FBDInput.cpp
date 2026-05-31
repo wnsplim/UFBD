@@ -12,8 +12,10 @@
 
 FBDInput::FBDInput(std::string treePath, std::string cladesPath, std::string fossilPath){
     tree = readTree(treePath);
-    readClades(cladesPath);
-    readFossils(fossilPath);
+    if(cladesPath.empty() == false)
+        readClades(cladesPath);
+    if(fossilPath.empty() == false)
+        readFossils(fossilPath);
 }
 
 Tree* FBDInput::readTree(std::string path){

@@ -496,19 +496,9 @@ bool Tree::isBinary(void){
     return true;
 }
 
-bool Tree::isUltrametric(void){
-    double maxTipAge = 0.0;
-    for(Node* n : downPassSequence)
-        if(n->getIsTip() && n->getTime() > maxTipAge)
-            maxTipAge = n->getTime();
-    return maxTipAge <= 1e-6 * root->getTime();
-}
-
 void Tree::validateBackbone(void){
     if(isBinary() == false)
         Msg::error("input tree must be fully resolved and rooted");
-    if(isUltrametric() == false)
-        Msg::warning("input tree is not ultrametric");
 }
 
 bool Tree::isValidNewick(const std::string& s){

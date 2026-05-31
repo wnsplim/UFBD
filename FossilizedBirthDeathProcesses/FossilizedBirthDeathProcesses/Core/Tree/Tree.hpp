@@ -35,7 +35,6 @@ class Tree {
         int                                 getNumTaxa(void);
         Node*                               getRoot(void) { return root; }
         bool                                isBinary(void);
-        bool                                isUltrametric(void);
         void                                validateBackbone(void);
         static bool                         isValidNewick(const std::string& s);
         Node*                               getTaxonNode(std::string name);
