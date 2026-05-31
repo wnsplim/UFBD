@@ -14,6 +14,8 @@ ParameterTree::ParameterTree(double prob, PhylogeneticModel* m) :
     numAcceptances(0),
     useCachedLnP(false){
     //constructor used in derived classes
+    trees[0] = nullptr;
+    trees[1] = nullptr;
 }
 
 ParameterTree::ParameterTree(double prob, PhylogeneticModel* m, std::vector<std::string> taxonNames, double lam) :
@@ -54,7 +56,7 @@ void ParameterTree::setTree(Tree* t){
     delete trees[0];
     delete trees[1];
     trees[0] = new Tree(*t);
-    trees[1] = trees[0];
+    trees[1] = new Tree(*trees[0]);
 }
 
 double ParameterTree::update(void) {
