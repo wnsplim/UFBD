@@ -14,8 +14,6 @@ Mcmc::Mcmc(int ng, int pf, int sf, PhylogeneticModel* m) : numCycles(ng), printF
     UserSettings& settings = UserSettings::userSettings();
     treeOut = settings.getTreeOutput();
     paramOut = settings.getParamOutput();
-    WriteTSV    params();
-    WriteTSV    trees();
 }
 
 void Mcmc::run(void) {

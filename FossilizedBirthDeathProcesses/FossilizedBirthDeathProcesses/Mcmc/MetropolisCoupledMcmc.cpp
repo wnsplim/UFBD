@@ -33,8 +33,6 @@ MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int pf, int sf, s
     UserSettings& settings = UserSettings::userSettings();
     treeOut = settings.getTreeOutput();
     paramOut = settings.getParamOutput();
-    WriteTSV    params();
-    WriteTSV    trees();
 }
 
 double MetropolisCoupledMcmc::calcHeating(int idx){
