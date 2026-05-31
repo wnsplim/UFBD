@@ -62,7 +62,7 @@ void FBDInput::readClades(std::string path){
         for(Clade& c : clades)
             if(c.getCrown() == crown)
                 Msg::error("clade '" + name + "' has the same MRCA as clade '" + c.getName() + "'");
-        clades.push_back(Clade(name, crown, crown->getAncestor()));
+        clades.push_back(Clade(name, taxa, crown, crown->getAncestor()));
     }
 }
 

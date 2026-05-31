@@ -10,7 +10,7 @@
 #include <cmath>
 #include <limits>
 
-FBDTreeModel::FBDTreeModel(Tree* t, unsigned int seed) :
+FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, unsigned int seed) :
     PhylogeneticModel(),
     c1(0.0),
     c2(0.0){
@@ -31,7 +31,10 @@ FBDTreeModel::FBDTreeModel(Tree* t, unsigned int seed) :
     psi = new ParameterDouble(1.0, this, "psi", 0.0, std::numeric_limits<double>::max());
     parameters.push_back(psi);
     rho = UserSettings::userSettings().getRho();
-    
+
+    unresolvedFossils = new ParameterUnresolvedFossils(1.0, this, parameterTree->getTree(), clades, fossils);
+    parameters.push_back(unresolvedFossils);
+
     //normalize proposal probabilities
     double sum = 0.0;
     for(Parameter* p : parameters)

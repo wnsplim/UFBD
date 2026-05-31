@@ -12,13 +12,15 @@ enum class Assignment { CROWN, TOTAL };
 class Clade {
 
     public:
-                                            Clade(std::string n, Node* c, Node* o) : name(n), crown(c), origin(o) {}
+                                            Clade(std::string n, std::vector<std::string> t, Node* c, Node* o) : name(n), taxa(t), crown(c), origin(o) {}
         std::string                         getName(void) { return name; }
+        std::vector<std::string>&           getTaxa(void) { return taxa; }
         Node*                               getCrown(void) { return crown; }
         Node*                               getOrigin(void) { return origin; }
 
     private:
         std::string                         name;
+        std::vector<std::string>            taxa;
         Node*                               crown;
         Node*                               origin;
 };

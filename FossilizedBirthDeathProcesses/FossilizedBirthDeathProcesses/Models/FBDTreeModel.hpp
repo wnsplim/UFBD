@@ -3,6 +3,7 @@
 
 #include "Parameter.hpp"
 #include "ParameterTree.hpp"
+#include "ParameterUnresolvedFossils.hpp"
 #include "PhylogeneticModel.hpp"
 #include "Tree.hpp"
 
@@ -15,7 +16,7 @@ class FBDTreeModel : public PhylogeneticModel {
 
     public:
                                     FBDTreeModel(void) = delete;
-                                    FBDTreeModel(Tree* t, unsigned int seed);
+                                    FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, unsigned int seed);
         std::vector<std::string>    getParameterNames(void);
         std::vector<double>         getParameterString(void);
         double                      lnLikelihood(void);
@@ -37,6 +38,7 @@ class FBDTreeModel : public PhylogeneticModel {
         ParameterDouble*            mu;
         ParameterDouble*            psi;
         ParameterTree*              parameterTree;
+        ParameterUnresolvedFossils* unresolvedFossils;
         double                      rho;
         double                      c1;
         double                      c2;
