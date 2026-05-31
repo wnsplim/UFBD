@@ -2,7 +2,7 @@
 #include "RandomVariable.hpp"
 
 
-Node::Node(void) : ancestor(nullptr), index(0), offset(0), isTip(false), name(""), flag(false){
+Node::Node(void) : ancestor(nullptr), index(0), offset(0), isTip(false), name(""), flag(false), fossil(false), time(0.0){
     
 }
 
