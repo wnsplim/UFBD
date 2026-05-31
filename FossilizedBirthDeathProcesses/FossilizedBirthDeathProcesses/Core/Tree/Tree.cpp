@@ -1229,17 +1229,26 @@ void Tree::showNode(Node* p, int indent) {
         }
 }
 
-double Tree::update(void){
+double Tree::update(double scaleLambda){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
-    double u = rng.uniformRv();
-    if(u < 1.0/3.0)
-        return updateRootAge();
-    if(u < 2.0/3.0)
+
+    int numSlideable = 0;
+    for(Node* n : downPassSequence)
+        if(n != root && n->getIsTip() == false)
+            numSlideable++;
+
+    double u = rng.uniformRv() * (numSlideable + 2.0);
+    if(u < numSlideable){
+        lastUpdateWasScale = false;
         return updateNodeAge();
-    return updateTreeScale();
+    }
+    lastUpdateWasScale = true;
+    if(u < numSlideable + 1.0)
+        return updateRootAge(scaleLambda);
+    return updateTreeScale(scaleLambda);
 }
 
-double Tree::updateRootAge(void){
+double Tree::updateRootAge(double scaleLambda){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
 
     double maxChildAge = 0.0;
@@ -1247,7 +1256,7 @@ double Tree::updateRootAge(void){
         if(c->getTime() > maxChildAge)
             maxChildAge = c->getTime();
 
-    double m = std::exp( 4.0 * (rng.uniformRv() - 0.5) );
+    double m = std::exp( scaleLambda * (rng.uniformRv() - 0.5) );
     double newRootAge = root->getTime() * m;
     if(newRootAge <= maxChildAge)
         return -INFINITY;
@@ -1279,10 +1288,10 @@ double Tree::updateNodeAge(void){
     return 0.0;
 }
 
-double Tree::updateTreeScale(void){
+double Tree::updateTreeScale(double scaleLambda){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
 
-    double m = std::exp( 4.0 * (rng.uniformRv() - 0.5) );
+    double m = std::exp( scaleLambda * (rng.uniformRv() - 0.5) );
 
     int numScaled = 0;
     for(Node* n : downPassSequence)

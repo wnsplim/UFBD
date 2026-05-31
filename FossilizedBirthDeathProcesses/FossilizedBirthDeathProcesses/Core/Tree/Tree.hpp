@@ -34,6 +34,7 @@ class Tree {
         int                                 getNumNodes(void) { return (int)nodes.size(); }
         int                                 getNumTaxa(void);
         Node*                               getRoot(void) { return root; }
+        bool                                getLastUpdateWasScale(void) { return lastUpdateWasScale; }
         bool                                isBinary(void);
         void                                validateBackbone(void);
         static bool                         isValidNewick(const std::string& s);
@@ -42,7 +43,7 @@ class Tree {
         void                                initializeDownPassSequence(void);
         void                                initializeTimes(void); //populates nodes with their date and fosisl status
         void                                keepTips(std::vector<std::string> t);
-        double                              update(void);
+        double                              update(double scaleLambda);
         void                                print(void);
         void                                print(std::string header);
         std::pair<Node*,Node*>              randomlyChooseBranch(void);
@@ -66,8 +67,8 @@ class Tree {
         void                                setBranch(Node* e1, Node* e2, double x);
         void                                showNode(Node* p, int indent);
         double                              updateNodeAge(void);
-        double                              updateRootAge(void);
-        double                              updateTreeScale(void);
+        double                              updateRootAge(double scaleLambda);
+        double                              updateTreeScale(double scaleLambda);
         void                                writeTree(Node* p, std::stringstream& strm);
         BranchLengths                       branchLengths;
         std::vector<Node*>                  downPassSequence;
@@ -78,6 +79,7 @@ class Tree {
         double                              treeHeight;
         int                                 numTaxa;
         int                                 numInternalNodes;
+        bool                                lastUpdateWasScale = false;
 };
 
 #endif

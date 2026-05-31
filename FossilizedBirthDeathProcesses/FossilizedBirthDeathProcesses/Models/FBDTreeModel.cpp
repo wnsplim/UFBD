@@ -165,7 +165,7 @@ void FBDTreeModel::print(void){
         if(p != parameterTree && p->getParmPrintConsole() == true)
             std::cout << p->getName() << " (A/R): " << p->getAcceptanceRatio() << "\t";
     }
-    std::cout << "\n";
+    std::cout << "tree (A/R): " << parameterTree->getAcceptanceRatio() << "\tscaleLambda: " << parameterTree->getScaleLambda() << "\n";
 }
 
 double FBDTreeModel::update(void){
