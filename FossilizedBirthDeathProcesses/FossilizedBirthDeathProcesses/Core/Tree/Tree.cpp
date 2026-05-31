@@ -636,6 +636,8 @@ std::vector<std::string>  Tree::parseNewickString(std::string newickStr){
     std::string token = "";
     for(int i = 0; i < newickStr.length(); i++){
         char c = newickStr[i];
+        if(c == ' ' || c == '\t' || c == '\n' || c == '\r')
+            continue;
         if(c == '(' || c == ')' || c==',' || c==':' ||c == ';'){
             if(token != ""){
                 tokens.push_back(token);
