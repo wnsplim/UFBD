@@ -8,6 +8,7 @@
 #include <cmath>
 #include <iomanip>
 #include <iostream>
+#include <set>
 #include <vector>
 
 Tree::Tree(const Tree& t) {
@@ -490,6 +491,32 @@ Node* Tree::getTaxonNode(std::string name) {
             return p;
         }
     return nullptr;
+}
+
+Node* Tree::getMRCA(const std::vector<std::string>& taxonNames){
+    if(taxonNames.size() < 2)
+        Msg::error("a clade must be defined by at least two taxa");
+
+    Node* mrca = getTaxonNode(taxonNames[0]);
+    if(mrca == nullptr)
+        Msg::error("taxon not found in tree: " + taxonNames[0]);
+
+    for(int i = 1; i < (int)taxonNames.size(); i++){
+        Node* n = getTaxonNode(taxonNames[i]);
+        if(n == nullptr)
+            Msg::error("taxon not found in tree: " + taxonNames[i]);
+
+        std::set<Node*> ancestors;
+        for(Node* p = mrca; p != nullptr; p = p->getAncestor())
+            ancestors.insert(p);
+
+        Node* common = nullptr;
+        for(Node* p = n; p != nullptr && common == nullptr; p = p->getAncestor())
+            if(ancestors.count(p) > 0)
+                common = p;
+        mrca = common;
+    }
+    return mrca;
 }
 
 void Tree::initializeBranchLengthKey(std::pair<Node*,Node*>& key, Node* e1, Node* e2) {

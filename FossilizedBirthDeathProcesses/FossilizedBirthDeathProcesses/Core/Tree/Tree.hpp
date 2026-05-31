@@ -35,6 +35,7 @@ class Tree {
         int                                 getNumTaxa(void);
         Node*                               getRoot(void) { return root; }
         Node*                               getTaxonNode(std::string name);
+        Node*                               getMRCA(const std::vector<std::string>& taxonNames);
         void                                initializeDownPassSequence(void);
         void                                initializeTimes(void); //populates nodes with their date and fosisl status
         void                                keepTips(std::vector<std::string> t);
