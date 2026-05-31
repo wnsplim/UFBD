@@ -49,6 +49,7 @@ class Tree {
         void                                clone(const Tree& t);
         void                                collapseNode(Node* n);
         void                                deleteNodes(void);
+        double                              branchLengthFromMap(Node* e1, Node* e2);
         void                                initializeBranchLengthKey(std::pair<Node*,Node*>& key, Node* e1, Node* e2);
         std::vector<std::string>            parseNewickString(std::string);
         void                                passDown(Node* p, Node* from);
@@ -60,7 +61,7 @@ class Tree {
         double                              roundDecimal(double value, int n);
         void                                setBranch(Node* e1, Node* e2, double x);
         void                                showNode(Node* p, int indent);
-        double                              updateBranchLength(void);
+        double                              updateNodeAge(void);
         void                                writeTree(Node* p, std::stringstream& strm);
         BranchLengths                       branchLengths;
         std::vector<Node*>                  downPassSequence;

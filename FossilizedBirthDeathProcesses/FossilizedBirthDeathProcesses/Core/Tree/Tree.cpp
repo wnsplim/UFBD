@@ -81,6 +81,7 @@ Tree::Tree(std::vector<std::string> taxonNames, double lambda) {
         if (p != root)
             setBranch(p, p->getAncestor(), Probability::Exponential::rv(&rng, lambda));
         }
+    initializeTimes();
 }
 
 Tree::Tree(std::string newick){
@@ -138,6 +139,7 @@ Tree::Tree(std::string newick){
             if (p->getIsTip() == false)
                 p->setIndex(idx++);
         }
+    initializeTimes();
 }
 
 Tree::~Tree(void) {
@@ -170,7 +172,7 @@ void Tree::calculateTreeHeight(void){
             double height = 0.0;
             while(p != root){
                 pAnc = p->getAncestor();
-                height += getBranchLength(p, pAnc);
+                height += branchLengthFromMap(p, pAnc);
                 p = pAnc;
             };
             if(height > maxHeight)
@@ -206,6 +208,8 @@ void Tree::clone(const Tree& t) {
         p->setIsTip(q->getIsTip());
         p->setName(q->getName());
         p->setFlag(q->getFlag());
+        p->setTime(q->getTime());
+        p->setIsFossil(q->getIsFossil());
         if (q->getAncestor() != nullptr)
             p->setAncestor( this->nodes[q->getAncestor()->getOffset()] );
         else
@@ -432,6 +436,11 @@ void Tree::forceBinary(void){
 
 double Tree::getBranchLength(Node* e1, Node* e2) {
 
+    return std::fabs(e1->getTime() - e2->getTime());
+}
+
+double Tree::branchLengthFromMap(Node* e1, Node* e2) {
+
     std::pair<Node*,Node*> key;
     initializeBranchLengthKey(key, e1, e2);
     BranchLengths::iterator it = branchLengths.find(key);
@@ -448,7 +457,6 @@ double Tree::getBranchLength(Node* e1, Node* e2) {
 int Tree::getNumLineagesAtTime(double t){
     std::set<Node*> branchesContainingFossils;
     branchesContainingFossils.clear();
-    initializeTimes();
     for(Node* n :downPassSequence){
         if(n != root && n->getTime() < t && n->getAncestor()->getTime() > t){
             branchesContainingFossils.insert(n);
@@ -514,7 +522,7 @@ void Tree::initializeTimes(void){
             double heightFromRoot = 0.0;
             while(p != root){
                 pAnc = p->getAncestor();
-                heightFromRoot += getBranchLength(p, pAnc);
+                heightFromRoot += branchLengthFromMap(p, pAnc);
                 p = pAnc;
             };
             n->setTime(treeHeight - heightFromRoot);
@@ -529,7 +537,7 @@ void Tree::initializeTimes(void){
             double height = 0.0;
             while(p != root){
                 pAnc = p->getAncestor();
-                height += getBranchLength(p, pAnc);
+                height += branchLengthFromMap(p, pAnc);
                 p = pAnc;
             };
             if(height < treeHeight)
@@ -1160,21 +1168,29 @@ double Tree::update(void){
     rSPR();
     return 0.0;
      */
-    return updateBranchLength();
+    return updateNodeAge();
 }
 
-double Tree::updateBranchLength(void){
+double Tree::updateNodeAge(void){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
 
-    //select branch at random
-    std::pair<Node*,Node*> branch = randomlyChooseBranch();
-    
-    double currBl = getBranchLength(branch.first, branch.second);
-    double newBl = currBl * std::exp( 4.0 *  (rng.uniformRv() - 0.5) );
-    
-    setBranch(branch.first, branch.second, newBl);
+    std::vector<Node*> candidates;
+    for(Node* n : downPassSequence)
+        if(n != root && n->getIsTip() == false)
+            candidates.push_back(n);
+    if(candidates.size() == 0)
+        return 0.0;
 
-    return newBl / currBl;
+    Node* n = candidates[(int)(rng.uniformRv() * candidates.size())];
+    double parentAge = n->getAncestor()->getTime();
+    double maxChildAge = 0.0;
+    for(Node* nb : n->getNeighbors())
+        if(nb != n->getAncestor() && nb->getTime() > maxChildAge)
+            maxChildAge = nb->getTime();
+
+    n->setTime(maxChildAge + rng.uniformRv() * (parentAge - maxChildAge));
+
+    return 0.0;
 }
 
 void Tree::writeTree(Node* p, std::stringstream& strm) {
