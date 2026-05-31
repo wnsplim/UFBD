@@ -4,6 +4,7 @@
 #include "ReadTSV.hpp"
 #include "Tree.hpp"
 
+#include <cctype>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -73,6 +74,8 @@ void FBDInput::readFossils(std::string path){
         }
         std::string cladeName = row[3];
         std::string assignStr = row[4];
+        for(char& ch : assignStr)
+            ch = std::toupper((unsigned char)ch);
 
         if(minAge > maxAge)
             Msg::error("fossil '" + taxon + "' has min_age greater than max_age");
