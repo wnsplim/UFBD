@@ -22,6 +22,8 @@ class UserSettings {
         std::string                 getCladesFile(void) { checkSettings(); return cladesFile; }
         std::string                 getFossilFile(void) { checkSettings(); return fossilFile; }
         double                      getRho(void) { checkSettings(); return rho; }
+        unsigned int                getSeed(void) { checkSettings(); return seed; }
+        bool                        getSeedSet(void) { checkSettings(); return seedSet; }
         int                         getPrintFrequency(void) { checkSettings(); return printFrequency; }
         int                         getSampleFrequency(void) { checkSettings(); return sampleFrequency; }
         void                        print(void);
@@ -39,6 +41,8 @@ class UserSettings {
         std::string                 cladesFile;
         std::string                 fossilFile;
         double                      rho;
+        unsigned int                seed;
+        bool                        seedSet;
         unsigned long               chainLength;
         int                         numChains;
         int                         numThreads;

@@ -2,6 +2,7 @@
 #include "FBDTreeModel.hpp"
 #include "Mcmc.hpp"
 #include "MetropolisCoupledMcmc.hpp"
+#include "RandomVariable.hpp"
 #include "Tree.hpp"
 #include "UserSettings.hpp"
 
@@ -12,6 +13,9 @@ int main(int argc, const char* argv[]) {
     UserSettings& settings = UserSettings::userSettings();
     settings.initializeSettings(argc, argv);
     settings.print();
+
+    if(settings.getSeedSet())
+        RandomVariable::randomVariableInstance().setSeed(settings.getSeed());
 
     FBDInput input(settings.getTreeFile(), settings.getCladesFile(), settings.getFossilFile());
 

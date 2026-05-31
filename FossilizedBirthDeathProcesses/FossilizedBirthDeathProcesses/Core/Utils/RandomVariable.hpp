@@ -32,6 +32,7 @@ class RandomVariable {
                                 RandomVariable(void);
                                 RandomVariable(RandomVariable& r);
                                 RandomVariable(uint32_t seed);
+        void                    setSeed(uint32_t seed) { initialize(seed); }
         double                  uniformRv(void);
                                 
     private:

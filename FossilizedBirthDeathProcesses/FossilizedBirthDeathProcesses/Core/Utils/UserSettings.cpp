@@ -29,6 +29,8 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
     cladesFile      = "";
     fossilFile      = "";
     rho             = 1.0;
+    seed            = 0;
+    seedSet         = false;
     chainLength     = 100;
     numChains       = 4;
     numThreads      = 4;
@@ -43,10 +45,10 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
 
     // Known flags and whether they take a value
     std::set<std::string> knownFlags = {
-        "-to", "-po", "-t", "-c", "-f", "-rho", "-n", "-p", "-s", "-nc", "-nt", "-help", "-h"
+        "-to", "-po", "-t", "-c", "-f", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt", "-help", "-h"
     };
     std::set<std::string> valueFlags = {
-        "-to", "-po", "-t", "-c", "-f", "-rho", "-n", "-p", "-s", "-nc", "-nt"
+        "-to", "-po", "-t", "-c", "-f", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt"
     };
 
     for (int i = 1; i < (int)arguments.size(); i++) {
@@ -94,6 +96,13 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
                 }
                 if (rho <= 0.0 || rho > 1.0)
                     Msg::error("Flag \"-rho\" must be in (0, 1].");
+            } else if (arg == "-seed") {
+                try {
+                    seed = (unsigned int)std::stoul(val);
+                } catch (...) {
+                    Msg::error("Flag \"-seed\" expects a non-negative integer, but got \"" + val + "\".");
+                }
+                seedSet = true;
             }else {
                 // Integer-valued flags
                 // Check all characters are digits (allowing leading minus for negative detection)
@@ -168,6 +177,9 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
         Msg::warning("No tree output file specified (-to). Use -help for usage.");
     if (parametersOut.empty())
         Msg::warning("No parameter output file specified (-po). Use -help for usage.");
+
+    if (seedSet && numChains > 1)
+        Msg::warning("-seed seeds only the main thread; Metropolis-coupled chains (-nc > 1) use independent thread-based RNGs, so the run is not fully reproducible.");
 }
 
 void UserSettings::print(void) {
@@ -179,6 +191,10 @@ void UserSettings::print(void) {
     std::cout << "Tree output file name:                 " << treeOut << std::endl;
     std::cout << "Parameter output file name:            " << parametersOut << std::endl;
     std::cout << "Extant sampling fraction (rho):        " << rho << std::endl;
+    if (seedSet)
+        std::cout << "Random number seed:                    " << seed << std::endl;
+    else
+        std::cout << "Random number seed:                    (time-based)" << std::endl;
     std::cout << "Chain length:                          " << chainLength << std::endl;
     std::cout << "Number of chains:                      " << numChains << std::endl;
     std::cout << "Number of threads:                     " << numThreads << std::endl;
