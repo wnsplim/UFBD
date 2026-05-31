@@ -34,6 +34,10 @@ class Tree {
         int                                 getNumNodes(void) { return (int)nodes.size(); }
         int                                 getNumTaxa(void);
         Node*                               getRoot(void) { return root; }
+        bool                                isBinary(void);
+        bool                                isUltrametric(void);
+        void                                validateBackbone(void);
+        static bool                         isValidNewick(const std::string& s);
         Node*                               getTaxonNode(std::string name);
         Node*                               getMRCA(const std::vector<std::string>& taxonNames);
         void                                initializeDownPassSequence(void);

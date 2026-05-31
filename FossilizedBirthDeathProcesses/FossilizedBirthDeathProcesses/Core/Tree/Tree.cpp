@@ -483,6 +483,54 @@ int Tree::getNumTaxa(void){
     return idx;
 }
 
+bool Tree::isBinary(void){
+    for(Node* n : downPassSequence){
+        if(n->getIsTip())
+            continue;
+        int numChildren = (int)n->getNeighbors().size();
+        if(n != root)
+            numChildren -= 1;
+        if(numChildren != 2)
+            return false;
+    }
+    return true;
+}
+
+bool Tree::isUltrametric(void){
+    double maxTipAge = 0.0;
+    for(Node* n : downPassSequence)
+        if(n->getIsTip() && n->getTime() > maxTipAge)
+            maxTipAge = n->getTime();
+    return maxTipAge <= 1e-6 * root->getTime();
+}
+
+void Tree::validateBackbone(void){
+    if(isBinary() == false)
+        Msg::error("input tree must be fully resolved and rooted");
+    if(isUltrametric() == false)
+        Msg::warning("input tree is not ultrametric");
+}
+
+bool Tree::isValidNewick(const std::string& s){
+    size_t begin = s.find_first_not_of(" \t\n\r");
+    size_t end = s.find_last_not_of(" \t\n\r");
+    if(begin == std::string::npos)
+        return false;
+    if(s[begin] != '(' || s[end] != ';')
+        return false;
+    int depth = 0;
+    for(char c : s){
+        if(c == '(')
+            depth++;
+        else if(c == ')'){
+            depth--;
+            if(depth < 0)
+                return false;
+        }
+    }
+    return depth == 0;
+}
+
 Node* Tree::getTaxonNode(std::string name) {
 
     for (Node* p : downPassSequence)
@@ -494,17 +542,16 @@ Node* Tree::getTaxonNode(std::string name) {
 }
 
 Node* Tree::getMRCA(const std::vector<std::string>& taxonNames){
-    if(taxonNames.size() < 2)
-        Msg::error("a clade must be defined by at least two taxa");
-
-    Node* mrca = getTaxonNode(taxonNames[0]);
-    if(mrca == nullptr)
-        Msg::error("taxon not found in tree: " + taxonNames[0]);
-
-    for(int i = 1; i < (int)taxonNames.size(); i++){
-        Node* n = getTaxonNode(taxonNames[i]);
+    Node* mrca = nullptr;
+    for(const std::string& name : taxonNames){
+        Node* n = getTaxonNode(name);
         if(n == nullptr)
-            Msg::error("taxon not found in tree: " + taxonNames[i]);
+            Msg::error("taxon not found in tree: " + name);
+
+        if(mrca == nullptr){
+            mrca = n;
+            continue;
+        }
 
         std::set<Node*> ancestors;
         for(Node* p = mrca; p != nullptr; p = p->getAncestor())
