@@ -15,7 +15,7 @@ FBDTreeModel::FBDTreeModel(Tree* t) :
     c1(0.0),
     c2(0.0){
     
-    parameterTree = new ParameterTree(0.0, this); // proposal probability = 0
+    parameterTree = new ParameterTree(1.0, this);
     parameterTree->setTree(t);
     parameterTree->getTree()->initializeTimes();
     parameters.push_back(parameterTree);
