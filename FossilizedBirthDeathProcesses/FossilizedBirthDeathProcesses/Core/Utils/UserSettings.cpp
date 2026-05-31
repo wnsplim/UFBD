@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <thread>
+#include <algorithm>
 
 #include "Msg.hpp"
 #include "UserSettings.hpp"

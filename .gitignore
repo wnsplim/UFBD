@@ -1,6 +1,10 @@
+# .DS_Store
 FossilizedBirthDeathProcesses/.DS_Store
 FossilizedBirthDeathProcesses/FossilizedBirthDeathProcesses.xcodeproj/project.xcworkspace/xcuserdata/levir.xcuserdatad/UserInterfaceState.xcuserstate
 .DS_Store
+
+# Playground
+output/
 
 # Coding agent configurations
 CLAUDE.md

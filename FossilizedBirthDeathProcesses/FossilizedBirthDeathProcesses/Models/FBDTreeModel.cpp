@@ -6,6 +6,8 @@
 #include "RandomVariable.hpp"
 
 #include <iostream>
+#include <cmath>
+#include <limits>
 
 FBDTreeModel::FBDTreeModel(Tree* t) :
     PhylogeneticModel(),
