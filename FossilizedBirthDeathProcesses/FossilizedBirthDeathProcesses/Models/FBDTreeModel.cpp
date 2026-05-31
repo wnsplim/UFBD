@@ -21,7 +21,6 @@ FBDTreeModel::FBDTreeModel(Tree* t, unsigned int seed) :
 
     parameterTree = new ParameterTree(1.0, this);
     parameterTree->setTree(t);
-    parameterTree->getTree()->initializeTimes();
     parameters.push_back(parameterTree);
     
     //instantiate FBD model parameters

@@ -3,19 +3,26 @@
 #include "Node.hpp"
 #include "ReadTSV.hpp"
 #include "Tree.hpp"
+#include "UserSettings.hpp"
 
 #include <cctype>
 #include <fstream>
+#include <map>
 #include <sstream>
 #include <string>
 #include <vector>
 
 FBDInput::FBDInput(std::string treePath, std::string cladesPath, std::string fossilPath){
     tree = readTree(treePath);
+    UserSettings& settings = UserSettings::userSettings();
+    if(settings.getConditioning() == Conditioning::ORIGIN && settings.getModel() != Model::FBD)
+        tree->addOriginPendant();
     if(cladesPath.empty() == false)
         readClades(cladesPath);
-    if(fossilPath.empty() == false)
+    if(fossilPath.empty() == false){
         readFossils(fossilPath);
+        assignFossilAwareAges();
+    }
 }
 
 Tree* FBDInput::readTree(std::string path){
@@ -49,8 +56,8 @@ void FBDInput::readClades(std::string path){
             Msg::error("clade row needs a name and a comma-separated taxon list");
         std::string name = row[0];
         std::vector<std::string> taxa = splitOnComma(row[1]);
-        if(taxa.size() < 2)
-            Msg::error("clade '" + name + "' must be defined by at least two taxa");
+        if(taxa.empty())
+            Msg::error("clade '" + name + "' has no taxa");
         Node* crown = tree->getMRCA(taxa);
         for(Clade& c : clades)
             if(c.getCrown() == crown)
@@ -84,17 +91,53 @@ void FBDInput::readFossils(std::string path){
         if(minAge < 0.0)
             Msg::error("fossil '" + taxon + "' has a negative age");
 
-        bool cladeFound = false;
+        Clade* clade = nullptr;
         for(Clade& c : clades)
-            if(c.getName() == cladeName)
-                cladeFound = true;
-        if(cladeFound == false)
+            if(c.getName() == cladeName){
+                clade = &c;
+                break;
+            }
+        if(clade == nullptr)
             Msg::error("fossil '" + taxon + "' references undefined clade '" + cladeName + "'");
 
         if(assignStr != "CROWN" && assignStr != "TOTAL")
             Msg::error("fossil '" + taxon + "' has unknown assignment '" + assignStr + "'");
         Assignment assignment = (assignStr == "CROWN") ? Assignment::CROWN : Assignment::TOTAL;
 
+        if(assignment == Assignment::CROWN && clade->getCrown()->getIsTip()){
+            Msg::warning("fossil '" + taxon + "' assigned CROWN to singleton clade '" + cladeName + "'; treating as TOTAL");
+            assignment = Assignment::TOTAL;
+        }
+        if(UserSettings::userSettings().getConditioning() == Conditioning::CROWN
+           && assignment == Assignment::TOTAL && clade->getCrown() == tree->getRoot()){
+            Msg::warning("fossil '" + taxon + "' is TOTAL on the whole-tree clade '" + cladeName + "'; treating as CROWN");
+            assignment = Assignment::CROWN;
+        }
+
         fossils.push_back(Fossil(taxon, minAge, maxAge, cladeName, assignment));
     }
+}
+
+void FBDInput::assignFossilAwareAges(void){
+    double maxBound = 0.0;
+    for(Fossil& f : fossils)
+        if(f.getMaxAge() > maxBound)
+            maxBound = f.getMaxAge();
+    int numInternal = tree->getNumNodes() - tree->getNumTaxa();
+    double unit = (maxBound > 0.0) ? maxBound / (numInternal + 1) : 1.0;
+
+    std::map<Node*,double> minAges;
+    for(Fossil& f : fossils){
+        Clade* clade = nullptr;
+        for(Clade& c : clades)
+            if(c.getName() == f.getClade()){
+                clade = &c;
+                break;
+            }
+        Node* anchor = (f.getAssignment() == Assignment::CROWN) ? clade->getCrown() : clade->getOrigin();
+        double bound = f.getMaxAge() * 1.05;
+        if(minAges.count(anchor) == 0 || bound > minAges[anchor])
+            minAges[anchor] = bound;
+    }
+    tree->assignStartingAges(minAges, unit);
 }

@@ -5,6 +5,7 @@
 #include <vector>
 #include <thread>
 #include <algorithm>
+#include <cctype>
 
 #include "Msg.hpp"
 #include "UserSettings.hpp"
@@ -28,6 +29,8 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
     treeFile        = "";
     cladesFile      = "";
     fossilFile      = "";
+    conditioningSet = false;
+    model           = Model::UFBD;
     rho             = 1.0;
     seed            = 0;
     seedSet         = false;
@@ -45,10 +48,10 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
 
     // Known flags and whether they take a value
     std::set<std::string> knownFlags = {
-        "-to", "-po", "-t", "-c", "-f", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt", "-help", "-h"
+        "-to", "-po", "-t", "-c", "-f", "-cond", "-model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt", "-help", "-h"
     };
     std::set<std::string> valueFlags = {
-        "-to", "-po", "-t", "-c", "-f", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt"
+        "-to", "-po", "-t", "-c", "-f", "-cond", "-model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt"
     };
 
     for (int i = 1; i < (int)arguments.size(); i++) {
@@ -88,6 +91,20 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
                 cladesFile = val;
             } else if (arg == "-f") {
                 fossilFile = val;
+            } else if (arg == "-cond") {
+                std::string v = val;
+                for (char& ch : v) ch = std::toupper((unsigned char)ch);
+                if (v == "CROWN")       conditioning = Conditioning::CROWN;
+                else if (v == "ORIGIN") conditioning = Conditioning::ORIGIN;
+                else Msg::error("Flag \"-cond\" expects crown or origin, but got \"" + val + "\".");
+                conditioningSet = true;
+            } else if (arg == "-model") {
+                std::string v = val;
+                for (char& ch : v) ch = std::toupper((unsigned char)ch);
+                if (v == "FBD")         model = Model::FBD;
+                else if (v == "HEA14")  model = Model::HEA14;
+                else if (v == "UFBD")   model = Model::UFBD;
+                else Msg::error("Flag \"-model\" expects FBD, HEA14, or UFBD, but got \"" + val + "\".");
             } else if (arg == "-rho") {
                 try {
                     rho = std::stod(val);
@@ -127,6 +144,9 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
     settingsInitialized = true;
 
     // ── Post-parse validation  ──────────────────────────────
+
+    if (conditioningSet == false)
+        Msg::error("Flag \"-cond\" is required (crown or origin).");
 
     int maxNumThreads = (int)std::thread::hardware_concurrency();
     if (maxNumThreads <= 0) {
@@ -185,6 +205,8 @@ void UserSettings::print(void) {
     std::cout << "Tree input file name:                  " << treeFile << std::endl;
     std::cout << "Clades input file name:                " << cladesFile << std::endl;
     std::cout << "Fossils input file name:               " << fossilFile << std::endl;
+    std::cout << "Conditioning scheme:                   " << (conditioning == Conditioning::CROWN ? "crown" : "origin") << std::endl;
+    std::cout << "Model:                                 " << (model == Model::FBD ? "FBD" : (model == Model::HEA14 ? "HEA14" : "UFBD")) << std::endl;
     std::cout << "Tree output file name:                 " << treeOut << std::endl;
     std::cout << "Parameter output file name:            " << parametersOut << std::endl;
     std::cout << "Extant sampling fraction (rho):        " << rho << std::endl;

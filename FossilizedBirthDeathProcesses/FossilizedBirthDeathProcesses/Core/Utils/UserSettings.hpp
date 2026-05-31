@@ -4,6 +4,9 @@
 #include <string>
 
 
+enum class Conditioning { CROWN, ORIGIN };
+enum class Model { FBD, HEA14, UFBD };
+
 class UserSettings {
 
     public:
@@ -21,6 +24,8 @@ class UserSettings {
         std::string                 getTreeFile(void) { checkSettings(); return treeFile; }
         std::string                 getCladesFile(void) { checkSettings(); return cladesFile; }
         std::string                 getFossilFile(void) { checkSettings(); return fossilFile; }
+        Conditioning                getConditioning(void) { checkSettings(); return conditioning; }
+        Model                       getModel(void) { checkSettings(); return model; }
         double                      getRho(void) { checkSettings(); return rho; }
         unsigned int                getSeed(void) { checkSettings(); return seed; }
         bool                        getSeedSet(void) { checkSettings(); return seedSet; }
@@ -40,6 +45,9 @@ class UserSettings {
         std::string                 treeFile;
         std::string                 cladesFile;
         std::string                 fossilFile;
+        Conditioning                conditioning;
+        bool                        conditioningSet;
+        Model                       model;
         double                      rho;
         unsigned int                seed;
         bool                        seedSet;

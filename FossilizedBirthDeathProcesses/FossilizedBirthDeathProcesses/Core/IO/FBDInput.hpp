@@ -53,6 +53,7 @@ class FBDInput {
         Tree*                               readTree(std::string path);
         void                                readClades(std::string path);
         void                                readFossils(std::string path);
+        void                                assignFossilAwareAges(void);
         Tree*                               tree;
         std::vector<Clade>                  clades;
         std::vector<Fossil>                 fossils;

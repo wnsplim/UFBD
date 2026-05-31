@@ -544,13 +544,19 @@ Node* Tree::getMRCA(const std::vector<std::string>& taxonNames){
         }
 
         std::set<Node*> ancestors;
-        for(Node* p = mrca; p != nullptr; p = p->getAncestor())
+        for(Node* p = mrca; ; p = p->getAncestor()){
             ancestors.insert(p);
+            if(p->getAncestor() == p) // root's ancestor is itself in this tree
+                break;
+        }
 
         Node* common = nullptr;
-        for(Node* p = n; p != nullptr && common == nullptr; p = p->getAncestor())
+        for(Node* p = n; common == nullptr; p = p->getAncestor()){
             if(ancestors.count(p) > 0)
                 common = p;
+            else if(p->getAncestor() == p)
+                break;
+        }
         mrca = common;
     }
     return mrca;
@@ -574,32 +580,39 @@ void Tree::initializeDownPassSequence(void) {
 
 void Tree::initializeTimes(void){
     initializeDownPassSequence();
+    std::map<Node*,double> noMinAges;
+    assignStartingAges(noMinAges, 1.0);
+}
 
-    std::map<Node*,int> rankToTip;
-    int maxRank = 0;
+void Tree::addOriginPendant(void){
+    Node* origin = addNode();
+    origin->setIsTip(false);
+    origin->setIsFossil(false);
+    origin->setIndex((int)nodes.size() - 1);
+    origin->addNeighbor(root);
+    root->addNeighbor(origin);
+    root = origin;
+    initializeTimes();
+}
+
+void Tree::assignStartingAges(const std::map<Node*,double>& minAges, double unit){
     for(Node* n : downPassSequence){
         if(n->getIsTip()){
+            n->setTime(0.0);
             n->setIsFossil(false);
-            rankToTip[n] = 0;
             continue;
         }
-        int r = 0;
+        double maxChild = 0.0;
         for(Node* c : n->getNeighbors())
-            if(c != n->getAncestor() && rankToTip[c] + 1 > r)
-                r = rankToTip[c] + 1;
-        rankToTip[n] = r;
-        if(r > maxRank)
-            maxRank = r;
+            if(c != n->getAncestor() && c->getTime() > maxChild)
+                maxChild = c->getTime();
+        double age = maxChild + unit;
+        std::map<Node*,double>::const_iterator it = minAges.find(n);
+        if(it != minAges.end() && it->second > age)
+            age = it->second;
+        n->setTime(age);
     }
-
-    double rootAge = 1.0;
-    treeHeight = rootAge;
-    for(Node* n : downPassSequence){
-        if(n->getIsTip())
-            n->setTime(0.0);
-        else
-            n->setTime(rootAge * (double)rankToTip[n] / (double)maxRank);
-    }
+    treeHeight = root->getTime();
 }
 
 void Tree::keepTips(std::vector<std::string> t){

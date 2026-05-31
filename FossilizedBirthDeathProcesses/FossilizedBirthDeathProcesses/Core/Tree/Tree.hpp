@@ -44,6 +44,8 @@ class Tree {
         void                                initializeTimes(void); //starting node ages from topology; extant tips at 0
         void                                keepTips(std::vector<std::string> t);
         double                              update(double scaleLambda);
+        void                                assignStartingAges(const std::map<Node*,double>& minAges, double unit);
+        void                                addOriginPendant(void);
         void                                print(void);
         void                                print(std::string header);
         std::pair<Node*,Node*>              randomlyChooseBranch(void);
