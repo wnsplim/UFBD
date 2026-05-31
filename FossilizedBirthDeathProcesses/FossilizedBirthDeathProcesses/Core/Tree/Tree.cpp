@@ -1164,11 +1164,28 @@ void Tree::showNode(Node* p, int indent) {
 }
 
 double Tree::update(void){
-    /*
-    rSPR();
-    return 0.0;
-     */
+    RandomVariable& rng = RandomVariable::randomVariableInstance();
+    if(rng.uniformRv() < 0.5)
+        return updateRootAge();
     return updateNodeAge();
+}
+
+double Tree::updateRootAge(void){
+    RandomVariable& rng = RandomVariable::randomVariableInstance();
+
+    double maxChildAge = 0.0;
+    for(Node* c : root->getNeighbors())
+        if(c->getTime() > maxChildAge)
+            maxChildAge = c->getTime();
+
+    double m = std::exp( 4.0 * (rng.uniformRv() - 0.5) );
+    double newRootAge = root->getTime() * m;
+    if(newRootAge <= maxChildAge)
+        return -INFINITY;
+
+    root->setTime(newRootAge);
+
+    return std::log(m);
 }
 
 double Tree::updateNodeAge(void){

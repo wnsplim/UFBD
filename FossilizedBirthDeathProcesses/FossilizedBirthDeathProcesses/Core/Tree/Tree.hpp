@@ -62,6 +62,7 @@ class Tree {
         void                                setBranch(Node* e1, Node* e2, double x);
         void                                showNode(Node* p, int indent);
         double                              updateNodeAge(void);
+        double                              updateRootAge(void);
         void                                writeTree(Node* p, std::stringstream& strm);
         BranchLengths                       branchLengths;
         std::vector<Node*>                  downPassSequence;
