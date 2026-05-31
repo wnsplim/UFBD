@@ -41,7 +41,7 @@ class Tree {
         Node*                               getTaxonNode(std::string name);
         Node*                               getMRCA(const std::vector<std::string>& taxonNames);
         void                                initializeDownPassSequence(void);
-        void                                initializeTimes(void); //populates nodes with their date and fosisl status
+        void                                initializeTimes(void); //starting node ages from topology; extant tips at 0
         void                                keepTips(std::vector<std::string> t);
         double                              update(double scaleLambda);
         void                                print(void);

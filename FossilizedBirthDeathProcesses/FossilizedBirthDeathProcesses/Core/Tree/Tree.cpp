@@ -573,42 +573,32 @@ void Tree::initializeDownPassSequence(void) {
 }
 
 void Tree::initializeTimes(void){
-    calculateTreeHeight();
-    
-    //instantiate node times
-    for (std::vector<Node*>::reverse_iterator rit = downPassSequence.rbegin(); rit != downPassSequence.rend(); rit++){
-        Node* n = *rit;
-        if(n==root)
-            n->setTime(treeHeight);
-        else{
-            Node* p = n;
-            Node* pAnc = p->getAncestor();
-            double heightFromRoot = 0.0;
-            while(p != root){
-                pAnc = p->getAncestor();
-                heightFromRoot += branchLengthFromMap(p, pAnc);
-                p = pAnc;
-            };
-            n->setTime(treeHeight - heightFromRoot);
-        }
-    }
-    
-    //instantiate fossils
+    initializeDownPassSequence();
+
+    std::map<Node*,int> rankToTip;
+    int maxRank = 0;
     for(Node* n : downPassSequence){
-        if(n->getIsTip() == true){
-            Node* p = n;
-            Node* pAnc = p->getAncestor();
-            double height = 0.0;
-            while(p != root){
-                pAnc = p->getAncestor();
-                height += branchLengthFromMap(p, pAnc);
-                p = pAnc;
-            };
-            if(height < treeHeight)
-                n->setIsFossil(true);
-            else
-                n->setIsFossil(false);
+        if(n->getIsTip()){
+            n->setIsFossil(false);
+            rankToTip[n] = 0;
+            continue;
         }
+        int r = 0;
+        for(Node* c : n->getNeighbors())
+            if(c != n->getAncestor() && rankToTip[c] + 1 > r)
+                r = rankToTip[c] + 1;
+        rankToTip[n] = r;
+        if(r > maxRank)
+            maxRank = r;
+    }
+
+    double rootAge = 1.0;
+    treeHeight = rootAge;
+    for(Node* n : downPassSequence){
+        if(n->getIsTip())
+            n->setTime(0.0);
+        else
+            n->setTime(rootAge * (double)rankToTip[n] / (double)maxRank);
     }
 }
 
