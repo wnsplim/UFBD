@@ -1231,9 +1231,12 @@ void Tree::showNode(Node* p, int indent) {
 
 double Tree::update(void){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
-    if(rng.uniformRv() < 0.5)
+    double u = rng.uniformRv();
+    if(u < 1.0/3.0)
         return updateRootAge();
-    return updateNodeAge();
+    if(u < 2.0/3.0)
+        return updateNodeAge();
+    return updateTreeScale();
 }
 
 double Tree::updateRootAge(void){
@@ -1274,6 +1277,21 @@ double Tree::updateNodeAge(void){
     n->setTime(maxChildAge + rng.uniformRv() * (parentAge - maxChildAge));
 
     return 0.0;
+}
+
+double Tree::updateTreeScale(void){
+    RandomVariable& rng = RandomVariable::randomVariableInstance();
+
+    double m = std::exp( 4.0 * (rng.uniformRv() - 0.5) );
+
+    int numScaled = 0;
+    for(Node* n : downPassSequence)
+        if(n->getIsTip() == false){
+            n->setTime(n->getTime() * m);
+            numScaled++;
+        }
+
+    return numScaled * std::log(m);
 }
 
 void Tree::writeTree(Node* p, std::stringstream& strm) {
