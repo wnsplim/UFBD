@@ -133,7 +133,7 @@ double FBDTreeModel::computeGamma(double z, int i){
         }
     }
 
-    bool halfFix = (UserSettings::userSettings().getModel() == Model::UFBD);
+    bool SymmetryCorrection = (UserSettings::userSettings().getModel() == Model::UFBD);
     bool focalIsTip = (unresolvedFossils->isSampledAncestor(i) == false);
     int numFossils = unresolvedFossils->getNumFossils();
     for(int j = 0; j < numFossils; j++){
@@ -150,7 +150,7 @@ double FBDTreeModel::computeGamma(double z, int i){
         if(total == false && zj > crown->getTime())
             continue;
         double w = 1.0;
-        if(halfFix && focalIsTip){
+        if(SymmetryCorrection && focalIsTip){
             Node* crownJ = unresolvedFossils->getCrownNode(j);
             bool jTotal = (unresolvedFossils->getIsCrown(j) == false);
             bool reciprocal = nodeInSubtree(crown, crownJ)
