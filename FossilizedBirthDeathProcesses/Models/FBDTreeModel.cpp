@@ -5,6 +5,7 @@
 #include "PhylogeneticModel.hpp"
 #include "RandomVariable.hpp"
 #include "UserSettings.hpp"
+#include "Probability.hpp"
 
 #include <iostream>
 #include <cmath>
@@ -375,6 +376,19 @@ double FBDTreeModel::lnPriorProbability(void){
         //exclude parameter tree; we account for its prior probability in FBD likelihood
         if( p != parameterTree)
             lnP += p->lnProbability();
+    }
+
+    UserSettings& us = UserSettings::userSettings();
+    if(us.getConditionAgePriorSet()){
+        double x = parameterTree->getTree()->getRoot()->getTime();
+        double p1 = us.getConditionAgePriorP1();
+        double p2 = us.getConditionAgePriorP2();
+        switch(us.getConditionAgePrior()){
+            case ConditionAgePriorFamily::EXP:       lnP += Probability::Exponential::lnPdf(p1, x); break;
+            case ConditionAgePriorFamily::GAMMA:     lnP += Probability::Gamma::lnPdf(p1, p2, x); break;
+            case ConditionAgePriorFamily::LOGNORMAL: lnP += Probability::Normal::lnPdf(p1, p2 * p2, std::log(x)) - std::log(x); break;
+            case ConditionAgePriorFamily::UNIFORM:   lnP += (x < p1 || x > p2) ? -INFINITY : Probability::Uniform::lnPdf(p1, p2, x); break;
+        }
     }
     
     return lnP;

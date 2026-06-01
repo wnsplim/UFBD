@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <set>
 #include <string>
 #include <vector>
@@ -30,6 +31,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
     cladesFile      = "";
     fossilFile      = "";
     conditioningSet = false;
+    conditionAgePriorSet = false;
     model           = Model::UFBD;
     rho             = 1.0;
     seed            = 0;
@@ -99,6 +101,8 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
                 else if (v == "ORIGIN") conditioning = Conditioning::ORIGIN;
                 else Msg::error("Flag \"-cond\" expects crown or origin, but got \"" + val + "\".");
                 conditioningSet = true;
+                if (i + 1 < (int)arguments.size() && knownFlags.find(arguments[i + 1]) == knownFlags.end())
+                    parseConditionAgePrior(arguments[++i]);
             } else if (arg == "-model") {
                 std::string v = val;
                 for (char& ch : v) ch = std::toupper((unsigned char)ch);
@@ -200,6 +204,38 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
         Msg::warning("No parameter output file specified (-po). Use -help for usage.");
 }
 
+void UserSettings::parseConditionAgePrior(const std::string& spec) {
+    size_t lp = spec.find('(');
+    size_t rp = spec.find(')');
+    if (lp == std::string::npos || rp == std::string::npos || rp <= lp)
+        Msg::error("Conditioning-age prior must look like exp(rate), gamma(shape,rate), lognormal(mu,sigma), or unif(a,b); got \"" + spec + "\".");
+    std::string fam = spec.substr(0, lp);
+    for (char& ch : fam) ch = std::tolower((unsigned char)ch);
+    std::vector<double> ps;
+    std::stringstream ss(spec.substr(lp + 1, rp - lp - 1));
+    std::string tok;
+    while (std::getline(ss, tok, ',')) {
+        try { ps.push_back(std::stod(tok)); }
+        catch (...) { Msg::error("Conditioning-age prior parameter \"" + tok + "\" is not a number in \"" + spec + "\"."); }
+    }
+    if (fam == "exp" || fam == "exponential") {
+        if (ps.size() != 1 || ps[0] <= 0.0) Msg::error("exp prior needs one positive rate: exp(rate).");
+        conditionAgePrior = ConditionAgePriorFamily::EXP; conditionAgePriorP1 = ps[0];
+    } else if (fam == "gamma") {
+        if (ps.size() != 2 || ps[0] <= 0.0 || ps[1] <= 0.0) Msg::error("gamma prior needs positive shape,rate: gamma(shape,rate).");
+        conditionAgePrior = ConditionAgePriorFamily::GAMMA; conditionAgePriorP1 = ps[0]; conditionAgePriorP2 = ps[1];
+    } else if (fam == "lognormal" || fam == "lnorm") {
+        if (ps.size() != 2 || ps[1] <= 0.0) Msg::error("lognormal prior needs mu,sigma with sigma>0: lognormal(mu,sigma).");
+        conditionAgePrior = ConditionAgePriorFamily::LOGNORMAL; conditionAgePriorP1 = ps[0]; conditionAgePriorP2 = ps[1];
+    } else if (fam == "unif" || fam == "uniform") {
+        if (ps.size() != 2 || ps[0] >= ps[1]) Msg::error("unif prior needs a<b: unif(a,b).");
+        conditionAgePrior = ConditionAgePriorFamily::UNIFORM; conditionAgePriorP1 = ps[0]; conditionAgePriorP2 = ps[1];
+    } else {
+        Msg::error("Unknown conditioning-age prior family \"" + fam + "\". Use exp / gamma / lognormal / unif.");
+    }
+    conditionAgePriorSet = true;
+}
+
 void UserSettings::print(void) {
 
     checkSettings();
@@ -207,6 +243,15 @@ void UserSettings::print(void) {
     std::cout << "Clades input file name:                " << cladesFile << std::endl;
     std::cout << "Fossils input file name:               " << fossilFile << std::endl;
     std::cout << "Conditioning scheme:                   " << (conditioning == Conditioning::CROWN ? "crown" : "origin") << std::endl;
+    std::cout << "Conditioning age prior:                ";
+    if (!conditionAgePriorSet) std::cout << "improper uniform";
+    else switch (conditionAgePrior) {
+        case ConditionAgePriorFamily::EXP:       std::cout << "exp(" << conditionAgePriorP1 << ")"; break;
+        case ConditionAgePriorFamily::GAMMA:     std::cout << "gamma(" << conditionAgePriorP1 << "," << conditionAgePriorP2 << ")"; break;
+        case ConditionAgePriorFamily::LOGNORMAL: std::cout << "lognormal(" << conditionAgePriorP1 << "," << conditionAgePriorP2 << ")"; break;
+        case ConditionAgePriorFamily::UNIFORM:   std::cout << "unif(" << conditionAgePriorP1 << "," << conditionAgePriorP2 << ")"; break;
+    }
+    std::cout << std::endl;
     std::cout << "Model:                                 " << (model == Model::FBD ? "FBD" : (model == Model::HEA14 ? "HEA14" : "UFBD")) << std::endl;
     std::cout << "Tree output file name:                 " << treeOut << std::endl;
     std::cout << "Parameter output file name:            " << parametersOut << std::endl;
