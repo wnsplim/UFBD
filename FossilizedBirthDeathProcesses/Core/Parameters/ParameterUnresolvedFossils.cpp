@@ -117,6 +117,16 @@ double ParameterUnresolvedFossils::scaleAllAttachAges(double m){
     return count * std::log(m);
 }
 
+double ParameterUnresolvedFossils::scaleAttachAges(const std::vector<int>& indices, double m){
+    lastWasBulk = true;
+    for(int i : indices)
+        if(z[0][i] * m < y[0][i])
+            return -INFINITY;
+    for(int i : indices)
+        z[0][i] *= m;
+    return (int)indices.size() * std::log(m);
+}
+
 void ParameterUnresolvedFossils::updateForAcceptance(void){
     numAcceptances++;
     if(lastWasBulk){

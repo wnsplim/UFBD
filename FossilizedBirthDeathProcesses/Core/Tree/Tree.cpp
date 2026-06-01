@@ -1233,7 +1233,13 @@ void Tree::showNode(Node* p, int indent) {
 }
 
 double Tree::update(double scaleLambda){
-    (void)scaleLambda; // node-slide only
+    RandomVariable& rng = RandomVariable::randomVariableInstance();
+    int numSlideable = 0;
+    for(Node* n : downPassSequence)
+        if(n != root && n->getIsTip() == false)
+            numSlideable++;
+    if(rng.uniformRv() * (numSlideable + 1.0) >= numSlideable)
+        return updateRootAge(scaleLambda);
     lastUpdateWasScale = false;
     return updateNodeAge();
 }
@@ -1246,6 +1252,18 @@ int Tree::scaleInternalAges(double m){
             numScaled++;
         }
     lastUpdateWasScale = true;
+    return numScaled;
+}
+
+int Tree::scaleSubtreeAges(Node* subtreeRoot, double m){
+    int numScaled = 0;
+    subtreeRoot->setTime(subtreeRoot->getTime() * m);
+    numScaled++;
+    for(Node* d : getAllDescendants(subtreeRoot))
+        if(d->getIsTip() == false){
+            d->setTime(d->getTime() * m);
+            numScaled++;
+        }
     return numScaled;
 }
 
@@ -1273,6 +1291,29 @@ double Tree::updateNodeAge(void){
     n->setTime(maxChildAge + rng.uniformRv() * (parentAge - maxChildAge));
 
     return 0.0;
+}
+
+double Tree::updateRootAge(double scaleLambda){
+    RandomVariable& rng = RandomVariable::randomVariableInstance();
+
+    double maxChildAge = 0.0;
+    for(Node* c : root->getNeighbors())
+        if(c->getTime() > maxChildAge)
+            maxChildAge = c->getTime();
+
+    std::map<Node*,double>::iterator it = ageFloors.find(root);
+    if(it != ageFloors.end() && it->second > maxChildAge)
+        maxChildAge = it->second;
+
+    double m = std::exp( scaleLambda * (rng.uniformRv() - 0.5) );
+    double newRootAge = root->getTime() * m;
+    lastUpdateWasScale = true;
+    if(newRootAge <= maxChildAge)
+        return -INFINITY;
+
+    root->setTime(newRootAge);
+
+    return std::log(m);
 }
 
 void Tree::writeTree(Node* p, std::stringstream& strm) {

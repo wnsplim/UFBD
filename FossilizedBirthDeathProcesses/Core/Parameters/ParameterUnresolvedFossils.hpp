@@ -29,6 +29,7 @@ class ParameterUnresolvedFossils : public Parameter {
         void                        print(void);
         double                      update(void);
         double                      scaleAllAttachAges(double m);
+        double                      scaleAttachAges(const std::vector<int>& indices, double m);
         void                        updateForAcceptance(void);
         void                        updateForRejection(void);
 

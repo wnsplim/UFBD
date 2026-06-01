@@ -31,6 +31,7 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      computeGamma(double z, int i);
         void                        computeAgeFloors(std::map<Node*,double>& floors);
         double                      doJointScale(void);
+        double                      doSubtreeScale(void);
         void                        updateGammaCache(void);
         void                        calculateCs(void);
         void                        calculateC1(void);

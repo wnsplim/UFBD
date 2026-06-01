@@ -188,6 +188,42 @@ double FBDTreeModel::doJointScale(void){
     return numScaled * std::log(m) + zJac;
 }
 
+double FBDTreeModel::doSubtreeScale(void){
+    Tree* tree = parameterTree->getTree();
+    tree->setLastUpdateWasScale(false);
+
+    std::vector<Node*> candidates;
+    for(Node* n : tree->getDownPassSequence())
+        if(n != tree->getRoot() && n->getIsTip() == false)
+            candidates.push_back(n);
+    if(candidates.empty())
+        return 0.0;
+
+    Node* node = candidates[(int)(rng.uniformRv() * candidates.size())];
+    double oldAge = node->getTime();
+    double parentAge = node->getAncestor()->getTime();
+    double oldestTip = 0.0;
+    for(Node* d : tree->getAllDescendants(node))
+        if(d->getIsTip() && d->getTime() > oldestTip)
+            oldestTip = d->getTime();
+    double sf = (oldestTip + rng.uniformRv() * (parentAge - oldestTip)) / oldAge;
+
+    std::vector<int> insideZ;
+    int nf = unresolvedFossils->getNumFossils();
+    for(int i = 0; i < nf; i++){
+        if(unresolvedFossils->isSampledAncestor(i))
+            continue;
+        if(nodeInSubtree(unresolvedFossils->getMaxAttachNode(i), node))
+            insideZ.push_back(i);
+    }
+
+    double zJac = unresolvedFossils->scaleAttachAges(insideZ, sf);
+    if(zJac == -INFINITY)
+        return -INFINITY;
+    int numScaled = tree->scaleSubtreeAges(node, sf);
+    return (numScaled - 1) * std::log(sf) + zJac;
+}
+
 void FBDTreeModel::updateGammaCache(void){
     Tree* tree = parameterTree->getTree();
     int nf = unresolvedFossils->getNumFossils();
@@ -363,7 +399,7 @@ double FBDTreeModel::update(void){
                 numSlideable++;
         if(rng.uniformRv() * (numSlideable + 2.0) >= numSlideable){
             lastWasJointScale = true;
-            double r = doJointScale();
+            double r = (rng.uniformRv() < 0.5) ? doJointScale() : doSubtreeScale();
             RandomVariable::setActiveInstance(prevRng);
             return r;
         }

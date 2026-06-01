@@ -45,6 +45,7 @@ class Tree {
         void                                keepTips(std::vector<std::string> t);
         double                              update(double scaleLambda);
         int                                 scaleInternalAges(double m);
+        int                                 scaleSubtreeAges(Node* subtreeRoot, double m);
         void                                setLastUpdateWasScale(bool b) { lastUpdateWasScale = b; }
         void                                assignStartingAges(const std::map<Node*,double>& minAges, double unit);
         void                                addOriginPendant(void);
@@ -72,6 +73,7 @@ class Tree {
         void                                setBranch(Node* e1, Node* e2, double x);
         void                                showNode(Node* p, int indent);
         double                              updateNodeAge(void);
+        double                              updateRootAge(double scaleLambda);
         void                                writeTree(Node* p, std::stringstream& strm);
         BranchLengths                       branchLengths;
         std::map<Node*,double>              ageFloors;
