@@ -67,21 +67,26 @@ double FBDTreeModel::calculateFBDProbability(void){
     double poHatRoot = calculatePoHat(rootAge);
     
     //FBD probability in log land
-    //term 1
+    bool useOrigin = (UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN);
     double fbdProb = 0.0;
-    fbdProb -= 2 * std::log(lambdaVal * (1 - poHatRoot));
 
-    //term 2
-    fbdProb += log4LambdaRho;
-    fbdProb -= std::log(qRoot);
+    //term 1: conditioning
+    if(useOrigin){
+        fbdProb -= std::log(lambdaVal);
+        fbdProb -= std::log(1 - poHatRoot);
+    }else{
+        fbdProb -= 2 * std::log(lambdaVal * (1 - poHatRoot));
+        fbdProb += log4LambdaRho;
+        fbdProb -= std::log(qRoot);
+    }
 
-    //term 3
+    //term 2: main body
     fbdProb += numInternalNodes * log4LambdaRho;
     for(Node* n : dpseq)
         if(n->getIsTip() == false)
             fbdProb -= std::log(calculateQt(n->getTime()));
 
-    //term 4: unresolved-fossil attachment
+    //term 3: unresolved-fossil attachment
     int numFossils = unresolvedFossils->getNumFossils();
     bool useGamma = (UserSettings::userSettings().getModel() != Model::FBD);
     if(useGamma)

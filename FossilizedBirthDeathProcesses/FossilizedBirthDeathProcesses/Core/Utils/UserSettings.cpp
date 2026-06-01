@@ -70,6 +70,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
             return;
         }
 
+
         // All remaining flags require a value — check it exists
         if (valueFlags.count(arg)) {
             if (i + 1 >= (int)arguments.size())
