@@ -6,6 +6,7 @@
 #include "RandomVariable.hpp"
 #include "UserSettings.hpp"
 #include "Probability.hpp"
+#include "Msg.hpp"
 
 #include <iostream>
 #include <cmath>
@@ -23,6 +24,9 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     RandomVariable::setActiveInstance(&rng);
 
     parameterTree = new ParameterTree(1.0, this);
+    isFBD = (UserSettings::userSettings().getModel() == Model::FBD);
+    if(isFBD)
+        resolveFossils(t, clades, fossils);
     parameterTree->setTree(t);
     parameters.push_back(parameterTree);
     
@@ -35,8 +39,22 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     parameters.push_back(psi);
     rho = UserSettings::userSettings().getRho();
 
-    unresolvedFossils = new ParameterUnresolvedFossils(1.0, this, parameterTree->getTree(), clades, fossils);
-    parameters.push_back(unresolvedFossils);
+    unresolvedFossils = nullptr;
+    if(isFBD){
+        Tree* wt = parameterTree->getTree();
+        for(Fossil& f : fossils){
+            Clade* clade = nullptr;
+            for(Clade& c : clades)
+                if(c.getName() == f.getClade()){
+                    clade = &c;
+                    break;
+                }
+            fossilCrown.push_back(wt->getMRCA(clade->getTaxa()));
+        }
+    }else{
+        unresolvedFossils = new ParameterUnresolvedFossils(1.0, this, parameterTree->getTree(), clades, fossils);
+        parameters.push_back(unresolvedFossils);
+    }
 
     //normalize proposal probabilities
     double sum = 0.0;
@@ -60,7 +78,6 @@ double FBDTreeModel::calculateFBDProbability(void){
     rhoVal = rho;
     psiVal = psi->getValue();
     double log4LambdaRho = std::log(4*lambdaVal*rhoVal);
-    double log2Lambda = std::log(2*lambdaVal);
     
     calculateC1();
     calculateC2();
@@ -81,27 +98,41 @@ double FBDTreeModel::calculateFBDProbability(void){
     }
 
     //term 2: main body
+    if(isFBD){//this chunk is for resolved (vanilla) FBD
+        for(Node* n : dpseq){
+            if(n->getIsTip())
+                continue;
+            bool isSplit = false;
+            for(Node* nb : n->getNeighbors())
+                if(nb != n->getAncestor() && nb->getIsTip() && nb->getIsFossil()){
+                    isSplit = true;
+                    break;
+                }
+            if(isSplit)
+                continue;
+            fbdProb += log4LambdaRho;
+            fbdProb -= std::log(calculateQt(n->getTime()));
+        }
+        for(Node* n : dpseq)
+            if(n->getIsTip() && n->getIsFossil())
+                fbdProb += fossilPqLn(n->getTime(), n->getAncestor()->getTime());
+        return fbdProb;
+    }
+
     fbdProb += numInternalNodes * log4LambdaRho;
     for(Node* n : dpseq)
         if(n->getIsTip() == false)
             fbdProb -= std::log(calculateQt(n->getTime()));
 
-    //term 3: unresolved-fossil attachment
+    //term 3: fossil attachment
     int numFossils = unresolvedFossils->getNumFossils();
-    bool useGamma = (UserSettings::userSettings().getModel() != Model::FBD);
-    if(useGamma)
-        updateGammaCache();
+    updateGammaCache();
     for(int i = 0; i < numFossils; i++){
-        fbdProb += std::log(psiVal);
-        if(unresolvedFossils->isSampledAncestor(i))
+        if(unresolvedFossils->isSampledAncestor(i)){
+            fbdProb += std::log(psiVal);
             continue;
-        double yi = unresolvedFossils->getFossilAge(i);
-        double zi = unresolvedFossils->getAttachAge(i);
-        if(useGamma)
-            fbdProb += cachedGammaLn[i];
-        fbdProb += log2Lambda;
-        fbdProb += std::log(calculatePo(yi)) + std::log(calculateQt(yi));
-        fbdProb -= std::log(calculateQt(zi));
+        }
+        fbdProb += fossilPqLn(unresolvedFossils->getFossilAge(i), unresolvedFossils->getAttachAge(i)) + cachedGammaLn[i];
     }
     return fbdProb;
 }
@@ -161,6 +192,54 @@ double FBDTreeModel::computeGamma(double z, int i){
         count += w;
     }
     return count;
+}
+
+void FBDTreeModel::resolveFossils(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils){
+    RandomVariable& rv = RandomVariable::randomVariableInstance();
+    for(Fossil& f : fossils){
+        Clade* clade = nullptr;
+        for(Clade& c : clades)
+            if(c.getName() == f.getClade()){
+                clade = &c;
+                break;
+            }
+        if(clade == nullptr)
+            Msg::error("fossil '" + f.getTaxon() + "' assigned to undefined clade '" + f.getClade() + "'");
+        Node* crown = t->getMRCA(clade->getTaxa());
+        bool isCrown = (f.getAssignment() == Assignment::CROWN);
+        if(crown->getAncestor() == crown)
+            isCrown = true;
+        double y = 0.5 * (f.getMinAge() + f.getMaxAge());
+        double ceiling = isCrown ? crown->getTime() : crown->getAncestor()->getTime();
+
+        std::vector<Node*> hostChildren;
+        std::vector<double> hostLo;
+        std::vector<double> hostHi;
+        for(Node* n : t->getDownPassSequence()){
+            if(n == t->getRoot())
+                continue;
+            Node* anc = n->getAncestor();
+            bool inZone = nodeInSubtree(anc, crown);
+            if(inZone == false && isCrown == false && n == crown)
+                inZone = true;
+            if(inZone == false)
+                continue;
+            double lo = std::max(y, n->getTime());
+            double hi = std::min(ceiling, anc->getTime());
+            if(lo < hi){
+                hostChildren.push_back(n);
+                hostLo.push_back(lo);
+                hostHi.push_back(hi);
+            }
+        }
+        int k = (int)(rv.uniformRv() * hostChildren.size());
+        double z = hostLo[k] + rv.uniformRv() * (hostHi[k] - hostLo[k]);
+        t->insertFossilTip(hostChildren[k], f.getTaxon(), y, z);
+
+        fossilName.push_back(f.getTaxon());
+        fossilIsCrown.push_back(isCrown);
+        fossilY.push_back(y);
+    }
 }
 
 void FBDTreeModel::computeAgeFloors(std::map<Node*,double>& floors){
@@ -344,6 +423,10 @@ double FBDTreeModel::calculateLnSurvival(double t){
     return lnAbsNum - lnAbsDenom;
 }
 
+double FBDTreeModel::fossilPqLn(double y, double z){
+    return std::log(psiVal) + std::log(2*lambdaVal) + std::log(calculatePo(y)) + std::log(calculateQt(y)) - std::log(calculateQt(z));
+}
+
 std::vector<std::string> FBDTreeModel::getParameterNames(void){
     std::vector<std::string> names;
     for(Parameter* p : parameters)
@@ -416,7 +499,7 @@ double FBDTreeModel::update(void){
         }
     }
     lastWasJointScale = false;
-    if(updatedParameter == parameterTree){
+    if(updatedParameter == parameterTree && isFBD == false){
         Tree* t = parameterTree->getTree();
         int numSlideable = 0;
         for(Node* n : t->getDownPassSequence())

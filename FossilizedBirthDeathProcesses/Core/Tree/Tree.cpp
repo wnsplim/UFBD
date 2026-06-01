@@ -162,6 +162,40 @@ Node* Tree::addNode(void) {
     nodes.push_back(newNode);
     return newNode;
 }
+
+Node* Tree::insertFossilTip(Node* hostChild, std::string name, double y, double z){
+    Node* hostParent = hostChild->getAncestor();
+
+    Node* split = addNode();
+    split->setIsTip(false);
+    split->setIsFossil(false);
+    split->setTime(z);
+
+    Node* fossil = addNode();
+    fossil->setIsTip(true);
+    fossil->setIsFossil(true);
+    fossil->setName(name);
+    fossil->setTime(y);
+
+    hostParent->removeNeighbor(hostChild);
+    hostChild->removeNeighbor(hostParent);
+
+    hostParent->addNeighbor(split);
+    split->addNeighbor(hostParent);
+    split->setAncestor(hostParent);
+
+    split->addNeighbor(hostChild);
+    hostChild->addNeighbor(split);
+    hostChild->setAncestor(split);
+
+    split->addNeighbor(fossil);
+    fossil->addNeighbor(split);
+    fossil->setAncestor(split);
+
+    initializeDownPassSequence();
+    reindexNodes();
+    return fossil;
+}
  
 void Tree::calculateTreeHeight(void){
     treeHeight = 0.0;

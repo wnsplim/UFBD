@@ -32,6 +32,7 @@ class FBDTreeModel : public PhylogeneticModel {
         void                        computeAgeFloors(std::map<Node*,double>& floors);
         double                      doJointScale(void);
         double                      doSubtreeScale(void);
+        void                        resolveFossils(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils);
         void                        updateGammaCache(void);
         void                        calculateCs(void);
         void                        calculateC1(void);
@@ -40,12 +41,17 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      calculatePo(double t);
         double                      calculatePoHat(double t);
         double                      calculateLnSurvival(double t);
+        double                      fossilPqLn(double y, double z);
         //ordered by memory footprint
         ParameterDouble*            lambda;
         ParameterDouble*            mu;
         ParameterDouble*            psi;
         ParameterTree*              parameterTree;
         ParameterUnresolvedFossils* unresolvedFossils;
+        std::vector<std::string>    fossilName;
+        std::vector<Node*>          fossilCrown;
+        std::vector<bool>           fossilIsCrown;
+        std::vector<double>         fossilY;
         double                      rho;
         double                      c1;
         double                      c2;
@@ -61,6 +67,7 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<int>            prevSa;
         std::vector<double>         prevNodeAge;
         bool                        cacheInit;
+        bool                        isFBD;
 };
 
 
