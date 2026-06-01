@@ -39,6 +39,7 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      calculateQt(double t);
         double                      calculatePo(double t);
         double                      calculatePoHat(double t);
+        double                      calculateLnSurvival(double t);
         //ordered by memory footprint
         ParameterDouble*            lambda;
         ParameterDouble*            mu;

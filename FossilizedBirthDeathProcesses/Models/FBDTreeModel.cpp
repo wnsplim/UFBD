@@ -64,7 +64,6 @@ double FBDTreeModel::calculateFBDProbability(void){
     calculateC1();
     calculateC2();
     double qRoot = calculateQt(rootAge);
-    double poHatRoot = calculatePoHat(rootAge);
     
     //FBD probability in log land
     bool useOrigin = (UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN);
@@ -73,9 +72,9 @@ double FBDTreeModel::calculateFBDProbability(void){
     //term 1: conditioning
     if(useOrigin){
         fbdProb -= std::log(lambdaVal);
-        fbdProb -= std::log(1 - poHatRoot);
+        fbdProb -= calculateLnSurvival(rootAge);
     }else{
-        fbdProb -= 2 * std::log(lambdaVal * (1 - poHatRoot));
+        fbdProb -= 2 * (std::log(lambdaVal) + calculateLnSurvival(rootAge));
         fbdProb += log4LambdaRho;
         fbdProb -= std::log(qRoot);
     }
@@ -330,6 +329,18 @@ double FBDTreeModel::calculatePoHat(double t){
     double tmp = rhoVal * (lambdaVal - muVal);
     tmp /= (lambdaVal * rhoVal + (lambdaVal*(1-rhoVal) - muVal)*std::exp(-1 * (lambdaVal - muVal) * t) );
     return 1 - tmp;
+}
+
+double FBDTreeModel::calculateLnSurvival(double t){
+    double a = lambdaVal - muVal;
+    double B = lambdaVal * (1.0 - rhoVal) - muVal;
+    double lnAbsNum = std::log(std::abs(rhoVal * a));
+    double lnAbsDenom;
+    if(-a * t > 0.0)
+        lnAbsDenom = (-a * t) + std::log(std::abs(lambdaVal * rhoVal * std::exp(a * t) + B));
+    else
+        lnAbsDenom = std::log(std::abs(lambdaVal * rhoVal + B * std::exp(-a * t)));
+    return lnAbsNum - lnAbsDenom;
 }
 
 std::vector<std::string> FBDTreeModel::getParameterNames(void){
