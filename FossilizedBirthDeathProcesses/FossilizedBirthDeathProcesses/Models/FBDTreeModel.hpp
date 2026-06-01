@@ -31,6 +31,7 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      computeGamma(double z, int i);
         void                        computeAgeFloors(std::map<Node*,double>& floors);
         double                      doJointScale(void);
+        void                        updateGammaCache(void);
         void                        calculateCs(void);
         void                        calculateC1(void);
         void                        calculateC2(void);
@@ -51,6 +52,13 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      rhoVal;
         double                      psiVal;
         bool                        lastWasJointScale;
+        std::vector<double>         cachedGammaLn;
+        std::vector<char>           gammaStale;
+        std::vector<double>         prevY;
+        std::vector<double>         prevZ;
+        std::vector<int>            prevSa;
+        std::vector<double>         prevNodeAge;
+        bool                        cacheInit;
 };
 
 

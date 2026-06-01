@@ -16,6 +16,7 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     c2(0.0){
 
     lastWasJointScale = false;
+    cacheInit = false;
     rng.setSeed(seed);
     RandomVariable* prevRng = RandomVariable::getActiveInstance();
     RandomVariable::setActiveInstance(&rng);
@@ -83,6 +84,8 @@ double FBDTreeModel::calculateFBDProbability(void){
     //term 4: unresolved-fossil attachment
     int numFossils = unresolvedFossils->getNumFossils();
     bool useGamma = (UserSettings::userSettings().getModel() != Model::FBD);
+    if(useGamma)
+        updateGammaCache();
     for(int i = 0; i < numFossils; i++){
         fbdProb += std::log(psiVal);
         if(unresolvedFossils->isSampledAncestor(i))
@@ -90,7 +93,7 @@ double FBDTreeModel::calculateFBDProbability(void){
         double yi = unresolvedFossils->getFossilAge(i);
         double zi = unresolvedFossils->getAttachAge(i);
         if(useGamma)
-            fbdProb += std::log(computeGamma(zi, i));
+            fbdProb += cachedGammaLn[i];
         fbdProb += log2Lambda;
         fbdProb += std::log(calculatePo(yi)) + std::log(calculateQt(yi));
         fbdProb -= std::log(calculateQt(zi));
@@ -178,6 +181,80 @@ double FBDTreeModel::doJointScale(void){
         return -INFINITY;
     int numScaled = parameterTree->getTree()->scaleInternalAges(m);
     return numScaled * std::log(m) + zJac;
+}
+
+void FBDTreeModel::updateGammaCache(void){
+    Tree* tree = parameterTree->getTree();
+    int nf = unresolvedFossils->getNumFossils();
+    std::vector<Node*>& dpseq = tree->getDownPassSequence();
+
+    if(cacheInit == false){
+        cachedGammaLn.assign(nf, 0.0);
+        gammaStale.assign(nf, 1);
+        prevY.assign(nf, -1.0);
+        prevZ.assign(nf, -1.0);
+        prevSa.assign(nf, -1);
+        prevNodeAge.assign(tree->getNumNodes(), -1.0);
+        cacheInit = true;
+    }
+
+    for(int i = 0; i < nf; i++){
+        double yi = unresolvedFossils->getFossilAge(i);
+        double zi = unresolvedFossils->getAttachAge(i);
+        int sai = unresolvedFossils->isSampledAncestor(i) ? 1 : 0;
+        if(yi == prevY[i] && zi == prevZ[i] && sai == prevSa[i])
+            continue;
+        gammaStale[i] = 1;
+        bool wasTerm = (prevSa[i] == 0);
+        bool isTerm = (sai == 0);
+        if((wasTerm || isTerm) && prevY[i] >= 0.0){
+            double lo = std::min(prevY[i], yi);
+            double hi = -INFINITY;
+            if(wasTerm) hi = std::max(hi, prevZ[i]);
+            if(isTerm)  hi = std::max(hi, zi);
+            for(int j = 0; j < nf; j++){
+                if(gammaStale[j]) continue;
+                double tj = unresolvedFossils->isSampledAncestor(j) ? unresolvedFossils->getFossilAge(j) : unresolvedFossils->getAttachAge(j);
+                if(tj > lo && tj < hi) gammaStale[j] = 1;
+            }
+        }
+    }
+
+    std::vector<std::pair<double,double> > changedIntervals;
+    for(Node* n : dpseq){
+        if(n == tree->getRoot()) continue;
+        Node* anc = n->getAncestor();
+        double pc = prevNodeAge[n->getOffset()];
+        double pp = prevNodeAge[anc->getOffset()];
+        if(pc < 0.0 || pp < 0.0) continue;
+        if(n->getTime() != pc || anc->getTime() != pp)
+            changedIntervals.push_back(std::make_pair(std::min(n->getTime(), pc), std::max(anc->getTime(), pp)));
+    }
+    if(changedIntervals.empty() == false){
+        for(int i = 0; i < nf; i++){
+            if(gammaStale[i]) continue;
+            double ti = unresolvedFossils->isSampledAncestor(i) ? unresolvedFossils->getFossilAge(i) : unresolvedFossils->getAttachAge(i);
+            for(std::pair<double,double>& iv : changedIntervals)
+                if(ti > iv.first && ti < iv.second){ gammaStale[i] = 1; break; }
+        }
+    }
+
+    for(int i = 0; i < nf; i++){
+        if(gammaStale[i] == 0) continue;
+        if(unresolvedFossils->isSampledAncestor(i) == false){
+            double g = computeGamma(unresolvedFossils->getAttachAge(i), i);
+            cachedGammaLn[i] = (g > 0.0) ? std::log(g) : -INFINITY;
+        }
+        gammaStale[i] = 0;
+    }
+
+    for(int i = 0; i < nf; i++){
+        prevY[i] = unresolvedFossils->getFossilAge(i);
+        prevZ[i] = unresolvedFossils->getAttachAge(i);
+        prevSa[i] = unresolvedFossils->isSampledAncestor(i) ? 1 : 0;
+    }
+    for(Node* n : dpseq)
+        prevNodeAge[n->getOffset()] = n->getTime();
 }
 
 void FBDTreeModel::calculateC1(void){
