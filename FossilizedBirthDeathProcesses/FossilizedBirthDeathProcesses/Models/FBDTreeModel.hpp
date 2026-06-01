@@ -27,13 +27,14 @@ class FBDTreeModel : public PhylogeneticModel {
         void                        updateForRejection(void);
     private:
         double                      calculateFBDProbability(void);
+        double                      computeGamma(double z, int i);
         void                        calculateCs(void);
         void                        calculateC1(void);
         void                        calculateC2(void);
         double                      calculateQt(double t);
         double                      calculatePo(double t);
         double                      calculatePoHat(double t);
-        //ordered by menmory footprint
+        //ordered by memory footprint
         ParameterDouble*            lambda;
         ParameterDouble*            mu;
         ParameterDouble*            psi;

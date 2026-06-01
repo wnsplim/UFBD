@@ -79,22 +79,79 @@ double FBDTreeModel::calculateFBDProbability(void){
         if(n->getIsTip() == false)
             fbdProb -= std::log(calculateQt(n->getTime()));
 
-    //term 4
-        //by convention: ancestral fossils are still flagged as tips
-    for(Node* n : dpseq)
-        if(n->getIsFossil())
-            fbdProb += std::log(psiVal * tree->getNumLineagesAtTime(n->getTime()));
-
-    for(Node* n : dpseq)
-        if(n->getIsFossil() && (n->getDescendants().size() == 0)){
-            double nTime = n->getTime();
-            double nAttachTime = nTime + tree->getBranchLength(n, n->getAncestor());
-            //fossil is not ancestral
-            fbdProb += log2Lambda;
-            fbdProb += std::log(calculatePo(nTime)) + std::log(calculateQt(nTime));
-            fbdProb -= std::log(calculateQt(nAttachTime));
-        }
+    //term 4: unresolved-fossil attachment
+    int numFossils = unresolvedFossils->getNumFossils();
+    bool useGamma = (UserSettings::userSettings().getModel() != Model::FBD);
+    for(int i = 0; i < numFossils; i++){
+        fbdProb += std::log(psiVal);
+        if(unresolvedFossils->isSampledAncestor(i))
+            continue;
+        double yi = unresolvedFossils->getFossilAge(i);
+        double zi = unresolvedFossils->getAttachAge(i);
+        if(useGamma)
+            fbdProb += std::log(computeGamma(zi, i));
+        fbdProb += log2Lambda;
+        fbdProb += std::log(calculatePo(yi)) + std::log(calculateQt(yi));
+        fbdProb -= std::log(calculateQt(zi));
+    }
     return fbdProb;
+}
+
+static bool nodeInSubtree(Node* node, Node* subtreeRoot){
+    for(Node* p = node; ; p = p->getAncestor()){
+        if(p == subtreeRoot)
+            return true;
+        if(p->getAncestor() == p) // reached the root self-loop
+            return false;
+    }
+}
+
+double FBDTreeModel::computeGamma(double z, int i){
+    Tree* tree = parameterTree->getTree();
+    Node* crown = unresolvedFossils->getCrownNode(i);
+    bool total = (unresolvedFossils->getIsCrown(i) == false);
+    double count = 0.0;
+    for(Node* n : tree->getDownPassSequence()){
+        if(n == tree->getRoot())
+            continue;
+        Node* anc = n->getAncestor();
+        if(n->getTime() < z && z < anc->getTime()){
+            bool inZone = nodeInSubtree(anc, crown);
+            if(inZone == false && total && n == crown)
+                inZone = true;
+            if(inZone)
+                count++;
+        }
+    }
+
+    bool halfFix = (UserSettings::userSettings().getModel() == Model::UFBD);
+    bool focalIsTip = (unresolvedFossils->isSampledAncestor(i) == false);
+    int numFossils = unresolvedFossils->getNumFossils();
+    for(int j = 0; j < numFossils; j++){
+        if(j == i)
+            continue;
+        if(unresolvedFossils->isSampledAncestor(j))
+            continue;
+        double yj = unresolvedFossils->getFossilAge(j);
+        double zj = unresolvedFossils->getAttachAge(j);
+        if(yj >= z || z >= zj)
+            continue;
+        if(nodeInSubtree(unresolvedFossils->getCrownNode(j), crown) == false)
+            continue;
+        if(total == false && zj > crown->getTime())
+            continue;
+        double w = 1.0;
+        if(halfFix && focalIsTip){
+            Node* crownJ = unresolvedFossils->getCrownNode(j);
+            bool jTotal = (unresolvedFossils->getIsCrown(j) == false);
+            bool reciprocal = nodeInSubtree(crown, crownJ)
+                              && (jTotal || z <= crownJ->getTime());
+            if(reciprocal)
+                w = 0.5;
+        }
+        count += w;
+    }
+    return count;
 }
 
 void FBDTreeModel::calculateC1(void){

@@ -20,6 +20,8 @@ class ParameterUnresolvedFossils : public Parameter {
         double                      getFossilAge(int i) { return y[0][i]; }
         double                      getAttachAge(int i) { return z[0][i]; }
         bool                        isSampledAncestor(int i) { return sa[0][i] != 0; }
+        Node*                       getCrownNode(int i) { return crownNode[i]; }
+        bool                        getIsCrown(int i) { return isCrown[i]; }
         double                      getMinAttachAge(int i);
         double                      getMaxAttachAge(int i);
         double                      lnProbability(void) { return 0.0; } // density is in the model's lnLikelihood, not a prior here
