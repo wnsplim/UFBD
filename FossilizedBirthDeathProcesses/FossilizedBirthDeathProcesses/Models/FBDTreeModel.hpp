@@ -7,6 +7,7 @@
 #include "PhylogeneticModel.hpp"
 #include "Tree.hpp"
 
+#include <map>
 #include <vector>
 
 class Parameter;
@@ -28,6 +29,8 @@ class FBDTreeModel : public PhylogeneticModel {
     private:
         double                      calculateFBDProbability(void);
         double                      computeGamma(double z, int i);
+        void                        computeAgeFloors(std::map<Node*,double>& floors);
+        double                      doJointScale(void);
         void                        calculateCs(void);
         void                        calculateC1(void);
         void                        calculateC2(void);
@@ -47,6 +50,7 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      muVal;
         double                      rhoVal;
         double                      psiVal;
+        bool                        lastWasJointScale;
 };
 
 

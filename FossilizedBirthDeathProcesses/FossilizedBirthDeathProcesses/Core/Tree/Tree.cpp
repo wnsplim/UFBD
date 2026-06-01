@@ -1233,40 +1233,20 @@ void Tree::showNode(Node* p, int indent) {
 }
 
 double Tree::update(double scaleLambda){
-    RandomVariable& rng = RandomVariable::randomVariableInstance();
-
-    int numSlideable = 0;
-    for(Node* n : downPassSequence)
-        if(n != root && n->getIsTip() == false)
-            numSlideable++;
-
-    double u = rng.uniformRv() * (numSlideable + 2.0);
-    if(u < numSlideable){
-        lastUpdateWasScale = false;
-        return updateNodeAge();
-    }
-    lastUpdateWasScale = true;
-    if(u < numSlideable + 1.0)
-        return updateRootAge(scaleLambda);
-    return updateTreeScale(scaleLambda);
+    (void)scaleLambda; // node-slide only
+    lastUpdateWasScale = false;
+    return updateNodeAge();
 }
 
-double Tree::updateRootAge(double scaleLambda){
-    RandomVariable& rng = RandomVariable::randomVariableInstance();
-
-    double maxChildAge = 0.0;
-    for(Node* c : root->getNeighbors())
-        if(c->getTime() > maxChildAge)
-            maxChildAge = c->getTime();
-
-    double m = std::exp( scaleLambda * (rng.uniformRv() - 0.5) );
-    double newRootAge = root->getTime() * m;
-    if(newRootAge <= maxChildAge)
-        return -INFINITY;
-
-    root->setTime(newRootAge);
-
-    return std::log(m);
+int Tree::scaleInternalAges(double m){
+    int numScaled = 0;
+    for(Node* n : downPassSequence)
+        if(n->getIsTip() == false){
+            n->setTime(n->getTime() * m);
+            numScaled++;
+        }
+    lastUpdateWasScale = true;
+    return numScaled;
 }
 
 double Tree::updateNodeAge(void){
@@ -1286,24 +1266,13 @@ double Tree::updateNodeAge(void){
         if(nb != n->getAncestor() && nb->getTime() > maxChildAge)
             maxChildAge = nb->getTime();
 
+    std::map<Node*,double>::iterator it = ageFloors.find(n);
+    if(it != ageFloors.end() && it->second > maxChildAge)
+        maxChildAge = it->second;
+
     n->setTime(maxChildAge + rng.uniformRv() * (parentAge - maxChildAge));
 
     return 0.0;
-}
-
-double Tree::updateTreeScale(double scaleLambda){
-    RandomVariable& rng = RandomVariable::randomVariableInstance();
-
-    double m = std::exp( scaleLambda * (rng.uniformRv() - 0.5) );
-
-    int numScaled = 0;
-    for(Node* n : downPassSequence)
-        if(n->getIsTip() == false){
-            n->setTime(n->getTime() * m);
-            numScaled++;
-        }
-
-    return numScaled * std::log(m);
 }
 
 void Tree::writeTree(Node* p, std::stringstream& strm) {

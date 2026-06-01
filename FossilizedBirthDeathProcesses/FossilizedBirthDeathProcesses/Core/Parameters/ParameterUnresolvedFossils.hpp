@@ -21,12 +21,14 @@ class ParameterUnresolvedFossils : public Parameter {
         double                      getAttachAge(int i) { return z[0][i]; }
         bool                        isSampledAncestor(int i) { return sa[0][i] != 0; }
         Node*                       getCrownNode(int i) { return crownNode[i]; }
+        Node*                       getMaxAttachNode(int i) { return isCrown[i] ? crownNode[i] : originNode[i]; }
         bool                        getIsCrown(int i) { return isCrown[i]; }
         double                      getMinAttachAge(int i);
         double                      getMaxAttachAge(int i);
         double                      lnProbability(void) { return 0.0; } // density is in the model's lnLikelihood, not a prior here
         void                        print(void);
         double                      update(void);
+        double                      scaleAllAttachAges(double m);
         void                        updateForAcceptance(void);
         void                        updateForRejection(void);
 
@@ -45,6 +47,7 @@ class ParameterUnresolvedFossils : public Parameter {
         std::vector<int>            sa[2];
         int                         lastFossil;
         bool                        lastWasAttach;
+        bool                        lastWasBulk;
         int                         numAcceptances;
         int                         numRejections;
 };

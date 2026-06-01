@@ -1,3 +1,5 @@
+#include <cmath>
+
 #include "FBDInput.hpp"
 #include "Msg.hpp"
 #include "Node.hpp"
@@ -13,6 +15,7 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
     numRejections = 0;
     lastFossil = -1;
     lastWasAttach = false;
+    lastWasBulk = false;
 
     yMin.resize(numFossils);
     yMax.resize(numFossils);
@@ -70,6 +73,7 @@ double ParameterUnresolvedFossils::getMaxAttachAge(int i){
 double ParameterUnresolvedFossils::update(void){
     if(numFossils == 0)
         return 0.0;
+    lastWasBulk = false;
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastFossil = (int)(rng.uniformRv() * numFossils);
     if(rng.uniformRv() < 0.5){
@@ -95,9 +99,30 @@ double ParameterUnresolvedFossils::updateAttachAge(int i){
     return 0.0;
 }
 
+double ParameterUnresolvedFossils::scaleAllAttachAges(double m){
+    lastWasBulk = true;
+    for(int i = 0; i < numFossils; i++){
+        if(sa[0][i] != 0)
+            continue;
+        if(z[0][i] * m < y[0][i])
+            return -INFINITY;
+    }
+    int count = 0;
+    for(int i = 0; i < numFossils; i++){
+        if(sa[0][i] != 0)
+            continue;
+        z[0][i] *= m;
+        count++;
+    }
+    return count * std::log(m);
+}
+
 void ParameterUnresolvedFossils::updateForAcceptance(void){
     numAcceptances++;
-    if(lastWasAttach)
+    if(lastWasBulk){
+        for(int i = 0; i < numFossils; i++)
+            z[1][i] = z[0][i];
+    }else if(lastWasAttach)
         z[1][lastFossil] = z[0][lastFossil];
     else
         y[1][lastFossil] = y[0][lastFossil];
@@ -105,7 +130,10 @@ void ParameterUnresolvedFossils::updateForAcceptance(void){
 
 void ParameterUnresolvedFossils::updateForRejection(void){
     numRejections++;
-    if(lastWasAttach)
+    if(lastWasBulk){
+        for(int i = 0; i < numFossils; i++)
+            z[0][i] = z[1][i];
+    }else if(lastWasAttach)
         z[0][lastFossil] = z[1][lastFossil];
     else
         y[0][lastFossil] = y[1][lastFossil];

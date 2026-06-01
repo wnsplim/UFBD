@@ -44,8 +44,11 @@ class Tree {
         void                                initializeTimes(void); //starting node ages from topology; extant tips at 0
         void                                keepTips(std::vector<std::string> t);
         double                              update(double scaleLambda);
+        int                                 scaleInternalAges(double m);
+        void                                setLastUpdateWasScale(bool b) { lastUpdateWasScale = b; }
         void                                assignStartingAges(const std::map<Node*,double>& minAges, double unit);
         void                                addOriginPendant(void);
+        void                                setAgeFloors(const std::map<Node*,double>& f) { ageFloors = f; }
         void                                print(void);
         void                                print(std::string header);
         std::pair<Node*,Node*>              randomlyChooseBranch(void);
@@ -69,10 +72,9 @@ class Tree {
         void                                setBranch(Node* e1, Node* e2, double x);
         void                                showNode(Node* p, int indent);
         double                              updateNodeAge(void);
-        double                              updateRootAge(double scaleLambda);
-        double                              updateTreeScale(double scaleLambda);
         void                                writeTree(Node* p, std::stringstream& strm);
         BranchLengths                       branchLengths;
+        std::map<Node*,double>              ageFloors;
         std::vector<Node*>                  downPassSequence;
         std::vector<Node*>                  nodes;
         std::vector<Node*>                  tips;

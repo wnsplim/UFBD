@@ -14,7 +14,8 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     PhylogeneticModel(),
     c1(0.0),
     c2(0.0){
-    
+
+    lastWasJointScale = false;
     rng.setSeed(seed);
     RandomVariable* prevRng = RandomVariable::getActiveInstance();
     RandomVariable::setActiveInstance(&rng);
@@ -154,6 +155,31 @@ double FBDTreeModel::computeGamma(double z, int i){
     return count;
 }
 
+void FBDTreeModel::computeAgeFloors(std::map<Node*,double>& floors){
+    int numFossils = unresolvedFossils->getNumFossils();
+    for(int i = 0; i < numFossils; i++){
+        if(unresolvedFossils->isSampledAncestor(i))
+            continue;
+        Node* node = unresolvedFossils->getMaxAttachNode(i);
+        double bound = unresolvedFossils->getAttachAge(i);
+        if(unresolvedFossils->getFossilAge(i) > bound)
+            bound = unresolvedFossils->getFossilAge(i);
+        std::map<Node*,double>::iterator it = floors.find(node);
+        if(it == floors.end() || bound > it->second)
+            floors[node] = bound;
+    }
+}
+
+double FBDTreeModel::doJointScale(void){
+    double m = std::exp(parameterTree->getScaleLambda() * (rng.uniformRv() - 0.5));
+    parameterTree->getTree()->setLastUpdateWasScale(true);
+    double zJac = unresolvedFossils->scaleAllAttachAges(m);
+    if(zJac == -INFINITY)
+        return -INFINITY;
+    int numScaled = parameterTree->getTree()->scaleInternalAges(m);
+    return numScaled * std::log(m) + zJac;
+}
+
 void FBDTreeModel::calculateC1(void){
     c1 =    std::abs(
                 std::sqrt(
@@ -246,6 +272,23 @@ double FBDTreeModel::update(void){
             break;
         }
     }
+    lastWasJointScale = false;
+    if(updatedParameter == parameterTree){
+        Tree* t = parameterTree->getTree();
+        int numSlideable = 0;
+        for(Node* n : t->getDownPassSequence())
+            if(n != t->getRoot() && n->getIsTip() == false)
+                numSlideable++;
+        if(rng.uniformRv() * (numSlideable + 2.0) >= numSlideable){
+            lastWasJointScale = true;
+            double r = doJointScale();
+            RandomVariable::setActiveInstance(prevRng);
+            return r;
+        }
+        std::map<Node*,double> floors;
+        computeAgeFloors(floors);
+        t->setAgeFloors(floors);
+    }
     double ratio = updatedParameter->update();
 
     RandomVariable::setActiveInstance(prevRng);
@@ -253,9 +296,19 @@ double FBDTreeModel::update(void){
 }
 
 void FBDTreeModel::updateForAcceptance(void){
-   updatedParameter->updateForAcceptance();
+    if(lastWasJointScale){
+        parameterTree->updateForAcceptance();
+        unresolvedFossils->updateForAcceptance();
+    }else{
+        updatedParameter->updateForAcceptance();
+    }
 }
 
 void FBDTreeModel::updateForRejection(void){
-    updatedParameter->updateForRejection();
+    if(lastWasJointScale){
+        parameterTree->updateForRejection();
+        unresolvedFossils->updateForRejection();
+    }else{
+        updatedParameter->updateForRejection();
+    }
 }
