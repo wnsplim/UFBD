@@ -9,7 +9,7 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 endif()
 
-set(FBD_SRC ${CMAKE_SOURCE_DIR}/FossilizedBirthDeathProcesses/FossilizedBirthDeathProcesses)
+set(FBD_SRC ${CMAKE_SOURCE_DIR}/FossilizedBirthDeathProcesses)
 
 file(GLOB_RECURSE FBD_SOURCES CONFIGURE_DEPENDS ${FBD_SRC}/*.cpp)
 list(FILTER FBD_SOURCES EXCLUDE REGEX "/Eigen/")
