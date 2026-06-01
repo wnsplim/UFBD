@@ -1238,7 +1238,8 @@ double Tree::update(double scaleLambda){
     for(Node* n : downPassSequence)
         if(n != root && n->getIsTip() == false)
             numSlideable++;
-    if(rng.uniformRv() * (numSlideable + 1.0) >= numSlideable)
+    double rootWeight = 3.0;
+    if(rng.uniformRv() * (numSlideable + rootWeight) >= numSlideable)
         return updateRootAge(scaleLambda);
     lastUpdateWasScale = false;
     return updateNodeAge();

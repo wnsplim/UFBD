@@ -408,9 +408,12 @@ double FBDTreeModel::update(void){
         for(Node* n : t->getDownPassSequence())
             if(n != t->getRoot() && n->getIsTip() == false)
                 numSlideable++;
-        if(rng.uniformRv() * (numSlideable + 2.0) >= numSlideable){
+        double fixedWeight = 3.0;
+        double slideAndRoot = numSlideable + fixedWeight;
+        double uMove = rng.uniformRv() * (slideAndRoot + 2.0 * fixedWeight);
+        if(uMove >= slideAndRoot){
             lastWasJointScale = true;
-            double r = (rng.uniformRv() < 0.5) ? doJointScale() : doSubtreeScale();
+            double r = (uMove < slideAndRoot + fixedWeight) ? doJointScale() : doSubtreeScale();
             RandomVariable::setActiveInstance(prevRng);
             return r;
         }
