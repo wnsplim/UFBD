@@ -25,9 +25,14 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
 
     parameterTree = new ParameterTree(1.0, this);
     isFBD = (UserSettings::userSettings().getModel() == Model::FBD);
-    if(isFBD)
-        resolveFossils(t, clades, fossils);
-    parameterTree->setTree(t);
+    if(isFBD){
+        Tree* working = new Tree(*t);
+        resolveFossils(working, clades, fossils);
+        parameterTree->setTree(working);
+        delete working;
+    }else{
+        parameterTree->setTree(t);
+    }
     parameters.push_back(parameterTree);
     
     //instantiate FBD model parameters
@@ -251,7 +256,7 @@ void FBDTreeModel::resolveFossils(Tree* t, std::vector<Clade>& clades, std::vect
         if(clade == nullptr)
             Msg::error("fossil '" + f.getTaxon() + "' assigned to undefined clade '" + f.getClade() + "'");
         Node* crown = t->getMRCA(clade->getTaxa());
-        Node* origin = clade->getOrigin();
+        Node* origin = t->getNodeByOffset(clade->getOrigin()->getOffset());
         bool isCrown = (f.getAssignment() == Assignment::CROWN);
         if(crown->getAncestor() == crown)
             isCrown = true;

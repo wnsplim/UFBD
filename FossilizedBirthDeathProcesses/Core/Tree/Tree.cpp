@@ -771,6 +771,7 @@ void Tree::reroot(Node* r) {
     passDown(root, root);
 }
 
+//Archival
 void Tree::rSPR(void){
     int startingNodeSize = nodes.size();
     
