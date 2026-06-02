@@ -296,23 +296,105 @@ void FBDTreeModel::enumerateFossilHosts(Tree* t, Node* crown, Node* origin, bool
     }
 }
 
+void FBDTreeModel::enumeratePrunableRoots(Tree* t, std::vector<Node*>& roots){
+    Node* treeRoot = t->getRoot();
+    std::set<Node*> allFossil;
+    for(Node* n : t->getDownPassSequence()){
+        bool af;
+        if(n->getIsTip()){
+            af = n->getIsFossil();
+        }else{
+            af = true;
+            for(Node* nb : n->getNeighbors()){
+                if(nb == n->getAncestor())
+                    continue;
+                if(allFossil.find(nb) == allFossil.end()){
+                    af = false;
+                    break;
+                }
+            }
+        }
+        if(af){
+            allFossil.insert(n);
+            if(n->getAncestor() != treeRoot)
+                roots.push_back(n);
+        }
+    }
+}
+
+void FBDTreeModel::enumerateSubtreeHosts(Tree* t, std::vector<Node*>& crowns, std::vector<char>& isCrowns, std::vector<Node*>& origins, double rAge, double ceilingS, std::vector<Node*>& hosts, std::vector<double>& los, std::vector<double>& his){
+    for(Node* n : t->getDownPassSequence()){
+        if(n == t->getRoot())
+            continue;
+        Node* anc = n->getAncestor();
+        bool allInZone = true;
+        for(size_t f = 0; f < crowns.size(); f++){
+            bool inZone = nodeInSubtree(anc, crowns[f]);
+            if(inZone == false && isCrowns[f] == 0 && nodeOnStalk(n, crowns[f], origins[f]))
+                inZone = true;
+            if(inZone == false){
+                allInZone = false;
+                break;
+            }
+        }
+        if(allInZone == false)
+            continue;
+        double lo = std::max(rAge, n->getTime());
+        double hi = std::min(ceilingS, anc->getTime());
+        if(lo < hi){
+            hosts.push_back(n);
+            los.push_back(lo);
+            his.push_back(hi);
+        }
+    }
+}
+
+int FBDTreeModel::fossilIndexByName(const std::string& nm){
+    for(size_t i = 0; i < fossilName.size(); i++)
+        if(fossilName[i] == nm)
+            return (int)i;
+    return -1;
+}
+
 double FBDTreeModel::doWilsonBalding(void){
     Tree* tree = parameterTree->getTree();
-    int i = (int)(rng.uniformRv() * (double)fossilName.size());
-    Node* fossil = tree->getTaxonNode(fossilName[i]);
-    Node* split = fossil->getAncestor();
+    std::vector<Node*> prunable;
+    enumeratePrunableRoots(tree, prunable);
+    double pFwd = (double)prunable.size();
+    Node* r = prunable[(int)(rng.uniformRv() * pFwd)];
+    Node* split = r->getAncestor();
     Node* hostParent = split->getAncestor();
     Node* hostChild = nullptr;
     for(Node* nb : split->getNeighbors())
-        if(nb != hostParent && nb != fossil)
+        if(nb != hostParent && nb != r)
             hostChild = nb;
 
-    double y = fossilY[i];
-    Node* crown = fossilCrown[i];
-    Node* origin = fossilOrigin[i];
-    bool isCrown = fossilIsCrown[i];
-    double ceiling = isCrown ? crown->getTime() : origin->getTime();
-    double oldRange = std::min(ceiling, hostParent->getTime()) - std::max(y, hostChild->getTime());
+    std::vector<Node*> crowns;
+    std::vector<char> isCrowns;
+    std::vector<Node*> origins;
+    double ceilingS = std::numeric_limits<double>::max();
+    std::vector<Node*> stack;
+    stack.push_back(r);
+    while(stack.empty() == false){
+        Node* x = stack.back();
+        stack.pop_back();
+        if(x->getIsTip()){
+            int idx = fossilIndexByName(x->getName());
+            crowns.push_back(fossilCrown[idx]);
+            isCrowns.push_back(fossilIsCrown[idx] ? 1 : 0);
+            origins.push_back(fossilOrigin[idx]);
+            double c = fossilIsCrown[idx] ? fossilCrown[idx]->getTime() : fossilOrigin[idx]->getTime();
+            if(c < ceilingS)
+                ceilingS = c;
+        }else{
+            for(Node* nb : x->getNeighbors())
+                if(nb != x->getAncestor())
+                    stack.push_back(nb);
+        }
+    }
+
+    double rAge = r->getTime();
+    double oldRange = std::min(ceilingS, hostParent->getTime()) - std::max(rAge, hostChild->getTime());
 
     hostParent->removeNeighbor(split);
     split->removeNeighbor(hostParent);
@@ -326,12 +408,12 @@ double FBDTreeModel::doWilsonBalding(void){
     std::vector<Node*> hosts;
     std::vector<double> los;
     std::vector<double> his;
-    enumerateFossilHosts(tree, crown, origin, isCrown, y, hosts, los, his);
+    enumerateSubtreeHosts(tree, crowns, isCrowns, origins, rAge, ceilingS, hosts, los, his);
     int k = (int)(rng.uniformRv() * (double)hosts.size());
     Node* newChild = hosts[k];
     Node* newParent = newChild->getAncestor();
     double newRange = his[k] - los[k];
-    double z = los[k] + rng.uniformRv() * (his[k] - los[k]);
+    double z = los[k] + rng.uniformRv() * newRange;
 
     newParent->removeNeighbor(newChild);
     newChild->removeNeighbor(newParent);
@@ -345,7 +427,11 @@ double FBDTreeModel::doWilsonBalding(void){
     tree->initializeDownPassSequence();
     tree->reindexNodes();
 
-    return std::log(newRange / oldRange);
+    std::vector<Node*> prunable2;
+    enumeratePrunableRoots(tree, prunable2);
+    double pRev = (double)prunable2.size();
+
+    return std::log(newRange / oldRange) + std::log(pFwd / pRev);
 }
 
 void FBDTreeModel::computeAgeFloors(std::map<Node*,double>& floors){

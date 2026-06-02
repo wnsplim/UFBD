@@ -36,6 +36,9 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      doSubtreeScale(void);
         void                        resolveFossils(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils);
         void                        enumerateFossilHosts(Tree* t, Node* crown, Node* origin, bool isCrown, double y, std::vector<Node*>& hosts, std::vector<double>& los, std::vector<double>& his);
+        void                        enumeratePrunableRoots(Tree* t, std::vector<Node*>& roots);
+        void                        enumerateSubtreeHosts(Tree* t, std::vector<Node*>& crowns, std::vector<char>& isCrowns, std::vector<Node*>& origins, double rAge, double ceilingS, std::vector<Node*>& hosts, std::vector<double>& los, std::vector<double>& his);
+        int                         fossilIndexByName(const std::string& nm);
         double                      doWilsonBalding(void);
         void                        updateGammaCache(void);
         void                        calculateCs(void);
