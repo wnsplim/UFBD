@@ -434,6 +434,107 @@ double FBDTreeModel::doWilsonBalding(void){
     return std::log(newRange / oldRange) + std::log(pFwd / pRev);
 }
 
+bool FBDTreeModel::subtreeFossilsValidAt(Tree* t, Node* s, Node* g){
+    std::vector<Node*> stack;
+    stack.push_back(s);
+    while(stack.empty() == false){
+        Node* x = stack.back();
+        stack.pop_back();
+        if(x->getIsTip()){
+            int idx = fossilIndexByName(x->getName());
+            Node* crown = fossilCrown[idx];
+            bool inZone = nodeInSubtree(g, crown);
+            if(inZone == false && fossilIsCrown[idx] == false && nodeOnStalk(g, crown, fossilOrigin[idx]))
+                inZone = true;
+            if(inZone == false)
+                return false;
+        }else{
+            for(Node* nb : x->getNeighbors())
+                if(nb != x->getAncestor())
+                    stack.push_back(nb);
+        }
+    }
+    return true;
+}
+
+void FBDTreeModel::enumerateNarrowSwaps(Tree* t, std::vector<Node*>& swaps){
+    Node* treeRoot = t->getRoot();
+    std::set<Node*> allFossil;
+    for(Node* n : t->getDownPassSequence()){
+        bool af;
+        if(n->getIsTip()){
+            af = n->getIsFossil();
+        }else{
+            af = true;
+            for(Node* nb : n->getNeighbors()){
+                if(nb == n->getAncestor())
+                    continue;
+                if(allFossil.find(nb) == allFossil.end()){
+                    af = false;
+                    break;
+                }
+            }
+        }
+        if(af)
+            allFossil.insert(n);
+    }
+    for(Node* i : t->getDownPassSequence()){
+        Node* parent = i->getAncestor();
+        if(i == treeRoot || parent == treeRoot)
+            continue;
+        Node* grandparent = parent->getAncestor();
+        Node* uncle = nullptr;
+        for(Node* nb : grandparent->getNeighbors())
+            if(nb != parent && nb != grandparent->getAncestor())
+                uncle = nb;
+        if(uncle->getTime() >= parent->getTime())
+            continue;
+        bool iFossil = (allFossil.find(i) != allFossil.end());
+        bool uncleFossil = (allFossil.find(uncle) != allFossil.end());
+        if(iFossil == false || uncleFossil == false)
+            continue;
+        if(subtreeFossilsValidAt(t, i, grandparent) == false)
+            continue;
+        if(subtreeFossilsValidAt(t, uncle, parent) == false)
+            continue;
+        swaps.push_back(i);
+    }
+}
+
+double FBDTreeModel::doNarrowExchange(void){
+    Tree* tree = parameterTree->getTree();
+    std::vector<Node*> swaps;
+    enumerateNarrowSwaps(tree, swaps);
+    if(swaps.empty())
+        return -INFINITY;
+    double vFwd = (double)swaps.size();
+    Node* i = swaps[(int)(rng.uniformRv() * vFwd)];
+    Node* parent = i->getAncestor();
+    Node* grandparent = parent->getAncestor();
+    Node* uncle = nullptr;
+    for(Node* nb : grandparent->getNeighbors())
+        if(nb != parent && nb != grandparent->getAncestor())
+            uncle = nb;
+
+    grandparent->removeNeighbor(uncle);
+    uncle->removeNeighbor(grandparent);
+    parent->removeNeighbor(i);
+    i->removeNeighbor(parent);
+    grandparent->addNeighbor(i);
+    i->addNeighbor(grandparent);
+    i->setAncestor(grandparent);
+    parent->addNeighbor(uncle);
+    uncle->addNeighbor(parent);
+    uncle->setAncestor(parent);
+    tree->initializeDownPassSequence();
+    tree->reindexNodes();
+
+    std::vector<Node*> swaps2;
+    enumerateNarrowSwaps(tree, swaps2);
+    double vRev = (double)swaps2.size();
+    return std::log(vFwd / vRev);
+}
+
 void FBDTreeModel::computeAgeFloors(std::map<Node*,double>& floors){
     int numFossils = unresolvedFossils->getNumFossils();
     for(int i = 0; i < numFossils; i++){
@@ -725,9 +826,16 @@ double FBDTreeModel::update(void){
     else if(updatedParameter == parameterTree && isFBD){
         parameterTree->getTree()->setLastUpdateWasScale(false);
         int nf = (int)fossilName.size();
-        double backboneWeight = 3.0;
-        if(nf > 0 && rng.uniformRv() * (nf + backboneWeight) < nf){
+        double wWB = nf;
+        double wNE = nf;
+        double wBackbone = 3.0;
+        double uMove = rng.uniformRv() * (wWB + wNE + wBackbone);
+        if(uMove < wWB){
             double r = doWilsonBalding();
+            RandomVariable::setActiveInstance(prevRng);
+            return r;
+        }else if(uMove < wWB + wNE){
+            double r = doNarrowExchange();
             RandomVariable::setActiveInstance(prevRng);
             return r;
         }

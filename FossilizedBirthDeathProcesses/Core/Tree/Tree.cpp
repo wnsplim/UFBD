@@ -771,7 +771,7 @@ void Tree::reroot(Node* r) {
     passDown(root, root);
 }
 
-//Archival
+//Archival (using FBD dedicated tree moves in practice)
 void Tree::rSPR(void){
     int startingNodeSize = nodes.size();
     
