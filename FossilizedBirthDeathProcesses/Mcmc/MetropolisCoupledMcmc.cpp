@@ -70,6 +70,15 @@ void MetropolisCoupledMcmc::run(void) {
 
             threadPool.enqueue([this, i, promise]() {
                 lnProposalRatio[i] = models[i]->update();
+
+                if(lnProposalRatio[i] == -INFINITY){
+                    newLnL[i] = currLnL[i];
+                    newLnP[i] = currLnP[i];
+                    lnAcceptanceProbabilities[i] = -INFINITY;
+                    promise->set_value();
+                    return;
+                }
+
                 newLnL[i]          = models[i]->lnLikelihood();
                 newLnP[i]          = models[i]->lnPriorProbability();
 

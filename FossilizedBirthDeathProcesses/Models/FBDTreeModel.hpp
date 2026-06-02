@@ -40,9 +40,11 @@ class FBDTreeModel : public PhylogeneticModel {
         void                        enumerateSubtreeHosts(Tree* t, std::vector<Node*>& crowns, std::vector<char>& isCrowns, std::vector<Node*>& origins, double rAge, double ceilingS, std::vector<Node*>& hosts, std::vector<double>& los, std::vector<double>& his);
         int                         fossilIndexByName(const std::string& nm);
         bool                        subtreeFossilsValidAt(Tree* t, Node* s, Node* g);
-        void                        enumerateNarrowSwaps(Tree* t, std::vector<Node*>& swaps);
+        bool                        subtreeAllFossil(Node* n);
         double                      doWilsonBalding(void);
         double                      doNarrowExchange(void);
+        double                      doWideExchange(void);
+        double                      doTreeScale(void);
         void                        updateGammaCache(void);
         void                        calculateCs(void);
         void                        calculateC1(void);
