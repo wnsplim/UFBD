@@ -46,6 +46,7 @@ class FBDTreeModel : public PhylogeneticModel {
         ParameterDouble*            lambda;
         ParameterDouble*            mu;
         ParameterDouble*            psi;
+        ParameterDouble*            originAge;
         ParameterTree*              parameterTree;
         ParameterUnresolvedFossils* unresolvedFossils;
         std::vector<std::string>    fossilName;
@@ -66,6 +67,7 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<double>         prevZ;
         std::vector<int>            prevSa;
         std::vector<double>         prevNodeAge;
+        double                      prevX0;
         bool                        cacheInit;
         bool                        isFBD;
 };

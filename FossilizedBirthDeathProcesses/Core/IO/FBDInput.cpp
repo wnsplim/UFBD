@@ -14,9 +14,6 @@
 
 FBDInput::FBDInput(std::string treePath, std::string cladesPath, std::string fossilPath){
     tree = readTree(treePath);
-    UserSettings& settings = UserSettings::userSettings();
-    if(settings.getConditioning() == Conditioning::ORIGIN && settings.getModel() != Model::FBD)
-        tree->addOriginPendant();
     if(cladesPath.empty() == false)
         readClades(cladesPath);
     if(fossilPath.empty() == false){

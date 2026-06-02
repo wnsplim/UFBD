@@ -21,7 +21,7 @@ int main(int argc, const char* argv[]) {
 
     Tree* pt = input.getTree();
     pt->print();
-    
+
     int numChains = settings.getNumChains();
     if(numChains > 1){
         std::cout << "Running Metropolis-coupled MCMC with " << numChains << " chains parallelized across " << settings.getNumThreads() << " threads \n";

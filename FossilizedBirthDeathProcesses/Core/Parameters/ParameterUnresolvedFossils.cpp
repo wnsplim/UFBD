@@ -3,13 +3,15 @@
 #include "FBDInput.hpp"
 #include "Msg.hpp"
 #include "Node.hpp"
+#include "ParameterDouble.hpp"
 #include "ParameterUnresolvedFossils.hpp"
 #include "PhylogeneticModel.hpp"
 #include "RandomVariable.hpp"
 #include "Tree.hpp"
 
-ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, PhylogeneticModel* m, Tree* bb, std::vector<Clade>& clades, std::vector<Fossil>& fossils) : Parameter(prob, m, "unresolvedFossils"){
+ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, PhylogeneticModel* m, Tree* bb, std::vector<Clade>& clades, std::vector<Fossil>& fossils, ParameterDouble* oa) : Parameter(prob, m, "unresolvedFossils"){
     backbone = bb;
+    originAge = oa;
     numFossils = (int)fossils.size();
     numAcceptances = 0;
     numRejections = 0;
@@ -67,7 +69,11 @@ double ParameterUnresolvedFossils::getMinAttachAge(int i){
 }
 
 double ParameterUnresolvedFossils::getMaxAttachAge(int i){
-    return isCrown[i] ? crownNode[i]->getTime() : originNode[i]->getTime();
+    if(isCrown[i])
+        return crownNode[i]->getTime();
+    if(crownNode[i] == backbone->getRoot())
+        return originAge->getValue();
+    return originNode[i]->getTime();
 }
 
 double ParameterUnresolvedFossils::update(void){

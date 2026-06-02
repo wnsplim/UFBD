@@ -8,13 +8,14 @@
 #include "Parameter.hpp"
 
 class Node;
+class ParameterDouble;
 class Tree;
 
 class ParameterUnresolvedFossils : public Parameter {
 
     public:
                                     ParameterUnresolvedFossils(void) = delete;
-                                    ParameterUnresolvedFossils(double prob, PhylogeneticModel* m, Tree* backbone, std::vector<Clade>& clades, std::vector<Fossil>& fossils);
+                                    ParameterUnresolvedFossils(double prob, PhylogeneticModel* m, Tree* backbone, std::vector<Clade>& clades, std::vector<Fossil>& fossils, ParameterDouble* originAge);
         double                      getAcceptanceRatio(void) { return ((double)numAcceptances) / ((double)numAcceptances + (double)numRejections); }
         int                         getNumFossils(void) { return numFossils; }
         double                      getFossilAge(int i) { return y[0][i]; }
@@ -37,6 +38,7 @@ class ParameterUnresolvedFossils : public Parameter {
         double                      updateFossilAge(int i);
         double                      updateAttachAge(int i);
         Tree*                       backbone;
+        ParameterDouble*            originAge;
         int                         numFossils;
         std::vector<double>         yMin;
         std::vector<double>         yMax;

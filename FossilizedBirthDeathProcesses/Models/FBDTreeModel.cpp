@@ -39,6 +39,17 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     parameters.push_back(psi);
     rho = UserSettings::userSettings().getRho();
 
+    originAge = nullptr;
+    if(UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN && isFBD == false){
+        double x0init = parameterTree->getTree()->getRoot()->getTime();
+        for(Fossil& f : fossils)
+            if(f.getMaxAge() > x0init)
+                x0init = f.getMaxAge();
+        originAge = new ParameterDouble(1.0, this, "originAge", 0.0, std::numeric_limits<double>::max());
+        originAge->setValue(x0init * 1.05);
+        parameters.push_back(originAge);
+    }
+
     unresolvedFossils = nullptr;
     if(isFBD){
         Tree* wt = parameterTree->getTree();
@@ -52,7 +63,7 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
             fossilCrown.push_back(wt->getMRCA(clade->getTaxa()));
         }
     }else{
-        unresolvedFossils = new ParameterUnresolvedFossils(1.0, this, parameterTree->getTree(), clades, fossils);
+        unresolvedFossils = new ParameterUnresolvedFossils(1.0, this, parameterTree->getTree(), clades, fossils, originAge);
         parameters.push_back(unresolvedFossils);
     }
 
@@ -83,14 +94,21 @@ double FBDTreeModel::calculateFBDProbability(void){
     calculateC2();
     double qRoot = calculateQt(rootAge);
     
-    //FBD probability in log land
+    //FBD probability in log-landia
     bool useOrigin = (UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN);
     double fbdProb = 0.0;
 
     //term 1: conditioning
     if(useOrigin){
+        double x0 = (originAge != nullptr) ? originAge->getValue() : rootAge;
+        if(x0 < rootAge)
+            return -INFINITY;
         fbdProb -= std::log(lambdaVal);
-        fbdProb -= calculateLnSurvival(rootAge);
+        fbdProb -= calculateLnSurvival(x0);
+        if(originAge != nullptr){
+            fbdProb += log4LambdaRho;
+            fbdProb -= std::log(calculateQt(x0));
+        }
     }else{
         fbdProb -= 2 * (std::log(lambdaVal) + calculateLnSurvival(rootAge));
         fbdProb += log4LambdaRho;
@@ -146,6 +164,16 @@ static bool nodeInSubtree(Node* node, Node* subtreeRoot){
     }
 }
 
+static bool nodeOnStalk(Node* n, Node* crown, Node* origin){
+    for(Node* p = crown; p != origin; p = p->getAncestor()){
+        if(p == n)
+            return true;
+        if(p->getAncestor() == p)
+            break;
+    }
+    return false;
+}
+
 double FBDTreeModel::computeGamma(double z, int i){
     Tree* tree = parameterTree->getTree();
     Node* crown = unresolvedFossils->getCrownNode(i);
@@ -162,6 +190,11 @@ double FBDTreeModel::computeGamma(double z, int i){
             if(inZone)
                 count++;
         }
+    }
+    if(total && crown == tree->getRoot() && originAge != nullptr){
+        double x0 = originAge->getValue();
+        if(tree->getRoot()->getTime() < z && z < x0)
+            count++;
     }
 
     bool SymmetryCorrection = (UserSettings::userSettings().getModel() == Model::UFBD);
@@ -206,11 +239,12 @@ void FBDTreeModel::resolveFossils(Tree* t, std::vector<Clade>& clades, std::vect
         if(clade == nullptr)
             Msg::error("fossil '" + f.getTaxon() + "' assigned to undefined clade '" + f.getClade() + "'");
         Node* crown = t->getMRCA(clade->getTaxa());
+        Node* origin = clade->getOrigin();
         bool isCrown = (f.getAssignment() == Assignment::CROWN);
         if(crown->getAncestor() == crown)
             isCrown = true;
         double y = 0.5 * (f.getMinAge() + f.getMaxAge());
-        double ceiling = isCrown ? crown->getTime() : crown->getAncestor()->getTime();
+        double ceiling = isCrown ? crown->getTime() : origin->getTime();
 
         std::vector<Node*> hostChildren;
         std::vector<double> hostLo;
@@ -220,7 +254,7 @@ void FBDTreeModel::resolveFossils(Tree* t, std::vector<Clade>& clades, std::vect
                 continue;
             Node* anc = n->getAncestor();
             bool inZone = nodeInSubtree(anc, crown);
-            if(inZone == false && isCrown == false && n == crown)
+            if(inZone == false && isCrown == false && nodeOnStalk(n, crown, origin))
                 inZone = true;
             if(inZone == false)
                 continue;
@@ -315,7 +349,19 @@ void FBDTreeModel::updateGammaCache(void){
         prevZ.assign(nf, -1.0);
         prevSa.assign(nf, -1);
         prevNodeAge.assign(tree->getNumNodes(), -1.0);
+        prevX0 = -1.0;
         cacheInit = true;
+    }
+
+    if(originAge != nullptr){
+        double x0 = originAge->getValue();
+        if(x0 != prevX0){
+            Node* root = tree->getRoot();
+            for(int i = 0; i < nf; i++)
+                if(unresolvedFossils->getCrownNode(i) == root && unresolvedFossils->getIsCrown(i) == false)
+                    gammaStale[i] = 1;
+            prevX0 = x0;
+        }
     }
 
     for(int i = 0; i < nf; i++){
@@ -456,14 +502,14 @@ double FBDTreeModel::lnPriorProbability(void){
     
     //calcualte lnP on FBD parameters
     for(Parameter* p : parameters){
-        //exclude parameter tree; we account for its prior probability in FBD likelihood
-        if( p != parameterTree)
+        //exclude parameter tree (prior accounted for in FBD likelihood) and originAge (prior is the conditioning-age prior below)
+        if( p != parameterTree && p != originAge)
             lnP += p->lnProbability();
     }
 
     UserSettings& us = UserSettings::userSettings();
     if(us.getConditionAgePriorSet()){
-        double x = parameterTree->getTree()->getRoot()->getTime();
+        double x = (originAge != nullptr) ? originAge->getValue() : parameterTree->getTree()->getRoot()->getTime();
         double p1 = us.getConditionAgePriorP1();
         double p2 = us.getConditionAgePriorP2();
         switch(us.getConditionAgePrior()){

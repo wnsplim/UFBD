@@ -503,6 +503,7 @@ int Tree::getNumLineagesAtTime(double t){
 std::string Tree::getNewickString(void) {
 
     std::stringstream strm;
+    strm << std::setprecision(17);
     writeTree(root, strm);
     strm << ";";
     return strm.str();
@@ -616,17 +617,6 @@ void Tree::initializeTimes(void){
     initializeDownPassSequence();
     std::map<Node*,double> noMinAges;
     assignStartingAges(noMinAges, 1.0);
-}
-
-void Tree::addOriginPendant(void){
-    Node* origin = addNode();
-    origin->setIsTip(false);
-    origin->setIsFossil(false);
-    origin->setIndex((int)nodes.size() - 1);
-    origin->addNeighbor(root);
-    root->addNeighbor(origin);
-    root = origin;
-    initializeTimes();
 }
 
 void Tree::assignStartingAges(const std::map<Node*,double>& minAges, double unit){

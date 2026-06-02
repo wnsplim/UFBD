@@ -48,7 +48,6 @@ class Tree {
         int                                 scaleSubtreeAges(Node* subtreeRoot, double m);
         void                                setLastUpdateWasScale(bool b) { lastUpdateWasScale = b; }
         void                                assignStartingAges(const std::map<Node*,double>& minAges, double unit);
-        void                                addOriginPendant(void);
         Node*                               insertFossilTip(Node* hostChild, std::string name, double y, double z);
         void                                setAgeFloors(const std::map<Node*,double>& f) { ageFloors = f; }
         void                                print(void);

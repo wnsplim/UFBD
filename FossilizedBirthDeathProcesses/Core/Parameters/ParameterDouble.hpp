@@ -14,6 +14,7 @@ class ParameterDouble : public Parameter {
         double                      getAcceptanceRatio(void) { return ((double)numAcceptances)/((double)(numAcceptances+numRejections));}
         bool                        getAdaptiveProposalActive(void) { return adaptiveProposalActive; }
         double                      getValue(void) { return value[0]; } // 0 is the one we update, 1 is the one we don't (last currently accepted value)
+        void                        setValue(double v) { value[0] = v; value[1] = v; }
         double                      lnProbability(void);
         void                        print(void);
         double                      update(void);
