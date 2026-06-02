@@ -28,11 +28,15 @@ class FBDTreeModel : public PhylogeneticModel {
         void                        updateForRejection(void);
     private:
         double                      calculateFBDProbability(void);
+        double                      calculateResolvedFBD(void);
+        double                      lnD(double t);
         double                      computeGamma(double z, int i);
         void                        computeAgeFloors(std::map<Node*,double>& floors);
         double                      doJointScale(void);
         double                      doSubtreeScale(void);
         void                        resolveFossils(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils);
+        void                        enumerateFossilHosts(Tree* t, Node* crown, Node* origin, bool isCrown, double y, std::vector<Node*>& hosts, std::vector<double>& los, std::vector<double>& his);
+        double                      doWilsonBalding(void);
         void                        updateGammaCache(void);
         void                        calculateCs(void);
         void                        calculateC1(void);
@@ -51,6 +55,7 @@ class FBDTreeModel : public PhylogeneticModel {
         ParameterUnresolvedFossils* unresolvedFossils;
         std::vector<std::string>    fossilName;
         std::vector<Node*>          fossilCrown;
+        std::vector<Node*>          fossilOrigin;
         std::vector<bool>           fossilIsCrown;
         std::vector<double>         fossilY;
         double                      rho;

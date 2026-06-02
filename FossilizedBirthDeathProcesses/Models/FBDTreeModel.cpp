@@ -61,6 +61,7 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
                     break;
                 }
             fossilCrown.push_back(wt->getMRCA(clade->getTaxa()));
+            fossilOrigin.push_back(wt->getNodeByOffset(clade->getOrigin()->getOffset()));
         }
     }else{
         unresolvedFossils = new ParameterUnresolvedFossils(1.0, this, parameterTree->getTree(), clades, fossils, originAge);
@@ -92,8 +93,12 @@ double FBDTreeModel::calculateFBDProbability(void){
     
     calculateC1();
     calculateC2();
+
+    if(isFBD)
+        return calculateResolvedFBD();
+
     double qRoot = calculateQt(rootAge);
-    
+
     //FBD probability in log-landia
     bool useOrigin = (UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN);
     double fbdProb = 0.0;
@@ -116,27 +121,6 @@ double FBDTreeModel::calculateFBDProbability(void){
     }
 
     //term 2: main body
-    if(isFBD){//this chunk is for resolved (vanilla) FBD
-        for(Node* n : dpseq){
-            if(n->getIsTip())
-                continue;
-            bool isSplit = false;
-            for(Node* nb : n->getNeighbors())
-                if(nb != n->getAncestor() && nb->getIsTip() && nb->getIsFossil()){
-                    isSplit = true;
-                    break;
-                }
-            if(isSplit)
-                continue;
-            fbdProb += log4LambdaRho;
-            fbdProb -= std::log(calculateQt(n->getTime()));
-        }
-        for(Node* n : dpseq)
-            if(n->getIsTip() && n->getIsFossil())
-                fbdProb += fossilPqLn(n->getTime(), n->getAncestor()->getTime());
-        return fbdProb;
-    }
-
     fbdProb += numInternalNodes * log4LambdaRho;
     for(Node* n : dpseq)
         if(n->getIsTip() == false)
@@ -153,6 +137,34 @@ double FBDTreeModel::calculateFBDProbability(void){
         fbdProb += fossilPqLn(unresolvedFossils->getFossilAge(i), unresolvedFossils->getAttachAge(i)) + cachedGammaLn[i];
     }
     return fbdProb;
+}
+
+double FBDTreeModel::lnD(double t){
+    return (t <= 0.0) ? 0.0 : std::log(4.0) - std::log(calculateQt(t));
+}
+
+double FBDTreeModel::calculateResolvedFBD(void){
+    Tree* tree = parameterTree->getTree();
+    Node* root = tree->getRoot();
+    double rootAge = root->getTime();
+    bool useOrigin = (UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN);
+    double startAge = (useOrigin && originAge != nullptr) ? originAge->getValue() : rootAge;
+
+    double logLambda = std::log(lambdaVal);
+    int numInitialLineages = useOrigin ? 1 : 2;
+    double lnP = -numInitialLineages * calculateLnSurvival(startAge);
+    if(useOrigin)
+        lnP += lnD(startAge) - lnD(rootAge);
+
+    for(Node* n : tree->getDownPassSequence()){
+        if(n != root)
+            lnP += lnD(n->getAncestor()->getTime()) - lnD(n->getTime());
+        if(n->getIsTip())
+            lnP += n->getIsFossil() ? std::log(psiVal) + std::log(calculatePo(n->getTime())) : std::log(rhoVal);
+        else if(useOrigin || n != root)
+            lnP += logLambda;
+    }
+    return lnP;
 }
 
 static bool nodeInSubtree(Node* node, Node* subtreeRoot){
@@ -244,36 +256,91 @@ void FBDTreeModel::resolveFossils(Tree* t, std::vector<Clade>& clades, std::vect
         if(crown->getAncestor() == crown)
             isCrown = true;
         double y = 0.5 * (f.getMinAge() + f.getMaxAge());
-        double ceiling = isCrown ? crown->getTime() : origin->getTime();
-
-        std::vector<Node*> hostChildren;
-        std::vector<double> hostLo;
-        std::vector<double> hostHi;
-        for(Node* n : t->getDownPassSequence()){
-            if(n == t->getRoot())
-                continue;
-            Node* anc = n->getAncestor();
-            bool inZone = nodeInSubtree(anc, crown);
-            if(inZone == false && isCrown == false && nodeOnStalk(n, crown, origin))
-                inZone = true;
-            if(inZone == false)
-                continue;
-            double lo = std::max(y, n->getTime());
-            double hi = std::min(ceiling, anc->getTime());
-            if(lo < hi){
-                hostChildren.push_back(n);
-                hostLo.push_back(lo);
-                hostHi.push_back(hi);
-            }
-        }
-        int k = (int)(rv.uniformRv() * hostChildren.size());
-        double z = hostLo[k] + rv.uniformRv() * (hostHi[k] - hostLo[k]);
-        t->insertFossilTip(hostChildren[k], f.getTaxon(), y, z);
+        std::vector<Node*> hosts;
+        std::vector<double> los;
+        std::vector<double> his;
+        enumerateFossilHosts(t, crown, origin, isCrown, y, hosts, los, his);
+        int k = (int)(rv.uniformRv() * hosts.size());
+        double z = los[k] + rv.uniformRv() * (his[k] - los[k]);
+        t->insertFossilTip(hosts[k], f.getTaxon(), y, z);
 
         fossilName.push_back(f.getTaxon());
         fossilIsCrown.push_back(isCrown);
         fossilY.push_back(y);
     }
+}
+
+void FBDTreeModel::enumerateFossilHosts(Tree* t, Node* crown, Node* origin, bool isCrown, double y, std::vector<Node*>& hosts, std::vector<double>& los, std::vector<double>& his){
+    double ceiling = isCrown ? crown->getTime() : origin->getTime();
+    for(Node* n : t->getDownPassSequence()){
+        if(n == t->getRoot())
+            continue;
+        Node* anc = n->getAncestor();
+        bool inZone = nodeInSubtree(anc, crown);
+        if(inZone == false && isCrown == false && nodeOnStalk(n, crown, origin))
+            inZone = true;
+        if(inZone == false)
+            continue;
+        double lo = std::max(y, n->getTime());
+        double hi = std::min(ceiling, anc->getTime());
+        if(lo < hi){
+            hosts.push_back(n);
+            los.push_back(lo);
+            his.push_back(hi);
+        }
+    }
+}
+
+double FBDTreeModel::doWilsonBalding(void){
+    Tree* tree = parameterTree->getTree();
+    int i = (int)(rng.uniformRv() * (double)fossilName.size());
+    Node* fossil = tree->getTaxonNode(fossilName[i]);
+    Node* split = fossil->getAncestor();
+    Node* hostParent = split->getAncestor();
+    Node* hostChild = nullptr;
+    for(Node* nb : split->getNeighbors())
+        if(nb != hostParent && nb != fossil)
+            hostChild = nb;
+
+    double y = fossilY[i];
+    Node* crown = fossilCrown[i];
+    Node* origin = fossilOrigin[i];
+    bool isCrown = fossilIsCrown[i];
+    double ceiling = isCrown ? crown->getTime() : origin->getTime();
+    double oldRange = std::min(ceiling, hostParent->getTime()) - std::max(y, hostChild->getTime());
+
+    hostParent->removeNeighbor(split);
+    split->removeNeighbor(hostParent);
+    hostChild->removeNeighbor(split);
+    split->removeNeighbor(hostChild);
+    hostParent->addNeighbor(hostChild);
+    hostChild->addNeighbor(hostParent);
+    hostChild->setAncestor(hostParent);
+    tree->initializeDownPassSequence();
+
+    std::vector<Node*> hosts;
+    std::vector<double> los;
+    std::vector<double> his;
+    enumerateFossilHosts(tree, crown, origin, isCrown, y, hosts, los, his);
+    int k = (int)(rng.uniformRv() * (double)hosts.size());
+    Node* newChild = hosts[k];
+    Node* newParent = newChild->getAncestor();
+    double newRange = his[k] - los[k];
+    double z = los[k] + rng.uniformRv() * (his[k] - los[k]);
+
+    newParent->removeNeighbor(newChild);
+    newChild->removeNeighbor(newParent);
+    newParent->addNeighbor(split);
+    split->addNeighbor(newParent);
+    split->setAncestor(newParent);
+    newChild->addNeighbor(split);
+    split->addNeighbor(newChild);
+    newChild->setAncestor(split);
+    split->setTime(z);
+    tree->initializeDownPassSequence();
+    tree->reindexNodes();
+
+    return std::log(newRange / oldRange);
 }
 
 void FBDTreeModel::computeAgeFloors(std::map<Node*,double>& floors){
@@ -563,6 +630,16 @@ double FBDTreeModel::update(void){
         std::map<Node*,double> floors;
         computeAgeFloors(floors);
         t->setAgeFloors(floors);
+    }
+    else if(updatedParameter == parameterTree && isFBD){
+        parameterTree->getTree()->setLastUpdateWasScale(false);
+        int nf = (int)fossilName.size();
+        double backboneWeight = 3.0;
+        if(nf > 0 && rng.uniformRv() * (nf + backboneWeight) < nf){
+            double r = doWilsonBalding();
+            RandomVariable::setActiveInstance(prevRng);
+            return r;
+        }
     }
     double ratio = updatedParameter->update();
 

@@ -32,6 +32,7 @@ class Tree {
         std::string                         getNewickString(void);
         int                                 getNumLineagesAtTime(double t);
         int                                 getNumNodes(void) { return (int)nodes.size(); }
+        Node*                               getNodeByOffset(int o) { return nodes[o]; }
         int                                 getNumTaxa(void);
         Node*                               getRoot(void) { return root; }
         bool                                getLastUpdateWasScale(void) { return lastUpdateWasScale; }
