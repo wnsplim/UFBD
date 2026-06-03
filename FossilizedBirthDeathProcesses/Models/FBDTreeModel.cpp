@@ -342,7 +342,7 @@ void FBDTreeModel::enumeratePrunableRoots(Tree* t, std::vector<Node*>& roots){
         }
         if(af){
             allFossil.insert(n);
-            if(n->getAncestor() != treeRoot && t->isFakeSplit(n->getAncestor()) == false)
+            if(n->getAncestor() != treeRoot && t->isSATip(n) == false)
                 roots.push_back(n);
         }
     }
@@ -371,6 +371,11 @@ void FBDTreeModel::enumerateSubtreeHosts(Tree* t, std::vector<Node*>& crowns, st
             hosts.push_back(n);
             los.push_back(lo);
             his.push_back(hi);
+        }
+        if(n->getIsTip() && n->getIsFossil() && t->isSATip(n) == false && rAge < n->getTime() && n->getTime() < ceilingS){
+            hosts.push_back(n);
+            los.push_back(n->getTime());
+            his.push_back(n->getTime());
         }
     }
 }
@@ -422,7 +427,7 @@ double FBDTreeModel::doWilsonBalding(void){
     }
 
     double rAge = r->getTime();
-    double oldRange = std::min(ceilingS, hostParent->getTime()) - std::max(rAge, hostChild->getTime());
+    double oldRange = tree->isSATip(hostChild) ? 1.0 : std::min(ceilingS, hostParent->getTime()) - std::max(rAge, hostChild->getTime());
 
     hostParent->removeNeighbor(split);
     split->removeNeighbor(hostParent);
@@ -440,8 +445,8 @@ double FBDTreeModel::doWilsonBalding(void){
     int k = (int)(rng.uniformRv() * (double)hosts.size());
     Node* newChild = hosts[k];
     Node* newParent = newChild->getAncestor();
-    double newRange = his[k] - los[k];
-    double z = los[k] + rng.uniformRv() * newRange;
+    double newRange = (los[k] == his[k]) ? 1.0 : his[k] - los[k];
+    double z = (los[k] == his[k]) ? los[k] : los[k] + rng.uniformRv() * (his[k] - los[k]);
 
     newParent->removeNeighbor(newChild);
     newChild->removeNeighbor(newParent);
