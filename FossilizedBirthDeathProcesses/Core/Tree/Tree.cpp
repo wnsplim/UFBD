@@ -1270,10 +1270,23 @@ double Tree::update(double scaleLambda){
     return updateNodeAge();
 }
 
+bool Tree::isSATip(Node* n){
+    return n->getIsTip() && n->getIsFossil() && n->getAncestor() != n && n->getAncestor()->getTime() == n->getTime();
+}
+
+bool Tree::isFakeSplit(Node* n){
+    if(n->getIsTip())
+        return false;
+    for(Node* c : n->getNeighbors())
+        if(c != n->getAncestor() && isSATip(c))
+            return true;
+    return false;
+}
+
 int Tree::scaleInternalAges(double m){
     int numScaled = 0;
     for(Node* n : downPassSequence)
-        if(n->getIsTip() == false){
+        if(n->getIsTip() == false && isFakeSplit(n) == false){
             n->setTime(n->getTime() * m);
             numScaled++;
         }
@@ -1298,7 +1311,7 @@ double Tree::updateNodeAge(void){
 
     std::vector<Node*> candidates;
     for(Node* n : downPassSequence)
-        if(n != root && n->getIsTip() == false)
+        if(n != root && n->getIsTip() == false && isFakeSplit(n) == false)
             candidates.push_back(n);
     if(candidates.size() == 0)
         return 0.0;

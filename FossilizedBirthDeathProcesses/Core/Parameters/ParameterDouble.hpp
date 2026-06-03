@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+namespace Probability { enum class PriorFamily; }
+
 class ParameterDouble : public Parameter {
 
     public:
@@ -15,6 +17,7 @@ class ParameterDouble : public Parameter {
         bool                        getAdaptiveProposalActive(void) { return adaptiveProposalActive; }
         double                      getValue(void) { return value[0]; } // 0 is the one we update, 1 is the one we don't (last currently accepted value)
         void                        setValue(double v) { value[0] = v; value[1] = v; }
+        void                        setPrior(Probability::PriorFamily f, double p1, double p2);
         double                      lnProbability(void);
         void                        print(void);
         double                      update(void);
@@ -26,6 +29,9 @@ class ParameterDouble : public Parameter {
         std::deque<bool>            recentAcceptRej;
         double                      lowerBound;
         double                      upperBound;
+        Probability::PriorFamily    priorFamily;
+        double                      priorP1;
+        double                      priorP2;
         double                      targetAr;
         double                      windowSize;
         int                         numAcceptances;

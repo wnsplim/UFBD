@@ -45,6 +45,7 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      doNarrowExchange(void);
         double                      doWideExchange(void);
         double                      doTreeScale(void);
+        double                      doSARJMCMC(void);
         void                        updateGammaCache(void);
         void                        calculateCs(void);
         void                        calculateC1(void);
@@ -78,7 +79,7 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<char>           gammaStale;
         std::vector<double>         prevY;
         std::vector<double>         prevZ;
-        std::vector<int>            prevSa;
+        std::vector<int>            prevSA;
         std::vector<double>         prevNodeAge;
         double                      prevX0;
         bool                        cacheInit;

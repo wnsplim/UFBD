@@ -31,6 +31,8 @@ class Tree {
         std::vector<Node*>&                 getDownPassSequence(void) { return downPassSequence; }
         std::string                         getNewickString(void);
         int                                 getNumLineagesAtTime(double t);
+        bool                                isSATip(Node* n);
+        bool                                isFakeSplit(Node* n);
         int                                 getNumNodes(void) { return (int)nodes.size(); }
         Node*                               getNodeByOffset(int o) { return nodes[o]; }
         int                                 getNumTaxa(void);

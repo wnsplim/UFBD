@@ -23,10 +23,21 @@ ParameterDouble::ParameterDouble(double prob, PhylogeneticModel* m, std::string 
     value.push_back(u);
     value.push_back(u);
     windowSize = 1;
+    priorFamily = Probability::PriorFamily::TRUNCATED_NORMAL;
+    priorP1 = 0.0;
+    priorP2 = 1.0;
 }
 
 double ParameterDouble::lnProbability(void){
-    return Probability::TruncatedNormal::lnPdf(value[0], 0.0, 1.0, lowerBound, upperBound); //this is kinda sloppy but most flexible for chaning bounds
+    return Probability::priorLnPdf(priorFamily, priorP1, priorP2, value[0], lowerBound, upperBound);
+}
+
+void ParameterDouble::setPrior(Probability::PriorFamily f, double p1, double p2){
+    priorFamily = f;
+    priorP1 = p1;
+    priorP2 = p2;
+    if(f == Probability::PriorFamily::UNIFORM && (value[0] < p1 || value[0] > p2))
+        setValue(0.5 * (p1 + p2));
 }
 
 void ParameterDouble::print(void){

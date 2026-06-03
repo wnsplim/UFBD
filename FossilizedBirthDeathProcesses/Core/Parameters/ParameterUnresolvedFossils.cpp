@@ -16,7 +16,6 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
     numAcceptances = 0;
     numRejections = 0;
     lastFossil = -1;
-    lastWasAttach = false;
     lastWasBulk = false;
 
     yMin.resize(numFossils);
@@ -28,8 +27,6 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
     y[1].resize(numFossils);
     z[0].resize(numFossils);
     z[1].resize(numFossils);
-    sa[0].resize(numFossils);
-    sa[1].resize(numFossils);
 
     for(int i = 0; i < numFossils; i++){
         Fossil& f = fossils[i];
@@ -59,8 +56,6 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
         double zi = lo + rng.uniformRv() * (hi - lo);
         z[0][i] = zi;
         z[1][i] = zi;
-        sa[0][i] = 0;
-        sa[1][i] = 0;
     }
 }
 
@@ -72,7 +67,7 @@ double ParameterUnresolvedFossils::getMaxAttachAge(int i){
     if(isCrown[i])
         return crownNode[i]->getTime();
     if(crownNode[i] == backbone->getRoot())
-        return originAge->getValue();
+        return (originAge != nullptr) ? originAge->getValue() : backbone->getRoot()->getTime();
     return originNode[i]->getTime();
 }
 
@@ -82,22 +77,31 @@ double ParameterUnresolvedFossils::update(void){
     lastWasBulk = false;
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastFossil = (int)(rng.uniformRv() * numFossils);
-    if(rng.uniformRv() < 0.5){
-        lastWasAttach = false;
+    double u = rng.uniformRv();
+    if(u < 1.0/3.0)
+        return updateSampledAncestor(lastFossil);
+    if(u < 2.0/3.0)
         return updateFossilAge(lastFossil);
-    }
-    lastWasAttach = true;
     return updateAttachAge(lastFossil);
 }
 
 double ParameterUnresolvedFossils::updateFossilAge(int i){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
+    if(z[0][i] == y[0][i]){
+        double ceiling = getMaxAttachAge(i);
+        double saHi = (yMax[i] < ceiling) ? yMax[i] : ceiling;
+        y[0][i] = yMin[i] + rng.uniformRv() * (saHi - yMin[i]);
+        z[0][i] = y[0][i];
+        return 0.0;
+    }
     double hi = (yMax[i] < z[0][i]) ? yMax[i] : z[0][i]; // keep z older than y
     y[0][i] = yMin[i] + rng.uniformRv() * (hi - yMin[i]);
     return 0.0;
 }
 
 double ParameterUnresolvedFossils::updateAttachAge(int i){
+    if(z[0][i] == y[0][i])
+        return 0.0;
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     double lo = getMinAttachAge(i);
     double hi = getMaxAttachAge(i);
@@ -105,17 +109,32 @@ double ParameterUnresolvedFossils::updateAttachAge(int i){
     return 0.0;
 }
 
+double ParameterUnresolvedFossils::updateSampledAncestor(int i){
+    RandomVariable& rng = RandomVariable::randomVariableInstance();
+    double lo = getMinAttachAge(i);
+    double hi = getMaxAttachAge(i);
+    double range = hi - lo;
+    if(range <= 0.0)
+        return -INFINITY;
+    if(z[0][i] == y[0][i]){
+        z[0][i] = lo + rng.uniformRv() * range;
+        return std::log(range);
+    }
+    z[0][i] = y[0][i];
+    return -std::log(range);
+}
+
 double ParameterUnresolvedFossils::scaleAllAttachAges(double m){
     lastWasBulk = true;
     for(int i = 0; i < numFossils; i++){
-        if(sa[0][i] != 0)
+        if(z[0][i] == y[0][i])
             continue;
         if(z[0][i] * m < y[0][i])
             return -INFINITY;
     }
     int count = 0;
     for(int i = 0; i < numFossils; i++){
-        if(sa[0][i] != 0)
+        if(z[0][i] == y[0][i])
             continue;
         z[0][i] *= m;
         count++;
@@ -138,10 +157,10 @@ void ParameterUnresolvedFossils::updateForAcceptance(void){
     if(lastWasBulk){
         for(int i = 0; i < numFossils; i++)
             z[1][i] = z[0][i];
-    }else if(lastWasAttach)
-        z[1][lastFossil] = z[0][lastFossil];
-    else
+    }else{
         y[1][lastFossil] = y[0][lastFossil];
+        z[1][lastFossil] = z[0][lastFossil];
+    }
 }
 
 void ParameterUnresolvedFossils::updateForRejection(void){
@@ -149,10 +168,10 @@ void ParameterUnresolvedFossils::updateForRejection(void){
     if(lastWasBulk){
         for(int i = 0; i < numFossils; i++)
             z[0][i] = z[1][i];
-    }else if(lastWasAttach)
-        z[0][lastFossil] = z[1][lastFossil];
-    else
+    }else{
         y[0][lastFossil] = y[1][lastFossil];
+        z[0][lastFossil] = z[1][lastFossil];
+    }
 }
 
 void ParameterUnresolvedFossils::print(void){

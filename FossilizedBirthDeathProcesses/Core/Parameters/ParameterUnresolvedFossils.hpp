@@ -20,7 +20,8 @@ class ParameterUnresolvedFossils : public Parameter {
         int                         getNumFossils(void) { return numFossils; }
         double                      getFossilAge(int i) { return y[0][i]; }
         double                      getAttachAge(int i) { return z[0][i]; }
-        bool                        isSampledAncestor(int i) { return sa[0][i] != 0; }
+        bool                        isSA(int i) { return z[0][i] == y[0][i]; }
+        int                         getNumSampledAncestors(void) { int n = 0; for(int i = 0; i < numFossils; i++) if(z[0][i] == y[0][i]) n++; return n; }
         Node*                       getCrownNode(int i) { return crownNode[i]; }
         Node*                       getMaxAttachNode(int i) { return isCrown[i] ? crownNode[i] : originNode[i]; }
         bool                        getIsCrown(int i) { return isCrown[i]; }
@@ -37,6 +38,7 @@ class ParameterUnresolvedFossils : public Parameter {
     private:
         double                      updateFossilAge(int i);
         double                      updateAttachAge(int i);
+        double                      updateSampledAncestor(int i);
         Tree*                       backbone;
         ParameterDouble*            originAge;
         int                         numFossils;
@@ -47,9 +49,7 @@ class ParameterUnresolvedFossils : public Parameter {
         std::vector<bool>           isCrown;
         std::vector<double>         y[2]; // 0 = working (scored), 1 = last accepted
         std::vector<double>         z[2];
-        std::vector<int>            sa[2];
         int                         lastFossil;
-        bool                        lastWasAttach;
         bool                        lastWasBulk;
         int                         numAcceptances;
         int                         numRejections;

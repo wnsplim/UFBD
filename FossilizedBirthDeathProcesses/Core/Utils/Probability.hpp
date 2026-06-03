@@ -22,6 +22,17 @@ thread_local static double extraNormalRv = 0.0;
 
 namespace  Probability {
 
+    enum class PriorFamily { IMPROPER, TRUNCATED_NORMAL, EXPONENTIAL, GAMMA, LOGNORMAL, UNIFORM };
+
+    struct PriorSpec {
+        bool        set    = false;
+        PriorFamily family = PriorFamily::TRUNCATED_NORMAL;
+        double      p1     = 0.0;
+        double      p2     = 1.0;
+    };
+
+    double priorLnPdf(PriorFamily family, double p1, double p2, double x, double lower, double upper);
+
     namespace Beta {
     
         double  pdf(double alpha, double beta, double x);

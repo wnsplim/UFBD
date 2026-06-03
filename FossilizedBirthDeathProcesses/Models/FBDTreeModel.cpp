@@ -42,10 +42,13 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     parameters.push_back(mu);
     psi = new ParameterDouble(1.0, this, "psi", 0.0, std::numeric_limits<double>::max());
     parameters.push_back(psi);
+    Probability::PriorSpec lp = UserSettings::userSettings().getLambdaPrior(); if(lp.set) lambda->setPrior(lp.family, lp.p1, lp.p2);
+    Probability::PriorSpec mp = UserSettings::userSettings().getMuPrior();     if(mp.set) mu->setPrior(mp.family, mp.p1, mp.p2);
+    Probability::PriorSpec pp = UserSettings::userSettings().getPsiPrior();    if(pp.set) psi->setPrior(pp.family, pp.p1, pp.p2);
     rho = UserSettings::userSettings().getRho();
 
     originAge = nullptr;
-    if(UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN && isFBD == false){
+    if(UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN){
         double x0init = parameterTree->getTree()->getRoot()->getTime();
         for(Fossil& f : fossils)
             if(f.getMaxAge() > x0init)
@@ -53,6 +56,11 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
         originAge = new ParameterDouble(1.0, this, "originAge", 0.0, std::numeric_limits<double>::max());
         originAge->setValue(x0init * 1.05);
         parameters.push_back(originAge);
+        UserSettings& us = UserSettings::userSettings();
+        if(us.getConditionAgePriorSet())
+            originAge->setPrior(us.getConditionAgePrior(), us.getConditionAgePriorP1(), us.getConditionAgePriorP2());
+        else
+            originAge->setPrior(Probability::PriorFamily::IMPROPER, 0.0, 0.0);
     }
 
     unresolvedFossils = nullptr;
@@ -117,15 +125,13 @@ double FBDTreeModel::calculateFBDProbability(void){
 
     //term 1: conditioning
     if(useOrigin){
-        double x0 = (originAge != nullptr) ? originAge->getValue() : rootAge;
+        double x0 = originAge->getValue();
         if(x0 < rootAge)
             return -INFINITY;
         fbdProb -= std::log(lambdaVal);
         fbdProb -= calculateLnSurvival(x0);
-        if(originAge != nullptr){
-            fbdProb += log4LambdaRho;
-            fbdProb -= std::log(calculateQt(x0));
-        }
+        fbdProb += log4LambdaRho;
+        fbdProb -= std::log(calculateQt(x0));
     }else{
         fbdProb -= 2 * (std::log(lambdaVal) + calculateLnSurvival(rootAge));
         fbdProb += log4LambdaRho;
@@ -142,8 +148,8 @@ double FBDTreeModel::calculateFBDProbability(void){
     int numFossils = unresolvedFossils->getNumFossils();
     updateGammaCache();
     for(int i = 0; i < numFossils; i++){
-        if(unresolvedFossils->isSampledAncestor(i)){
-            fbdProb += std::log(psiVal);
+        if(unresolvedFossils->isSA(i)){
+            fbdProb += std::log(psiVal) + cachedGammaLn[i];
             continue;
         }
         fbdProb += fossilPqLn(unresolvedFossils->getFossilAge(i), unresolvedFossils->getAttachAge(i)) + cachedGammaLn[i];
@@ -160,9 +166,11 @@ double FBDTreeModel::calculateResolvedFBD(void){
     Node* root = tree->getRoot();
     double rootAge = root->getTime();
     bool useOrigin = (UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN);
-    double startAge = (useOrigin && originAge != nullptr) ? originAge->getValue() : rootAge;
+    double startAge = useOrigin ? originAge->getValue() : rootAge;
+    if(useOrigin && startAge < rootAge)
+        return -INFINITY;
 
-    double logLambda = std::log(lambdaVal);
+    double logTwoLambda = std::log(2.0 * lambdaVal);
     int numInitialLineages = useOrigin ? 1 : 2;
     double lnP = -numInitialLineages * calculateLnSurvival(startAge);
     if(useOrigin)
@@ -171,10 +179,21 @@ double FBDTreeModel::calculateResolvedFBD(void){
     for(Node* n : tree->getDownPassSequence()){
         if(n != root)
             lnP += lnD(n->getAncestor()->getTime()) - lnD(n->getTime());
-        if(n->getIsTip())
-            lnP += n->getIsFossil() ? std::log(psiVal) + std::log(calculatePo(n->getTime())) : std::log(rhoVal);
-        else if(useOrigin || n != root)
-            lnP += logLambda;
+        if(n->getIsTip()){
+            if(n->getIsFossil() == false)
+                lnP += std::log(rhoVal);
+            else if(n->getAncestor()->getTime() == n->getTime())
+                lnP += std::log(psiVal);
+            else
+                lnP += std::log(psiVal) + std::log(calculatePo(n->getTime()));
+        }
+        else if(useOrigin || n != root){
+            bool fakeSplit = false;
+            for(Node* c : n->getNeighbors())
+                if(c != n->getAncestor() && c->getIsTip() && c->getIsFossil() && c->getTime() == n->getTime()){ fakeSplit = true; break; }
+            if(fakeSplit == false)
+                lnP += logTwoLambda;
+        }
     }
     return lnP;
 }
@@ -222,12 +241,12 @@ double FBDTreeModel::computeGamma(double z, int i){
     }
 
     bool SymmetryCorrection = (UserSettings::userSettings().getModel() == Model::UFBD);
-    bool focalIsTip = (unresolvedFossils->isSampledAncestor(i) == false);
+    bool focalIsTip = (unresolvedFossils->isSA(i) == false);
     int numFossils = unresolvedFossils->getNumFossils();
     for(int j = 0; j < numFossils; j++){
         if(j == i)
             continue;
-        if(unresolvedFossils->isSampledAncestor(j))
+        if(unresolvedFossils->isSA(j))
             continue;
         double yj = unresolvedFossils->getFossilAge(j);
         double zj = unresolvedFossils->getAttachAge(j);
@@ -323,7 +342,7 @@ void FBDTreeModel::enumeratePrunableRoots(Tree* t, std::vector<Node*>& roots){
         }
         if(af){
             allFossil.insert(n);
-            if(n->getAncestor() != treeRoot)
+            if(n->getAncestor() != treeRoot && t->isFakeSplit(n->getAncestor()) == false)
                 roots.push_back(n);
         }
     }
@@ -367,6 +386,8 @@ double FBDTreeModel::doWilsonBalding(void){
     Tree* tree = parameterTree->getTree();
     std::vector<Node*> prunable;
     enumeratePrunableRoots(tree, prunable);
+    if(prunable.empty())
+        return -INFINITY;
     double pFwd = (double)prunable.size();
     Node* r = prunable[(int)(rng.uniformRv() * pFwd)];
     Node* split = r->getAncestor();
@@ -487,6 +508,8 @@ double FBDTreeModel::doNarrowExchange(void){
             uncle = nb;
     if(uncle->getTime() >= parent->getTime())
         return -INFINITY;
+    if(tree->isSATip(i) || tree->isSATip(uncle))
+        return -INFINITY;
     if(subtreeAllFossil(i) == false || subtreeAllFossil(uncle) == false)
         return -INFINITY;
     if(subtreeFossilsValidAt(tree, i, grandparent) == false)
@@ -514,9 +537,45 @@ double FBDTreeModel::doTreeScale(void){
     double m = std::exp(parameterTree->getScaleLambda() * (rng.uniformRv() - 0.5));
     int numScaled = tree->scaleInternalAges(m);
     for(Node* n : tree->getDownPassSequence())
-        if(n != tree->getRoot() && n->getTime() >= n->getAncestor()->getTime())
+        if(n != tree->getRoot() && tree->isSATip(n) == false && n->getTime() >= n->getAncestor()->getTime())
             return -INFINITY;
     return numScaled * std::log(m);
+}
+
+double FBDTreeModel::doSARJMCMC(void){
+    Tree* tree = parameterTree->getTree();
+    std::vector<Node*> fossils;
+    for(Node* n : tree->getDownPassSequence())
+        if(n->getIsTip() && n->getIsFossil())
+            fossils.push_back(n);
+    if(fossils.empty())
+        return -INFINITY;
+    Node* f = fossils[(int)(rng.uniformRv() * fossils.size())];
+    Node* sp = f->getAncestor();
+    bool useOrigin = (UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN);
+    bool spIsRoot = (sp == tree->getRoot());
+    if(spIsRoot && useOrigin == false)
+        return -INFINITY;
+    Node* gp = sp->getAncestor();
+    Node* sib = nullptr;
+    for(Node* c : sp->getNeighbors())
+        if(c != gp && c != f)
+            sib = c;
+    double y = f->getTime();
+    double maxAge = spIsRoot ? originAge->getValue() : gp->getTime();
+    double range = maxAge - y;
+    if(range <= 0.0)
+        return -INFINITY;
+    if(sp->getTime() == y){
+        sp->setTime(y + rng.uniformRv() * range);
+        return std::log(range);
+    }
+    if(y < sib->getTime())
+        return -INFINITY;
+    if(sib->getIsTip() && sib->getIsFossil() && sib->getTime() == y)
+        return -INFINITY;
+    sp->setTime(y);
+    return -std::log(range);
 }
 
 double FBDTreeModel::doWideExchange(void){
@@ -536,6 +595,8 @@ double FBDTreeModel::doWideExchange(void){
     if(nodeInSubtree(i, j) || nodeInSubtree(j, i))
         return -INFINITY;
     if(i->getTime() >= pj->getTime() || j->getTime() >= pi->getTime())
+        return -INFINITY;
+    if(tree->isSATip(i) || tree->isSATip(j))
         return -INFINITY;
     if(subtreeAllFossil(i) == false || subtreeAllFossil(j) == false)
         return -INFINITY;
@@ -560,7 +621,7 @@ double FBDTreeModel::doWideExchange(void){
 void FBDTreeModel::computeAgeFloors(std::map<Node*,double>& floors){
     int numFossils = unresolvedFossils->getNumFossils();
     for(int i = 0; i < numFossils; i++){
-        if(unresolvedFossils->isSampledAncestor(i))
+        if(unresolvedFossils->isSA(i))
             continue;
         Node* node = unresolvedFossils->getMaxAttachNode(i);
         double bound = unresolvedFossils->getAttachAge(i);
@@ -605,7 +666,7 @@ double FBDTreeModel::doSubtreeScale(void){
     std::vector<int> insideZ;
     int nf = unresolvedFossils->getNumFossils();
     for(int i = 0; i < nf; i++){
-        if(unresolvedFossils->isSampledAncestor(i))
+        if(unresolvedFossils->isSA(i))
             continue;
         if(nodeInSubtree(unresolvedFossils->getMaxAttachNode(i), node))
             insideZ.push_back(i);
@@ -628,7 +689,7 @@ void FBDTreeModel::updateGammaCache(void){
         gammaStale.assign(nf, 1);
         prevY.assign(nf, -1.0);
         prevZ.assign(nf, -1.0);
-        prevSa.assign(nf, -1);
+        prevSA.assign(nf, -1);
         prevNodeAge.assign(tree->getNumNodes(), -1.0);
         prevX0 = -1.0;
         cacheInit = true;
@@ -648,11 +709,11 @@ void FBDTreeModel::updateGammaCache(void){
     for(int i = 0; i < nf; i++){
         double yi = unresolvedFossils->getFossilAge(i);
         double zi = unresolvedFossils->getAttachAge(i);
-        int sai = unresolvedFossils->isSampledAncestor(i) ? 1 : 0;
-        if(yi == prevY[i] && zi == prevZ[i] && sai == prevSa[i])
+        int sai = unresolvedFossils->isSA(i) ? 1 : 0;
+        if(yi == prevY[i] && zi == prevZ[i] && sai == prevSA[i])
             continue;
         gammaStale[i] = 1;
-        bool wasTerm = (prevSa[i] == 0);
+        bool wasTerm = (prevSA[i] == 0);
         bool isTerm = (sai == 0);
         if((wasTerm || isTerm) && prevY[i] >= 0.0){
             double lo = std::min(prevY[i], yi);
@@ -661,7 +722,7 @@ void FBDTreeModel::updateGammaCache(void){
             if(isTerm)  hi = std::max(hi, zi);
             for(int j = 0; j < nf; j++){
                 if(gammaStale[j]) continue;
-                double tj = unresolvedFossils->isSampledAncestor(j) ? unresolvedFossils->getFossilAge(j) : unresolvedFossils->getAttachAge(j);
+                double tj = unresolvedFossils->isSA(j) ? unresolvedFossils->getFossilAge(j) : unresolvedFossils->getAttachAge(j);
                 if(tj > lo && tj < hi) gammaStale[j] = 1;
             }
         }
@@ -680,7 +741,7 @@ void FBDTreeModel::updateGammaCache(void){
     if(changedIntervals.empty() == false){
         for(int i = 0; i < nf; i++){
             if(gammaStale[i]) continue;
-            double ti = unresolvedFossils->isSampledAncestor(i) ? unresolvedFossils->getFossilAge(i) : unresolvedFossils->getAttachAge(i);
+            double ti = unresolvedFossils->isSA(i) ? unresolvedFossils->getFossilAge(i) : unresolvedFossils->getAttachAge(i);
             for(std::pair<double,double>& iv : changedIntervals)
                 if(ti > iv.first && ti < iv.second){ gammaStale[i] = 1; break; }
         }
@@ -688,17 +749,15 @@ void FBDTreeModel::updateGammaCache(void){
 
     for(int i = 0; i < nf; i++){
         if(gammaStale[i] == 0) continue;
-        if(unresolvedFossils->isSampledAncestor(i) == false){
-            double g = computeGamma(unresolvedFossils->getAttachAge(i), i);
-            cachedGammaLn[i] = (g > 0.0) ? std::log(g) : -INFINITY;
-        }
+        double g = computeGamma(unresolvedFossils->getAttachAge(i), i);
+        cachedGammaLn[i] = (g > 0.0) ? std::log(g) : -INFINITY;
         gammaStale[i] = 0;
     }
 
     for(int i = 0; i < nf; i++){
         prevY[i] = unresolvedFossils->getFossilAge(i);
         prevZ[i] = unresolvedFossils->getAttachAge(i);
-        prevSa[i] = unresolvedFossils->isSampledAncestor(i) ? 1 : 0;
+        prevSA[i] = unresolvedFossils->isSA(i) ? 1 : 0;
     }
     for(Node* n : dpseq)
         prevNodeAge[n->getOffset()] = n->getTime();
@@ -757,8 +816,10 @@ double FBDTreeModel::fossilPqLn(double y, double z){
 std::vector<std::string> FBDTreeModel::getParameterNames(void){
     std::vector<std::string> names;
     for(Parameter* p : parameters)
-        if( p != parameterTree) //by convention, exclude parameter tree from these getters
-            names.push_back(p->getName());
+        if( p != parameterTree){ //by convention, exclude parameter tree from these getters
+            ParameterUnresolvedFossils* uf = dynamic_cast<ParameterUnresolvedFossils*>(p);
+            names.push_back(uf != nullptr ? "nSA" : p->getName());
+        }
     return names;
 }
 
@@ -767,8 +828,13 @@ std::vector<double> FBDTreeModel::getParameterString(void){
     for(Parameter* p : parameters)
         if( p != parameterTree){ //by convention, exclude parameter tree from these getters
             ParameterDouble* pd = dynamic_cast<ParameterDouble*>(p);
-            if(pd != nullptr)
+            if(pd != nullptr){
                 vals.push_back(pd->getValue());
+                continue;
+            }
+            ParameterUnresolvedFossils* uf = dynamic_cast<ParameterUnresolvedFossils*>(p);
+            if(uf != nullptr)
+                vals.push_back((double)uf->getNumSampledAncestors());
         }
 
     return vals;
@@ -781,26 +847,16 @@ double FBDTreeModel::lnLikelihood(void){
 double FBDTreeModel::lnPriorProbability(void){
     double lnP = 0.0;
     
-    //calcualte lnP on FBD parameters
-    for(Parameter* p : parameters){
-        //exclude parameter tree (prior accounted for in FBD likelihood) and originAge (prior is the conditioning-age prior below)
-        if( p != parameterTree && p != originAge)
+    for(Parameter* p : parameters)
+        if( p != parameterTree)
             lnP += p->lnProbability();
-    }
 
     UserSettings& us = UserSettings::userSettings();
-    if(us.getConditionAgePriorSet()){
-        double x = (originAge != nullptr) ? originAge->getValue() : parameterTree->getTree()->getRoot()->getTime();
-        double p1 = us.getConditionAgePriorP1();
-        double p2 = us.getConditionAgePriorP2();
-        switch(us.getConditionAgePrior()){
-            case ConditionAgePriorFamily::EXP:       lnP += Probability::Exponential::lnPdf(p1, x); break;
-            case ConditionAgePriorFamily::GAMMA:     lnP += Probability::Gamma::lnPdf(p1, p2, x); break;
-            case ConditionAgePriorFamily::LOGNORMAL: lnP += Probability::Normal::lnPdf(p1, p2 * p2, std::log(x)) - std::log(x); break;
-            case ConditionAgePriorFamily::UNIFORM:   lnP += (x < p1 || x > p2) ? -INFINITY : Probability::Uniform::lnPdf(p1, p2, x); break;
-        }
+    if(us.getConditionAgePriorSet() && us.getConditioning() == Conditioning::CROWN){
+        double rootAge = parameterTree->getTree()->getRoot()->getTime();
+        lnP += Probability::priorLnPdf(us.getConditionAgePrior(), us.getConditionAgePriorP1(), us.getConditionAgePriorP2(), rootAge, 0.0, std::numeric_limits<double>::max());
     }
-    
+
     return lnP;
 }
 
@@ -851,8 +907,9 @@ double FBDTreeModel::update(void){
         double wWB = 10.0;
         double wWE = 10.0;
         double wTreeScale = 3.0;
+        double wSA = 15.0;
         double wAge = 40.0;
-        double uMove = rng.uniformRv() * (wNE + wWB + wWE + wTreeScale + wAge);
+        double uMove = rng.uniformRv() * (wNE + wWB + wWE + wTreeScale + wSA + wAge);
         if(uMove < wNE){
             double r = doNarrowExchange();
             RandomVariable::setActiveInstance(prevRng);
@@ -870,6 +927,11 @@ double FBDTreeModel::update(void){
         }
         if(uMove < wNE + wWB + wWE + wTreeScale){
             double r = doTreeScale();
+            RandomVariable::setActiveInstance(prevRng);
+            return r;
+        }
+        if(uMove < wNE + wWB + wWE + wTreeScale + wSA){
+            double r = doSARJMCMC();
             RandomVariable::setActiveInstance(prevRng);
             return r;
         }

@@ -7,6 +7,21 @@
 #include "Probability.hpp"
 #include "RandomVariable.hpp"
 
+#pragma mark - PriorFamily
+
+double Probability::priorLnPdf(PriorFamily family, double p1, double p2, double x, double lower, double upper){
+    double lnp = -INFINITY;
+    switch(family){
+        case PriorFamily::IMPROPER:         lnp = 0.0;                                                       break;
+        case PriorFamily::TRUNCATED_NORMAL: lnp = TruncatedNormal::lnPdf(x, p1, p2, lower, upper);            break;
+        case PriorFamily::EXPONENTIAL:      lnp = Exponential::lnPdf(p1, x);                                  break;
+        case PriorFamily::GAMMA:            lnp = Gamma::lnPdf(p1, p2, x);                                    break;
+        case PriorFamily::LOGNORMAL:        lnp = Normal::lnPdf(p1, p2 * p2, std::log(x)) - std::log(x);      break;
+        case PriorFamily::UNIFORM:          lnp = (x < p1 || x > p2) ? -INFINITY : Uniform::lnPdf(p1, p2, x); break;
+    }
+    return lnp;
+}
+
 #pragma mark - Beta
 
 double Probability::Beta::rv(RandomVariable* rng, double a, double b) {

@@ -3,10 +3,10 @@
 
 #include <string>
 
+#include "Probability.hpp"
 
 enum class Conditioning { CROWN, ORIGIN };
 enum class Model { FBD, HEA14, UFBD };
-enum class ConditionAgePriorFamily { EXP, GAMMA, LOGNORMAL, UNIFORM };
 
 class UserSettings {
 
@@ -26,10 +26,13 @@ class UserSettings {
         std::string                 getCladesFile(void) { checkSettings(); return cladesFile; }
         std::string                 getFossilFile(void) { checkSettings(); return fossilFile; }
         Conditioning                getConditioning(void) { checkSettings(); return conditioning; }
-        ConditionAgePriorFamily          getConditionAgePrior(void) { checkSettings(); return conditionAgePrior; }
+        Probability::PriorFamily         getConditionAgePrior(void) { checkSettings(); return conditionAgePrior; }
         double                      getConditionAgePriorP1(void) { checkSettings(); return conditionAgePriorP1; }
         double                      getConditionAgePriorP2(void) { checkSettings(); return conditionAgePriorP2; }
         bool                        getConditionAgePriorSet(void) { checkSettings(); return conditionAgePriorSet; }
+        Probability::PriorSpec      getLambdaPrior(void) { checkSettings(); return lambdaPrior; }
+        Probability::PriorSpec      getMuPrior(void) { checkSettings(); return muPrior; }
+        Probability::PriorSpec      getPsiPrior(void) { checkSettings(); return psiPrior; }
         Model                       getModel(void) { checkSettings(); return model; }
         double                      getRho(void) { checkSettings(); return rho; }
         unsigned int                getSeed(void) { checkSettings(); return seed; }
@@ -44,7 +47,7 @@ class UserSettings {
                                     UserSettings(const UserSettings& u);
         UserSettings&               operator=(const UserSettings&);
         void                        checkSettings(void);
-        void                        parseConditionAgePrior(const std::string& spec);
+        void                        parsePriorInto(const std::string& spec, Probability::PriorFamily& family, double& p1, double& p2);
         std::string                 executablePath;
         std::string                 treeOut;
         std::string                 parametersOut;
@@ -53,10 +56,13 @@ class UserSettings {
         std::string                 fossilFile;
         Conditioning                conditioning;
         bool                        conditioningSet;
-        ConditionAgePriorFamily          conditionAgePrior;
+        Probability::PriorFamily         conditionAgePrior;
         bool                        conditionAgePriorSet;
         double                      conditionAgePriorP1;
         double                      conditionAgePriorP2;
+        Probability::PriorSpec      lambdaPrior;
+        Probability::PriorSpec      muPrior;
+        Probability::PriorSpec      psiPrior;
         Model                       model;
         double                      rho;
         unsigned int                seed;

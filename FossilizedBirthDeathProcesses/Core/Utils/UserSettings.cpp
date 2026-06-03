@@ -9,6 +9,7 @@
 #include <cctype>
 
 #include "Msg.hpp"
+#include "Probability.hpp"
 #include "UserSettings.hpp"
 
 
@@ -50,10 +51,12 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
 
     // Known flags and whether they take a value
     std::set<std::string> knownFlags = {
-        "-to", "-po", "-t", "-c", "-f", "-cond", "-model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt", "-help", "-h"
+        "-to", "-po", "-t", "-c", "-f", "-cond", "-model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt", "-help", "-h",
+        "-lambda-prior", "-mu-prior", "-psi-prior"
     };
     std::set<std::string> valueFlags = {
-        "-to", "-po", "-t", "-c", "-f", "-cond", "-model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt"
+        "-to", "-po", "-t", "-c", "-f", "-cond", "-model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt",
+        "-lambda-prior", "-mu-prior", "-psi-prior"
     };
 
     for (int i = 1; i < (int)arguments.size(); i++) {
@@ -101,8 +104,10 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
                 else if (v == "ORIGIN") conditioning = Conditioning::ORIGIN;
                 else Msg::error("Flag \"-cond\" expects crown or origin, but got \"" + val + "\".");
                 conditioningSet = true;
-                if (i + 1 < (int)arguments.size() && knownFlags.find(arguments[i + 1]) == knownFlags.end())
-                    parseConditionAgePrior(arguments[++i]);
+                if (i + 1 < (int)arguments.size() && knownFlags.find(arguments[i + 1]) == knownFlags.end()) {
+                    parsePriorInto(arguments[++i], conditionAgePrior, conditionAgePriorP1, conditionAgePriorP2);
+                    conditionAgePriorSet = true;
+                }
             } else if (arg == "-model") {
                 std::string v = val;
                 for (char& ch : v) ch = std::toupper((unsigned char)ch);
@@ -125,6 +130,12 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
                     Msg::error("Flag \"-seed\" expects a non-negative integer, but got \"" + val + "\".");
                 }
                 seedSet = true;
+            } else if (arg == "-lambda-prior") {
+                parsePriorInto(val, lambdaPrior.family, lambdaPrior.p1, lambdaPrior.p2); lambdaPrior.set = true;
+            } else if (arg == "-mu-prior") {
+                parsePriorInto(val, muPrior.family, muPrior.p1, muPrior.p2); muPrior.set = true;
+            } else if (arg == "-psi-prior") {
+                parsePriorInto(val, psiPrior.family, psiPrior.p1, psiPrior.p2); psiPrior.set = true;
             }else {
                 // Integer-valued flags
                 // Check all characters are digits (allowing leading minus for negative detection)
@@ -204,11 +215,11 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
         Msg::warning("No parameter output file specified (-po). Use -help for usage.");
 }
 
-void UserSettings::parseConditionAgePrior(const std::string& spec) {
+void UserSettings::parsePriorInto(const std::string& spec, Probability::PriorFamily& family, double& p1, double& p2) {
     size_t lp = spec.find('(');
     size_t rp = spec.find(')');
     if (lp == std::string::npos || rp == std::string::npos || rp <= lp)
-        Msg::error("Conditioning-age prior must look like exp(rate), gamma(shape,rate), lognormal(mu,sigma), or unif(a,b); got \"" + spec + "\".");
+        Msg::error("prior must look like exp(rate), gamma(shape,rate), lognormal(mu,sigma), unif(a,b), or truncnormal(mean,sd); got \"" + spec + "\".");
     std::string fam = spec.substr(0, lp);
     for (char& ch : fam) ch = std::tolower((unsigned char)ch);
     std::vector<double> ps;
@@ -216,24 +227,26 @@ void UserSettings::parseConditionAgePrior(const std::string& spec) {
     std::string tok;
     while (std::getline(ss, tok, ',')) {
         try { ps.push_back(std::stod(tok)); }
-        catch (...) { Msg::error("Conditioning-age prior parameter \"" + tok + "\" is not a number in \"" + spec + "\"."); }
+        catch (...) { Msg::error("prior parameter \"" + tok + "\" is not a number in \"" + spec + "\"."); }
     }
     if (fam == "exp" || fam == "exponential") {
         if (ps.size() != 1 || ps[0] <= 0.0) Msg::error("exp prior needs one positive rate: exp(rate).");
-        conditionAgePrior = ConditionAgePriorFamily::EXP; conditionAgePriorP1 = ps[0];
+        family = Probability::PriorFamily::EXPONENTIAL; p1 = ps[0];
     } else if (fam == "gamma") {
         if (ps.size() != 2 || ps[0] <= 0.0 || ps[1] <= 0.0) Msg::error("gamma prior needs positive shape,rate: gamma(shape,rate).");
-        conditionAgePrior = ConditionAgePriorFamily::GAMMA; conditionAgePriorP1 = ps[0]; conditionAgePriorP2 = ps[1];
+        family = Probability::PriorFamily::GAMMA; p1 = ps[0]; p2 = ps[1];
     } else if (fam == "lognormal" || fam == "lnorm") {
         if (ps.size() != 2 || ps[1] <= 0.0) Msg::error("lognormal prior needs mu,sigma with sigma>0: lognormal(mu,sigma).");
-        conditionAgePrior = ConditionAgePriorFamily::LOGNORMAL; conditionAgePriorP1 = ps[0]; conditionAgePriorP2 = ps[1];
+        family = Probability::PriorFamily::LOGNORMAL; p1 = ps[0]; p2 = ps[1];
     } else if (fam == "unif" || fam == "uniform") {
         if (ps.size() != 2 || ps[0] >= ps[1]) Msg::error("unif prior needs a<b: unif(a,b).");
-        conditionAgePrior = ConditionAgePriorFamily::UNIFORM; conditionAgePriorP1 = ps[0]; conditionAgePriorP2 = ps[1];
+        family = Probability::PriorFamily::UNIFORM; p1 = ps[0]; p2 = ps[1];
+    } else if (fam == "truncnormal" || fam == "tn" || fam == "normal") {
+        if (ps.size() != 2 || ps[1] <= 0.0) Msg::error("truncnormal prior needs mean,sd with sd>0: truncnormal(mean,sd).");
+        family = Probability::PriorFamily::TRUNCATED_NORMAL; p1 = ps[0]; p2 = ps[1];
     } else {
-        Msg::error("Unknown conditioning-age prior family \"" + fam + "\". Use exp / gamma / lognormal / unif.");
+        Msg::error("Unknown prior family \"" + fam + "\". Use exp / gamma / lognormal / unif / truncnormal.");
     }
-    conditionAgePriorSet = true;
 }
 
 void UserSettings::print(void) {
@@ -246,10 +259,12 @@ void UserSettings::print(void) {
     std::cout << "Conditioning age prior:                ";
     if (!conditionAgePriorSet) std::cout << "improper uniform";
     else switch (conditionAgePrior) {
-        case ConditionAgePriorFamily::EXP:       std::cout << "exp(" << conditionAgePriorP1 << ")"; break;
-        case ConditionAgePriorFamily::GAMMA:     std::cout << "gamma(" << conditionAgePriorP1 << "," << conditionAgePriorP2 << ")"; break;
-        case ConditionAgePriorFamily::LOGNORMAL: std::cout << "lognormal(" << conditionAgePriorP1 << "," << conditionAgePriorP2 << ")"; break;
-        case ConditionAgePriorFamily::UNIFORM:   std::cout << "unif(" << conditionAgePriorP1 << "," << conditionAgePriorP2 << ")"; break;
+        case Probability::PriorFamily::EXPONENTIAL:      std::cout << "exp(" << conditionAgePriorP1 << ")"; break;
+        case Probability::PriorFamily::GAMMA:            std::cout << "gamma(" << conditionAgePriorP1 << "," << conditionAgePriorP2 << ")"; break;
+        case Probability::PriorFamily::LOGNORMAL:        std::cout << "lognormal(" << conditionAgePriorP1 << "," << conditionAgePriorP2 << ")"; break;
+        case Probability::PriorFamily::UNIFORM:          std::cout << "unif(" << conditionAgePriorP1 << "," << conditionAgePriorP2 << ")"; break;
+        case Probability::PriorFamily::TRUNCATED_NORMAL: std::cout << "truncnormal(" << conditionAgePriorP1 << "," << conditionAgePriorP2 << ")"; break;
+        case Probability::PriorFamily::IMPROPER:         std::cout << "improper"; break;
     }
     std::cout << std::endl;
     std::cout << "Model:                                 " << (model == Model::FBD ? "FBD" : (model == Model::HEA14 ? "HEA14" : "UFBD")) << std::endl;
