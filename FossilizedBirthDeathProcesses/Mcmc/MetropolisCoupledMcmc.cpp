@@ -167,15 +167,15 @@ void MetropolisCoupledMcmc::run(void) {
 void MetropolisCoupledMcmc::sample(unsigned long n) {
     if(n == 1){
         params.addFilepath(paramOut, true);
-        std::vector<std::string> cn = {"n", "lnL"};
+        std::vector<std::string> cn = {"n", "posterior", "likelihood", "prior"};
         std::vector<std::string> headStr = models[coldModelIdx]->getParameterNames();
         cn.insert( cn.end(), headStr.begin(), headStr.end() );
         params.addColumnNamesTSV(cn);
-        
+
         trees.addFilepath(treeOut, true); // no CN for tree file
     }
-    
-    std::vector<double> dat = {(double)n, currLnL[coldModelIdx]};
+
+    std::vector<double> dat = {(double)n, currLnL[coldModelIdx] + currLnP[coldModelIdx], currLnL[coldModelIdx], currLnP[coldModelIdx]};
     std::vector<double> parmStr = models[coldModelIdx]->getParameterString();
     dat.insert( dat.end(), parmStr.begin(), parmStr.end() );
     params.appendDataTSV(dat);

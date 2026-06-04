@@ -13,7 +13,7 @@ ParameterDouble::ParameterDouble(double prob, PhylogeneticModel* m, std::string 
     upperBound(ub),
     numRejections(0), numAcceptances(0),
     numAdaptive(10000),
-    targetAr(0.43){
+    targetAr(0.3){
     
     adaptiveProposalActive = true;
     RandomVariable& rng = RandomVariable::randomVariableInstance();
@@ -45,7 +45,7 @@ void ParameterDouble::print(void){
 }
 
 double ParameterDouble::update(void) {
-    return updateSlidingWindow(); //done this way so that if we want, we can implement other proposal mechanisms etc fairly painlessly
+    return updateBactrianScale();
 }
 
 double ParameterDouble::updateSlidingWindow(){
@@ -76,6 +76,31 @@ double ParameterDouble::updateSlidingWindow(){
     }
     value[0] = u;
     return 0.0;
+}
+
+double ParameterDouble::updateBactrianScale(){
+    RandomVariable& rng = RandomVariable::randomVariableInstance();
+
+    double acceptRej = 0.0;
+    for(bool b : recentAcceptRej)
+        if(b == true)
+            acceptRej++;
+    acceptRej /= recentAcceptRej.size();
+
+    int total = numRejections + numAcceptances;
+    if(total > 0 && total % 100 == 0){
+        double gain = 1.0 / std::sqrt((double)(total / 100));
+        windowSize *= std::exp(gain * (acceptRej - targetAr));
+    }
+
+    double m = 0.95;
+    double s = std::sqrt(1.0 - m * m);
+    double delta = m + Probability::Normal::rv(&rng) * s;
+    if(Probability::Uniform::rv(&rng, 0.0, 1.0) < 0.5)
+        delta = -delta;
+    double logScale = windowSize * delta;
+    value[0] = value[1] * std::exp(logScale);
+    return logScale;
 }
 
 void ParameterDouble::updateForAcceptance(void) {

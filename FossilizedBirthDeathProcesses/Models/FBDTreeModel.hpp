@@ -23,7 +23,6 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      lnLikelihood(void);
         double                      lnPriorProbability(void);
         void                        print(void);
-        void                        dumpLnp(void);
         double                      update(void);
         void                        updateForAcceptance(void);
         void                        updateForRejection(void);

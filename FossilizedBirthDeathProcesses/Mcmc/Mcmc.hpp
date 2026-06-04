@@ -11,7 +11,7 @@ class Mcmc {
         void                    run(void);
     
     private:
-        void                    sample(unsigned long n, double lnL);
+        void                    sample(unsigned long n, double lnL, double lnP);
         PhylogeneticModel*      model;
         WriteTSV                params;
         WriteTSV                trees;

@@ -38,7 +38,6 @@ class UserSettings {
         double                      getRho(void) { checkSettings(); return rho; }
         unsigned int                getSeed(void) { checkSettings(); return seed; }
         bool                        getSeedSet(void) { checkSettings(); return seedSet; }
-        bool                        getDumpLnp(void) { checkSettings(); return dumpLnp; }
         int                         getPrintFrequency(void) { checkSettings(); return printFrequency; }
         int                         getSampleFrequency(void) { checkSettings(); return sampleFrequency; }
         void                        print(void);
@@ -70,7 +69,6 @@ class UserSettings {
         double                      rho;
         unsigned int                seed;
         bool                        seedSet;
-        bool                        dumpLnp;
         unsigned long               chainLength;
         int                         numChains;
         int                         numThreads;

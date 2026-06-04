@@ -57,22 +57,22 @@ void Mcmc::run(void) {
             }
                             
         if (n == 1 || n == numCycles || n % sampleFrequency == 0 )
-            sample(n, curLnL);
+            sample(n, curLnL, curLnP);
     }
 }
 
-void Mcmc::sample(unsigned long n, double lnL) {
+void Mcmc::sample(unsigned long n, double lnL, double lnP) {
     if(n == 1){
         params.addFilepath(paramOut, true);
-        std::vector<std::string> cn = {"n", "lnL"};
+        std::vector<std::string> cn = {"n", "posterior", "likelihood", "prior"};
         std::vector<std::string> headStr = model->getParameterNames();
         cn.insert( cn.end(), headStr.begin(), headStr.end() );
         params.addColumnNamesTSV(cn);
-        
+
         trees.addFilepath(treeOut, true); // no CN for tree file
     }
 
-    std::vector<double> dat = {(double)n, lnL};
+    std::vector<double> dat = {(double)n, lnL + lnP, lnL, lnP};
     std::vector<double> parmStr = model->getParameterString();
     dat.insert( dat.end(), parmStr.begin(), parmStr.end() );
     params.appendDataTSV(dat);
