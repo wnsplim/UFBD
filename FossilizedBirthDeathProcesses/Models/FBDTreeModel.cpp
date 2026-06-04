@@ -18,6 +18,9 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     c2(0.0){
 
     lastWasJointScale = false;
+    lastWasUpDown = false;
+    upDownStep = 0.1;
+    upDownTotal = 0;
     cacheInit = false;
     rng.setSeed(seed);
     RandomVariable* prevRng = RandomVariable::getActiveInstance();
@@ -659,6 +662,52 @@ double FBDTreeModel::doJointScale(void){
     return numScaled * std::log(m) + zJac;
 }
 
+double FBDTreeModel::doUpDownScale(void){
+    lastWasUpDown = true;
+    double ar = 0.0;
+    for(bool b : upDownRecent)
+        if(b)
+            ar++;
+    if(upDownRecent.empty() == false)
+        ar /= upDownRecent.size();
+    if(upDownTotal > 0 && upDownTotal % 100 == 0)
+        upDownStep *= std::exp((1.0 / std::sqrt((double)(upDownTotal / 100))) * (ar - 0.3));
+
+    double mBact = 0.95;
+    double sBact = std::sqrt(1.0 - mBact * mBact);
+    double delta = mBact + Probability::Normal::rv(&rng) * sBact;
+    if(Probability::Uniform::rv(&rng, 0.0, 1.0) < 0.5)
+        delta = -delta;
+    double c = std::exp(upDownStep * delta);
+    double invc = 1.0 / c;
+    double lnc = std::log(c);
+
+    int nUp = 0;
+    for(ParameterDouble* l : lambda){ l->scaleProposed(c); nUp++; }
+    for(ParameterDouble* m : mu){ m->scaleProposed(c); nUp++; }
+    for(ParameterDouble* p : psi){ p->scaleProposed(c); nUp++; }
+    double h = nUp * lnc;
+
+    Tree* t = parameterTree->getTree();
+    t->setLastUpdateWasScale(true);
+    if(unresolvedFossils != nullptr){
+        double zJac = unresolvedFossils->scaleAllAttachAges(invc);
+        if(zJac == -INFINITY)
+            return -INFINITY;
+        h += zJac;
+    }
+    int numScaledDown = t->scaleInternalAges(invc);
+    h += numScaledDown * std::log(invc);
+    if(originAge != nullptr){
+        originAge->scaleProposed(invc);
+        h += std::log(invc);
+    }
+    for(Node* n : t->getDownPassSequence())
+        if(n != t->getRoot() && n->getAncestor()->getTime() < n->getTime())
+            return -INFINITY;
+    return h;
+}
+
 double FBDTreeModel::doSubtreeScale(void){
     Tree* tree = parameterTree->getTree();
     tree->setLastUpdateWasScale(false);
@@ -968,6 +1017,7 @@ double FBDTreeModel::update(void){
         }
     }
     lastWasJointScale = false;
+    lastWasUpDown = false;
     if(updatedParameter == parameterTree && isFBD == false){
         Tree* t = parameterTree->getTree();
         int numSlideable = 0;
@@ -976,7 +1026,12 @@ double FBDTreeModel::update(void){
                 numSlideable++;
         double fixedWeight = 3.0;
         double slideAndRoot = numSlideable + fixedWeight;
-        double uMove = rng.uniformRv() * (slideAndRoot + 2.0 * fixedWeight);
+        double uMove = rng.uniformRv() * (slideAndRoot + 3.0 * fixedWeight);
+        if(uMove >= slideAndRoot + 2.0 * fixedWeight){
+            double r = doUpDownScale();
+            RandomVariable::setActiveInstance(prevRng);
+            return r;
+        }
         if(uMove >= slideAndRoot){
             lastWasJointScale = true;
             double r = (uMove < slideAndRoot + fixedWeight) ? doJointScale() : doSubtreeScale();
@@ -994,8 +1049,9 @@ double FBDTreeModel::update(void){
         double wWE = 10.0;
         double wTreeScale = 3.0;
         double wSA = 15.0;
+        double wUpDown = 10.0;
         double wAge = 40.0;
-        double uMove = rng.uniformRv() * (wNE + wWB + wWE + wTreeScale + wSA + wAge);
+        double uMove = rng.uniformRv() * (wNE + wWB + wWE + wTreeScale + wSA + wUpDown + wAge);
         if(uMove < wNE){
             double r = doNarrowExchange();
             RandomVariable::setActiveInstance(prevRng);
@@ -1021,6 +1077,11 @@ double FBDTreeModel::update(void){
             RandomVariable::setActiveInstance(prevRng);
             return r;
         }
+        if(uMove < wNE + wWB + wWE + wTreeScale + wSA + wUpDown){
+            double r = doUpDownScale();
+            RandomVariable::setActiveInstance(prevRng);
+            return r;
+        }
     }
     double ratio = updatedParameter->update();
 
@@ -1029,7 +1090,17 @@ double FBDTreeModel::update(void){
 }
 
 void FBDTreeModel::updateForAcceptance(void){
-    if(lastWasJointScale){
+    if(lastWasUpDown){
+        for(ParameterDouble* l : lambda) l->commitProposed();
+        for(ParameterDouble* m : mu) m->commitProposed();
+        for(ParameterDouble* p : psi) p->commitProposed();
+        if(originAge != nullptr) originAge->commitProposed();
+        parameterTree->updateForAcceptance();
+        if(unresolvedFossils != nullptr) unresolvedFossils->updateForAcceptance();
+        upDownTotal++;
+        upDownRecent.push_back(true);
+        if(upDownRecent.size() > 1000) upDownRecent.pop_front();
+    }else if(lastWasJointScale){
         parameterTree->updateForAcceptance();
         unresolvedFossils->updateForAcceptance();
     }else{
@@ -1038,7 +1109,17 @@ void FBDTreeModel::updateForAcceptance(void){
 }
 
 void FBDTreeModel::updateForRejection(void){
-    if(lastWasJointScale){
+    if(lastWasUpDown){
+        for(ParameterDouble* l : lambda) l->restoreProposed();
+        for(ParameterDouble* m : mu) m->restoreProposed();
+        for(ParameterDouble* p : psi) p->restoreProposed();
+        if(originAge != nullptr) originAge->restoreProposed();
+        parameterTree->updateForRejection();
+        if(unresolvedFossils != nullptr) unresolvedFossils->updateForRejection();
+        upDownTotal++;
+        upDownRecent.push_back(false);
+        if(upDownRecent.size() > 1000) upDownRecent.pop_front();
+    }else if(lastWasJointScale){
         parameterTree->updateForRejection();
         unresolvedFossils->updateForRejection();
     }else{

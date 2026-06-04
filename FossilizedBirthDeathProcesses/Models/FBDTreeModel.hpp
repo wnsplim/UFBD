@@ -7,6 +7,7 @@
 #include "PhylogeneticModel.hpp"
 #include "Tree.hpp"
 
+#include <deque>
 #include <map>
 #include <vector>
 
@@ -46,6 +47,7 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      doWideExchange(void);
         double                      doTreeScale(void);
         double                      doSARJMCMC(void);
+        double                      doUpDownScale(void);
         void                        updateGammaCache(void);
         void                        calculateCs(void);
         void                        calculateC1(void);
@@ -88,6 +90,10 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      rhoVal;
         double                      psiVal;
         bool                        lastWasJointScale;
+        bool                        lastWasUpDown;
+        double                      upDownStep;
+        int                         upDownTotal;
+        std::deque<bool>            upDownRecent;
         std::vector<double>         cachedGammaLn;
         std::vector<char>           gammaStale;
         std::vector<double>         prevY;
