@@ -69,8 +69,10 @@ class Tree {
         void                                passDown(Node* p, Node* from);
         void                                removeAllBranches(void);
         void                                removeBranch(Node* e1, Node* e2);
+#if 0
         void                                rSPR(void);
         void                                rSPR(std::string s); // for a specifc tip
+#endif
         void                                reroot(Node* r);
         double                              roundDecimal(double value, int n);
         void                                setBranch(Node* e1, Node* e2, double x);

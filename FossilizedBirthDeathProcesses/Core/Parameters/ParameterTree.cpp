@@ -20,6 +20,7 @@ ParameterTree::ParameterTree(double prob, PhylogeneticModel* m) :
     trees[1] = nullptr;
 }
 
+#if 0
 ParameterTree::ParameterTree(double prob, PhylogeneticModel* m, std::vector<std::string> taxonNames, double lam) :
     Parameter(prob, m,"Tree"),
     lambda(lam), //exponential prior on branch length
@@ -33,8 +34,10 @@ ParameterTree::ParameterTree(double prob, PhylogeneticModel* m, std::vector<std:
     trees[0] = new Tree(taxonNames, lambda);
     trees[1] = new Tree(*trees[0]);
 }
+#endif
 
 double ParameterTree::lnProbability(void) {
+#if 0
     if(useCachedLnP == false){
         Tree* t = trees[0];
         cachedLnP = 0.0;
@@ -49,6 +52,8 @@ double ParameterTree::lnProbability(void) {
         useCachedLnP = true;
     }
     return cachedLnP;
+#endif
+    return 0.0;
 }
 
 void ParameterTree::print(void) {

@@ -16,6 +16,7 @@ Tree::Tree(const Tree& t) {
     clone(t);
 }
 
+#if 0
 Tree::Tree(std::vector<std::string> taxonNames, double lambda) {
 
     numTaxa = (int)taxonNames.size();
@@ -84,6 +85,8 @@ Tree::Tree(std::vector<std::string> taxonNames, double lambda) {
         }
     initializeTimes();
 }
+
+#endif
 
 Tree::Tree(std::string newick){
     numTaxa = 0;
@@ -197,6 +200,7 @@ Node* Tree::insertFossilTip(Node* hostChild, std::string name, double y, double 
     return fossil;
 }
  
+#if 0
 void Tree::calculateTreeHeight(void){
     treeHeight = 0.0;
     double maxHeight = 0.0;
@@ -216,6 +220,8 @@ void Tree::calculateTreeHeight(void){
     }
     treeHeight = maxHeight;
 }
+
+#endif
 
 void Tree::checkBranchLengthsNeg(void){
     for(auto const& x : branchLengths)
@@ -267,6 +273,7 @@ void Tree::clone(const Tree& t) {
         }
 }
 
+#if 0
 void Tree::collapseNode(Node* n){
     if(n->getNeighbors().size() != 2)
         Msg::error("cannot collapse this node because it does not have two neighbors");
@@ -423,6 +430,8 @@ void Tree::dropTip(int idx){
     }
 }
 
+#endif
+
 void Tree::deleteNodes(void) {
 
     for (int i=0; i<nodes.size(); i++)
@@ -442,6 +451,7 @@ std::vector<Node*> Tree::getAllDescendants(Node* n){
     return descendants;
 }
 
+#if 0
 void Tree::forceBinary(void){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     std::vector<Node*> rootDesc = root->getDescendants();
@@ -469,11 +479,14 @@ void Tree::forceBinary(void){
         
 }
 
+#endif
+
 double Tree::getBranchLength(Node* e1, Node* e2) {
 
     return std::fabs(e1->getTime() - e2->getTime());
 }
 
+#if 0
 double Tree::branchLengthFromMap(Node* e1, Node* e2) {
 
     std::pair<Node*,Node*> key;
@@ -488,6 +501,8 @@ double Tree::branchLengthFromMap(Node* e1, Node* e2) {
     }
     return it->second;
 }
+
+#endif
 
 int Tree::getNumLineagesAtTime(double t){
     std::set<Node*> branchesContainingFossils;
@@ -639,6 +654,7 @@ void Tree::assignStartingAges(const std::map<Node*,double>& minAges, double unit
     treeHeight = root->getTime();
 }
 
+#if 0
 void Tree::keepTips(std::vector<std::string> t){
     //function drops all tips but those in the vector tips
     initializeDownPassSequence();
@@ -655,6 +671,8 @@ void Tree::keepTips(std::vector<std::string> t){
     }
     
 }
+
+#endif
 
 std::vector<std::string>  Tree::parseNewickString(std::string newickStr){
     
@@ -747,6 +765,7 @@ void Tree::reindexNodes(void){
         }
 }
 
+#if 0
 void Tree::removeAllBranches(void) {
 
     branchLengths.clear();
@@ -1208,6 +1227,7 @@ void Tree::rSPR(std::string s){
     reindexNodes();
 //    print("after move");
 }
+#endif
 
 void Tree::setBranch(Node* e1, Node* e2, double x) {
     std::pair<Node*,Node*> key;
