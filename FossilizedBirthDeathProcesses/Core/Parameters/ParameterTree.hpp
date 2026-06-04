@@ -14,8 +14,10 @@ class ParameterTree : public Parameter {
     public:
                                     ParameterTree(void) = delete;
                                     ParameterTree(double prob, PhylogeneticModel* m);
+#if 0
                                     ParameterTree(double prob, PhylogeneticModel* m, std::vector<std::string> taxonNames, double lam);
         void                        forceBinary(void) { trees[0]->forceBinary(); trees[1]->forceBinary(); }
+#endif
         double                      getAcceptanceRatio(void) { return ((double) numAcceptances) /( (double)numAcceptances + (double)numRejections ) ;}
         double                      getScaleLambda(void) { return scaleLambda; }
         virtual bool                getAdaptiveProposalActive(void) { return false; }
@@ -31,7 +33,9 @@ class ParameterTree : public Parameter {
         void                        tuneScale(bool accepted);
         //ordered by menmory footprint
         Tree*                       trees[2];
+#if 0
         double                      lambda; //branch length prior parameter exp(lambda)
+#endif
         double                      cachedLnP; 
         bool                        useCachedLnP;
         int                         numAcceptances;
