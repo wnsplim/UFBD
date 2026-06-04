@@ -736,6 +736,7 @@ void Tree::print(std::string header) {
     print();
 }
 
+#if 0
 std::pair<Node*,Node*> Tree::randomlyChooseBranch(void) {
     RandomVariable& rng = RandomVariable::randomVariableInstance();
 
@@ -750,6 +751,8 @@ std::pair<Node*,Node*> Tree::randomlyChooseBranch(void) {
     
     return nodePair;
 }
+
+#endif
 
 void Tree::reindexNodes(void){
     int idx = 0;

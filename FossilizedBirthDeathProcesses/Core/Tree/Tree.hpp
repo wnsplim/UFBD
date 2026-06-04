@@ -63,7 +63,9 @@ class Tree {
         void                                setAgeFloors(const std::map<Node*,double>& f) { ageFloors = f; }
         void                                print(void);
         void                                print(std::string header);
+#if 0
         std::pair<Node*,Node*>              randomlyChooseBranch(void);
+#endif
         void                                reindexNodes(void);
         
     private:
@@ -86,7 +88,9 @@ class Tree {
         void                                rSPR(std::string s); // for a specifc tip
         void                                reroot(Node* r);
 #endif
+#if 0
         double                              roundDecimal(double value, int n);
+#endif
         void                                setBranch(Node* e1, Node* e2, double x);
         void                                showNode(Node* p, int indent);
         double                              updateNodeAge(void);
