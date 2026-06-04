@@ -22,6 +22,12 @@ int main(int argc, const char* argv[]) {
     Tree* pt = input.getTree();
     pt->print();
 
+    if(settings.getDumpLnp()){
+        FBDTreeModel* m = new FBDTreeModel(pt, input.getClades(), input.getFossils(), masterSeed);
+        m->dumpLnp();
+        return 0;
+    }
+
     int numChains = settings.getNumChains();
     if(numChains > 1){
         std::cout << "Running Metropolis-coupled MCMC with " << numChains << " chains parallelized across " << settings.getNumThreads() << " threads \n";

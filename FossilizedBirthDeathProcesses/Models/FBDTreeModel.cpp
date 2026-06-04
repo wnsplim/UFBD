@@ -9,6 +9,7 @@
 #include "Msg.hpp"
 
 #include <iostream>
+#include <iomanip>
 #include <cmath>
 #include <limits>
 
@@ -928,6 +929,49 @@ std::vector<double> FBDTreeModel::getParameterString(void){
 
 double FBDTreeModel::lnLikelihood(void){
     return calculateFBDProbability();
+}
+
+void FBDTreeModel::dumpLnp(void){
+    Tree* t = parameterTree->getTree();
+    double lnL = calculateFBDProbability();
+    double lnPrior = lnPriorProbability();
+    UserSettings& us = UserSettings::userSettings();
+    const char* mname = (us.getModel() == Model::UFBD) ? "UFBD" : ((us.getModel() == Model::HEA14) ? "HEA14" : "FBD");
+    std::cout << std::setprecision(17);
+    std::cout << "LNP_BEGIN\n";
+    std::cout << "model " << mname << "\n";
+    std::cout << "cond " << ((us.getConditioning() == Conditioning::CROWN) ? "CROWN" : "ORIGIN") << "\n";
+    std::cout << "rho " << rhoVal << "\n";
+    std::cout << "lambda"; for(ParameterDouble* x : lambda) std::cout << " " << x->getValue(); std::cout << "\n";
+    std::cout << "mu";     for(ParameterDouble* x : mu)     std::cout << " " << x->getValue(); std::cout << "\n";
+    std::cout << "psi";    for(ParameterDouble* x : psi)    std::cout << " " << x->getValue(); std::cout << "\n";
+    std::cout << "timeline"; for(size_t i = 1; i < intervalStart.size(); i++) std::cout << " " << intervalStart[i]; std::cout << "\n";
+    std::cout << "rootAge " << t->getRoot()->getTime() << "\n";
+    if(originAge != nullptr) std::cout << "originAge " << originAge->getValue() << "\n";
+    std::cout << "lnLikelihood " << lnL << "\n";
+    std::cout << "lnPrior " << lnPrior << "\n";
+    std::cout << "nExtant " << t->getNumTaxa() << "\n";
+    int nf = (unresolvedFossils != nullptr) ? unresolvedFossils->getNumFossils() : 0;
+    std::cout << "nFossil " << nf << "\n";
+    std::cout << "nSA " << ((unresolvedFossils != nullptr) ? unresolvedFossils->getNumSampledAncestors() : 0) << "\n";
+    std::cout << "tree " << t->getNewickString() << "\n";
+    for(int i = 0; i < nf; i++){
+        std::cout << "fossil " << i
+                  << " y=" << unresolvedFossils->getFossilAge(i)
+                  << " z=" << unresolvedFossils->getAttachAge(i)
+                  << " sa=" << (unresolvedFossils->isSA(i) ? 1 : 0)
+                  << " group=" << (unresolvedFossils->getIsCrown(i) ? "CROWN" : "TOTAL")
+                  << " clade=";
+        std::vector<Node*> desc = t->getAllDescendants(unresolvedFossils->getCrownNode(i));
+        bool first = true;
+        for(Node* d : desc)
+            if(d->getIsTip()){
+                std::cout << (first ? "" : ",") << d->getName();
+                first = false;
+            }
+        std::cout << "\n";
+    }
+    std::cout << "LNP_END\n";
 }
 
 double FBDTreeModel::lnPriorProbability(void){

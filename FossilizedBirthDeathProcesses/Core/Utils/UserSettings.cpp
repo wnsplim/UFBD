@@ -48,11 +48,12 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
         arguments.push_back(std::string(argv[i]));
 
     executablePath = arguments[0];
+    dumpLnp = false;
 
     // Known flags and whether they take a value
     std::set<std::string> knownFlags = {
         "-to", "-po", "-t", "-c", "-f", "-cond", "-model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt", "-help", "-h",
-        "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times"
+        "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times", "-lnp"
     };
     std::set<std::string> valueFlags = {
         "-to", "-po", "-t", "-c", "-f", "-cond", "-model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt",
@@ -73,6 +74,11 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
         if (arg == "-help" || arg == "-h") {
             printHelp();
             return;
+        }
+
+        if (arg == "-lnp") {
+            dumpLnp = true;
+            continue;
         }
 
 
