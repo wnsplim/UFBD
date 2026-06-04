@@ -27,6 +27,7 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      update(void);
         void                        updateForAcceptance(void);
         void                        updateForRejection(void);
+        ParameterTree*              getParameterTree(void) { return parameterTree; }
     private:
         double                      calculateFBDProbability(void);
         double                      calculateResolvedFBD(void);

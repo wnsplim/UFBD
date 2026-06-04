@@ -14,6 +14,7 @@
 
 FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, unsigned int seed) :
     PhylogeneticModel(),
+ 
     c1(0.0),
     c2(0.0){
 

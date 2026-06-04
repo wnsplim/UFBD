@@ -49,13 +49,13 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
 
     executablePath = arguments[0];
 
-    // Known flags and whether they take a value
+    // Known flags and whether they take a value (terrible to read currently; will clean up later)
     std::set<std::string> knownFlags = {
-        "-to", "-po", "-t", "-c", "-f", "-cond", "-model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt", "-help", "-h",
+        "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt", "-help", "-h",
         "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times"
     };
     std::set<std::string> valueFlags = {
-        "-to", "-po", "-t", "-c", "-f", "-cond", "-model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt",
+        "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt",
         "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times"
     };
 
@@ -108,13 +108,13 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
                     parsePriorInto(arguments[++i], conditionAgePrior, conditionAgePriorP1, conditionAgePriorP2);
                     conditionAgePriorSet = true;
                 }
-            } else if (arg == "-model") {
+            } else if (arg == "-fbd_model") {
                 std::string v = val;
                 for (char& ch : v) ch = std::toupper((unsigned char)ch);
                 if (v == "FBD")         model = Model::FBD;
                 else if (v == "HEA14")  model = Model::HEA14;
                 else if (v == "UFBD")   model = Model::UFBD;
-                else Msg::error("Flag \"-model\" expects FBD, HEA14, or UFBD, but got \"" + val + "\".");
+                else Msg::error("Flag \"-fbd_model\" expects FBD, HEA14, or UFBD, but got \"" + val + "\".");
             } else if (arg == "-rho") {
                 try {
                     rho = std::stod(val);

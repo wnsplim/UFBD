@@ -257,10 +257,7 @@ Node* ApproxBranchLengthLikelihood::findNodeByBipartition(const std::set<std::st
     return nullptr;
 }
 
-double ApproxBranchLengthLikelihood::computeLnL(Tree* tree, double rate, const std::vector<double>* branchRates){
-    if(branchRates == nullptr && rate <= 0.0)
-        return -INFINITY;
-
+double ApproxBranchLengthLikelihood::computeLnL(Tree* tree, const std::vector<std::vector<double>>& branchRates){
     Node* curRoot = tree->getRoot();
     if(curRoot != cachedRoot){
         branchNodeIdx.assign(nb, -1);
@@ -282,23 +279,18 @@ double ApproxBranchLengthLikelihood::computeLnL(Tree* tree, double rate, const s
     std::vector<double> z(nb);
     double lnL = 0.0;
     for(int p = 0; p < nPartitions; p++){
+        const std::vector<double>& br = branchRates[p];
         for(int i = 0; i < nb; i++){
             double predBl;
             if(i == rootBranchIdx){
                 if(rootChildren.size() != 2) return -INFINITY;
                 double d0 = rootChildren[0]->getAncestor()->getTime() - rootChildren[0]->getTime();
                 double d1 = rootChildren[1]->getAncestor()->getTime() - rootChildren[1]->getTime();
-                if(branchRates)
-                    predBl = rate * ((*branchRates)[rootChildren[0]->getOffset()] * d0 + (*branchRates)[rootChildren[1]->getOffset()] * d1);
-                else
-                    predBl = rate * (d0 + d1);
+                predBl = br[rootChildren[0]->getOffset()] * d0 + br[rootChildren[1]->getOffset()] * d1;
             }else{
                 Node* n = tree->getNodeByOffset(branchNodeIdx[i]);
                 double d = n->getAncestor()->getTime() - n->getTime();
-                if(branchRates)
-                    predBl = rate * (*branchRates)[branchNodeIdx[i]] * d;
-                else
-                    predBl = rate * d;
+                predBl = br[branchNodeIdx[i]] * d;
             }
             if(predBl <= 0.0) return -INFINITY;
             z[i] = 2.0 * std::asin(std::sqrt(cJc - cJc * std::exp(-predBl / cJc))) - blMle[p][i];
