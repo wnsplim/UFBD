@@ -33,6 +33,7 @@ class UserSettings {
         Probability::PriorSpec      getLambdaPrior(void) { checkSettings(); return lambdaPrior; }
         Probability::PriorSpec      getMuPrior(void) { checkSettings(); return muPrior; }
         Probability::PriorSpec      getPsiPrior(void) { checkSettings(); return psiPrior; }
+        std::vector<double>         getSkylineTimes(void) { checkSettings(); return skylineTimes; }
         Model                       getModel(void) { checkSettings(); return model; }
         double                      getRho(void) { checkSettings(); return rho; }
         unsigned int                getSeed(void) { checkSettings(); return seed; }
@@ -63,6 +64,7 @@ class UserSettings {
         Probability::PriorSpec      lambdaPrior;
         Probability::PriorSpec      muPrior;
         Probability::PriorSpec      psiPrior;
+        std::vector<double>         skylineTimes;
         Model                       model;
         double                      rho;
         unsigned int                seed;

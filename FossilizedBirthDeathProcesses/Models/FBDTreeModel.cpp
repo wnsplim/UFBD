@@ -36,15 +36,27 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     parameters.push_back(parameterTree);
     
     //instantiate FBD model parameters
-    lambda = new ParameterDouble(1.0, this, "lambda", 0.0, std::numeric_limits<double>::max());
-    parameters.push_back(lambda);
-    mu = new ParameterDouble(1.0, this, "mu", 0.0, std::numeric_limits<double>::max());
-    parameters.push_back(mu);
-    psi = new ParameterDouble(1.0, this, "psi", 0.0, std::numeric_limits<double>::max());
-    parameters.push_back(psi);
-    Probability::PriorSpec lp = UserSettings::userSettings().getLambdaPrior(); if(lp.set) lambda->setPrior(lp.family, lp.p1, lp.p2);
-    Probability::PriorSpec mp = UserSettings::userSettings().getMuPrior();     if(mp.set) mu->setPrior(mp.family, mp.p1, mp.p2);
-    Probability::PriorSpec pp = UserSettings::userSettings().getPsiPrior();    if(pp.set) psi->setPrior(pp.family, pp.p1, pp.p2);
+    intervalStart.push_back(0.0);
+    for(double t : UserSettings::userSettings().getSkylineTimes())
+        intervalStart.push_back(t);
+    Probability::PriorSpec lp = UserSettings::userSettings().getLambdaPrior();
+    Probability::PriorSpec mp = UserSettings::userSettings().getMuPrior();
+    Probability::PriorSpec pp = UserSettings::userSettings().getPsiPrior();
+    for(size_t i = 0; i < intervalStart.size(); i++){
+        std::string suf = (intervalStart.size() > 1) ? std::to_string(i) : "";
+        ParameterDouble* l = new ParameterDouble(1.0, this, "lambda" + suf, 0.0, std::numeric_limits<double>::max());
+        ParameterDouble* m = new ParameterDouble(1.0, this, "mu" + suf, 0.0, std::numeric_limits<double>::max());
+        ParameterDouble* p = new ParameterDouble(1.0, this, "psi" + suf, 0.0, std::numeric_limits<double>::max());
+        if(lp.set) l->setPrior(lp.family, lp.p1, lp.p2);
+        if(mp.set) m->setPrior(mp.family, mp.p1, mp.p2);
+        if(pp.set) p->setPrior(pp.family, pp.p1, pp.p2);
+        lambda.push_back(l);
+        mu.push_back(m);
+        psi.push_back(p);
+        parameters.push_back(l);
+        parameters.push_back(m);
+        parameters.push_back(p);
+    }
     rho = UserSettings::userSettings().getRho();
 
     originAge = nullptr;
@@ -83,9 +95,9 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
 
     if(isFBD){
         parameterTree->setProposalProbability(78.0);
-        lambda->setProposalProbability(15.0);
-        mu->setProposalProbability(15.0);
-        psi->setProposalProbability(15.0);
+        for(ParameterDouble* l : lambda) l->setProposalProbability(15.0);
+        for(ParameterDouble* m : mu)     m->setProposalProbability(15.0);
+        for(ParameterDouble* p : psi)    p->setProposalProbability(15.0);
     }
 
     //normalize proposal probabilities
@@ -105,14 +117,13 @@ double FBDTreeModel::calculateFBDProbability(void){
     double rootAge = tree->getRoot()->getTime();
     std::vector<Node*> dpseq = tree->getDownPassSequence();
     
-    lambdaVal = lambda->getValue();
-    muVal = mu->getValue();
+    lambdaVal = lambda[0]->getValue();
+    muVal = mu[0]->getValue();
     rhoVal = rho;
-    psiVal = psi->getValue();
+    psiVal = psi[0]->getValue();
     double log4LambdaRho = std::log(4*lambdaVal*rhoVal);
     
-    calculateC1();
-    calculateC2();
+    prepareIntervals();
 
     if(isFBD)
         return calculateResolvedFBD();
@@ -128,28 +139,29 @@ double FBDTreeModel::calculateFBDProbability(void){
         double x0 = originAge->getValue();
         if(x0 < rootAge)
             return -INFINITY;
-        fbdProb -= std::log(lambdaVal);
+        double lx0 = lambda[findIndex(x0)]->getValue();
+        fbdProb -= std::log(lx0);
         fbdProb -= calculateLnSurvival(x0);
-        fbdProb += log4LambdaRho;
-        fbdProb -= std::log(calculateQt(x0));
+        fbdProb += std::log(4 * lx0 * rhoVal);
+        fbdProb += lnD(x0) - std::log(4.0);
     }else{
-        fbdProb -= 2 * (std::log(lambdaVal) + calculateLnSurvival(rootAge));
-        fbdProb += log4LambdaRho;
-        fbdProb -= std::log(qRoot);
+        double lr = lambda[findIndex(rootAge)]->getValue();
+        fbdProb -= 2 * (std::log(lr) + calculateLnSurvival(rootAge));
+        fbdProb += std::log(4 * lr * rhoVal);
+        fbdProb += lnD(rootAge) - std::log(4.0);
     }
 
     //term 2: main body
-    fbdProb += numInternalNodes * log4LambdaRho;
     for(Node* n : dpseq)
         if(n->getIsTip() == false)
-            fbdProb -= std::log(calculateQt(n->getTime()));
+            fbdProb += std::log(lambda[findIndex(n->getTime())]->getValue() * rhoVal) + lnD(n->getTime());
 
     //term 3: fossil attachment
     int numFossils = unresolvedFossils->getNumFossils();
     updateGammaCache();
     for(int i = 0; i < numFossils; i++){
         if(unresolvedFossils->isSA(i)){
-            fbdProb += std::log(psiVal) + cachedGammaLn[i];
+            fbdProb += std::log(psi[findIndex(unresolvedFossils->getFossilAge(i))]->getValue()) + cachedGammaLn[i];
             continue;
         }
         fbdProb += fossilPqLn(unresolvedFossils->getFossilAge(i), unresolvedFossils->getAttachAge(i)) + cachedGammaLn[i];
@@ -158,7 +170,7 @@ double FBDTreeModel::calculateFBDProbability(void){
 }
 
 double FBDTreeModel::lnD(double t){
-    return (t <= 0.0) ? 0.0 : std::log(4.0) - std::log(calculateQt(t));
+    return (t <= 0.0) ? 0.0 : lnDPrev[findIndex(t)] + std::log(4.0) - std::log(calculateQt(t));
 }
 
 double FBDTreeModel::calculateResolvedFBD(void){
@@ -170,7 +182,6 @@ double FBDTreeModel::calculateResolvedFBD(void){
     if(useOrigin && startAge < rootAge)
         return -INFINITY;
 
-    double logTwoLambda = std::log(2.0 * lambdaVal);
     int numInitialLineages = useOrigin ? 1 : 2;
     double lnP = -numInitialLineages * calculateLnSurvival(startAge);
     if(useOrigin)
@@ -183,16 +194,16 @@ double FBDTreeModel::calculateResolvedFBD(void){
             if(n->getIsFossil() == false)
                 lnP += std::log(rhoVal);
             else if(n->getAncestor()->getTime() == n->getTime())
-                lnP += std::log(psiVal);
+                lnP += std::log(psi[findIndex(n->getTime())]->getValue());
             else
-                lnP += std::log(psiVal) + std::log(calculatePo(n->getTime()));
+                lnP += std::log(psi[findIndex(n->getTime())]->getValue()) + std::log(calculatePo(n->getTime()));
         }
         else if(useOrigin || n != root){
             bool fakeSplit = false;
             for(Node* c : n->getNeighbors())
                 if(c != n->getAncestor() && c->getIsTip() && c->getIsFossil() && c->getTime() == n->getTime()){ fakeSplit = true; break; }
             if(fakeSplit == false)
-                lnP += logTwoLambda;
+                lnP += std::log(2.0 * lambda[findIndex(n->getTime())]->getValue());
         }
     }
     return lnP;
@@ -782,40 +793,110 @@ void FBDTreeModel::calculateC2(void){
     c2 /= c1;
 }
 
-double FBDTreeModel::calculateQt(double t){
-    double tmp = 2 * (1 - std::pow(c2, 2));
-    tmp += std::exp(-c1 * t) * std::pow(1-c2, 2);
-    tmp += std::exp(c1 * t) * std::pow(1+c2, 2);
+int FBDTreeModel::findIndex(double t){
+    int i = 0;
+    for(size_t j = 1; j < intervalStart.size(); j++)
+        if(t >= intervalStart[j])
+            i = (int)j;
+    return i;
+}
+
+void FBDTreeModel::prepareIntervals(void){
+    size_t n = intervalStart.size();
+    c1Vec.assign(n, 0.0);
+    c2Vec.assign(n, 0.0);
+    ePrev.assign(n, 0.0);
+    lnDPrev.assign(n, 0.0);
+    for(size_t i = 0; i < n; i++){
+        double li = lambda[i]->getValue();
+        double mi = mu[i]->getValue();
+        double pi = psi[i]->getValue();
+        c1Vec[i] = std::abs(std::sqrt(std::pow(li - mi - pi, 2) + 4*li*pi));
+        if(i == 0){
+            ePrev[0] = 1.0;
+            lnDPrev[0] = 0.0;
+            c2Vec[0] = (-li + mi + 2*li * rhoVal + pi) / c1Vec[0];
+        }else{
+            double s = intervalStart[i];
+            ePrev[i] = calculatePoAt((int)i - 1, s);
+            lnDPrev[i] = lnDPrev[i-1] + std::log(4.0) - std::log(calculateQtAt((int)i - 1, s));
+            c2Vec[i] = ((1.0 - 2.0 * ePrev[i]) * li + mi + pi) / c1Vec[i];
+        }
+    }
+    if(n > 1){
+        c1HatVec.assign(n, 0.0);
+        c2HatVec.assign(n, 0.0);
+        ePrevHat.assign(n, 0.0);
+        for(size_t i = 0; i < n; i++){
+            double li = lambda[i]->getValue();
+            double mi = mu[i]->getValue();
+            c1HatVec[i] = std::abs(li - mi);
+            if(i == 0){
+                ePrevHat[0] = 1.0;
+                c2HatVec[0] = (-li + mi + 2*li * rhoVal) / c1HatVec[0];
+            }else{
+                ePrevHat[i] = calculatePoHatAt((int)i - 1, intervalStart[i]);
+                c2HatVec[i] = ((1.0 - 2.0 * ePrevHat[i]) * li + mi) / c1HatVec[i];
+            }
+        }
+    }
+}
+
+double FBDTreeModel::calculateQtAt(int i, double t){
+    double tau = t - intervalStart[i];
+    double tmp = 2 * (1 - std::pow(c2Vec[i], 2));
+    tmp += std::exp(-c1Vec[i] * tau) * std::pow(1-c2Vec[i], 2);
+    tmp += std::exp(c1Vec[i] * tau) * std::pow(1+c2Vec[i], 2);
     return tmp;
 }
 
+double FBDTreeModel::calculateQt(double t){
+    return calculateQtAt(findIndex(t), t);
+}
+
+double FBDTreeModel::calculatePoAt(int i, double t){
+    double tau = t - intervalStart[i];
+    double li = lambda[i]->getValue();
+    double tmp = -li + mu[i]->getValue() + psi[i]->getValue();
+    tmp += c1Vec[i] * (std::exp(-c1Vec[i] * tau) * (1 - c2Vec[i]) - (1+c2Vec[i]) ) / ( std::exp(-c1Vec[i] * tau) * (1 - c2Vec[i]) + (1+c2Vec[i])  );
+    tmp /= 2*li;
+    return 1 + tmp;
+}
+
 double FBDTreeModel::calculatePo(double t){
-    double tmp = -lambdaVal + muVal + psiVal;
-    tmp += c1 * (std::exp(-c1 * t) * (1 - c2) - (1+c2) ) / ( std::exp(-c1 * t) * (1 - c2) + (1+c2)  );
-    tmp /= 2*lambdaVal;
+    return calculatePoAt(findIndex(t), t);
+}
+
+double FBDTreeModel::calculatePoHatAt(int i, double t){
+    double tau = t - intervalStart[i];
+    double li = lambda[i]->getValue();
+    double tmp = -li + mu[i]->getValue();
+    tmp += c1HatVec[i] * (std::exp(-c1HatVec[i] * tau) * (1 - c2HatVec[i]) - (1+c2HatVec[i]) ) / ( std::exp(-c1HatVec[i] * tau) * (1 - c2HatVec[i]) + (1+c2HatVec[i])  );
+    tmp /= 2*li;
     return 1 + tmp;
 }
 
 double FBDTreeModel::calculatePoHat(double t){
-    double tmp = rhoVal * (lambdaVal - muVal);
-    tmp /= (lambdaVal * rhoVal + (lambdaVal*(1-rhoVal) - muVal)*std::exp(-1 * (lambdaVal - muVal) * t) );
-    return 1 - tmp;
+    return calculatePoHatAt(findIndex(t), t);
 }
 
 double FBDTreeModel::calculateLnSurvival(double t){
-    double a = lambdaVal - muVal;
-    double B = lambdaVal * (1.0 - rhoVal) - muVal;
-    double lnAbsNum = std::log(std::abs(rhoVal * a));
-    double lnAbsDenom;
-    if(-a * t > 0.0)
-        lnAbsDenom = (-a * t) + std::log(std::abs(lambdaVal * rhoVal * std::exp(a * t) + B));
-    else
-        lnAbsDenom = std::log(std::abs(lambdaVal * rhoVal + B * std::exp(-a * t)));
-    return lnAbsNum - lnAbsDenom;
+    if(intervalStart.size() == 1){
+        double a = lambdaVal - muVal;
+        double B = lambdaVal * (1.0 - rhoVal) - muVal;
+        double lnAbsNum = std::log(std::abs(rhoVal * a));
+        double lnAbsDenom;
+        if(-a * t > 0.0)
+            lnAbsDenom = (-a * t) + std::log(std::abs(lambdaVal * rhoVal * std::exp(a * t) + B));
+        else
+            lnAbsDenom = std::log(std::abs(lambdaVal * rhoVal + B * std::exp(-a * t)));
+        return lnAbsNum - lnAbsDenom;
+    }
+    return std::log(1.0 - calculatePoHat(t));
 }
 
 double FBDTreeModel::fossilPqLn(double y, double z){
-    return std::log(psiVal) + std::log(2*lambdaVal) + std::log(calculatePo(y)) + std::log(calculateQt(y)) - std::log(calculateQt(z));
+    return std::log(psi[findIndex(y)]->getValue()) + std::log(2*lambda[findIndex(z)]->getValue()) + std::log(calculatePo(y)) + lnD(z) - lnD(y);
 }
 
 std::vector<std::string> FBDTreeModel::getParameterNames(void){

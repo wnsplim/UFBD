@@ -52,11 +52,11 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
     // Known flags and whether they take a value
     std::set<std::string> knownFlags = {
         "-to", "-po", "-t", "-c", "-f", "-cond", "-model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt", "-help", "-h",
-        "-lambda-prior", "-mu-prior", "-psi-prior"
+        "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times"
     };
     std::set<std::string> valueFlags = {
         "-to", "-po", "-t", "-c", "-f", "-cond", "-model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt",
-        "-lambda-prior", "-mu-prior", "-psi-prior"
+        "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times"
     };
 
     for (int i = 1; i < (int)arguments.size(); i++) {
@@ -136,6 +136,12 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
                 parsePriorInto(val, muPrior.family, muPrior.p1, muPrior.p2); muPrior.set = true;
             } else if (arg == "-psi-prior") {
                 parsePriorInto(val, psiPrior.family, psiPrior.p1, psiPrior.p2); psiPrior.set = true;
+            } else if (arg == "-skyline-times") {
+                std::stringstream ss(val);
+                std::string tok;
+                while (std::getline(ss, tok, ','))
+                    if (tok.empty() == false) skylineTimes.push_back(std::stod(tok));
+                std::sort(skylineTimes.begin(), skylineTimes.end());
             }else {
                 // Integer-valued flags
                 // Check all characters are digits (allowing leading minus for negative detection)

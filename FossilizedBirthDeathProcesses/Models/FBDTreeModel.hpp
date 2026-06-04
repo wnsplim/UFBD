@@ -50,15 +50,21 @@ class FBDTreeModel : public PhylogeneticModel {
         void                        calculateCs(void);
         void                        calculateC1(void);
         void                        calculateC2(void);
+        void                        prepareIntervals(void);
+        int                         findIndex(double t);
         double                      calculateQt(double t);
+        double                      calculateQtAt(int i, double t);
         double                      calculatePo(double t);
+        double                      calculatePoAt(int i, double t);
         double                      calculatePoHat(double t);
+        double                      calculatePoHatAt(int i, double t);
         double                      calculateLnSurvival(double t);
         double                      fossilPqLn(double y, double z);
         //ordered by memory footprint
-        ParameterDouble*            lambda;
-        ParameterDouble*            mu;
-        ParameterDouble*            psi;
+        std::vector<ParameterDouble*> lambda;
+        std::vector<ParameterDouble*> mu;
+        std::vector<ParameterDouble*> psi;
+        std::vector<double>           intervalStart;
         ParameterDouble*            originAge;
         ParameterTree*              parameterTree;
         ParameterUnresolvedFossils* unresolvedFossils;
@@ -70,6 +76,13 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      rho;
         double                      c1;
         double                      c2;
+        std::vector<double>         c1Vec;
+        std::vector<double>         c2Vec;
+        std::vector<double>         ePrev;
+        std::vector<double>         lnDPrev;
+        std::vector<double>         c1HatVec;
+        std::vector<double>         c2HatVec;
+        std::vector<double>         ePrevHat;
         double                      lambdaVal;
         double                      muVal;
         double                      rhoVal;
