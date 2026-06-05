@@ -14,9 +14,9 @@ set(FBD_SRC ${CMAKE_SOURCE_DIR}/FossilizedBirthDeathProcesses)
 file(GLOB_RECURSE FBD_SOURCES CONFIGURE_DEPENDS ${FBD_SRC}/*.cpp)
 list(FILTER FBD_SOURCES EXCLUDE REGEX "/Eigen/")
 
-add_executable(fbd ${FBD_SOURCES})
+add_executable(ufbd ${FBD_SOURCES})
 
-target_include_directories(fbd PRIVATE
+target_include_directories(ufbd PRIVATE
     ${FBD_SRC}                          # bundled Eigen ("Eigen/Dense") + root-level headers
     ${FBD_SRC}/Models
     ${FBD_SRC}/Mcmc
@@ -27,4 +27,4 @@ target_include_directories(fbd PRIVATE
 )
 
 find_package(Threads REQUIRED)
-target_link_libraries(fbd PRIVATE Threads::Threads)
+target_link_libraries(ufbd PRIVATE Threads::Threads)

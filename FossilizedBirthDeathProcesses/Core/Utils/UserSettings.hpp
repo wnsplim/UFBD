@@ -40,6 +40,11 @@ class UserSettings {
         bool                        getSeedSet(void) { checkSettings(); return seedSet; }
         int                         getPrintFrequency(void) { checkSettings(); return printFrequency; }
         int                         getSampleFrequency(void) { checkSettings(); return sampleFrequency; }
+        std::string                 getHessianFile(void) { checkSettings(); return hessianFile; }
+        std::string                 getClockModelName(void) { checkSettings(); return clockModelName; }
+        int                         getNStates(void) { checkSettings(); return nStates; }
+        const double*               getRgeneGamma(void) { checkSettings(); return rgeneGamma; }
+        const double*               getSigma2Gamma(void) { checkSettings(); return sigma2Gamma; }
         void                        print(void);
         void                        printHelp(void);
 
@@ -74,6 +79,11 @@ class UserSettings {
         int                         numThreads;
         int                         printFrequency;
         int                         sampleFrequency;
+        std::string                 hessianFile;
+        std::string                 clockModelName;
+        int                         nStates;
+        double                      rgeneGamma[3];
+        double                      sigma2Gamma[3];
         bool                        settingsInitialized;
 };
 

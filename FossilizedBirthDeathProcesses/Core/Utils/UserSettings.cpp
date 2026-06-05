@@ -42,6 +42,11 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
     numThreads      = 4;
     printFrequency  = 1;
     sampleFrequency = 1;
+    hessianFile     = "";
+    clockModelName  = "ucln";
+    nStates         = 4;
+    rgeneGamma[0]   = 2.0;  rgeneGamma[1]  = 2000.0; rgeneGamma[2]  = 1.0;
+    sigma2Gamma[0]  = 1.0;  sigma2Gamma[1] = 10.0;   sigma2Gamma[2] = 1.0;
 
     std::vector<std::string> arguments;
     for (int i = 0; i < argc; i++)
@@ -52,11 +57,13 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
     // Known flags and whether they take a value (terrible to read currently; will clean up later)
     std::set<std::string> knownFlags = {
         "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt", "-help", "-h",
-        "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times"
+        "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times",
+        "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma"
     };
     std::set<std::string> valueFlags = {
         "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt",
-        "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times"
+        "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times",
+        "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma"
     };
 
     for (int i = 1; i < (int)arguments.size(); i++) {
@@ -142,6 +149,17 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
                 while (std::getline(ss, tok, ','))
                     if (tok.empty() == false) skylineTimes.push_back(std::stod(tok));
                 std::sort(skylineTimes.begin(), skylineTimes.end());
+            } else if (arg == "-hessian") {
+                hessianFile = val;
+            } else if (arg == "-clock") {
+                clockModelName = val;
+                for (char& ch : clockModelName) ch = std::tolower((unsigned char)ch);
+            } else if (arg == "-rgene_gamma") {
+                std::stringstream ss(val); std::string tok; int k = 0;
+                while (std::getline(ss, tok, ',') && k < 3) if (tok.empty() == false) rgeneGamma[k++] = std::stod(tok);
+            } else if (arg == "-sigma2_gamma") {
+                std::stringstream ss(val); std::string tok; int k = 0;
+                while (std::getline(ss, tok, ',') && k < 3) if (tok.empty() == false) sigma2Gamma[k++] = std::stod(tok);
             }else {
                 // Integer-valued flags
                 // Check all characters are digits (allowing leading minus for negative detection)
@@ -159,6 +177,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
                 else if (arg == "-s")   sampleFrequency = intVal;
                 else if (arg == "-nc")  numChains       = intVal;
                 else if (arg == "-nt")  numThreads      = intVal;
+                else if (arg == "-nstates") nStates     = intVal;
             }
         }
     }
