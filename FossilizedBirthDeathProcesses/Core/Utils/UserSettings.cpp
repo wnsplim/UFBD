@@ -47,6 +47,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
     nStates         = 4;
     rgeneGamma[0]   = 2.0;  rgeneGamma[1]  = 2000.0; rgeneGamma[2]  = 1.0;
     sigma2Gamma[0]  = 1.0;  sigma2Gamma[1] = 10.0;   sigma2Gamma[2] = 1.0;
+    fixAge          = -1.0;
 
     std::vector<std::string> arguments;
     for (int i = 0; i < argc; i++)
@@ -58,12 +59,12 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
     std::set<std::string> knownFlags = {
         "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt", "-help", "-h",
         "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times",
-        "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma"
+        "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma", "-fixage"
     };
     std::set<std::string> valueFlags = {
         "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt",
         "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times",
-        "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma"
+        "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma", "-fixage"
     };
 
     for (int i = 1; i < (int)arguments.size(); i++) {
@@ -160,6 +161,8 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
             } else if (arg == "-sigma2_gamma") {
                 std::stringstream ss(val); std::string tok; int k = 0;
                 while (std::getline(ss, tok, ',') && k < 3) if (tok.empty() == false) sigma2Gamma[k++] = std::stod(tok);
+            } else if (arg == "-fixage") {
+                fixAge = std::stod(val);
             }else {
                 // Integer-valued flags
                 // Check all characters are digits (allowing leading minus for negative detection)

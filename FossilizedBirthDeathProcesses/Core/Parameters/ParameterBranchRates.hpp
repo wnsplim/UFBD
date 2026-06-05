@@ -25,17 +25,20 @@ class ParameterBranchRates : public Parameter {
         double                      update(void);
         void                        updateForAcceptance(void);
         void                        updateForRejection(void);
+        double                      constantDistanceMove(void);
 
     private:
         double                      scaleLocusRate(int p);
         double                      scaleLocusSigma2(int p);
         double                      scaleLocusTheta(int p);
         double                      scaleBranchRate(int p, int b);
+        double                      globalRateBranchRatesScale(int p);
+        double                      vectorScale(int p);
         double                      bactrianMultiplier(int moveType);
         double                      gammaDirichletLnP(const std::vector<double>& v, const double* para);
         double                      gammaLnPdf(double a, double b, double x);
-        double                      lognormalLnP(double r, double s2);
-        double                      whiteNoiseLnP(double r, double s2, double t);
+        double                      lognormalLnP(double r, double s2, double m);
+        double                      whiteNoiseLnP(double r, double s2, double t, double m);
         double                      gbmLnP(void);
         double                      cirLnP(void);
         double                      getMeanTau(double rho, double rhoUp, double t, double sigma, double theta);
@@ -59,6 +62,7 @@ class ParameterBranchRates : public Parameter {
         int                         lastMove;
         int                         lastLocus;
         int                         lastNode;
+        std::vector<int>            cdNodes;
 };
 
 #endif

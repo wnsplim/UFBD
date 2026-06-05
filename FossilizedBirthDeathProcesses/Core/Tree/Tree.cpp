@@ -1282,6 +1282,10 @@ void Tree::showNode(Node* p, int indent) {
 
 double Tree::update(double scaleLambda){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
+    if(fixRoot){
+        lastUpdateWasScale = false;
+        return updateNodeAge();
+    }
     int numSlideable = 0;
     for(Node* n : downPassSequence)
         if(n != root && n->getIsTip() == false)

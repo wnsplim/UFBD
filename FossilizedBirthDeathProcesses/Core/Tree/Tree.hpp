@@ -58,6 +58,7 @@ class Tree {
         int                                 scaleInternalAges(double m);
         int                                 scaleSubtreeAges(Node* subtreeRoot, double m);
         void                                setLastUpdateWasScale(bool b) { lastUpdateWasScale = b; }
+        void                                setFixRoot(bool b) { fixRoot = b; }
         void                                assignStartingAges(const std::map<Node*,double>& minAges, double unit);
         Node*                               insertFossilTip(Node* hostChild, std::string name, double y, double z);
         void                                setAgeFloors(const std::map<Node*,double>& f) { ageFloors = f; }
@@ -107,6 +108,7 @@ class Tree {
         int                                 numTaxa;
         int                                 numInternalNodes;
         bool                                lastUpdateWasScale = false;
+        bool                                fixRoot = false;
 };
 
 #endif

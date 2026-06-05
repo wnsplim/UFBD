@@ -57,6 +57,7 @@ class FBDTreeModel : public PhylogeneticModel {
         int                         findIndex(double t);
         double                      calculateQt(double t);
         double                      calculateQtAt(int i, double t);
+        double                      calculateLnQtAt(int i, double t);
         double                      calculatePo(double t);
         double                      calculatePoAt(int i, double t);
         double                      calculatePoHat(double t);

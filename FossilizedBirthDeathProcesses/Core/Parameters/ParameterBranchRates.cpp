@@ -73,18 +73,19 @@ double ParameterBranchRates::gammaLnPdf(double a, double b, double x){
     return a * std::log(b) - Probability::Helper::lnGamma(a) + (a - 1.0) * std::log(x) - b * x;
 }
 
-double ParameterBranchRates::lognormalLnP(double r, double s2){
+double ParameterBranchRates::lognormalLnP(double r, double s2, double m){
     if(r <= 0.0 || s2 <= 0.0)
         return -INFINITY;
     double logr = std::log(r);
-    return Probability::Normal::lnPdf(-0.5 * s2, s2, logr) - logr;
+    return Probability::Normal::lnPdf(std::log(m) - 0.5 * s2, s2, logr) - logr;
 }
 
-double ParameterBranchRates::whiteNoiseLnP(double r, double s2, double t){
+double ParameterBranchRates::whiteNoiseLnP(double r, double s2, double t, double m){
     if(r <= 0.0 || s2 <= 0.0 || t <= 0.0)
         return -INFINITY;
-    double a = t / s2;
-    return a * std::log(a) - Probability::Helper::lnGamma(a) + (a - 1.0) * std::log(r) - a * r;
+    double alpha = m * m * t / s2;
+    double beta = m * t / s2;
+    return alpha * std::log(beta) - Probability::Helper::lnGamma(alpha) + (alpha - 1.0) * std::log(r) - beta * r;
 }
 
 double ParameterBranchRates::gbmLnP(void){
@@ -107,7 +108,7 @@ double ParameterBranchRates::gbmLnP(void){
             double Tinv0 = (tA + t2) / detT;
             double Tinv1 = -tA / detT;
             double Tinv3 = (tA + t1) / detT;
-            double rA = rate[0][p][inode->getOffset()];
+            double rA = (inode == root) ? mu[0][p] : rate[0][p][inode->getOffset()];
             double r1 = rate[0][p][sons[0]->getOffset()];
             double r2 = rate[0][p][sons[1]->getOffset()];
             double y1 = std::log(r1 / rA) + (tA + t1) * s2 / 2.0;
@@ -124,7 +125,8 @@ double ParameterBranchRates::cirLnP(void){
     for(int p = 0; p < numLoci; p++){
         double s2 = sigma2[0][p];
         double th = theta[0][p];
-        if(s2 <= 0.0 || s2 >= 1.0 || th <= 0.0)
+        double mp = mu[0][p];
+        if(s2 <= 0.0 || s2 >= mp || th <= 0.0)
             return -INFINITY;
         for(int b : branchNodes){
             Node* n = tree->getNodeByOffset(b);
@@ -133,8 +135,8 @@ double ParameterBranchRates::cirLnP(void){
                 return -INFINITY;
             double rhoUp = rate[0][p][n->getAncestor()->getOffset()];
             double eTL = std::exp(-th * L);
-            double mean = 1.0 + (rhoUp - 1.0) * eTL;
-            double var = s2 * ((1.0 - eTL) * (1.0 - eTL) + 2.0 * rhoUp * (eTL - eTL * eTL));
+            double mean = mp + (rhoUp - mp) * eTL;
+            double var = s2 * (mp * (1.0 - eTL) * (1.0 - eTL) + 2.0 * rhoUp * (eTL - eTL * eTL));
             if(var <= 0.0)
                 return -INFINITY;
             double alpha = mean * mean / var;
@@ -197,9 +199,9 @@ double ParameterBranchRates::lnProbability(void){
         for(int b : branchNodes){
             if(clockModel == ClockModel::WN){
                 Node* n = tree->getNodeByOffset(b);
-                lnp += whiteNoiseLnP(rate[0][p][b], sigma2[0][p], n->getAncestor()->getTime() - n->getTime());
+                lnp += whiteNoiseLnP(rate[0][p][b], sigma2[0][p], n->getAncestor()->getTime() - n->getTime(), mu[0][p]);
             }else{
-                lnp += lognormalLnP(rate[0][p][b], sigma2[0][p]);
+                lnp += lognormalLnP(rate[0][p][b], sigma2[0][p], mu[0][p]);
             }
         }
     }
@@ -215,7 +217,10 @@ std::vector<std::vector<double>> ParameterBranchRates::getAbsoluteRates(void){
             if(clockModel == ClockModel::CIR && n != root){
                 double L = n->getAncestor()->getTime() - n->getTime();
                 double sigmaPB = 2.0 * theta[0][p] * sigma2[0][p];
-                a[p][b] = mu[0][p] * getMeanTau(rate[0][p][b], rate[0][p][n->getAncestor()->getOffset()], L, sigmaPB, theta[0][p]) / L;
+                double mp = mu[0][p];
+                a[p][b] = mp * getMeanTau(rate[0][p][b] / mp, rate[0][p][n->getAncestor()->getOffset()] / mp, L, sigmaPB / mp, theta[0][p]) / L;
+            }else if(clockModel == ClockModel::UCLN || clockModel == ClockModel::WN || clockModel == ClockModel::GBM){
+                a[p][b] = rate[0][p][b];
             }else{
                 a[p][b] = mu[0][p] * rate[0][p][b];
             }
@@ -269,6 +274,21 @@ double ParameterBranchRates::scaleBranchRate(int p, int b){
     return std::log(c);
 }
 
+double ParameterBranchRates::globalRateBranchRatesScale(int p){
+    double sf = bactrianMultiplier(0);
+    mu[0][p] *= sf;
+    for(int b : branchNodes)
+        rate[0][p][b] *= sf;
+    return (1.0 + (double)branchNodes.size()) * std::log(sf);
+}
+
+double ParameterBranchRates::vectorScale(int p){
+    double sf = bactrianMultiplier(0);
+    for(int b : branchNodes)
+        rate[0][p][b] *= sf;
+    return (double)branchNodes.size() * std::log(sf);
+}
+
 double ParameterBranchRates::update(void){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastLocus = (int)(rng.uniformRv() * numLoci);
@@ -292,6 +312,12 @@ double ParameterBranchRates::update(void){
 }
 
 void ParameterBranchRates::updateForAcceptance(void){
+    if(lastMove == 4){
+        for(int k = 0; k < (int)cdNodes.size(); k++)
+            for(int p = 0; p < numLoci; p++)
+                rate[1][p][cdNodes[k]] = rate[0][p][cdNodes[k]];
+        return;
+    }
     acc[lastMove]++;
     recentAR[lastMove].push_back(true);
     if(recentAR[lastMove].size() > 1000)
@@ -307,6 +333,12 @@ void ParameterBranchRates::updateForAcceptance(void){
 }
 
 void ParameterBranchRates::updateForRejection(void){
+    if(lastMove == 4){
+        for(int k = 0; k < (int)cdNodes.size(); k++)
+            for(int p = 0; p < numLoci; p++)
+                rate[0][p][cdNodes[k]] = rate[1][p][cdNodes[k]];
+        return;
+    }
     rej[lastMove]++;
     recentAR[lastMove].push_back(false);
     if(recentAR[lastMove].size() > 1000)
@@ -319,6 +351,46 @@ void ParameterBranchRates::updateForRejection(void){
         theta[0][lastLocus] = theta[1][lastLocus];
     else
         rate[0][lastLocus][lastNode] = rate[1][lastLocus][lastNode];
+}
+
+double ParameterBranchRates::constantDistanceMove(void){
+    RandomVariable& rng = RandomVariable::randomVariableInstance();
+    std::vector<Node*> internals;
+    for(Node* n : tree->getDownPassSequence())
+        if(n != tree->getRoot() && n->getIsTip() == false)
+            internals.push_back(n);
+    Node* node = internals[(int)(rng.uniformRv() * internals.size())];
+    Node* parent = node->getAncestor();
+    std::vector<Node*> children;
+    for(Node* c : node->getNeighbors())
+        if(c != parent)
+            children.push_back(c);
+    double parentAge = parent->getTime();
+    double myAge = node->getTime();
+    double maxChild = 0.0;
+    for(Node* c : children)
+        if(c->getTime() > maxChild)
+            maxChild = c->getTime();
+    double newAge = maxChild + rng.uniformRv() * (parentAge - maxChild);
+    node->setTime(newAge);
+    cdNodes.clear();
+    cdNodes.push_back(node->getOffset());
+    double lnNum = std::log(parentAge - myAge);
+    double lnDen = std::log(parentAge - newAge);
+    for(int p = 0; p < numLoci; p++)
+        rate[0][p][node->getOffset()] *= (parentAge - myAge) / (parentAge - newAge);
+    for(Node* c : children){
+        double prevC = myAge - c->getTime();
+        double newC = newAge - c->getTime();
+        cdNodes.push_back(c->getOffset());
+        lnNum += std::log(prevC);
+        lnDen += std::log(newC);
+        for(int p = 0; p < numLoci; p++)
+            rate[0][p][c->getOffset()] *= prevC / newC;
+    }
+    lastMove = 4;
+    tree->setLastUpdateWasScale(false);
+    return numLoci * (lnNum - lnDen);
 }
 
 void ParameterBranchRates::print(void){

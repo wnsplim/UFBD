@@ -12,3 +12,6 @@ CLAUDE.md
 # CMake build outputs
 build/
 cmake-build-*/
+
+# Architecture spec (local, untracked)
+FossilizedBirthDeathProcesses/codeArchitectureExplanation.txt

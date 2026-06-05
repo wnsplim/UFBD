@@ -132,8 +132,6 @@ double FBDTreeModel::calculateFBDProbability(void){
     if(isFBD)
         return calculateResolvedFBD();
 
-    double qRoot = calculateQt(rootAge);
-
     //FBD probability in log-landia
     bool useOrigin = (UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN);
     double fbdProb = 0.0;
@@ -174,7 +172,7 @@ double FBDTreeModel::calculateFBDProbability(void){
 }
 
 double FBDTreeModel::lnD(double t){
-    return (t <= 0.0) ? 0.0 : lnDPrev[findIndex(t)] + std::log(4.0) - std::log(calculateQt(t));
+    return (t <= 0.0) ? 0.0 : lnDPrev[findIndex(t)] + std::log(4.0) - calculateLnQtAt(findIndex(t), t);
 }
 
 double FBDTreeModel::calculateResolvedFBD(void){
@@ -869,7 +867,7 @@ void FBDTreeModel::prepareIntervals(void){
         }else{
             double s = intervalStart[i];
             ePrev[i] = calculatePoAt((int)i - 1, s);
-            lnDPrev[i] = lnDPrev[i-1] + std::log(4.0) - std::log(calculateQtAt((int)i - 1, s));
+            lnDPrev[i] = lnDPrev[i-1] + std::log(4.0) - calculateLnQtAt((int)i - 1, s);
             c2Vec[i] = ((1.0 - 2.0 * ePrev[i]) * li + mi + pi) / c1Vec[i];
         }
     }
@@ -902,6 +900,14 @@ double FBDTreeModel::calculateQtAt(int i, double t){
 
 double FBDTreeModel::calculateQt(double t){
     return calculateQtAt(findIndex(t), t);
+}
+
+double FBDTreeModel::calculateLnQtAt(int i, double t){
+    double tau = t - intervalStart[i];
+    double a = c1Vec[i] * tau;
+    double c2 = c2Vec[i];
+    double bracket = std::pow(1.0 + c2, 2) + std::exp(-a) * 2.0 * (1.0 - c2 * c2) + std::exp(-2.0 * a) * std::pow(1.0 - c2, 2);
+    return a + std::log(bracket);
 }
 
 double FBDTreeModel::calculatePoAt(int i, double t){

@@ -10,6 +10,7 @@
 
 class ApproxBranchLengthLikelihood;
 class FBDTreeModel;
+class ParameterTree;
 class Tree;
 
 class RelaxedClockTreeModel : public PhylogeneticModel {
@@ -27,11 +28,16 @@ class RelaxedClockTreeModel : public PhylogeneticModel {
         void                        updateForRejection(void);
 
     private:
+        double                      bdPrior(void);
         FBDTreeModel*               fbd;
+        ParameterTree*              parameterTree;
         ParameterBranchRates*       clock;
         ApproxBranchLengthLikelihood* lik;
         double                      clockWeight;
-        bool                        lastWasClock;
+        int                         lastMoveType;
+        bool                        fixedRoot;
+        bool                        isOrigin;
+        double                      fixAge;
 };
 
 #endif
