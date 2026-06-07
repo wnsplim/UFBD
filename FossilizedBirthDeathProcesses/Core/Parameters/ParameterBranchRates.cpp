@@ -32,7 +32,7 @@ ParameterBranchRates::ParameterBranchRates(double prob, PhylogeneticModel* m, Tr
         if(n != root && n->getIsFossil() == false)
             branchNodes.push_back(n->getOffset());
 
-    double muInit = rgenePara[0] / rgenePara[1];
+    double muInit = 1.0;
     double s2Init = sigma2Para[0] / sigma2Para[1];
     double thInit = thetaPara[0] / thetaPara[1];
     for(int s = 0; s < 2; s++){
@@ -113,8 +113,8 @@ double ParameterBranchRates::gbmLnP(void){
             double r2 = rate[0][p][sons[1]->getOffset()];
             double y1 = std::log(r1 / rA) + (tA + t1) * s2 / 2.0;
             double y2 = std::log(r2 / rA) + (tA + t2) * s2 / 2.0;
-            double zz = y1 * y1 * Tinv0 + 2.0 * y1 * y2 * Tinv1 + y2 * y2 * Tinv3;
-            lnp -= zz / (2.0 * s2) + 0.5 * std::log(detT * s2 * s2) + std::log(r1 * r2);
+            double quadForm = y1 * y1 * Tinv0 + 2.0 * y1 * y2 * Tinv1 + y2 * y2 * Tinv3;
+            lnp -= quadForm / (2.0 * s2) + 0.5 * std::log(detT * s2 * s2) + std::log(r1 * r2);
         }
     }
     return lnp;
@@ -125,8 +125,7 @@ double ParameterBranchRates::cirLnP(void){
     for(int p = 0; p < numLoci; p++){
         double s2 = sigma2[0][p];
         double th = theta[0][p];
-        double mp = mu[0][p];
-        if(s2 <= 0.0 || s2 >= mp || th <= 0.0)
+        if(s2 <= 0.0 || s2 >= 1.0 || th <= 0.0)
             return -INFINITY;
         for(int b : branchNodes){
             Node* n = tree->getNodeByOffset(b);
@@ -134,9 +133,9 @@ double ParameterBranchRates::cirLnP(void){
             if(L <= 0.0)
                 return -INFINITY;
             double rhoUp = rate[0][p][n->getAncestor()->getOffset()];
-            double eTL = std::exp(-th * L);
-            double mean = mp + (rhoUp - mp) * eTL;
-            double var = s2 * (mp * (1.0 - eTL) * (1.0 - eTL) + 2.0 * rhoUp * (eTL - eTL * eTL));
+            double decay = std::exp(-th * L);
+            double mean = 1.0 + (rhoUp - 1.0) * decay;
+            double var = s2 * ((1.0 - decay) * (1.0 - decay) + 2.0 * rhoUp * (decay - decay * decay));
             if(var <= 0.0)
                 return -INFINITY;
             double alpha = mean * mean / var;
@@ -148,45 +147,41 @@ double ParameterBranchRates::cirLnP(void){
 }
 
 double ParameterBranchRates::besselIRatio(double nu, double x){
-    double tiny = 1e-300;
-    double f = tiny;
-    double C = f;
-    double D = 0.0;
+    double epsilon = 1e-300;
+    double ratio = epsilon;
+    double cNumer = ratio;
+    double dDenom = 0;
     for(int j = 1; j < 1000000; j++){
-        double b = 2.0 * (nu + j - 1) / x;
-        D = b + D;
-        if(D == 0.0)
-            D = tiny;
-        C = b + 1.0 / C;
-        if(C == 0.0)
-            C = tiny;
-        D = 1.0 / D;
-        double delta = C * D;
-        f *= delta;
-        if(std::fabs(delta - 1.0) < 1e-12)
+        double coef = 2 * (nu + j - 1) / x;
+        dDenom = coef + dDenom;
+        if(dDenom == 0)
+            dDenom = epsilon;
+        cNumer = coef + 1 / cNumer;
+        if(cNumer == 0)
+            cNumer = epsilon;
+        dDenom = 1 / dDenom;
+        double delta = cNumer * dDenom;
+        ratio *= delta;
+        if(std::fabs(delta - 1) < 1e-12)
             break;
     }
-    return f;
+    return ratio;
 }
 
 double ParameterBranchRates::getMeanTau(double rho, double rhoUp, double t, double sigma, double theta){
     if(t * theta < 0.0001)
-        return (rho + rhoUp) * t / 2.0;
-    double eTt = std::exp(-theta * t);
-    double eTt2 = eTt * eTt;
-    double oneMTt = 1.0 - eTt;
-    double oneMTt2 = oneMTt * oneMTt;
-    double Root = std::sqrt(rho * rhoUp * eTt);
-    double temp11 = sigma / theta * (-1.0 / theta + t * eTt / oneMTt + theta * t / sigma + (rho + rhoUp) / sigma);
-    double temp22 = 2.0 * (rho + rhoUp) / theta / oneMTt2 * (eTt - eTt2 - t * theta * eTt) - t + sigma * t / 2.0 / theta;
-    double x = 4.0 * theta / sigma / oneMTt * Root;
-    double nu1 = 2.0 * theta / sigma;
-    double br = besselIRatio(nu1, x);
-    double invTheta = 1.0 / theta;
-    double f1 = br + 0.25 * (2.0 * theta / sigma - 1.0) * invTheta * sigma * oneMTt / Root;
-    double f2 = -4.0 * invTheta / oneMTt * Root + 4.0 / oneMTt2 * Root * t * eTt + 2.0 / oneMTt / Root * rho * rhoUp * t * eTt;
-    double temp33 = f1 * f2;
-    return temp11 + temp22 + temp33;
+        return (rho + rhoUp) * t / 2;
+    double decay = std::exp(-theta * t);
+    double rootTerm = std::sqrt(rho * rhoUp * decay);
+    double term1 = sigma / theta * (-1 / theta + t * decay / (1 - decay) + theta * t / sigma + (rho + rhoUp) / sigma);
+    double term2 = 2 * (rho + rhoUp) / theta / ((1 - decay) * (1 - decay)) * (decay - decay * decay - t * theta * decay) - t + sigma * t / 2 / theta;
+    double besselArg = 4 * theta / sigma / (1 - decay) * rootTerm;
+    double besselOrder = 2 * theta / sigma;
+    double besselRatio = besselIRatio(besselOrder, besselArg);
+    double besselFactor = besselRatio + 0.25 * (2 * theta / sigma - 1) / theta * sigma * (1 - decay) / rootTerm;
+    double derivFactor = -4 / theta / (1 - decay) * rootTerm + 4 / ((1 - decay) * (1 - decay)) * rootTerm * t * decay + 2 / (1 - decay) / rootTerm * rho * rhoUp * t * decay;
+    double term3 = besselFactor * derivFactor;
+    return term1 + term2 + term3;
 }
 
 double ParameterBranchRates::lnProbability(void){
@@ -217,8 +212,7 @@ std::vector<std::vector<double>> ParameterBranchRates::getAbsoluteRates(void){
             if(clockModel == ClockModel::CIR && n != root){
                 double L = n->getAncestor()->getTime() - n->getTime();
                 double sigmaPB = 2.0 * theta[0][p] * sigma2[0][p];
-                double mp = mu[0][p];
-                a[p][b] = mp * getMeanTau(rate[0][p][b] / mp, rate[0][p][n->getAncestor()->getOffset()] / mp, L, sigmaPB / mp, theta[0][p]) / L;
+                a[p][b] = mu[0][p] * getMeanTau(rate[0][p][b], rate[0][p][n->getAncestor()->getOffset()], L, sigmaPB, theta[0][p]) / L;
             }else if(clockModel == ClockModel::UCLN || clockModel == ClockModel::WN || clockModel == ClockModel::GBM){
                 a[p][b] = rate[0][p][b];
             }else{

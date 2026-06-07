@@ -196,12 +196,10 @@ void ApproxBranchLengthLikelihood::applyArcsinTransform(int p){
     std::vector<double> dbu(nb), dbu2(nb);
     for(int i = 0; i < nb; i++){
         double b = blMle[p][i];
-        double u = 2.0 * std::asin(std::sqrt(cJc - cJc * std::exp(-b / cJc)));
-        double sin2 = std::sin(u / 2.0);
-        double cos2 = std::cos(u / 2.0);
-        double denom = 1.0 - sin2 * sin2 / cJc;
-        dbu[i] = sin2 * cos2 / denom;
-        dbu2[i] = (cos2 * cos2 - sin2 * sin2) / 2.0 / denom + dbu[i] * dbu[i] / cJc;
+        double pDist = cJc - cJc * std::exp(-b / cJc);
+        double denom = 1 - pDist / cJc;
+        dbu[i] = std::sqrt(pDist * (1 - pDist)) / denom;
+        dbu2[i] = (1 - 2 * pDist) / (2 * denom) + dbu[i] * dbu[i] / cJc;
     }
     for(int i = 0; i < nb; i++){
         for(int j = 0; j < i; j++){
