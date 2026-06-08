@@ -32,14 +32,30 @@ ParameterBranchRates::ParameterBranchRates(double prob, PhylogeneticModel* m, Tr
         if(n != crown && n->getIsFossil() == false)
             branchNodes.push_back(n->getOffset());
 
-    double muInit = 1.0;
-    double s2Init = sigma2Param[0] / sigma2Param[1];
-    double thInit = thetaParam[0] / thetaParam[1];
     for(int s = 0; s < 2; s++){
-        mu[s].assign(numLoci, muInit);
-        sigma2[s].assign(numLoci, s2Init);
-        theta[s].assign(numLoci, thInit);
+        mu[s].assign(numLoci, 1.0);
+        sigma2[s].assign(numLoci, 1.0);
+        theta[s].assign(numLoci, 1.0);
         rate[s].assign(numLoci, std::vector<double>(numNodes, 1.0));
+    }
+    RandomVariable& rng = RandomVariable::randomVariableInstance();
+    std::vector<Node*>& dp = t->getDownPassSequence();
+    for(int p = 0; p < numLoci; p++){
+        double muDraw = Probability::Gamma::rv(&rng, rgeneParam[0], rgeneParam[1]);
+        double s2Draw = Probability::Gamma::rv(&rng, sigma2Param[0], sigma2Param[1]);
+        double thDraw = Probability::Gamma::rv(&rng, thetaParam[0], thetaParam[1]);
+        mu[0][p] = mu[1][p] = muDraw;
+        sigma2[0][p] = sigma2[1][p] = s2Draw;
+        theta[0][p] = theta[1][p] = thDraw;
+        for(std::vector<Node*>::reverse_iterator it = dp.rbegin(); it != dp.rend(); ++it){
+            Node* n = *it;
+            if(n == crown || n->getIsFossil())
+                continue;
+            double rPar = (n->getAncestor() == crown) ? muDraw : rate[0][p][n->getAncestor()->getOffset()];
+            double L = n->getAncestor()->getTime() - n->getTime();
+            double logr = std::log(rPar) - 0.5 * s2Draw * L + Probability::Normal::rv(&rng) * std::sqrt(s2Draw * L);
+            rate[0][p][n->getOffset()] = rate[1][p][n->getOffset()] = std::exp(logr);
+        }
     }
 }
 
