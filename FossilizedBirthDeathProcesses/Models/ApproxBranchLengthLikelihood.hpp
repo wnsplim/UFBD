@@ -20,14 +20,14 @@ class ApproxBranchLengthLikelihood {
         void                        readHessianFile(const std::string& fn);
         void                        applyArcsinTransform(int p);
         void                        buildBipartitions(Tree* molTree);
-        void                        identifyRootBranch(Tree* rootedMlTree);
+        void                        identifyCrownBranch(Tree* rootedMlTree);
         Node*                       findNodeByBipartition(const std::set<std::string>& bp, Tree* tree);
         std::set<std::string>       molecularDescendants(Node* n, Tree* tree);
         std::set<std::string>       canonicalize(const std::set<std::string>& clade);
 
         int                         nb;
         int                         nPartitions;
-        int                         rootBranchIdx;
+        int                         crownBranchIdx;
         int                         partitionIndex;
         double                      cJc;
         std::vector<std::vector<double>>    blMle;
@@ -37,7 +37,7 @@ class ApproxBranchLengthLikelihood {
         std::set<std::string>       backboneTaxa;
         std::set<std::string>       rogueTaxa;
         std::vector<int>            branchNodeIdx;
-        Node*                       cachedRoot;
+        Node*                       cachedCrown;
 };
 
 #endif

@@ -43,7 +43,7 @@ double ParameterTree::lnProbability(void) {
         cachedLnP = 0.0;
         for (Node* p : t->getDownPassSequence())
             {
-            if (p != t->getRoot())
+            if (p != t->getCrown())
                 {
                 double v = t->getBranchLength(p, p->getAncestor());
                 cachedLnP += Probability::Exponential::lnPdf(lambda, v);

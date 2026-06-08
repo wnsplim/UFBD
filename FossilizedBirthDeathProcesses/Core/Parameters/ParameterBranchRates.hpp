@@ -14,7 +14,7 @@ class ParameterBranchRates : public Parameter {
 
     public:
                                     ParameterBranchRates(void) = delete;
-                                    ParameterBranchRates(double prob, PhylogeneticModel* m, Tree* tree, int numLoci, ClockModel clockModel, const double* rgenePara, const double* sigma2Para);
+                                    ParameterBranchRates(double prob, PhylogeneticModel* m, Tree* tree, int numLoci, ClockModel clockModel, const double* rgeneParam, const double* sigma2Param);
         double                      getAcceptanceRatio(void);
         std::vector<std::vector<double>> getAbsoluteRates(void);
         int                         getNumLoci(void) { return numLoci; }
@@ -35,7 +35,7 @@ class ParameterBranchRates : public Parameter {
         double                      globalRateBranchRatesScale(int p);
         double                      vectorScale(int p);
         double                      bactrianMultiplier(int moveType);
-        double                      gammaDirichletLnP(const std::vector<double>& v, const double* para);
+        double                      gammaDirichletLnP(const std::vector<double>& v, const double* param);
         double                      gammaLnPdf(double a, double b, double x);
         double                      lognormalLnP(double r, double s2, double m);
         double                      whiteNoiseLnP(double r, double s2, double t, double m);
@@ -48,9 +48,9 @@ class ParameterBranchRates : public Parameter {
         ClockModel                  clockModel;
         int                         numNodes;
         std::vector<int>            branchNodes;
-        double                      rgenePara[3];
-        double                      sigma2Para[3];
-        double                      thetaPara[3];
+        double                      rgeneParam[3];
+        double                      sigma2Param[3];
+        double                      thetaParam[3];
         std::vector<double>         mu[2];
         std::vector<double>         sigma2[2];
         std::vector<double>         theta[2];

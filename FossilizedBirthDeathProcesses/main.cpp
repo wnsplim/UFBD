@@ -31,9 +31,6 @@ int main(int argc, const char* argv[]) {
     else if(cn == "gbm")  cm = ClockModel::GBM;
     else if(cn == "cir")  cm = ClockModel::CIR;
 
-    if(settings.getFixAge() > 0.0)
-        std::cout << "Note: -fixage set: fixed-root relative-dating (clock-model testing). The FBD model / -fbd_model is ignored.\n";
-
     int numChains = settings.getNumChains();
     if(numChains > 1){
         std::cout << "Running Metropolis-coupled MCMC with " << numChains << " chains parallelized across " << settings.getNumThreads() << " threads \n";

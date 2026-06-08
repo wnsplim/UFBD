@@ -63,6 +63,7 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      calculatePoHat(double t);
         double                      calculatePoHatAt(int i, double t);
         double                      calculateLnSurvival(double t);
+        double                      calculateBDProbability(void);
         double                      fossilPqLn(double y, double z);
         //ordered by memory footprint
         std::vector<ParameterDouble*> lambda;

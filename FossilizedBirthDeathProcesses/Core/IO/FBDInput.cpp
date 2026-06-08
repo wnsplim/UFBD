@@ -106,7 +106,7 @@ void FBDInput::readFossils(std::string path){
             assignment = Assignment::TOTAL;
         }
         if(UserSettings::userSettings().getConditioning() == Conditioning::CROWN
-           && assignment == Assignment::TOTAL && clade->getCrown() == tree->getRoot()){
+           && assignment == Assignment::TOTAL && clade->getCrown() == tree->getCrown()){
             Msg::warning("fossil '" + taxon + "' is TOTAL on the whole-tree clade '" + cladeName + "'; treating as CROWN");
             assignment = Assignment::CROWN;
         }

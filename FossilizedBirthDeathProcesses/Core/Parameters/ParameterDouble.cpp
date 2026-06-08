@@ -36,7 +36,10 @@ void ParameterDouble::setPrior(Probability::PriorFamily f, double p1, double p2)
     priorFamily = f;
     priorP1 = p1;
     priorP2 = p2;
-    if(f == Probability::PriorFamily::UNIFORM && (value[0] < p1 || value[0] > p2))
+    if(f == Probability::PriorFamily::FIXED){
+        setValue(p1);
+        setProposalProbability(0.0);
+    } else if(f == Probability::PriorFamily::UNIFORM && (value[0] < p1 || value[0] > p2))
         setValue(0.5 * (p1 + p2));
 }
 

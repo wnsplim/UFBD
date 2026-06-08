@@ -66,8 +66,8 @@ double ParameterUnresolvedFossils::getMinAttachAge(int i){
 double ParameterUnresolvedFossils::getMaxAttachAge(int i){
     if(isCrown[i])
         return crownNode[i]->getTime();
-    if(crownNode[i] == backbone->getRoot())
-        return (originAge != nullptr) ? originAge->getValue() : backbone->getRoot()->getTime();
+    if(crownNode[i] == backbone->getCrown())
+        return (originAge != nullptr) ? originAge->getValue() : backbone->getCrown()->getTime();
     return originNode[i]->getTime();
 }
 

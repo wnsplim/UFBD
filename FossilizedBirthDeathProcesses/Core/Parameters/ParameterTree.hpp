@@ -24,7 +24,6 @@ class ParameterTree : public Parameter {
         Tree*                       getTree(void) { return trees[0]; }
         double                      lnProbability(void);
         void                        print(void);
-        void                        setFixRoot(bool b) { trees[0]->setFixRoot(b); trees[1]->setFixRoot(b); }
         void                        setTree(Tree* t);
         double                      update(void);
         void                        updateForAcceptance(void);

@@ -47,7 +47,6 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
     nStates         = 4;
     rgeneGamma[0]   = 2.0;  rgeneGamma[1]  = 2000.0; rgeneGamma[2]  = 1.0;
     sigma2Gamma[0]  = 1.0;  sigma2Gamma[1] = 10.0;   sigma2Gamma[2] = 1.0;
-    fixAge          = -1.0;
 
     std::vector<std::string> arguments;
     for (int i = 0; i < argc; i++)
@@ -59,12 +58,12 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
     std::set<std::string> knownFlags = {
         "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt", "-help", "-h",
         "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times",
-        "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma", "-fixage"
+        "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma"
     };
     std::set<std::string> valueFlags = {
         "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt",
         "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times",
-        "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma", "-fixage"
+        "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma"
     };
 
     for (int i = 1; i < (int)arguments.size(); i++) {
@@ -119,10 +118,11 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
             } else if (arg == "-fbd_model") {
                 std::string v = val;
                 for (char& ch : v) ch = std::toupper((unsigned char)ch);
-                if (v == "FBD")         model = Model::FBD;
+                if (v == "BD")          model = Model::BD;
+                else if (v == "FBD")    model = Model::FBD;
                 else if (v == "HEA14")  model = Model::HEA14;
                 else if (v == "UFBD")   model = Model::UFBD;
-                else Msg::error("Flag \"-fbd_model\" expects FBD, HEA14, or UFBD, but got \"" + val + "\".");
+                else Msg::error("Flag \"-fbd_model\" expects BD, FBD, HEA14, or UFBD, but got \"" + val + "\".");
             } else if (arg == "-rho") {
                 try {
                     rho = std::stod(val);
@@ -161,8 +161,6 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
             } else if (arg == "-sigma2_gamma") {
                 std::stringstream ss(val); std::string tok; int k = 0;
                 while (std::getline(ss, tok, ',') && k < 3) if (tok.empty() == false) sigma2Gamma[k++] = std::stod(tok);
-            } else if (arg == "-fixage") {
-                fixAge = std::stod(val);
             }else {
                 // Integer-valued flags
                 // Check all characters are digits (allowing leading minus for negative detection)
@@ -245,8 +243,17 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
 
 void UserSettings::parsePriorInto(const std::string& spec, Probability::PriorFamily& family, double& p1, double& p2) {
     size_t lp = spec.find('(');
+    if (lp == std::string::npos) {
+        try {
+            p1 = std::stod(spec);
+            family = Probability::PriorFamily::FIXED;
+            return;
+        } catch (...) {
+            Msg::error("prior must be a fixed number or look like exp(rate), gamma(shape,rate), lognormal(mu,sigma), unif(a,b), or truncnormal(mean,sd); got \"" + spec + "\".");
+        }
+    }
     size_t rp = spec.find(')');
-    if (lp == std::string::npos || rp == std::string::npos || rp <= lp)
+    if (rp == std::string::npos || rp <= lp)
         Msg::error("prior must look like exp(rate), gamma(shape,rate), lognormal(mu,sigma), unif(a,b), or truncnormal(mean,sd); got \"" + spec + "\".");
     std::string fam = spec.substr(0, lp);
     for (char& ch : fam) ch = std::tolower((unsigned char)ch);
@@ -295,7 +302,7 @@ void UserSettings::print(void) {
         case Probability::PriorFamily::IMPROPER:         std::cout << "improper"; break;
     }
     std::cout << std::endl;
-    std::cout << "Model:                                 " << (model == Model::FBD ? "FBD" : (model == Model::HEA14 ? "HEA14" : "UFBD")) << std::endl;
+    std::cout << "Model:                                 " << (model == Model::BD ? "BD" : (model == Model::FBD ? "FBD" : (model == Model::HEA14 ? "HEA14" : "UFBD"))) << std::endl;
     std::cout << "Tree output file name:                 " << treeOut << std::endl;
     std::cout << "Parameter output file name:            " << parametersOut << std::endl;
     std::cout << "Extant sampling fraction (rho):        " << rho << std::endl;

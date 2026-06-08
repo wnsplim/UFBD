@@ -13,11 +13,11 @@
 ApproxBranchLengthLikelihood::ApproxBranchLengthLikelihood(const std::string& hessianFile, const std::string& mlTreeFile, const std::vector<std::string>& rogue, int partitionIndex, int nStates) :
     nb(0),
     nPartitions(0),
-    rootBranchIdx(-1),
+    crownBranchIdx(-1),
     partitionIndex(partitionIndex),
     cJc((nStates - 1.0) / nStates),
     rogueTaxa(rogue.begin(), rogue.end()),
-    cachedRoot(nullptr)
+    cachedCrown(nullptr)
 {
     if(nStates < 2)
         Msg::error("ApproxBranchLengthLikelihood: nStates must be >= 2");
@@ -38,7 +38,7 @@ ApproxBranchLengthLikelihood::ApproxBranchLengthLikelihood(const std::string& he
         newick = newick.substr(0, semi + 1);
 
     Tree* rootedMl = new Tree(newick);
-    identifyRootBranch(rootedMl);
+    identifyCrownBranch(rootedMl);
     delete rootedMl;
 }
 
@@ -219,7 +219,7 @@ void ApproxBranchLengthLikelihood::applyArcsinTransform(int p){
 void ApproxBranchLengthLikelihood::buildBipartitions(Tree* molTree){
     std::vector<std::set<std::string>> entries;
     for(Node* n : molTree->getDownPassSequence()){
-        if(n == molTree->getRoot()) continue;
+        if(n == molTree->getCrown()) continue;
         std::set<std::string> desc;
         for(Node* d : molTree->getAllDescendants(n))
             if(d->getIsTip()) desc.insert(d->getName());
@@ -231,24 +231,24 @@ void ApproxBranchLengthLikelihood::buildBipartitions(Tree* molTree){
     bipartitions = entries;
 }
 
-void ApproxBranchLengthLikelihood::identifyRootBranch(Tree* rootedMlTree){
-    Node* root = rootedMlTree->getRoot();
+void ApproxBranchLengthLikelihood::identifyCrownBranch(Tree* rootedMlTree){
+    Node* crown = rootedMlTree->getCrown();
     Node* child0 = nullptr;
-    for(Node* c : root->getNeighbors())
-        if(c != root->getAncestor()){ child0 = c; break; }
+    for(Node* c : crown->getNeighbors())
+        if(c != crown->getAncestor()){ child0 = c; break; }
     if(child0 == nullptr)
-        Msg::error("ApproxBranchLengthLikelihood: ML root has no children");
+        Msg::error("ApproxBranchLengthLikelihood: ML crown has no children");
     std::set<std::string> canon = canonicalize(molecularDescendants(child0, rootedMlTree));
     for(int i = 0; i < nb; i++)
-        if(bipartitions[i] == canon){ rootBranchIdx = i; return; }
-    Msg::error("ApproxBranchLengthLikelihood: cannot identify root branch; hessian topology must match inference tree");
+        if(bipartitions[i] == canon){ crownBranchIdx = i; return; }
+    Msg::error("ApproxBranchLengthLikelihood: cannot identify crown branch; hessian topology must match inference tree");
 }
 
 Node* ApproxBranchLengthLikelihood::findNodeByBipartition(const std::set<std::string>& bp, Tree* tree){
     if(bp.size() == 1)
         return tree->getTaxonNode(*bp.begin());
     for(Node* n : tree->getDownPassSequence()){
-        if(n == tree->getRoot() || n->getIsTip()) continue;
+        if(n == tree->getCrown() || n->getIsTip()) continue;
         if(canonicalize(molecularDescendants(n, tree)) == bp)
             return n;
     }
@@ -256,23 +256,23 @@ Node* ApproxBranchLengthLikelihood::findNodeByBipartition(const std::set<std::st
 }
 
 double ApproxBranchLengthLikelihood::computeLnL(Tree* tree, const std::vector<std::vector<double>>& branchRates){
-    Node* curRoot = tree->getRoot();
-    if(curRoot != cachedRoot){
+    Node* curCrown = tree->getCrown();
+    if(curCrown != cachedCrown){
         branchNodeIdx.assign(nb, -1);
         for(int i = 0; i < nb; i++){
-            if(i == rootBranchIdx) continue;
+            if(i == crownBranchIdx) continue;
             Node* n = findNodeByBipartition(bipartitions[i], tree);
-            if(n == nullptr){ cachedRoot = nullptr; return -INFINITY; }
+            if(n == nullptr){ cachedCrown = nullptr; return -INFINITY; }
             branchNodeIdx[i] = n->getOffset();
         }
-        cachedRoot = curRoot;
+        cachedCrown = curCrown;
     }
 
-    Node* root = tree->getRoot();
-    std::vector<Node*> rootChildren;
-    for(Node* c : root->getNeighbors())
-        if(c != root->getAncestor())
-            rootChildren.push_back(c);
+    Node* crown = tree->getCrown();
+    std::vector<Node*> crownChildren;
+    for(Node* c : crown->getNeighbors())
+        if(c != crown->getAncestor())
+            crownChildren.push_back(c);
 
     std::vector<double> z(nb);
     double lnL = 0.0;
@@ -280,11 +280,11 @@ double ApproxBranchLengthLikelihood::computeLnL(Tree* tree, const std::vector<st
         const std::vector<double>& br = branchRates[p];
         for(int i = 0; i < nb; i++){
             double predBl;
-            if(i == rootBranchIdx){
-                if(rootChildren.size() != 2) return -INFINITY;
-                double d0 = rootChildren[0]->getAncestor()->getTime() - rootChildren[0]->getTime();
-                double d1 = rootChildren[1]->getAncestor()->getTime() - rootChildren[1]->getTime();
-                predBl = br[rootChildren[0]->getOffset()] * d0 + br[rootChildren[1]->getOffset()] * d1;
+            if(i == crownBranchIdx){
+                if(crownChildren.size() != 2) return -INFINITY;
+                double d0 = crownChildren[0]->getAncestor()->getTime() - crownChildren[0]->getTime();
+                double d1 = crownChildren[1]->getAncestor()->getTime() - crownChildren[1]->getTime();
+                predBl = br[crownChildren[0]->getOffset()] * d0 + br[crownChildren[1]->getOffset()] * d1;
             }else{
                 Node* n = tree->getNodeByOffset(branchNodeIdx[i]);
                 double d = n->getAncestor()->getTime() - n->getTime();

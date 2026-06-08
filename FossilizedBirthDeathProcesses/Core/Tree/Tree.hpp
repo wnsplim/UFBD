@@ -42,7 +42,7 @@ class Tree {
         int                                 getNumNodes(void) { return (int)nodes.size(); }
         Node*                               getNodeByOffset(int o) { return nodes[o]; }
         int                                 getNumTaxa(void);
-        Node*                               getRoot(void) { return root; }
+        Node*                               getCrown(void) { return crown; }
         bool                                getLastUpdateWasScale(void) { return lastUpdateWasScale; }
         bool                                isBinary(void);
         void                                validateBackbone(void);
@@ -56,9 +56,8 @@ class Tree {
 #endif
         double                              update(double scaleLambda);
         int                                 scaleInternalAges(double m);
-        int                                 scaleSubtreeAges(Node* subtreeRoot, double m);
+        int                                 scaleSubtreeAges(Node* subtreeCrown, double m);
         void                                setLastUpdateWasScale(bool b) { lastUpdateWasScale = b; }
-        void                                setFixRoot(bool b) { fixRoot = b; }
         void                                assignStartingAges(const std::map<Node*,double>& minAges, double unit);
         Node*                               insertFossilTip(Node* hostChild, std::string name, double y, double z);
         void                                setAgeFloors(const std::map<Node*,double>& f) { ageFloors = f; }
@@ -95,7 +94,7 @@ class Tree {
         void                                setBranch(Node* e1, Node* e2, double x);
         void                                showNode(Node* p, int indent);
         double                              updateNodeAge(void);
-        double                              updateRootAge(double scaleLambda);
+        double                              updateCrownAge(double scaleLambda);
         void                                writeTree(Node* p, std::stringstream& strm);
         BranchLengths                       branchLengths;
         std::map<Node*,double>              ageFloors;
@@ -103,12 +102,11 @@ class Tree {
         std::vector<Node*>                  nodes;
         std::vector<Node*>                  tips;
         Node*                               freeNode;
-        Node*                               root;
+        Node*                               crown;
         double                              treeHeight;
         int                                 numTaxa;
         int                                 numInternalNodes;
         bool                                lastUpdateWasScale = false;
-        bool                                fixRoot = false;
 };
 
 #endif

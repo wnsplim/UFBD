@@ -18,6 +18,7 @@ double Probability::priorLnPdf(PriorFamily family, double p1, double p2, double 
         case PriorFamily::GAMMA:            lnp = Gamma::lnPdf(p1, p2, x);                                    break;
         case PriorFamily::LOGNORMAL:        lnp = Normal::lnPdf(p1, p2 * p2, std::log(x)) - std::log(x);      break;
         case PriorFamily::UNIFORM:          lnp = (x < p1 || x > p2) ? -INFINITY : Uniform::lnPdf(p1, p2, x); break;
+        case PriorFamily::FIXED:            lnp = 0.0;                                                       break;
     }
     return lnp;
 }

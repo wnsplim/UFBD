@@ -24,16 +24,16 @@ Tree::Tree(std::vector<std::string> taxonNames, double lambda) {
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     
     // start with three-species tree
-    root = addNode();
+    crown = addNode();
     for (int i=0; i<3; i++)
         {
         Node* p = addNode();
         p->setIsTip(true);
         p->setIndex(i);
         p->setName(taxonNames[i]);
-        p->addNeighbor(root);
-        p->setAncestor(root);
-        root->addNeighbor(p);
+        p->addNeighbor(crown);
+        p->setAncestor(crown);
+        crown->addNeighbor(p);
         }
         
     // randomly add the remaining taxa to the branches of the tree
@@ -44,7 +44,7 @@ Tree::Tree(std::vector<std::string> taxonNames, double lambda) {
             double u = rng.uniformRv();
             int whichNode = (int)(u*nodes.size());
             p = nodes[whichNode];
-            } while (p == root);
+            } while (p == crown);
         Node* pAnc = p->getAncestor();
         p->removeNeighbor(pAnc);
         pAnc->removeNeighbor(p);
@@ -80,7 +80,7 @@ Tree::Tree(std::vector<std::string> taxonNames, double lambda) {
     // add the branch lengths to the tree
     for (Node* p : downPassSequence)
         {
-        if (p != root)
+        if (p != crown)
             setBranch(p, p->getAncestor(), Probability::Exponential::rv(&rng, lambda));
         }
     initializeTimes();
@@ -98,7 +98,7 @@ Tree::Tree(std::string newick){
         if(token == "("){
             Node* newNode = addNode();
             if(p == nullptr){
-                root = newNode;
+                crown = newNode;
             }else{
                 p->addNeighbor(newNode);
                 newNode->addNeighbor(p);
@@ -110,8 +110,8 @@ Tree::Tree(std::string newick){
                 Msg::error("no anc found for p");
             p = p->getAncestor();
         }else if (token == ";"){
-            if(p != root)
-                Msg::error("expecting to be at root");
+            if(p != crown)
+                Msg::error("expecting to be at crown");
         }else if (token == ":"){
             readingBl = true;
         }else{
@@ -209,7 +209,7 @@ void Tree::calculateTreeHeight(void){
             Node* p = n;
             Node* pAnc = p->getAncestor();
             double height = 0.0;
-            while(p != root){
+            while(p != crown){
                 pAnc = p->getAncestor();
                 height += branchLengthFromMap(p, pAnc);
                 p = pAnc;
@@ -239,7 +239,7 @@ void Tree::clone(const Tree& t) {
         }
         
     this->numTaxa = t.numTaxa;
-    this->root = this->nodes[t.root->getOffset()];
+    this->crown = this->nodes[t.crown->getOffset()];
     
     for (int i=0; i<t.nodes.size(); i++)
         {
@@ -282,33 +282,33 @@ void Tree::collapseNode(Node* n){
     
     std::vector<Node*> neighbors(n->getNeighbors().begin(), n->getNeighbors().end());
     double bl = getBranchLength(neighbors[0], n) + getBranchLength(neighbors[1], n);
-    if(n == root){
-        //need to select new root
-        Node* foundNewRoot = nullptr;
+    if(n == crown){
+        //need to select new crown
+        Node* foundNewCrown = nullptr;
         for(int i = 0; i < neighbors.size(); i++){
             if(neighbors[i]->getNeighbors().size() == 3){
-                foundNewRoot = neighbors[i];
+                foundNewCrown = neighbors[i];
                 neighbors.erase(neighbors.begin() + i);
             } //beacuse of how we set up the rot class, there should only be one node wiht this condition
         }
         
         if(neighbors.size() != 1)
             Msg::error("wonky neighbor sizing");
-        if(foundNewRoot == nullptr)
-            Msg::error("could not find suitable new root");
+        if(foundNewCrown == nullptr)
+            Msg::error("could not find suitable new crown");
         
-//        std::cout << "New root = " << foundNewRoot->getIndex() << std::endl;
+//        std::cout << "New crown = " << foundNewCrown->getIndex() << std::endl;
 
-        root = foundNewRoot;
-        root->setAncestor(nullptr);
+        crown = foundNewCrown;
+        crown->setAncestor(nullptr);
         Node* b = neighbors[0];
-        b->addNeighbor(root);
-        setBranch(root, b, bl);
+        b->addNeighbor(crown);
+        setBranch(crown, b, bl);
         
         b->removeNeighbor(n);
-        root->removeNeighbor(n);
+        crown->removeNeighbor(n);
         removeBranch(n, b);
-        removeBranch(n, root);
+        removeBranch(n, crown);
         
     }else{
         neighbors[0]->addNeighbor(neighbors[1]);
@@ -357,12 +357,12 @@ void Tree::dropTip(std::string tip){
         Msg::error("could not find tip in descendants");
     }
        
-    if(a == root){
+    if(a == crown){
         //std::cout << "pongo pyg case" << std::endl;
-        //q becomes new root
+        //q becomes new crown
         removeBranch(q, a);
         q->removeNeighbor(a);
-        root = q;
+        crown = q;
         initializeDownPassSequence();
     }else{
         double newBl = getBranchLength(q, a) + getBranchLength(a, b);
@@ -406,12 +406,12 @@ void Tree::dropTip(int idx){
         Msg::error("could not find tip in descendants");
     }
        
-    if(a == root){
+    if(a == crown){
         //std::cout << "pongo pyg case" << std::endl;
-        //q becomes new root
+        //q becomes new crown
         removeBranch(q, a);
         q->removeNeighbor(a);
-        root = q;
+        crown = q;
         initializeDownPassSequence();
     }else{
         double newBl = getBranchLength(q, a) + getBranchLength(a, b);
@@ -454,21 +454,21 @@ std::vector<Node*> Tree::getAllDescendants(Node* n){
 #if 0
 void Tree::forceBinary(void){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
-    std::vector<Node*> rootDesc = root->getDescendants();
-    if(rootDesc.size() != 2){
-        Node* newOutgroup = rootDesc[(int)(rng.uniformRv() * rootDesc.size())];
-        Node* newRoot = addNode();
-        newRoot->setIndex((int)nodes.size() + 1);
-        double blHalf = getBranchLength(newOutgroup, root) / 2;
+    std::vector<Node*> crownDesc = crown->getDescendants();
+    if(crownDesc.size() != 2){
+        Node* newOutgroup = crownDesc[(int)(rng.uniformRv() * crownDesc.size())];
+        Node* newCrown = addNode();
+        newCrown->setIndex((int)nodes.size() + 1);
+        double blHalf = getBranchLength(newOutgroup, crown) / 2;
         
-        removeBranch(newOutgroup, root);
-        newOutgroup->removeNeighbor(root);
+        removeBranch(newOutgroup, crown);
+        newOutgroup->removeNeighbor(crown);
         
-        newOutgroup->addNeighbor(newRoot);
-        root->addNeighbor(newRoot);
-        setBranch(newRoot, root, blHalf);
-        setBranch(newOutgroup, newRoot, blHalf);
-        reroot(newRoot);
+        newOutgroup->addNeighbor(newCrown);
+        crown->addNeighbor(newCrown);
+        setBranch(newCrown, crown, blHalf);
+        setBranch(newOutgroup, newCrown, blHalf);
+        reroot(newCrown);
     }
     
     for(Node* n : downPassSequence)
@@ -508,7 +508,7 @@ int Tree::getNumLineagesAtTime(double t){
     std::set<Node*> branchesContainingFossils;
     branchesContainingFossils.clear();
     for(Node* n :downPassSequence){
-        if(n != root && n->getTime() < t && n->getAncestor()->getTime() > t){
+        if(n != crown && n->getTime() < t && n->getAncestor()->getTime() > t){
             branchesContainingFossils.insert(n);
         }
     }
@@ -519,7 +519,7 @@ std::string Tree::getNewickString(void) {
 
     std::stringstream strm;
     strm << std::setprecision(17);
-    writeTree(root, strm);
+    writeTree(crown, strm);
     strm << ";";
     return strm.str();
 }
@@ -538,7 +538,7 @@ bool Tree::isBinary(void){
         if(n->getIsTip())
             continue;
         int numChildren = (int)n->getNeighbors().size();
-        if(n != root)
+        if(n != crown)
             numChildren -= 1;
         if(numChildren != 2)
             return false;
@@ -596,7 +596,7 @@ Node* Tree::getMRCA(const std::vector<std::string>& taxonNames){
         std::set<Node*> ancestors;
         for(Node* p = mrca; ; p = p->getAncestor()){
             ancestors.insert(p);
-            if(p->getAncestor() == p) // root's ancestor is itself in this tree
+            if(p->getAncestor() == p) // crown's ancestor is itself in this tree
                 break;
         }
 
@@ -621,10 +621,10 @@ void Tree::initializeBranchLengthKey(std::pair<Node*,Node*>& key, Node* e1, Node
 }
 
 void Tree::initializeDownPassSequence(void) {
-    if(root == nullptr)
-        Msg::error("root is nullptr");
+    if(crown == nullptr)
+        Msg::error("crown is nullptr");
     downPassSequence.clear();
-    passDown(root, root);
+    passDown(crown, crown);
     checkBranchLengthsNeg();
 }
 
@@ -651,7 +651,7 @@ void Tree::assignStartingAges(const std::map<Node*,double>& minAges, double unit
             age = it->second;
         n->setTime(age);
     }
-    treeHeight = root->getTime();
+    treeHeight = crown->getTime();
 }
 
 #if 0
@@ -722,7 +722,7 @@ void Tree::passDown(Node* p, Node* from) {
 
 void Tree::print(void) {
     
-    showNode(root, 0);
+    showNode(crown, 0);
     std::cout << "Postorder sequence: ";
     for (int i=0; i<downPassSequence.size(); i++)
         std::cout << downPassSequence[i]->getIndex() << " ";
@@ -745,7 +745,7 @@ std::pair<Node*,Node*> Tree::randomlyChooseBranch(void) {
     Node* p = nullptr;
     do {
         p = nodes[(int)(rng.uniformRv()*nodes.size())];
-        } while(p == root);
+        } while(p == crown);
     Node* pAnc = p->getAncestor();
     nodePair = std::make_pair(p, pAnc);
     
@@ -788,9 +788,9 @@ void Tree::removeBranch(Node* e1, Node* e2) {
 void Tree::reroot(Node* r) {
     if(r->getIsTip() == true)
         Msg::error("why are you rerooting on a tip?");
-    root = r;
+    crown = r;
     downPassSequence.clear();
-    passDown(root, root);
+    passDown(crown, crown);
 }
 
 //Archival (using FBD dedicated tree moves in practice)
@@ -809,15 +809,15 @@ void Tree::rSPR(void){
     }
     
     bool isBinary = false;
-    if(root->getNeighbors().size() == 2)
+    if(crown->getNeighbors().size() == 2)
         isBinary = true;
     
     //which interior node to move around
     Node* p = candidateMoves[(int)(rng.uniformRv() * candidateMoves.size())];
-//    Node* p = root;
+//    Node* p = crown;
     
     std::set<Node*> pNeighbors = p->getNeighbors();
-    if(pNeighbors.size() != 3 && p != root){
+    if(pNeighbors.size() != 3 && p != crown){
         std::cout << p->getIndex() << std::endl;
         print();
         Msg::error("pNeighbor size is not 3");
@@ -831,7 +831,7 @@ void Tree::rSPR(void){
         Msg::error("could not sample q");
     
 //    std::cout << "Int node: " << p->getIndex() << " node to move: " << q->getIndex() << std::endl;
-    if(q == root){
+    if(q == crown){
         Node* transfer = p;
         p = q;
         q = transfer;
@@ -840,24 +840,24 @@ void Tree::rSPR(void){
     
     //p is what we're rotating around and collapsing
     //q is qhat actually moves
-    if(p == root){
+    if(p == crown){
         if(isBinary == false){
-            //root has three descendants
+            //crown has three descendants
             //both neighbors of q tips with q int node?
-            bool moveRootSubtree = false;
+            bool moveCrownSubtree = false;
             pNeighbors.erase(q);
             if((*next(pNeighbors.begin(), 0))->getIsTip() == true && (*next(pNeighbors.begin(), 1))->getIsTip() == true)
-                moveRootSubtree = true;
-            if(moveRootSubtree == false){
-    //            std::cout << "Move root subtree false " << std::endl;
+                moveCrownSubtree = true;
+            if(moveCrownSubtree == false){
+    //            std::cout << "Move crown subtree false " << std::endl;
                 double bl = getBranchLength(p, q);
                 q->removeNeighbor(p);
                 collapseNode(p);
                 initializeDownPassSequence();
-                //finding a reattachment point (cannot be root)
+                //finding a reattachment point (cannot be crown)
                 std::vector<Node*> candidateRegraftingLocations = {};
                 for(Node* n : downPassSequence)
-                    if(n != root && n != freeNode)
+                    if(n != crown && n != freeNode)
                         candidateRegraftingLocations.push_back(n);
                 if(candidateRegraftingLocations.size() == 0){
                     print();
@@ -891,31 +891,31 @@ void Tree::rSPR(void){
                 setBranch(a, regraft, regraftTopHalf);
                 setBranch(b, regraft, regraftBottomHalf);
             }else{
-    //            std::cout << "Move root subtree true " << std::endl;
-                //regrafting an internal node subtending the root-- really means we're moving the (tip1, tip2), root subtree
+    //            std::cout << "Move crown subtree true " << std::endl;
+                //regrafting an internal node subtending the crown-- really means we're moving the (tip1, tip2), crown subtree
                 double bl = getBranchLength(p, q);
-                //first-- sample new root, reroot, and proceed as normal
+                //first-- sample new crown, reroot, and proceed as normal
                 std::set<Node*> qNeighbors = q->getNeighbors();
-                Node* newRoot = nullptr;
+                Node* newCrown = nullptr;
                 for(Node* n : qNeighbors)
                     if(n->getNeighbors().size() == 3){
-                        if(n != root){
-                            newRoot = n;
+                        if(n != crown){
+                            newCrown = n;
                             break;
                         }
                     }
-                if(newRoot == nullptr)
-                    Msg::error("could not identify new root");
+                if(newCrown == nullptr)
+                    Msg::error("could not identify new crown");
                 
-                reroot(newRoot);
+                reroot(newCrown);
                 q->removeNeighbor(p);
                 collapseNode(q);
                 initializeDownPassSequence();
                 
-                //finding a reattachment point (cannot be root)
+                //finding a reattachment point (cannot be crown)
                 std::vector<Node*> candidateRegraftingLocations = {};
                 for(Node* n : downPassSequence)
-                    if(n != root && n != freeNode)
+                    if(n != crown && n != freeNode)
                         candidateRegraftingLocations.push_back(n);
                 if(candidateRegraftingLocations.size() == 0){
                     print();
@@ -952,56 +952,56 @@ void Tree::rSPR(void){
         }else{
             //we need to remove p (which is binary), reroot on an internal node, and then force binary again
             
-            Node* newRoot = nullptr;
+            Node* newCrown = nullptr;
             for(Node* n : pNeighbors){
                 if(n->getNeighbors().size() == 3){
-                    newRoot = n;
+                    newCrown = n;
                     break;
                 }
             }
-            reroot(newRoot);
+            reroot(newCrown);
             
             Node* pAbove = p->getDescendants()[0];
             double blAbove = getBranchLength(pAbove, p);
-            double blBelow = getBranchLength(p, newRoot);
+            double blBelow = getBranchLength(p, newCrown);
             
             removeBranch(pAbove, p);
-            removeBranch(p, newRoot);
+            removeBranch(p, newCrown);
             p->removeNeighbor(pAbove);
-            p->removeNeighbor(newRoot);
+            p->removeNeighbor(newCrown);
             
-            pAbove->addNeighbor(newRoot);
-            pAbove->setAncestor(newRoot);
-            setBranch(pAbove, newRoot, blAbove+blBelow);
+            pAbove->addNeighbor(newCrown);
+            pAbove->setAncestor(newCrown);
+            setBranch(pAbove, newCrown, blAbove+blBelow);
             
             nodes.erase(find(nodes.begin(), nodes.end(), p));
             delete p;
             
             initializeDownPassSequence();
             pNeighbors.clear();
-            p = root;
+            p = crown;
             pNeighbors = p->getNeighbors();
             
             //sample new q:
             idx = (int)(rng.uniformRv() * pNeighbors.size());
             q = *next(pNeighbors.begin(), idx);
             
-            //root now has three descendants
+            //crown now has three descendants
             //both neighbors of q tips with q int node?
-            bool moveRootSubtree = false;
+            bool moveCrownSubtree = false;
             pNeighbors.erase(q);
             if((*next(pNeighbors.begin(), 0))->getIsTip() == true && (*next(pNeighbors.begin(), 1))->getIsTip() == true)
-                moveRootSubtree = true;
-            if(moveRootSubtree == false){
-    //            std::cout << "Move root subtree false " << std::endl;
+                moveCrownSubtree = true;
+            if(moveCrownSubtree == false){
+    //            std::cout << "Move crown subtree false " << std::endl;
                 double bl = getBranchLength(p, q);
                 q->removeNeighbor(p);
                 collapseNode(p);
                 initializeDownPassSequence();
-                //finding a reattachment point (cannot be root)
+                //finding a reattachment point (cannot be crown)
                 std::vector<Node*> candidateRegraftingLocations = {};
                 for(Node* n : downPassSequence)
-                    if(n != root && n != freeNode)
+                    if(n != crown && n != freeNode)
                         candidateRegraftingLocations.push_back(n);
                 if(candidateRegraftingLocations.size() == 0){
                     print();
@@ -1035,31 +1035,31 @@ void Tree::rSPR(void){
                 setBranch(a, regraft, regraftTopHalf);
                 setBranch(b, regraft, regraftBottomHalf);
             }else{
-    //            std::cout << "Move root subtree true " << std::endl;
-                //regrafting an internal node subtending the root-- really means we're moving the (tip1, tip2), root subtree
+    //            std::cout << "Move crown subtree true " << std::endl;
+                //regrafting an internal node subtending the crown-- really means we're moving the (tip1, tip2), crown subtree
                 double bl = getBranchLength(p, q);
-                //first-- sample new root, reroot, and proceed as normal
+                //first-- sample new crown, reroot, and proceed as normal
                 std::set<Node*> qNeighbors = q->getNeighbors();
-                Node* newRoot = nullptr;
+                Node* newCrown = nullptr;
                 for(Node* n : qNeighbors)
                     if(n->getNeighbors().size() == 3){
-                        if(n != root){
-                            newRoot = n;
+                        if(n != crown){
+                            newCrown = n;
                             break;
                         }
                     }
-                if(newRoot == nullptr)
-                    Msg::error("could not identify new root");
+                if(newCrown == nullptr)
+                    Msg::error("could not identify new crown");
                 
-                reroot(newRoot);
+                reroot(newCrown);
                 q->removeNeighbor(p);
                 collapseNode(q);
                 initializeDownPassSequence();
                 
-                //finding a reattachment point (cannot be root)
+                //finding a reattachment point (cannot be crown)
                 std::vector<Node*> candidateRegraftingLocations = {};
                 for(Node* n : downPassSequence)
-                    if(n != root && n != freeNode)
+                    if(n != crown && n != freeNode)
                         candidateRegraftingLocations.push_back(n);
                 if(candidateRegraftingLocations.size() == 0){
                     print();
@@ -1097,7 +1097,7 @@ void Tree::rSPR(void){
             initializeDownPassSequence();
         }
     }else{
-//        std::cout << "p is not root" << std::endl;
+//        std::cout << "p is not crown" << std::endl;
         if(p->getAncestor() == q){
 //            std::cout << "here" << std::endl;
             Node* transfer = p;
@@ -1108,10 +1108,10 @@ void Tree::rSPR(void){
         double bl = getBranchLength(p, q);
         q->removeNeighbor(p);
         collapseNode(p);
-        //finding a reattachment point (cannot be root)
+        //finding a reattachment point (cannot be crown)
         std::vector<Node*> candidateRegraftingLocations = {};
         for(Node* n : downPassSequence)
-            if(n != root && n != freeNode)
+            if(n != crown && n != freeNode)
                 candidateRegraftingLocations.push_back(n);
         if(candidateRegraftingLocations.size() == 0){
             print();
@@ -1184,10 +1184,10 @@ void Tree::rSPR(std::string s){
     double bl = getBranchLength(p, q);
     q->removeNeighbor(p);
     collapseNode(p);
-    //finding a reattachment point (cannot be root)
+    //finding a reattachment point (cannot be crown)
     std::vector<Node*> candidateRegraftingLocations = {};
     for(Node* n : downPassSequence)
-        if(n != root && n != freeNode)
+        if(n != crown && n != freeNode)
             candidateRegraftingLocations.push_back(n);
     if(candidateRegraftingLocations.size() == 0){
         print();
@@ -1263,12 +1263,12 @@ void Tree::showNode(Node* p, int indent) {
         std::cout << ") ";
         std::cout << p->getName() << " " << p->getIsTip() << " ";
         std::cout << std::fixed << std::setprecision(6);
-        if (p != root)
+        if (p != crown)
             std::cout << getBranchLength(p, p->getAncestor()) << " ";
         else
             std::cout << "--- ";
-        if (p == root)
-            std::cout << "<- Root ";
+        if (p == crown)
+            std::cout << "<- Crown ";
         std::cout << std::endl;
 
         for (Node* n : pNeighbors)
@@ -1282,17 +1282,13 @@ void Tree::showNode(Node* p, int indent) {
 
 double Tree::update(double scaleLambda){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
-    if(fixRoot){
-        lastUpdateWasScale = false;
-        return updateNodeAge();
-    }
     int numSlideable = 0;
     for(Node* n : downPassSequence)
-        if(n != root && n->getIsTip() == false)
+        if(n != crown && n->getIsTip() == false)
             numSlideable++;
-    double rootWeight = 3.0;
-    if(rng.uniformRv() * (numSlideable + rootWeight) >= numSlideable)
-        return updateRootAge(scaleLambda);
+    double crownWeight = 3.0;
+    if(rng.uniformRv() * (numSlideable + crownWeight) >= numSlideable)
+        return updateCrownAge(scaleLambda);
     lastUpdateWasScale = false;
     return updateNodeAge();
 }
@@ -1321,11 +1317,11 @@ int Tree::scaleInternalAges(double m){
     return numScaled;
 }
 
-int Tree::scaleSubtreeAges(Node* subtreeRoot, double m){
+int Tree::scaleSubtreeAges(Node* subtreeCrown, double m){
     int numScaled = 0;
-    subtreeRoot->setTime(subtreeRoot->getTime() * m);
+    subtreeCrown->setTime(subtreeCrown->getTime() * m);
     numScaled++;
-    for(Node* d : getAllDescendants(subtreeRoot))
+    for(Node* d : getAllDescendants(subtreeCrown))
         if(d->getIsTip() == false){
             d->setTime(d->getTime() * m);
             numScaled++;
@@ -1338,7 +1334,7 @@ double Tree::updateNodeAge(void){
 
     std::vector<Node*> candidates;
     for(Node* n : downPassSequence)
-        if(n != root && n->getIsTip() == false && isFakeSplit(n) == false)
+        if(n != crown && n->getIsTip() == false && isFakeSplit(n) == false)
             candidates.push_back(n);
     if(candidates.size() == 0)
         return 0.0;
@@ -1359,25 +1355,25 @@ double Tree::updateNodeAge(void){
     return 0.0;
 }
 
-double Tree::updateRootAge(double scaleLambda){
+double Tree::updateCrownAge(double scaleLambda){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
 
     double maxChildAge = 0.0;
-    for(Node* c : root->getNeighbors())
+    for(Node* c : crown->getNeighbors())
         if(c->getTime() > maxChildAge)
             maxChildAge = c->getTime();
 
-    std::map<Node*,double>::iterator it = ageFloors.find(root);
+    std::map<Node*,double>::iterator it = ageFloors.find(crown);
     if(it != ageFloors.end() && it->second > maxChildAge)
         maxChildAge = it->second;
 
     double m = std::exp( scaleLambda * (rng.uniformRv() - 0.5) );
-    double newRootAge = root->getTime() * m;
+    double newCrownAge = crown->getTime() * m;
     lastUpdateWasScale = true;
-    if(newRootAge <= maxChildAge)
+    if(newCrownAge <= maxChildAge)
         return -INFINITY;
 
-    root->setTime(newRootAge);
+    crown->setTime(newCrownAge);
 
     return std::log(m);
 }

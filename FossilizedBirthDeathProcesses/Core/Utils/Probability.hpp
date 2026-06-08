@@ -22,7 +22,7 @@ thread_local static double extraNormalRv = 0.0;
 
 namespace  Probability {
 
-    enum class PriorFamily { IMPROPER, TRUNCATED_NORMAL, EXPONENTIAL, GAMMA, LOGNORMAL, UNIFORM };
+    enum class PriorFamily { IMPROPER, TRUNCATED_NORMAL, EXPONENTIAL, GAMMA, LOGNORMAL, UNIFORM, FIXED };
 
     struct PriorSpec {
         bool        set    = false;

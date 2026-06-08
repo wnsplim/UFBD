@@ -6,7 +6,7 @@
 #include "Probability.hpp"
 
 enum class Conditioning { CROWN, ORIGIN };
-enum class Model { FBD, HEA14, UFBD };
+enum class Model { BD, FBD, HEA14, UFBD };
 
 class UserSettings {
 
@@ -45,7 +45,6 @@ class UserSettings {
         int                         getNStates(void) { checkSettings(); return nStates; }
         const double*               getRgeneGamma(void) { checkSettings(); return rgeneGamma; }
         const double*               getSigma2Gamma(void) { checkSettings(); return sigma2Gamma; }
-        double                      getFixAge(void) { checkSettings(); return fixAge; }
         void                        print(void);
         void                        printHelp(void);
 
@@ -85,7 +84,6 @@ class UserSettings {
         int                         nStates;
         double                      rgeneGamma[3];
         double                      sigma2Gamma[3];
-        double                      fixAge;
         bool                        settingsInitialized;
 };
 
