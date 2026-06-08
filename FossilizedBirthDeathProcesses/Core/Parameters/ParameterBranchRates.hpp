@@ -26,6 +26,10 @@ class ParameterBranchRates : public Parameter {
         void                        updateForAcceptance(void);
         void                        updateForRejection(void);
         double                      constantDistanceMove(void);
+        int                         getNumBranchNodes(void) { return (int)branchNodes.size(); }
+        void                        scaleAll(double sf);
+        void                        commitAll(void);
+        void                        restoreAll(void);
 
     private:
         double                      scaleLocusRate(int p);

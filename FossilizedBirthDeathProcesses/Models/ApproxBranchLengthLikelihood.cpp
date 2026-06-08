@@ -37,12 +37,10 @@ ApproxBranchLengthLikelihood::ApproxBranchLengthLikelihood(const std::string& he
     if(semi != std::string::npos)
         newick = newick.substr(0, semi + 1);
 
-    Tree* rootedMl = new Tree(newick);
-    identifyCrownBranch(rootedMl);
-    delete rootedMl;
+    buildBranchOrder(newick);
 }
 
-std::set<std::string> ApproxBranchLengthLikelihood::molecularDescendants(Node* n, Tree* tree){
+std::set<std::string> ApproxBranchLengthLikelihood::backboneTipsBelow(Node* n, Tree* tree){
     std::set<std::string> names;
     if(n->getIsTip()){
         if(rogueTaxa.find(n->getName()) == rogueTaxa.end())
@@ -131,13 +129,7 @@ void ApproxBranchLengthLikelihood::readHessianFile(const std::string& fn){
         Msg::error("ApproxBranchLengthLikelihood: invalid ns in hessian file");
     nb = 2 * ns - 3;
 
-    Tree* molTree = new Tree(newick);
-    backboneTaxa.clear();
-    for(Node* n : molTree->getDownPassSequence())
-        if(n->getIsTip())
-            backboneTaxa.insert(n->getName());
-    buildBipartitions(molTree);
-    delete molTree;
+    hessianNewick = newick;
 
     blMle.clear();
     gradient.clear();
@@ -216,32 +208,120 @@ void ApproxBranchLengthLikelihood::applyArcsinTransform(int p){
     }
 }
 
-void ApproxBranchLengthLikelihood::buildBipartitions(Tree* molTree){
-    std::vector<std::set<std::string>> entries;
-    for(Node* n : molTree->getDownPassSequence()){
-        if(n == molTree->getCrown()) continue;
-        std::set<std::string> desc;
-        for(Node* d : molTree->getAllDescendants(n))
-            if(d->getIsTip()) desc.insert(d->getName());
-        if(n->getIsTip()) desc.insert(n->getName());
-        entries.push_back(canonicalize(desc));
+void ApproxBranchLengthLikelihood::newickCanonBiparts(const std::string& nwk, std::set<std::set<std::string>>& out){
+    struct PNode { std::vector<int> kids; int parent; std::string name; std::set<std::string> tips; };
+    std::vector<PNode> nd;
+    auto newNode = [&](int par) -> int { PNode p; p.parent = par; nd.push_back(p); return (int)nd.size() - 1; };
+    int root = newNode(-1);
+    int cur = root;
+    size_t i = 0;
+    while(i < nwk.size()){
+        char c = nwk[i];
+        if(c == '('){ int ch = newNode(cur); nd[cur].kids.push_back(ch); cur = ch; i++; }
+        else if(c == ','){ int sib = newNode(nd[cur].parent); nd[nd[cur].parent].kids.push_back(sib); cur = sib; i++; }
+        else if(c == ')'){ cur = nd[cur].parent; i++; }
+        else if(c == ':'){ i++; while(i < nwk.size() && nwk[i] != '(' && nwk[i] != ')' && nwk[i] != ',' && nwk[i] != ';') i++; }
+        else if(c == ';'){ break; }
+        else { size_t j = i; while(j < nwk.size() && nwk[j] != '(' && nwk[j] != ')' && nwk[j] != ',' && nwk[j] != ':' && nwk[j] != ';') j++; nd[cur].name = nwk.substr(i, j - i); i = j; }
     }
-    if((int)entries.size() != nb)
-        Msg::error("ApproxBranchLengthLikelihood: hessian tree has " + std::to_string(entries.size()) + " branches, expected " + std::to_string(nb));
-    bipartitions = entries;
+    for(int k = (int)nd.size() - 1; k >= 0; k--){
+        if(nd[k].kids.empty()) nd[k].tips.insert(nd[k].name);
+        else for(int ch : nd[k].kids) nd[k].tips.insert(nd[ch].tips.begin(), nd[ch].tips.end());
+    }
+    for(int k = 0; k < (int)nd.size(); k++)
+        if(nd[k].parent != -1)
+            out.insert(canonicalize(nd[k].tips));
 }
 
-void ApproxBranchLengthLikelihood::identifyCrownBranch(Tree* rootedMlTree){
-    Node* crown = rootedMlTree->getCrown();
-    Node* child0 = nullptr;
-    for(Node* c : crown->getNeighbors())
-        if(c != crown->getAncestor()){ child0 = c; break; }
-    if(child0 == nullptr)
-        Msg::error("ApproxBranchLengthLikelihood: ML crown has no children");
-    std::set<std::string> canon = canonicalize(molecularDescendants(child0, rootedMlTree));
-    for(int i = 0; i < nb; i++)
-        if(bipartitions[i] == canon){ crownBranchIdx = i; return; }
-    Msg::error("ApproxBranchLengthLikelihood: cannot identify crown branch; hessian topology must match inference tree");
+void ApproxBranchLengthLikelihood::buildBranchOrder(const std::string& backboneNewick){
+    struct PNode { std::vector<int> kids; int parent; std::string name; std::set<std::string> tips; int ibranch; bool dead; };
+    std::vector<PNode> nd;
+    auto newNode = [&](int par) -> int { PNode p; p.parent = par; p.ibranch = -1; p.dead = false; nd.push_back(p); return (int)nd.size() - 1; };
+    int root = newNode(-1);
+    int cur = root;
+    size_t i = 0;
+    while(i < backboneNewick.size()){
+        char c = backboneNewick[i];
+        if(c == '('){ int ch = newNode(cur); nd[cur].kids.push_back(ch); cur = ch; i++; }
+        else if(c == ','){ int sib = newNode(nd[cur].parent); nd[nd[cur].parent].kids.push_back(sib); cur = sib; i++; }
+        else if(c == ')'){ cur = nd[cur].parent; i++; }
+        else if(c == ':'){ i++; while(i < backboneNewick.size() && backboneNewick[i] != '(' && backboneNewick[i] != ')' && backboneNewick[i] != ',' && backboneNewick[i] != ';') i++; }
+        else if(c == ';'){ break; }
+        else { size_t j = i; while(j < backboneNewick.size() && backboneNewick[j] != '(' && backboneNewick[j] != ')' && backboneNewick[j] != ',' && backboneNewick[j] != ':' && backboneNewick[j] != ';') j++; nd[cur].name = backboneNewick.substr(i, j - i); i = j; }
+    }
+
+    for(int k = 0; k < (int)nd.size(); k++)
+        if(nd[k].kids.empty() && rogueTaxa.find(nd[k].name) != rogueTaxa.end())
+            nd[k].dead = true;
+    bool changed = true;
+    while(changed){
+        changed = false;
+        for(int k = 0; k < (int)nd.size(); k++){
+            if(nd[k].dead) continue;
+            std::vector<int> live;
+            for(int ch : nd[k].kids)
+                if(nd[ch].dead == false) live.push_back(ch);
+            if(live.size() != nd[k].kids.size()){ nd[k].kids = live; changed = true; }
+            if(nd[k].kids.empty() && nd[k].name.empty()){ nd[k].dead = true; changed = true; }
+            else if(nd[k].kids.size() == 1 && k != root){
+                int only = nd[k].kids[0];
+                int par = nd[k].parent;
+                nd[only].parent = par;
+                for(int& s : nd[par].kids) if(s == k) s = only;
+                nd[k].kids.clear();
+                nd[k].dead = true;
+                changed = true;
+            }
+        }
+    }
+    while(nd[root].kids.size() == 1){ int only = nd[root].kids[0]; nd[only].parent = -1; nd[root].dead = true; root = only; }
+
+    backboneTaxa.clear();
+    for(int k = (int)nd.size() - 1; k >= 0; k--){
+        if(nd[k].dead) continue;
+        if(nd[k].kids.empty()){ nd[k].tips.insert(nd[k].name); backboneTaxa.insert(nd[k].name); }
+        else for(int ch : nd[k].kids) nd[k].tips.insert(nd[ch].tips.begin(), nd[ch].tips.end());
+    }
+
+    if((int)nd[root].kids.size() != 2)
+        Msg::error("ApproxBranchLengthLikelihood: backbone tree must have a binary root to order branches");
+
+    int counter = 0;
+    std::vector<int> st;
+    for(int k = (int)nd[root].kids.size() - 1; k >= 0; k--) st.push_back(nd[root].kids[k]);
+    while(st.empty() == false){
+        int n = st.back(); st.pop_back();
+        nd[n].ibranch = counter++;
+        for(int k = (int)nd[n].kids.size() - 1; k >= 0; k--) st.push_back(nd[n].kids[k]);
+    }
+
+    int son1 = nd[root].kids[0];
+    int son2 = nd[root].kids[1];
+    if(nd[son1].kids.empty()){
+        nd[son1].ibranch = nb - 1;
+        for(int k = 0; k < (int)nd.size(); k++)
+            if(k != root && k != son1 && k != son2 && nd[k].ibranch >= 0) nd[k].ibranch -= 2;
+    }else{
+        nd[son1].ibranch = nd[son2].ibranch - 1;
+        for(int k = 0; k < (int)nd.size(); k++)
+            if(k != root && k != son1 && k != son2 && nd[k].ibranch >= 0) nd[k].ibranch -= 1;
+    }
+    nd[son2].ibranch = -1;
+    nd[root].ibranch = -1;
+
+    bipartitions.assign(nb, std::set<std::string>());
+    for(int k = 0; k < (int)nd.size(); k++){
+        int b = nd[k].ibranch;
+        if(b < 0) continue;
+        bipartitions[b] = canonicalize(nd[k].tips);
+    }
+    crownBranchIdx = nd[son1].ibranch;
+
+    std::set<std::set<std::string>> hessBip;
+    newickCanonBiparts(hessianNewick, hessBip);
+    for(int b = 0; b < nb; b++)
+        if(hessBip.find(bipartitions[b]) == hessBip.end())
+            Msg::error("ApproxBranchLengthLikelihood: backbone topology does not match the Hessian tree");
 }
 
 Node* ApproxBranchLengthLikelihood::findNodeByBipartition(const std::set<std::string>& bp, Tree* tree){
@@ -249,7 +329,7 @@ Node* ApproxBranchLengthLikelihood::findNodeByBipartition(const std::set<std::st
         return tree->getTaxonNode(*bp.begin());
     for(Node* n : tree->getDownPassSequence()){
         if(n == tree->getCrown() || n->getIsTip()) continue;
-        if(canonicalize(molecularDescendants(n, tree)) == bp)
+        if(canonicalize(backboneTipsBelow(n, tree)) == bp)
             return n;
     }
     return nullptr;

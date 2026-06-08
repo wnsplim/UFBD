@@ -36,8 +36,16 @@ double RelaxedClockTreeModel::lnPriorProbability(void){
 double RelaxedClockTreeModel::update(void){
     RandomVariable& r = RandomVariable::randomVariableInstance();
     double u = r.uniformRv();
-    if(u < 0.4){ lastMoveType = 0; return clock->update(); }
-    if(u < 0.55){ lastMoveType = 1; return clock->constantDistanceMove(); }
+    if(u < 0.25){ lastMoveType = 0; return clock->update(); }
+    if(u < 0.85){ lastMoveType = 1; return clock->constantDistanceMove(); }
+    if(u < 0.95){
+        lastMoveType = 3;
+        double cc = std::exp(0.02 * (r.uniformRv() - 0.5));
+        int kAge = fbd->getTree()->scaleInternalAges(cc);
+        clock->scaleAll(1.0 / cc);
+        int nRate = clock->getNumLoci() * (1 + clock->getNumBranchNodes());
+        return ((double)kAge - (double)nRate) * std::log(cc);
+    }
     lastMoveType = 2; return fbd->update();
 }
 
@@ -46,6 +54,9 @@ void RelaxedClockTreeModel::updateForAcceptance(void){
         clock->updateForAcceptance();
     else if(lastMoveType == 1){
         clock->updateForAcceptance();
+        fbd->getParameterTree()->updateForAcceptance();
+    }else if(lastMoveType == 3){
+        clock->commitAll();
         fbd->getParameterTree()->updateForAcceptance();
     }else
         fbd->updateForAcceptance();
@@ -56,6 +67,9 @@ void RelaxedClockTreeModel::updateForRejection(void){
         clock->updateForRejection();
     else if(lastMoveType == 1){
         clock->updateForRejection();
+        fbd->getParameterTree()->updateForRejection();
+    }else if(lastMoveType == 3){
+        clock->restoreAll();
         fbd->getParameterTree()->updateForRejection();
     }else
         fbd->updateForRejection();

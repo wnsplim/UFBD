@@ -379,6 +379,30 @@ void ParameterBranchRates::updateForRejection(void){
         rate[0][lastLocus][lastNode] = rate[1][lastLocus][lastNode];
 }
 
+void ParameterBranchRates::scaleAll(double sf){
+    for(int p = 0; p < numLoci; p++){
+        mu[0][p] *= sf;
+        for(int b : branchNodes)
+            rate[0][p][b] *= sf;
+    }
+}
+
+void ParameterBranchRates::commitAll(void){
+    for(int p = 0; p < numLoci; p++){
+        mu[1][p] = mu[0][p];
+        for(int b : branchNodes)
+            rate[1][p][b] = rate[0][p][b];
+    }
+}
+
+void ParameterBranchRates::restoreAll(void){
+    for(int p = 0; p < numLoci; p++){
+        mu[0][p] = mu[1][p];
+        for(int b : branchNodes)
+            rate[0][p][b] = rate[1][p][b];
+    }
+}
+
 double ParameterBranchRates::constantDistanceMove(void){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     std::vector<Node*> internals;
