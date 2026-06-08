@@ -303,17 +303,21 @@ double ParameterBranchRates::update(void){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastLocus = (int)(rng.uniformRv() * numLoci);
     double u = rng.uniformRv();
-    double branchW = (clockModel == ClockModel::CIR) ? 0.7 : 0.8;
+    double branchW = (clockModel == ClockModel::CIR) ? 0.55 : 0.65;
     if(u < branchW){
         lastMove = 2;
         lastNode = branchNodes[(int)(rng.uniformRv() * branchNodes.size())];
         return scaleBranchRate(lastLocus, lastNode);
     }
-    if(u < branchW + 0.1){
+    if(u < branchW + 0.15){
+        lastMove = 5;
+        return globalRateBranchRatesScale(lastLocus);
+    }
+    if(u < branchW + 0.25){
         lastMove = 0;
         return scaleLocusRate(lastLocus);
     }
-    if(u < branchW + 0.2){
+    if(u < branchW + 0.35){
         lastMove = 1;
         return scaleLocusSigma2(lastLocus);
     }
@@ -326,6 +330,12 @@ void ParameterBranchRates::updateForAcceptance(void){
         for(int k = 0; k < (int)cdNodes.size(); k++)
             for(int p = 0; p < numLoci; p++)
                 rate[1][p][cdNodes[k]] = rate[0][p][cdNodes[k]];
+        return;
+    }
+    if(lastMove == 5){
+        mu[1][lastLocus] = mu[0][lastLocus];
+        for(int b : branchNodes)
+            rate[1][lastLocus][b] = rate[0][lastLocus][b];
         return;
     }
     acc[lastMove]++;
@@ -347,6 +357,12 @@ void ParameterBranchRates::updateForRejection(void){
         for(int k = 0; k < (int)cdNodes.size(); k++)
             for(int p = 0; p < numLoci; p++)
                 rate[0][p][cdNodes[k]] = rate[1][p][cdNodes[k]];
+        return;
+    }
+    if(lastMove == 5){
+        mu[0][lastLocus] = mu[1][lastLocus];
+        for(int b : branchNodes)
+            rate[0][lastLocus][b] = rate[1][lastLocus][b];
         return;
     }
     rej[lastMove]++;
