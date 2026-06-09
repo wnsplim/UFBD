@@ -1,4 +1,5 @@
 #include <cmath>
+#include <cstdlib>
 
 #include "Node.hpp"
 #include "ParameterBranchRates.hpp"
@@ -14,6 +15,11 @@ ParameterBranchRates::ParameterBranchRates(double prob, PhylogeneticModel* m, Tr
     lastMove = -1;
     lastLocus = -1;
     lastNode = -1;
+    cdStep = std::getenv("CD_STEP") ? std::atof(std::getenv("CD_STEP")) : 1.0;
+    cdAcc = 0;
+    cdAtt = 0;
+    cdAccW = 0;
+    cdAttW = 0;
     thetaParam[0] = 2.0;
     thetaParam[1] = 2.0;
     thetaParam[2] = 1.0;
@@ -43,6 +49,8 @@ ParameterBranchRates::ParameterBranchRates(double prob, PhylogeneticModel* m, Tr
     for(int p = 0; p < numLoci; p++){
         double muDraw = Probability::Gamma::rv(&rng, rgeneParam[0], rgeneParam[1]);
         double s2Draw = Probability::Gamma::rv(&rng, sigma2Param[0], sigma2Param[1]);
+        if(std::getenv("FIX_S2")) s2Draw = std::atof(std::getenv("FIX_S2"));
+        else if(std::getenv("INIT_S2")) s2Draw = std::atof(std::getenv("INIT_S2"));
         double thDraw = Probability::Gamma::rv(&rng, thetaParam[0], thetaParam[1]);
         mu[0][p] = mu[1][p] = muDraw;
         sigma2[0][p] = sigma2[1][p] = s2Draw;
@@ -267,6 +275,7 @@ double ParameterBranchRates::scaleLocusRate(int p){
 }
 
 double ParameterBranchRates::scaleLocusSigma2(int p){
+    if(std::getenv("FIX_S2")) return 0.0;
     double c = bactrianMultiplier(1);
     sigma2[0][p] *= c;
     return std::log(c);
@@ -327,6 +336,8 @@ double ParameterBranchRates::update(void){
 
 void ParameterBranchRates::updateForAcceptance(void){
     if(lastMove == 4){
+        cdAcc++;
+        cdAccW++;
         for(int k = 0; k < (int)cdNodes.size(); k++)
             for(int p = 0; p < numLoci; p++)
                 rate[1][p][cdNodes[k]] = rate[0][p][cdNodes[k]];
@@ -421,7 +432,15 @@ double ParameterBranchRates::constantDistanceMove(void){
     for(Node* c : children)
         if(c->getTime() > maxChild)
             maxChild = c->getTime();
-    double newAge = maxChild + rng.uniformRv() * (parentAge - maxChild);
+    double yHi = std::log(parentAge);
+    double yLo = (maxChild > 0.0) ? std::log(maxChild) : (yHi - 30.0);
+    double y = std::log(myAge);
+    double ynew = y + cdStep * (rng.uniformRv() - 0.5);
+    while(ynew < yLo || ynew > yHi){
+        if(ynew < yLo) ynew = 2.0 * yLo - ynew;
+        if(ynew > yHi) ynew = 2.0 * yHi - ynew;
+    }
+    double newAge = std::exp(ynew);
     node->setTime(newAge);
     cdNodes.clear();
     cdNodes.push_back(node->getOffset());
@@ -439,8 +458,20 @@ double ParameterBranchRates::constantDistanceMove(void){
             rate[0][p][c->getOffset()] *= prevC / newC;
     }
     lastMove = 4;
+    cdAtt++;
+    cdAttW++;
+    if(cdAttW >= 200){
+        double ar = (double)cdAccW / cdAttW;
+        cdStep *= std::exp((ar - 0.3));
+        if(cdStep < 1e-3) cdStep = 1e-3;
+        if(cdStep > 10.0) cdStep = 10.0;
+        cdAccW = 0;
+        cdAttW = 0;
+    }
+    if(std::getenv("CD_AR") && cdAtt % 50000 == 0)
+        std::fprintf(stderr, "CD accept-rate=%.3f cdStep=%.4f (cdAtt=%ld)\n", (double)cdAcc / cdAtt, cdStep, cdAtt);
     tree->setLastUpdateWasScale(false);
-    return numLoci * (lnNum - lnDen);
+    return numLoci * (lnNum - lnDen) + (ynew - y);
 }
 
 void ParameterBranchRates::print(void){

@@ -180,22 +180,21 @@ double FBDTreeModel::lnD(double t){
 
 double FBDTreeModel::calculateBDProbability(void){
     Tree* tree = parameterTree->getTree();
+    Node* crown = tree->getCrown();
+    double crownAge = crown->getTime();
     double lam = lambda[0]->getValue();
     double m = mu[0]->getValue();
     double r = rho;
-    double crownAge = tree->getCrown()->getTime();
     bool useOrigin = (UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN);
 
     double a = lam - m;
     double c1 = std::abs(a);
-
+    double c2 = (-lam + m + 2.0 * lam * r) / c1;
     auto bdLnD = [&](double t) -> double {
         if(t <= 0.0)
             return 0.0;
-        double c2 = (-lam + m + 2.0 * lam * r) / c1;
-        double e = std::exp(-c1 * t);
-        double bracket = std::pow(1.0 + c2, 2) + e * 2.0 * (1.0 - c2 * c2) + e * e * std::pow(1.0 - c2, 2);
-        return std::log(4.0) - (c1 * t + std::log(bracket));
+        double q = std::exp(c1 * t) * std::pow(1.0 + c2, 2) + 2.0 * (1.0 - c2 * c2) + std::exp(-c1 * t) * std::pow(1.0 - c2, 2);
+        return std::log(4.0) - std::log(q);
     };
     auto bdLnSurvival = [&](double t) -> double {
         double B = lam * (1.0 - r) - m;
@@ -211,13 +210,18 @@ double FBDTreeModel::calculateBDProbability(void){
         double x0 = originAge->getValue();
         if(x0 < crownAge)
             return -INFINITY;
-        lnP = -(std::log(lam) + bdLnSurvival(x0)) + std::log(4.0 * lam * r) + bdLnD(x0) - std::log(4.0);
+        lnP = -bdLnSurvival(x0) + bdLnD(x0) - bdLnD(crownAge);
     }else{
-        lnP = -2.0 * (std::log(lam) + bdLnSurvival(crownAge)) + std::log(4.0 * lam * r) + bdLnD(crownAge) - std::log(4.0);
+        lnP = -2.0 * bdLnSurvival(crownAge);
     }
-    for(Node* n : tree->getDownPassSequence())
-        if(n->getIsTip() == false)
-            lnP += std::log(lam * r) + bdLnD(n->getTime());
+    for(Node* n : tree->getDownPassSequence()){
+        if(n != crown)
+            lnP += bdLnD(n->getAncestor()->getTime()) - bdLnD(n->getTime());
+        if(n->getIsTip())
+            lnP += std::log(r);
+        else if(useOrigin || n != crown)
+            lnP += std::log(2.0 * lam);
+    }
     return lnP;
 }
 

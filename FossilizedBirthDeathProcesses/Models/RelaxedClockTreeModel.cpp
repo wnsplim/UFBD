@@ -1,5 +1,8 @@
 #include "RelaxedClockTreeModel.hpp"
 
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include "ApproxBranchLengthLikelihood.hpp"
 #include "FBDTreeModel.hpp"
 #include "Node.hpp"
@@ -16,6 +19,14 @@ RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades
             t->scaleInternalAges(1.0 / cur);
     }
     fbd = new FBDTreeModel(t, clades, fossils, seed);
+    if(const char* ap = std::getenv("INIT_AGE_POW")){
+        double pw = std::atof(ap);
+        Tree* tt = fbd->getTree();
+        double ca = tt->getCrown()->getTime();
+        for(Node* n : tt->getDownPassSequence())
+            if(n != tt->getCrown() && n->getIsTip() == false)
+                n->setTime(ca * std::pow(n->getTime() / ca, pw));
+    }
     std::vector<std::string> rogue;
     for(Fossil& f : fossils)
         rogue.push_back(f.getTaxon());
@@ -30,7 +41,17 @@ double RelaxedClockTreeModel::lnLikelihood(void){
 }
 
 double RelaxedClockTreeModel::lnPriorProbability(void){
-    return fbd->lnLikelihood() + fbd->lnPriorProbability() + clock->lnProbability();
+    double bd = fbd->lnLikelihood();
+    double fp = fbd->lnPriorProbability();
+    double cl = clock->lnProbability();
+    if(std::getenv("DUMP_COMP")){
+        static long cnt = 0;
+        if((cnt++ % 100000) == 0)
+            std::fprintf(stderr, "COMP n=%ld approxBL=%.2f bdTime=%.2f fbdPrior=%.2f gbm=%.2f s2prior=%.2f muprior=%.2f s2=%.3f\n",
+                         cnt, lik->computeLnL(fbd->getTree(), clock->getAbsoluteRates()), bd, fp,
+                         clock->dbgGbm(), clock->dbgSigma2Prior(), clock->dbgMuPrior(), clock->getLocusSigma2(0));
+    }
+    return bd + fp + cl;
 }
 
 double RelaxedClockTreeModel::update(void){

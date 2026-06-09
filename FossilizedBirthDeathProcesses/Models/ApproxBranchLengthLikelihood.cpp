@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <limits>
@@ -206,10 +207,16 @@ void ApproxBranchLengthLikelihood::applyArcsinTransform(int p){
         double b = blMle[p][i];
         blMle[p][i] = 2.0 * std::asin(std::sqrt(cJc - cJc * std::exp(-b / cJc)));
     }
+    if(p == 0 && std::getenv("DUMPH")){
+        double hdiagsum = 0.0, gsum = 0.0;
+        for(int i = 0; i < nb; i++){ hdiagsum += hessian[p][i*nb+i]; gsum += gradient[p][i]; }
+        std::fprintf(stderr, "OURSH nb=%d blMle[0]=%.6f blMle[1]=%.6f grad[0]=%.6f grad[1]=%.6f gsum=%.4f H00=%.6f H01=%.6f H11=%.6f Hdiagsum=%.2f\n",
+                     nb, blMle[p][0], blMle[p][1], gradient[p][0], gradient[p][1], gsum, hessian[p][0], hessian[p][1], hessian[p][nb+1], hdiagsum);
+    }
 }
 
 void ApproxBranchLengthLikelihood::newickCanonBiparts(const std::string& nwk, std::set<std::set<std::string>>& out){
-    struct PNode { std::vector<int> kids; int parent; std::string name; std::set<std::string> tips; };
+    struct PNode { std::vector<int> children; int parent; std::string name; std::set<std::string> tips; };
     std::vector<PNode> nd;
     auto newNode = [&](int par) -> int { PNode p; p.parent = par; nd.push_back(p); return (int)nd.size() - 1; };
     int root = newNode(-1);
@@ -217,16 +224,16 @@ void ApproxBranchLengthLikelihood::newickCanonBiparts(const std::string& nwk, st
     size_t i = 0;
     while(i < nwk.size()){
         char c = nwk[i];
-        if(c == '('){ int ch = newNode(cur); nd[cur].kids.push_back(ch); cur = ch; i++; }
-        else if(c == ','){ int sib = newNode(nd[cur].parent); nd[nd[cur].parent].kids.push_back(sib); cur = sib; i++; }
+        if(c == '('){ int ch = newNode(cur); nd[cur].children.push_back(ch); cur = ch; i++; }
+        else if(c == ','){ int sib = newNode(nd[cur].parent); nd[nd[cur].parent].children.push_back(sib); cur = sib; i++; }
         else if(c == ')'){ cur = nd[cur].parent; i++; }
         else if(c == ':'){ i++; while(i < nwk.size() && nwk[i] != '(' && nwk[i] != ')' && nwk[i] != ',' && nwk[i] != ';') i++; }
         else if(c == ';'){ break; }
         else { size_t j = i; while(j < nwk.size() && nwk[j] != '(' && nwk[j] != ')' && nwk[j] != ',' && nwk[j] != ':' && nwk[j] != ';') j++; nd[cur].name = nwk.substr(i, j - i); i = j; }
     }
     for(int k = (int)nd.size() - 1; k >= 0; k--){
-        if(nd[k].kids.empty()) nd[k].tips.insert(nd[k].name);
-        else for(int ch : nd[k].kids) nd[k].tips.insert(nd[ch].tips.begin(), nd[ch].tips.end());
+        if(nd[k].children.empty()) nd[k].tips.insert(nd[k].name);
+        else for(int ch : nd[k].children) nd[k].tips.insert(nd[ch].tips.begin(), nd[ch].tips.end());
     }
     for(int k = 0; k < (int)nd.size(); k++)
         if(nd[k].parent != -1)
@@ -234,7 +241,7 @@ void ApproxBranchLengthLikelihood::newickCanonBiparts(const std::string& nwk, st
 }
 
 void ApproxBranchLengthLikelihood::buildBranchOrder(const std::string& backboneNewick){
-    struct PNode { std::vector<int> kids; int parent; std::string name; std::set<std::string> tips; int ibranch; bool dead; };
+    struct PNode { std::vector<int> children; int parent; std::string name; std::set<std::string> tips; int ibranch; bool dead; };
     std::vector<PNode> nd;
     auto newNode = [&](int par) -> int { PNode p; p.parent = par; p.ibranch = -1; p.dead = false; nd.push_back(p); return (int)nd.size() - 1; };
     int root = newNode(-1);
@@ -242,8 +249,8 @@ void ApproxBranchLengthLikelihood::buildBranchOrder(const std::string& backboneN
     size_t i = 0;
     while(i < backboneNewick.size()){
         char c = backboneNewick[i];
-        if(c == '('){ int ch = newNode(cur); nd[cur].kids.push_back(ch); cur = ch; i++; }
-        else if(c == ','){ int sib = newNode(nd[cur].parent); nd[nd[cur].parent].kids.push_back(sib); cur = sib; i++; }
+        if(c == '('){ int ch = newNode(cur); nd[cur].children.push_back(ch); cur = ch; i++; }
+        else if(c == ','){ int sib = newNode(nd[cur].parent); nd[nd[cur].parent].children.push_back(sib); cur = sib; i++; }
         else if(c == ')'){ cur = nd[cur].parent; i++; }
         else if(c == ':'){ i++; while(i < backboneNewick.size() && backboneNewick[i] != '(' && backboneNewick[i] != ')' && backboneNewick[i] != ',' && backboneNewick[i] != ';') i++; }
         else if(c == ';'){ break; }
@@ -251,7 +258,7 @@ void ApproxBranchLengthLikelihood::buildBranchOrder(const std::string& backboneN
     }
 
     for(int k = 0; k < (int)nd.size(); k++)
-        if(nd[k].kids.empty() && rogueTaxa.find(nd[k].name) != rogueTaxa.end())
+        if(nd[k].children.empty() && rogueTaxa.find(nd[k].name) != rogueTaxa.end())
             nd[k].dead = true;
     bool changed = true;
     while(changed){
@@ -259,45 +266,45 @@ void ApproxBranchLengthLikelihood::buildBranchOrder(const std::string& backboneN
         for(int k = 0; k < (int)nd.size(); k++){
             if(nd[k].dead) continue;
             std::vector<int> live;
-            for(int ch : nd[k].kids)
+            for(int ch : nd[k].children)
                 if(nd[ch].dead == false) live.push_back(ch);
-            if(live.size() != nd[k].kids.size()){ nd[k].kids = live; changed = true; }
-            if(nd[k].kids.empty() && nd[k].name.empty()){ nd[k].dead = true; changed = true; }
-            else if(nd[k].kids.size() == 1 && k != root){
-                int only = nd[k].kids[0];
+            if(live.size() != nd[k].children.size()){ nd[k].children = live; changed = true; }
+            if(nd[k].children.empty() && nd[k].name.empty()){ nd[k].dead = true; changed = true; }
+            else if(nd[k].children.size() == 1 && k != root){
+                int only = nd[k].children[0];
                 int par = nd[k].parent;
                 nd[only].parent = par;
-                for(int& s : nd[par].kids) if(s == k) s = only;
-                nd[k].kids.clear();
+                for(int& s : nd[par].children) if(s == k) s = only;
+                nd[k].children.clear();
                 nd[k].dead = true;
                 changed = true;
             }
         }
     }
-    while(nd[root].kids.size() == 1){ int only = nd[root].kids[0]; nd[only].parent = -1; nd[root].dead = true; root = only; }
+    while(nd[root].children.size() == 1){ int only = nd[root].children[0]; nd[only].parent = -1; nd[root].dead = true; root = only; }
 
     backboneTaxa.clear();
     for(int k = (int)nd.size() - 1; k >= 0; k--){
         if(nd[k].dead) continue;
-        if(nd[k].kids.empty()){ nd[k].tips.insert(nd[k].name); backboneTaxa.insert(nd[k].name); }
-        else for(int ch : nd[k].kids) nd[k].tips.insert(nd[ch].tips.begin(), nd[ch].tips.end());
+        if(nd[k].children.empty()){ nd[k].tips.insert(nd[k].name); backboneTaxa.insert(nd[k].name); }
+        else for(int ch : nd[k].children) nd[k].tips.insert(nd[ch].tips.begin(), nd[ch].tips.end());
     }
 
-    if((int)nd[root].kids.size() != 2)
+    if((int)nd[root].children.size() != 2)
         Msg::error("ApproxBranchLengthLikelihood: backbone tree must have a binary root to order branches");
 
     int counter = 0;
     std::vector<int> st;
-    for(int k = (int)nd[root].kids.size() - 1; k >= 0; k--) st.push_back(nd[root].kids[k]);
+    for(int k = (int)nd[root].children.size() - 1; k >= 0; k--) st.push_back(nd[root].children[k]);
     while(st.empty() == false){
         int n = st.back(); st.pop_back();
         nd[n].ibranch = counter++;
-        for(int k = (int)nd[n].kids.size() - 1; k >= 0; k--) st.push_back(nd[n].kids[k]);
+        for(int k = (int)nd[n].children.size() - 1; k >= 0; k--) st.push_back(nd[n].children[k]);
     }
 
-    int son1 = nd[root].kids[0];
-    int son2 = nd[root].kids[1];
-    if(nd[son1].kids.empty()){
+    int son1 = nd[root].children[0];
+    int son2 = nd[root].children[1];
+    if(nd[son1].children.empty()){
         nd[son1].ibranch = nb - 1;
         for(int k = 0; k < (int)nd.size(); k++)
             if(k != root && k != son1 && k != son2 && nd[k].ibranch >= 0) nd[k].ibranch -= 2;

@@ -30,6 +30,9 @@ class ParameterBranchRates : public Parameter {
         void                        scaleAll(double sf);
         void                        commitAll(void);
         void                        restoreAll(void);
+        double                      dbgGbm(void) { return gbmLnP(); }
+        double                      dbgSigma2Prior(void) { return gammaDirichletLnP(sigma2[0], sigma2Param); }
+        double                      dbgMuPrior(void) { return gammaDirichletLnP(mu[0], rgeneParam); }
 
     private:
         double                      scaleLocusRate(int p);
@@ -66,6 +69,11 @@ class ParameterBranchRates : public Parameter {
         int                         lastMove;
         int                         lastLocus;
         int                         lastNode;
+        double                      cdStep;
+        long                        cdAcc;
+        long                        cdAtt;
+        long                        cdAccW;
+        long                        cdAttW;
         std::vector<int>            cdNodes;
 };
 
