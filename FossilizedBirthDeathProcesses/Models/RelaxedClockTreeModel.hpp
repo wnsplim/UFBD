@@ -29,7 +29,7 @@ class RelaxedClockTreeModel : public PhylogeneticModel {
 
     private:
         FBDTreeModel*               fbd;
-        ParameterBranchRates*       clock;
+        BranchRateModel*            clock;
         ApproxBranchLengthLikelihood* lik;
         int                         lastMoveType;
 };

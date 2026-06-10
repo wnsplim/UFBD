@@ -10,7 +10,22 @@ class Tree;
 
 enum class ClockModel { UCLN, WN, GBM, CIR };
 
-class ParameterBranchRates : public Parameter {
+class BranchRateModel : public Parameter {
+
+    public:
+                                    BranchRateModel(double prob, PhylogeneticModel* m, std::string n) : Parameter(prob, m, n) {}
+        virtual std::vector<std::vector<double>> getAbsoluteRates(void) = 0;
+        virtual int                 getNumLoci(void) = 0;
+        virtual double              getLocusRate(int p) = 0;
+        virtual double              getLocusSigma2(int p) = 0;
+        virtual int                 getNumBranchNodes(void) = 0;
+        virtual void                scaleAll(double sf) = 0;
+        virtual void                commitAll(void) = 0;
+        virtual void                restoreAll(void) = 0;
+        virtual double              constantDistanceMove(void) = 0;
+};
+
+class ParameterBranchRates : public BranchRateModel {
 
     public:
                                     ParameterBranchRates(void) = delete;

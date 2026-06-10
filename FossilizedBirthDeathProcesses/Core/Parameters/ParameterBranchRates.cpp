@@ -7,7 +7,7 @@
 #include "RandomVariable.hpp"
 #include "Tree.hpp"
 
-ParameterBranchRates::ParameterBranchRates(double prob, PhylogeneticModel* m, Tree* t, int L, ClockModel cm, const double* rg, const double* s2) : Parameter(prob, m, "branchRates"){
+ParameterBranchRates::ParameterBranchRates(double prob, PhylogeneticModel* m, Tree* t, int L, ClockModel cm, const double* rg, const double* s2) : BranchRateModel(prob, m, "branchRates"){
     tree = t;
     numLoci = L;
     clockModel = cm;
