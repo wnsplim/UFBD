@@ -28,7 +28,10 @@ RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades
     for(Fossil& f : fossils)
         rogue.push_back(f.getTaxon());
     lik = new ApproxBranchLengthLikelihood(hessianFile, mlTreeFile, rogue, 0, nStates);
-    clock = new ParameterBranchRates(1.0, this, fbd->getTree(), lik->getNumPartitions(), clockModel, rgeneParam, sigma2Param);
+    if(clockModel == ClockModel::CIR)
+        clock = new ParameterBranchRatesCIR(1.0, this, fbd->getTree(), lik->getNumPartitions(), rgeneParam, sigma2Param);
+    else
+        clock = new ParameterBranchRates(1.0, this, fbd->getTree(), lik->getNumPartitions(), clockModel, rgeneParam, sigma2Param);
     parameters.push_back(fbd->getParameterTree());
     lastMoveType = 2;
 }

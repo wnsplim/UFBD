@@ -13,10 +13,7 @@
 #include <limits>
 
 FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, unsigned int seed) :
-    PhylogeneticModel(),
- 
-    c1(0.0),
-    c2(0.0){
+    PhylogeneticModel(){
 
     lastWasJointScale = false;
     lastWasUpDown = false;
@@ -879,20 +876,6 @@ void FBDTreeModel::updateGammaCache(void){
         prevNodeAge[n->getOffset()] = n->getTime();
 }
 
-void FBDTreeModel::calculateC1(void){
-    c1 =    std::abs(
-                std::sqrt(
-                    std::pow(lambdaVal - muVal - psiVal, 2) +
-                    4*lambdaVal * psiVal
-                )
-            );
-}
-
-void FBDTreeModel::calculateC2(void){
-    c2 = (-lambdaVal + muVal + 2*lambdaVal * rhoVal + psiVal);
-    c2 /= c1;
-}
-
 int FBDTreeModel::findIndex(double t){
     int i = 0;
     for(size_t j = 1; j < intervalStart.size(); j++)
@@ -948,10 +931,6 @@ double FBDTreeModel::calculateQtAt(int i, double t){
     tmp += std::exp(-c1Vec[i] * tau) * std::pow(1-c2Vec[i], 2);
     tmp += std::exp(c1Vec[i] * tau) * std::pow(1+c2Vec[i], 2);
     return tmp;
-}
-
-double FBDTreeModel::calculateQt(double t){
-    return calculateQtAt(findIndex(t), t);
 }
 
 double FBDTreeModel::calculateLnQtAt(int i, double t){

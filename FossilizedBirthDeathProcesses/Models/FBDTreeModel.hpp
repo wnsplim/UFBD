@@ -50,12 +50,8 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      doSARJMCMC(void);
         double                      doUpDownScale(void);
         void                        updateGammaCache(void);
-        void                        calculateCs(void);
-        void                        calculateC1(void);
-        void                        calculateC2(void);
         void                        prepareIntervals(void);
         int                         findIndex(double t);
-        double                      calculateQt(double t);
         double                      calculateQtAt(int i, double t);
         double                      calculateLnQtAt(int i, double t);
         double                      calculatePo(double t);
@@ -79,8 +75,6 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<bool>           fossilIsCrown;
         std::vector<double>         fossilY;
         double                      rho;
-        double                      c1;
-        double                      c2;
         std::vector<double>         c1Vec;
         std::vector<double>         c2Vec;
         std::vector<double>         ePrev;
