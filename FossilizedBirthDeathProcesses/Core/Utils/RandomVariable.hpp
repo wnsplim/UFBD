@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <vector>
 
+#include "Msg.hpp"
+
 enum {
 
     N = 624,
@@ -26,9 +28,8 @@ class RandomVariable {
     public:
         static RandomVariable&  randomVariableInstance(void)
                                     {
-                                    thread_local RandomVariable fallbackRandomVariable;
                                     if(activeInstance == nullptr)
-                                        return fallbackRandomVariable;
+                                        Msg::error("randomVariableInstance: no active RNG is set");
                                     return *activeInstance;
                                     }
         static void             setActiveInstance(RandomVariable* r) { activeInstance = r; }

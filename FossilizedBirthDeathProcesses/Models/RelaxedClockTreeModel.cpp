@@ -14,6 +14,8 @@
 
 RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, const std::string& hessianFile, const std::string& mlTreeFile, int nStates, ClockModel clockModel, const double* rgeneParam, const double* sigma2Param, unsigned int seed){
     rng.setSeed(seed);
+    RandomVariable* prevRng = RandomVariable::getActiveInstance();
+    RandomVariable::setActiveInstance(&rng);
     if(UserSettings::userSettings().getModel() == Model::BD){
         UserSettings& us = UserSettings::userSettings();
         double cur = t->getCrown()->getTime();
@@ -34,6 +36,7 @@ RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades
         clock = new ParameterBranchRates(1.0, this, fbd->getTree(), lik->getNumPartitions(), clockModel, rgeneParam, sigma2Param);
     parameters.push_back(fbd->getParameterTree());
     lastMoveType = 2;
+    RandomVariable::setActiveInstance(prevRng);
 }
 
 double RelaxedClockTreeModel::lnLikelihood(void){

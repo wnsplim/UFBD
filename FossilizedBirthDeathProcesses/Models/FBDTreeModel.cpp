@@ -36,7 +36,6 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     }
     parameters.push_back(parameterTree);
     
-    //instantiate FBD model parameters
     intervalStart.push_back(0.0);
     for(double t : UserSettings::userSettings().getSkylineTimes())
         intervalStart.push_back(t);
@@ -104,7 +103,6 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
         for(ParameterDouble* p : psi)    p->setProposalProbability(15.0);
     }
 
-    //normalize proposal probabilities
     double sum = 0.0;
     for(Parameter* p : parameters)
         sum += p->getProposalProbability();
@@ -132,7 +130,6 @@ double FBDTreeModel::calculateFBDProbability(void){
     if(isFBD)
         return calculateResolvedFBD();
 
-    //FBD probability in log-landia
     bool useOrigin = (UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN);
     double fbdProb = 0.0;
 

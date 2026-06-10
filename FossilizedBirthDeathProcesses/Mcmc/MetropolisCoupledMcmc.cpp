@@ -19,7 +19,7 @@ MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int pf, int sf, s
     coldModelIdx(-1),
     numSwapsCold(0),
     deltaT(0.2),
-    threadPool(models.size()){
+    threadPool((size_t)UserSettings::userSettings().getNumThreads() < models.size() ? (size_t)UserSettings::userSettings().getNumThreads() : models.size()){
     swapRng.setSeed(masterSeed + numModels);
     currLnL.reserve(numModels); //needs to be reserve for pushback
     newLnL.resize(numModels);
@@ -69,6 +69,7 @@ void MetropolisCoupledMcmc::run(void) {
             futures.push_back(promise->get_future());
 
             threadPool.enqueue([this, i, promise]() {
+                RandomVariable::setActiveInstance(models[i]->getRng());
                 lnProposalRatio[i] = models[i]->update();
 
                 if(lnProposalRatio[i] == -INFINITY){
