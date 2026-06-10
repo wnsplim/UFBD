@@ -23,6 +23,19 @@ double Probability::priorLnPdf(PriorFamily family, double p1, double p2, double 
     return lnp;
 }
 
+double Probability::priorMean(PriorFamily family, double p1, double p2){
+    switch(family){
+        case PriorFamily::IMPROPER:         return 1.0;
+        case PriorFamily::TRUNCATED_NORMAL: return p1;
+        case PriorFamily::EXPONENTIAL:      return 1.0 / p1;
+        case PriorFamily::GAMMA:            return p1 / p2;
+        case PriorFamily::LOGNORMAL:        return std::exp(p1);
+        case PriorFamily::UNIFORM:          return 0.5 * (p1 + p2);
+        case PriorFamily::FIXED:            return p1;
+    }
+    return 1.0;
+}
+
 #pragma mark - Beta
 
 double Probability::Beta::rv(RandomVariable* rng, double a, double b) {

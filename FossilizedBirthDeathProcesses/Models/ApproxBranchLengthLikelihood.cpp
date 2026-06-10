@@ -207,12 +207,6 @@ void ApproxBranchLengthLikelihood::applyArcsinTransform(int p){
         double b = blMle[p][i];
         blMle[p][i] = 2.0 * std::asin(std::sqrt(cJc - cJc * std::exp(-b / cJc)));
     }
-    if(p == 0 && std::getenv("DUMPH")){
-        double hdiagsum = 0.0, gsum = 0.0;
-        for(int i = 0; i < nb; i++){ hdiagsum += hessian[p][i*nb+i]; gsum += gradient[p][i]; }
-        std::fprintf(stderr, "OURSH nb=%d blMle[0]=%.6f blMle[1]=%.6f grad[0]=%.6f grad[1]=%.6f gsum=%.4f H00=%.6f H01=%.6f H11=%.6f Hdiagsum=%.2f\n",
-                     nb, blMle[p][0], blMle[p][1], gradient[p][0], gradient[p][1], gsum, hessian[p][0], hessian[p][1], hessian[p][nb+1], hdiagsum);
-    }
 }
 
 void ApproxBranchLengthLikelihood::newickCanonBiparts(const std::string& nwk, std::set<std::set<std::string>>& out){

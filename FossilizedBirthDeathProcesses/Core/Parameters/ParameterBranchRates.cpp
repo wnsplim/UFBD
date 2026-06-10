@@ -15,9 +15,7 @@ ParameterBranchRates::ParameterBranchRates(double prob, PhylogeneticModel* m, Tr
     lastMove = -1;
     lastLocus = -1;
     lastNode = -1;
-    cdStep = std::getenv("CD_STEP") ? std::atof(std::getenv("CD_STEP")) : 1.0;
-    cdAcc = 0;
-    cdAtt = 0;
+    cdStep = 1.0;
     cdAccW = 0;
     cdAttW = 0;
     thetaParam[0] = 2.0;
@@ -49,8 +47,6 @@ ParameterBranchRates::ParameterBranchRates(double prob, PhylogeneticModel* m, Tr
     for(int p = 0; p < numLoci; p++){
         double muDraw = Probability::Gamma::rv(&rng, rgeneParam[0], rgeneParam[1]);
         double s2Draw = Probability::Gamma::rv(&rng, sigma2Param[0], sigma2Param[1]);
-        if(std::getenv("FIX_S2")) s2Draw = std::atof(std::getenv("FIX_S2"));
-        else if(std::getenv("INIT_S2")) s2Draw = std::atof(std::getenv("INIT_S2"));
         double thDraw = Probability::Gamma::rv(&rng, thetaParam[0], thetaParam[1]);
         mu[0][p] = mu[1][p] = muDraw;
         sigma2[0][p] = sigma2[1][p] = s2Draw;
@@ -275,7 +271,6 @@ double ParameterBranchRates::scaleLocusRate(int p){
 }
 
 double ParameterBranchRates::scaleLocusSigma2(int p){
-    if(std::getenv("FIX_S2")) return 0.0;
     double c = bactrianMultiplier(1);
     sigma2[0][p] *= c;
     return std::log(c);
@@ -336,7 +331,6 @@ double ParameterBranchRates::update(void){
 
 void ParameterBranchRates::updateForAcceptance(void){
     if(lastMove == 4){
-        cdAcc++;
         cdAccW++;
         for(int k = 0; k < (int)cdNodes.size(); k++)
             for(int p = 0; p < numLoci; p++)
@@ -458,7 +452,6 @@ double ParameterBranchRates::constantDistanceMove(void){
             rate[0][p][c->getOffset()] *= prevC / newC;
     }
     lastMove = 4;
-    cdAtt++;
     cdAttW++;
     if(cdAttW >= 200){
         double ar = (double)cdAccW / cdAttW;
@@ -468,8 +461,6 @@ double ParameterBranchRates::constantDistanceMove(void){
         cdAccW = 0;
         cdAttW = 0;
     }
-    if(std::getenv("CD_AR") && cdAtt % 50000 == 0)
-        std::fprintf(stderr, "CD accept-rate=%.3f cdStep=%.4f (cdAtt=%ld)\n", (double)cdAcc / cdAtt, cdStep, cdAtt);
     tree->setLastUpdateWasScale(false);
     return numLoci * (lnNum - lnDen) + (ynew - y);
 }
