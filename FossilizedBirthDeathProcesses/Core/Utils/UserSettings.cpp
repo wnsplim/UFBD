@@ -7,6 +7,7 @@
 #include <thread>
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 
 #include "Msg.hpp"
 #include "Probability.hpp"
@@ -47,6 +48,13 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
     nStates         = 4;
     rgeneGamma[0]   = 2.0;  rgeneGamma[1]  = 2000.0; rgeneGamma[2]  = 1.0;
     sigma2Gamma[0]  = 1.0;  sigma2Gamma[1] = 10.0;   sigma2Gamma[2] = 1.0;
+    lambdaMode      = RateMode::IID;
+    muMode          = RateMode::IID;
+    psiMode         = RateMode::IID;
+    hsmrfShifts     = std::log(2.0);
+    hsmrfShiftSize  = 2.0;
+    hsmrfAsis       = true;
+    hsmrfAo         = false;
 
     std::vector<std::string> arguments;
     for (int i = 0; i < argc; i++)
@@ -58,11 +66,13 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
     std::set<std::string> knownFlags = {
         "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt", "-help", "-h",
         "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times",
+        "-lambda-prior-mode", "-mu-prior-mode", "-psi-prior-mode", "-hsmrf-shifts", "-hsmrf-shift-size", "-hsmrf-asis", "-hsmrf-ao",
         "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma"
     };
     std::set<std::string> valueFlags = {
         "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt",
         "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times",
+        "-lambda-prior-mode", "-mu-prior-mode", "-psi-prior-mode", "-hsmrf-shifts", "-hsmrf-shift-size", "-hsmrf-asis", "-hsmrf-ao",
         "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma"
     };
 
@@ -144,6 +154,29 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
                 parsePriorInto(val, muPrior.family, muPrior.p1, muPrior.p2); muPrior.set = true;
             } else if (arg == "-psi-prior") {
                 parsePriorInto(val, psiPrior.family, psiPrior.p1, psiPrior.p2); psiPrior.set = true;
+            } else if (arg == "-lambda-prior-mode" || arg == "-mu-prior-mode" || arg == "-psi-prior-mode") {
+                std::string v = val;
+                for (char& ch : v) ch = std::tolower((unsigned char)ch);
+                RateMode rm = RateMode::IID;
+                if (v == "iid") rm = RateMode::IID;
+                else if (v == "smooth" || v == "hsmrf") rm = RateMode::SMOOTH;
+                else Msg::error("Flag \"" + arg + "\" expects iid or smooth, but got \"" + val + "\".");
+                if (arg == "-lambda-prior-mode") lambdaMode = rm;
+                else if (arg == "-mu-prior-mode") muMode = rm;
+                else psiMode = rm;
+            } else if (arg == "-hsmrf-shifts") {
+                try { hsmrfShifts = std::stod(val); } catch (...) { Msg::error("Flag \"-hsmrf-shifts\" expects a number, but got \"" + val + "\"."); }
+            } else if (arg == "-hsmrf-shift-size") {
+                try { hsmrfShiftSize = std::stod(val); } catch (...) { Msg::error("Flag \"-hsmrf-shift-size\" expects a number, but got \"" + val + "\"."); }
+            } else if (arg == "-hsmrf-asis" || arg == "-hsmrf-ao") {
+                std::string v = val;
+                for (char& ch : v) ch = std::tolower((unsigned char)ch);
+                bool on = true;
+                if (v == "on" || v == "true" || v == "1") on = true;
+                else if (v == "off" || v == "false" || v == "0") on = false;
+                else Msg::error("Flag \"" + arg + "\" expects on or off, but got \"" + val + "\".");
+                if (arg == "-hsmrf-asis") hsmrfAsis = on;
+                else hsmrfAo = on;
             } else if (arg == "-skyline-times") {
                 std::stringstream ss(val);
                 std::string tok;

@@ -7,6 +7,7 @@
 
 enum class Conditioning { CROWN, ORIGIN };
 enum class Model { BD, FBD, HEA14, UFBD };
+enum class RateMode { IID, SMOOTH };
 
 class UserSettings {
 
@@ -33,6 +34,13 @@ class UserSettings {
         Probability::PriorSpec      getLambdaPrior(void) { checkSettings(); return lambdaPrior; }
         Probability::PriorSpec      getMuPrior(void) { checkSettings(); return muPrior; }
         Probability::PriorSpec      getPsiPrior(void) { checkSettings(); return psiPrior; }
+        RateMode                    getLambdaMode(void) { checkSettings(); return lambdaMode; }
+        RateMode                    getMuMode(void) { checkSettings(); return muMode; }
+        RateMode                    getPsiMode(void) { checkSettings(); return psiMode; }
+        double                      getHsmrfShifts(void) { checkSettings(); return hsmrfShifts; }
+        double                      getHsmrfShiftSize(void) { checkSettings(); return hsmrfShiftSize; }
+        bool                        getHsmrfAsis(void) { checkSettings(); return hsmrfAsis; }
+        bool                        getHsmrfAo(void) { checkSettings(); return hsmrfAo; }
         std::vector<double>         getSkylineTimes(void) { checkSettings(); return skylineTimes; }
         Model                       getModel(void) { checkSettings(); return model; }
         double                      getRho(void) { checkSettings(); return rho; }
@@ -69,6 +77,13 @@ class UserSettings {
         Probability::PriorSpec      lambdaPrior;
         Probability::PriorSpec      muPrior;
         Probability::PriorSpec      psiPrior;
+        RateMode                    lambdaMode;
+        RateMode                    muMode;
+        RateMode                    psiMode;
+        double                      hsmrfShifts;
+        double                      hsmrfShiftSize;
+        bool                        hsmrfAsis;
+        bool                        hsmrfAo;
         std::vector<double>         skylineTimes;
         Model                       model;
         double                      rho;

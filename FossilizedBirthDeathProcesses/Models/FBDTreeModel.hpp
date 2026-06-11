@@ -13,6 +13,7 @@
 
 class Parameter;
 class ParameterDouble;
+class ParameterShrinkageField;
 
 class FBDTreeModel : public PhylogeneticModel {
 
@@ -61,10 +62,16 @@ class FBDTreeModel : public PhylogeneticModel {
         void                        enumerateSubtreeHosts(Tree* t, std::vector<Node*>& crowns, std::vector<char>& isCrowns, std::vector<Node*>& origins, double rAge, double ceilingS, std::vector<Node*>& hosts, std::vector<double>& los, std::vector<double>& his);
         bool                        subtreeFossilsValidAt(Tree* t, Node* s, Node* g);
         bool                        subtreeAllFossil(Node* n);
+        double                      lambdaAt(int i);
+        double                      muAt(int i);
+        double                      psiAt(int i);
         //ordered by memory footprint
         std::vector<ParameterDouble*> lambda;
         std::vector<ParameterDouble*> mu;
         std::vector<ParameterDouble*> psi;
+        ParameterShrinkageField*    lambdaField;
+        ParameterShrinkageField*    muField;
+        ParameterShrinkageField*    psiField;
         std::vector<double>           intervalStart;
         ParameterDouble*            originAge;
         ParameterTree*              parameterTree;

@@ -1,6 +1,7 @@
 #include "Node.hpp"
 #include "Parameter.hpp"
 #include "ParameterDouble.hpp"
+#include "ParameterShrinkageField.hpp"
 #include "FBDTreeModel.hpp"
 #include "PhylogeneticModel.hpp"
 #include "RandomVariable.hpp"
@@ -20,6 +21,9 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     upDownStep = 0.1;
     upDownTotal = 0;
     cacheInit = false;
+    lambdaField = nullptr;
+    muField = nullptr;
+    psiField = nullptr;
     rng.setSeed(seed);
     RandomVariable* prevRng = RandomVariable::getActiveInstance();
     RandomVariable::setActiveInstance(&rng);
@@ -43,21 +47,72 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     Probability::PriorSpec mp = UserSettings::userSettings().getMuPrior();
     Probability::PriorSpec pp = UserSettings::userSettings().getPsiPrior();
     bool fossilSampling = (UserSettings::userSettings().getModel() != Model::BD);
-    for(size_t i = 0; i < intervalStart.size(); i++){
-        std::string suf = (intervalStart.size() > 1) ? std::to_string(i) : "";
-        ParameterDouble* l = new ParameterDouble(1.0, this, "lambda" + suf, 0.0, std::numeric_limits<double>::max());
-        ParameterDouble* m = new ParameterDouble(1.0, this, "mu" + suf, 0.0, std::numeric_limits<double>::max());
-        if(lp.set) l->setPrior(lp.family, lp.p1, lp.p2);
-        if(mp.set) m->setPrior(mp.family, mp.p1, mp.p2);
-        lambda.push_back(l);
-        mu.push_back(m);
-        parameters.push_back(l);
-        parameters.push_back(m);
+    UserSettings& rateUs = UserSettings::userSettings();
+    int nB = (int)intervalStart.size();
+    bool lamSmooth = (rateUs.getLambdaMode() == RateMode::SMOOTH);
+    bool muSmooth  = (rateUs.getMuMode() == RateMode::SMOOTH);
+    bool psiSmooth = (rateUs.getPsiMode() == RateMode::SMOOTH);
+    if(lamSmooth && nB < 2){ Msg::warning("Smooth (HSMRF) requested for lambda but only 1 rate interval; using iid (add -skyline-times)."); lamSmooth = false; }
+    if(muSmooth && nB < 2){ Msg::warning("Smooth (HSMRF) requested for mu but only 1 rate interval; using iid."); muSmooth = false; }
+    if(psiSmooth && nB < 2){ Msg::warning("Smooth (HSMRF) requested for psi but only 1 rate interval; using iid."); psiSmooth = false; }
+    double nShifts = rateUs.getHsmrfShifts();
+    double shiftSize = rateUs.getHsmrfShiftSize();
+    if(lamSmooth || muSmooth || (psiSmooth && fossilSampling)){
+        if(lamSmooth){
+            lambdaField = new ParameterShrinkageField(1.0, this, nB, lp, nShifts, shiftSize);
+            parameters.push_back(lambdaField);
+        }else{
+            for(int i = 0; i < nB; i++){
+                std::string suf = (nB > 1) ? std::to_string(i) : "";
+                ParameterDouble* l = new ParameterDouble(1.0, this, "lambda" + suf, 0.0, std::numeric_limits<double>::max());
+                if(lp.set) l->setPrior(lp.family, lp.p1, lp.p2);
+                lambda.push_back(l);
+                parameters.push_back(l);
+            }
+        }
+        if(muSmooth){
+            muField = new ParameterShrinkageField(1.0, this, nB, mp, nShifts, shiftSize);
+            parameters.push_back(muField);
+        }else{
+            for(int i = 0; i < nB; i++){
+                std::string suf = (nB > 1) ? std::to_string(i) : "";
+                ParameterDouble* m = new ParameterDouble(1.0, this, "mu" + suf, 0.0, std::numeric_limits<double>::max());
+                if(mp.set) m->setPrior(mp.family, mp.p1, mp.p2);
+                mu.push_back(m);
+                parameters.push_back(m);
+            }
+        }
         if(fossilSampling){
-            ParameterDouble* p = new ParameterDouble(1.0, this, "psi" + suf, 0.0, std::numeric_limits<double>::max());
-            if(pp.set) p->setPrior(pp.family, pp.p1, pp.p2);
-            psi.push_back(p);
-            parameters.push_back(p);
+            if(psiSmooth){
+                psiField = new ParameterShrinkageField(1.0, this, nB, pp, nShifts, shiftSize);
+                parameters.push_back(psiField);
+            }else{
+                for(int i = 0; i < nB; i++){
+                    std::string suf = (nB > 1) ? std::to_string(i) : "";
+                    ParameterDouble* p = new ParameterDouble(1.0, this, "psi" + suf, 0.0, std::numeric_limits<double>::max());
+                    if(pp.set) p->setPrior(pp.family, pp.p1, pp.p2);
+                    psi.push_back(p);
+                    parameters.push_back(p);
+                }
+            }
+        }
+    }else{
+        for(size_t i = 0; i < intervalStart.size(); i++){
+            std::string suf = (intervalStart.size() > 1) ? std::to_string(i) : "";
+            ParameterDouble* l = new ParameterDouble(1.0, this, "lambda" + suf, 0.0, std::numeric_limits<double>::max());
+            ParameterDouble* m = new ParameterDouble(1.0, this, "mu" + suf, 0.0, std::numeric_limits<double>::max());
+            if(lp.set) l->setPrior(lp.family, lp.p1, lp.p2);
+            if(mp.set) m->setPrior(mp.family, mp.p1, mp.p2);
+            lambda.push_back(l);
+            mu.push_back(m);
+            parameters.push_back(l);
+            parameters.push_back(m);
+            if(fossilSampling){
+                ParameterDouble* p = new ParameterDouble(1.0, this, "psi" + suf, 0.0, std::numeric_limits<double>::max());
+                if(pp.set) p->setPrior(pp.family, pp.p1, pp.p2);
+                psi.push_back(p);
+                parameters.push_back(p);
+            }
         }
     }
     rho = UserSettings::userSettings().getRho();
@@ -102,6 +157,15 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
         for(ParameterDouble* m : mu)     m->setProposalProbability(15.0);
         for(ParameterDouble* p : psi)    p->setProposalProbability(15.0);
     }
+    double fieldWeight = (isFBD ? 15.0 : 1.0) * (double)nB;
+    if(lambdaField) lambdaField->setProposalProbability(fieldWeight);
+    if(muField)     muField->setProposalProbability(fieldWeight);
+    if(psiField)    psiField->setProposalProbability(fieldWeight);
+    bool asisOn = rateUs.getHsmrfAsis();
+    bool aoOn = rateUs.getHsmrfAo();
+    if(lambdaField){ lambdaField->setInterweave(asisOn); lambdaField->setAdaptive(aoOn); }
+    if(muField){ muField->setInterweave(asisOn); muField->setAdaptive(aoOn); }
+    if(psiField){ psiField->setInterweave(asisOn); psiField->setAdaptive(aoOn); }
 
     double sum = 0.0;
     for(Parameter* p : parameters)
@@ -110,6 +174,27 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
         p->setProposalProbability(p->getProposalProbability() / sum);
 
     RandomVariable::setActiveInstance(prevRng);
+}
+
+double FBDTreeModel::lambdaAt(int i){
+    if(lambdaField != nullptr)
+        return lambdaField->getRate(i);
+    ParameterDouble* d = lambda[i];
+    return d->getValue();
+}
+
+double FBDTreeModel::muAt(int i){
+    if(muField != nullptr)
+        return muField->getRate(i);
+    ParameterDouble* d = mu[i];
+    return d->getValue();
+}
+
+double FBDTreeModel::psiAt(int i){
+    if(psiField != nullptr)
+        return psiField->getRate(i);
+    ParameterDouble* d = psi[i];
+    return d->getValue();
 }
 
 static bool nodeInSubtree(Node* node, Node* subtreeCrown){
@@ -135,6 +220,13 @@ std::vector<std::string> FBDTreeModel::getParameterNames(void){
     std::vector<std::string> names;
     for(Parameter* p : parameters)
         if( p != parameterTree){ //by convention, exclude parameter tree from these getters
+            ParameterShrinkageField* sf = dynamic_cast<ParameterShrinkageField*>(p);
+            if(sf != nullptr){
+                std::string base = (p == lambdaField) ? "lambda" : (p == muField ? "mu" : "psi");
+                for(int i = 0; i < sf->getNumBins(); i++)
+                    names.push_back(base + std::to_string(i));
+                continue;
+            }
             ParameterUnresolvedFossils* uf = dynamic_cast<ParameterUnresolvedFossils*>(p);
             names.push_back(uf != nullptr ? "nSA" : p->getName());
         }
@@ -145,6 +237,12 @@ std::vector<double> FBDTreeModel::getParameterString(void){
     std::vector<double> vals;
     for(Parameter* p : parameters)
         if( p != parameterTree){ //by convention, exclude parameter tree from these getters
+            ParameterShrinkageField* sf = dynamic_cast<ParameterShrinkageField*>(p);
+            if(sf != nullptr){
+                for(int i = 0; i < sf->getNumBins(); i++)
+                    vals.push_back(sf->getRate(i));
+                continue;
+            }
             ParameterDouble* pd = dynamic_cast<ParameterDouble*>(p);
             if(pd != nullptr){
                 vals.push_back(pd->getValue());
@@ -159,9 +257,10 @@ std::vector<double> FBDTreeModel::getParameterString(void){
 }
 
 double FBDTreeModel::lnLikelihood(void){
-    if(UserSettings::userSettings().getModel() == Model::BD)
-        return calculateBDProbability();
-    return calculateFBDProbability();
+    double v = (UserSettings::userSettings().getModel() == Model::BD) ? calculateBDProbability() : calculateFBDProbability();
+    if(std::isfinite(v) == false)
+        return -INFINITY;
+    return v;
 }
 
 double FBDTreeModel::lnPriorProbability(void){
@@ -319,10 +418,10 @@ double FBDTreeModel::calculateFBDProbability(void){
     double crownAge = tree->getCrown()->getTime();
     std::vector<Node*> dpseq = tree->getDownPassSequence();
     
-    lambdaVal = lambda[0]->getValue();
-    muVal = mu[0]->getValue();
+    lambdaVal = lambdaAt(0);
+    muVal = muAt(0);
     rhoVal = rho;
-    psiVal = psi[0]->getValue();
+    psiVal = psiAt(0);
     double log4LambdaRho = std::log(4*lambdaVal*rhoVal);
     
     prepareIntervals();
@@ -338,13 +437,13 @@ double FBDTreeModel::calculateFBDProbability(void){
         double x0 = originAge->getValue();
         if(x0 < crownAge)
             return -INFINITY;
-        double lx0 = lambda[findIndex(x0)]->getValue();
+        double lx0 = lambdaAt(findIndex(x0));
         fbdProb -= std::log(lx0);
         fbdProb -= calculateLnSurvival(x0);
         fbdProb += std::log(4 * lx0 * rhoVal);
         fbdProb += lnD(x0) - std::log(4.0);
     }else{
-        double lr = lambda[findIndex(crownAge)]->getValue();
+        double lr = lambdaAt(findIndex(crownAge));
         fbdProb -= 2 * (std::log(lr) + calculateLnSurvival(crownAge));
         fbdProb += std::log(4 * lr * rhoVal);
         fbdProb += lnD(crownAge) - std::log(4.0);
@@ -353,14 +452,14 @@ double FBDTreeModel::calculateFBDProbability(void){
     //term 2: main body
     for(Node* n : dpseq)
         if(n->getIsTip() == false)
-            fbdProb += std::log(lambda[findIndex(n->getTime())]->getValue() * rhoVal) + lnD(n->getTime());
+            fbdProb += std::log(lambdaAt(findIndex(n->getTime())) * rhoVal) + lnD(n->getTime());
 
     //term 3: fossil attachment
     int numFossils = unresolvedFossils->getNumFossils();
     updateGammaCache();
     for(int i = 0; i < numFossils; i++){
         if(unresolvedFossils->isSA(i)){
-            fbdProb += std::log(psi[findIndex(unresolvedFossils->getFossilAge(i))]->getValue()) + cachedGammaLn[i];
+            fbdProb += std::log(psiAt(findIndex(unresolvedFossils->getFossilAge(i)))) + cachedGammaLn[i];
             continue;
         }
         fbdProb += fossilPqLn(unresolvedFossils->getFossilAge(i), unresolvedFossils->getAttachAge(i)) + cachedGammaLn[i];
@@ -391,16 +490,16 @@ double FBDTreeModel::calculateResolvedFBD(void){
             if(n->getIsFossil() == false)
                 lnP += std::log(rhoVal);
             else if(n->getAncestor()->getTime() == n->getTime())
-                lnP += std::log(psi[findIndex(n->getTime())]->getValue());
+                lnP += std::log(psiAt(findIndex(n->getTime())));
             else
-                lnP += std::log(psi[findIndex(n->getTime())]->getValue()) + std::log(calculatePo(n->getTime()));
+                lnP += std::log(psiAt(findIndex(n->getTime()))) + std::log(calculatePo(n->getTime()));
         }
         else if(useOrigin || n != crown){
             bool fakeSplit = false;
             for(Node* c : n->getNeighbors())
                 if(c != n->getAncestor() && c->getIsTip() && c->getIsFossil() && c->getTime() == n->getTime()){ fakeSplit = true; break; }
             if(fakeSplit == false)
-                lnP += std::log(2.0 * lambda[findIndex(n->getTime())]->getValue());
+                lnP += std::log(2.0 * lambdaAt(findIndex(n->getTime())));
         }
     }
     return lnP;
@@ -410,8 +509,8 @@ double FBDTreeModel::calculateBDProbability(void){
     Tree* tree = parameterTree->getTree();
     Node* crown = tree->getCrown();
     double crownAge = crown->getTime();
-    double lam = lambda[0]->getValue();
-    double m = mu[0]->getValue();
+    double lam = lambdaAt(0);
+    double m = muAt(0);
     double r = rho;
     bool useOrigin = (UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN);
 
@@ -458,7 +557,7 @@ double FBDTreeModel::lnD(double t){
 }
 
 double FBDTreeModel::fossilPqLn(double y, double z){
-    return std::log(psi[findIndex(y)]->getValue()) + std::log(2*lambda[findIndex(z)]->getValue()) + std::log(calculatePo(y)) + lnD(z) - lnD(y);
+    return std::log(psiAt(findIndex(y))) + std::log(2*lambdaAt(findIndex(z))) + std::log(calculatePo(y)) + lnD(z) - lnD(y);
 }
 
 double FBDTreeModel::calculateLnSurvival(double t){
@@ -483,9 +582,9 @@ void FBDTreeModel::prepareIntervals(void){
     ePrev.assign(n, 0.0);
     lnDPrev.assign(n, 0.0);
     for(size_t i = 0; i < n; i++){
-        double li = lambda[i]->getValue();
-        double mi = mu[i]->getValue();
-        double pi = psi[i]->getValue();
+        double li = lambdaAt(i);
+        double mi = muAt(i);
+        double pi = psiAt(i);
         c1Vec[i] = std::abs(std::sqrt(std::pow(li - mi - pi, 2) + 4*li*pi));
         if(i == 0){
             ePrev[0] = 1.0;
@@ -503,8 +602,8 @@ void FBDTreeModel::prepareIntervals(void){
         c2HatVec.assign(n, 0.0);
         ePrevHat.assign(n, 0.0);
         for(size_t i = 0; i < n; i++){
-            double li = lambda[i]->getValue();
-            double mi = mu[i]->getValue();
+            double li = lambdaAt(i);
+            double mi = muAt(i);
             c1HatVec[i] = std::abs(li - mi);
             if(i == 0){
                 ePrevHat[0] = 1.0;
@@ -543,8 +642,8 @@ double FBDTreeModel::calculateLnQtAt(int i, double t){
 
 double FBDTreeModel::calculatePoAt(int i, double t){
     double tau = t - intervalStart[i];
-    double li = lambda[i]->getValue();
-    double tmp = -li + mu[i]->getValue() + psi[i]->getValue();
+    double li = lambdaAt(i);
+    double tmp = -li + muAt(i) + psiAt(i);
     tmp += c1Vec[i] * (std::exp(-c1Vec[i] * tau) * (1 - c2Vec[i]) - (1+c2Vec[i]) ) / ( std::exp(-c1Vec[i] * tau) * (1 - c2Vec[i]) + (1+c2Vec[i])  );
     tmp /= 2*li;
     return 1 + tmp;
@@ -556,8 +655,8 @@ double FBDTreeModel::calculatePo(double t){
 
 double FBDTreeModel::calculatePoHatAt(int i, double t){
     double tau = t - intervalStart[i];
-    double li = lambda[i]->getValue();
-    double tmp = -li + mu[i]->getValue();
+    double li = lambdaAt(i);
+    double tmp = -li + muAt(i);
     tmp += c1HatVec[i] * (std::exp(-c1HatVec[i] * tau) * (1 - c2HatVec[i]) - (1+c2HatVec[i]) ) / ( std::exp(-c1HatVec[i] * tau) * (1 - c2HatVec[i]) + (1+c2HatVec[i])  );
     tmp /= 2*li;
     return 1 + tmp;
