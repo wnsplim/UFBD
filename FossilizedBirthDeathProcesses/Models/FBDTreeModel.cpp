@@ -161,11 +161,6 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     if(lambdaField) lambdaField->setProposalProbability(fieldWeight);
     if(muField)     muField->setProposalProbability(fieldWeight);
     if(psiField)    psiField->setProposalProbability(fieldWeight);
-    bool asisOn = rateUs.getHsmrfAsis();
-    bool aoOn = rateUs.getHsmrfAo();
-    if(lambdaField){ lambdaField->setInterweave(asisOn); lambdaField->setAdaptive(aoOn); }
-    if(muField){ muField->setInterweave(asisOn); muField->setAdaptive(aoOn); }
-    if(psiField){ psiField->setInterweave(asisOn); psiField->setAdaptive(aoOn); }
 
     double sum = 0.0;
     for(Parameter* p : parameters)
@@ -520,8 +515,9 @@ double FBDTreeModel::calculateBDProbability(void){
     auto bdLnD = [&](double t) -> double {
         if(t <= 0.0)
             return 0.0;
-        double q = std::exp(c1 * t) * std::pow(1.0 + c2, 2) + 2.0 * (1.0 - c2 * c2) + std::exp(-c1 * t) * std::pow(1.0 - c2, 2);
-        return std::log(4.0) - std::log(q);
+        double a = c1 * t;
+        double bracket = std::pow(1.0 + c2, 2) + std::exp(-a) * 2.0 * (1.0 - c2 * c2) + std::exp(-2.0 * a) * std::pow(1.0 - c2, 2);
+        return std::log(4.0) - a - std::log(bracket);
     };
     auto bdLnSurvival = [&](double t) -> double {
         double B = lam * (1.0 - r) - m;
@@ -622,14 +618,6 @@ int FBDTreeModel::findIndex(double t){
         if(t >= intervalStart[j])
             i = (int)j;
     return i;
-}
-
-double FBDTreeModel::calculateQtAt(int i, double t){
-    double tau = t - intervalStart[i];
-    double tmp = 2 * (1 - std::pow(c2Vec[i], 2));
-    tmp += std::exp(-c1Vec[i] * tau) * std::pow(1-c2Vec[i], 2);
-    tmp += std::exp(c1Vec[i] * tau) * std::pow(1+c2Vec[i], 2);
-    return tmp;
 }
 
 double FBDTreeModel::calculateLnQtAt(int i, double t){

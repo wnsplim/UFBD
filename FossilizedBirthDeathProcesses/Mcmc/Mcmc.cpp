@@ -6,6 +6,7 @@
 #include "UserSettings.hpp"
 #include "WriteTSV.hpp"
 
+#include <ctime>
 #include <iomanip>
 #include <iostream>
 
@@ -62,11 +63,14 @@ void Mcmc::run(void) {
 }
 
 void Mcmc::sample(unsigned long n, double lnL, double lnP) {
+    bool cpuTime = UserSettings::userSettings().getCpuTime();
     if(n == 1){
         params.addFilepath(paramOut, true);
         std::vector<std::string> cn = {"n", "posterior", "likelihood", "prior"};
         std::vector<std::string> headStr = model->getParameterNames();
         cn.insert( cn.end(), headStr.begin(), headStr.end() );
+        if(cpuTime)
+            cn.push_back("cpu_s");
         params.addColumnNamesTSV(cn);
 
         trees.addFilepath(treeOut, true); // no CN for tree file
@@ -75,6 +79,8 @@ void Mcmc::sample(unsigned long n, double lnL, double lnP) {
     std::vector<double> dat = {(double)n, lnL + lnP, lnL, lnP};
     std::vector<double> parmStr = model->getParameterString();
     dat.insert( dat.end(), parmStr.begin(), parmStr.end() );
+    if(cpuTime)
+        dat.push_back((double)std::clock() / CLOCKS_PER_SEC);
     params.appendDataTSV(dat);
     
     trees.appendDataTSV(model->getTree()->getNewickString());

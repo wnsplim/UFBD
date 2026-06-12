@@ -7,14 +7,13 @@
 #include "Probability.hpp"
 #include "RandomVariable.hpp"
 
-ParameterShrinkageField::ParameterShrinkageField(double prob, PhylogeneticModel* m, int nB, Probability::PriorSpec ap, double priorNShifts, double shiftSize) : Parameter(prob, m, "shrinkageField"), sampler(5){
+ParameterShrinkageField::ParameterShrinkageField(double prob, PhylogeneticModel* m, int nB, Probability::PriorSpec ap, double priorNShifts, double shiftSize) : Parameter(prob, m, "shrinkageField"){
     nBins = nB;
     nDelta = nB - 1;
     anchorPrior = ap;
     zeta = calibrateGlobalScale(nB, priorNShifts, shiftSize);
     lastMove = -1;
-    interweave = true;
-    for(int i = 0; i < 5; i++){
+    for(int i = 0; i < 4; i++){
         acc[i] = 0;
         rej[i] = 0;
     }
@@ -22,19 +21,15 @@ ParameterShrinkageField::ParameterShrinkageField(double prob, PhylogeneticModel*
     step[1] = 0.05;
     step[2] = 0.4;
     step[3] = 0.4;
-    step[4] = 0.5;
-    adaptive = false;
-    sampler.setWeight(0, 0.15);
-    sampler.setWeight(1, 0.15);
-    sampler.setWeight(2, 0.30);
-    sampler.setWeight(3, 0.20);
-    sampler.setWeight(4, 0.20);
-    sampler.setPinned(2, 0.30);
+    moveWeight[0] = 0.15;
+    moveWeight[1] = 0.15;
+    moveWeight[2] = 0.30;
+    moveWeight[3] = 0.40;
     double present0 = ap.set ? Probability::priorMean(ap.family, ap.p1, ap.p2) : 1.0;
     if(present0 <= 0.0)
         present0 = 1.0;
     RandomVariable& rng = RandomVariable::randomVariableInstance();
-    anchor[0] = anchor[1] = std::log(present0);
+    anchor[0] = anchor[1] = std::log(present0) + Probability::Normal::rv(&rng) * zeta;
     gamma[0] = gamma[1] = zeta;
     delta[0].assign(nDelta, 0.0);
     sigma[0].assign(nDelta, 1.0);
@@ -46,14 +41,6 @@ ParameterShrinkageField::ParameterShrinkageField(double prob, PhylogeneticModel*
     delta[1] = delta[0];
     sigma[1] = sigma[0];
     rateVal[1] = rateVal[0];
-    snapLogR.assign(nBins, 0.0);
-    logrM.assign(nBins, 0.0);
-    logrV.assign(nBins, 1.0);
-    for(int i = 0; i < nBins; i++)
-        logrM[i] = std::log(rateVal[0][i]);
-    lgM = std::log(gamma[0]);
-    lgV = 1.0;
-    snapLogGamma = lgM;
 }
 
 double ParameterShrinkageField::calibrateGlobalScale(int nBins, double priorNShifts, double shiftSize){
@@ -203,48 +190,18 @@ double ParameterShrinkageField::ellipticalSliceDelta(void){
     return std::numeric_limits<double>::infinity();
 }
 
-double ParameterShrinkageField::interweaveGlobalScale(void){
-    double s = bactrianStep(4);
-    double c = std::exp(s);
-    gamma[0] *= c;
-    for(int k = 0; k < nDelta; k++)
-        delta[0][k] *= c;
-    recomputeRates();
-    return (nDelta + 1.0) * s;
-}
-
-void ParameterShrinkageField::recordReward(bool accepted){
-    double sjd = 0.0;
-    if(accepted){
-        for(int i = 0; i < nBins; i++){
-            double d = std::log(rateVal[0][i]) - snapLogR[i];
-            sjd += d * d / logrV[i];
-        }
-        double dg = std::log(gamma[0]) - snapLogGamma;
-        sjd += dg * dg / lgV;
-    }
-    sampler.reward(lastMove, sjd);
-    double a = 0.002;
-    for(int i = 0; i < nBins; i++){
-        double x = std::log(rateVal[0][i]);
-        double d = x - logrM[i];
-        logrM[i] += a * d;
-        logrV[i] = (1.0 - a) * (logrV[i] + a * d * d);
-        if(logrV[i] < 1e-8) logrV[i] = 1e-8;
-    }
-    double xg = std::log(gamma[0]);
-    double dg2 = xg - lgM;
-    lgM += a * dg2;
-    lgV = (1.0 - a) * (lgV + a * dg2 * dg2);
-    if(lgV < 1e-8) lgV = 1e-8;
-}
-
 double ParameterShrinkageField::update(void){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
-    for(int i = 0; i < nBins; i++)
-        snapLogR[i] = std::log(rateVal[0][i]);
-    snapLogGamma = std::log(gamma[0]);
-    int mv = sampler.pick(rng.uniformRv());
+    double u = rng.uniformRv();
+    double cum = 0.0;
+    int mv = 3;
+    for(int i = 0; i < 4; i++){
+        cum += moveWeight[i];
+        if(u < cum){
+            mv = i;
+            break;
+        }
+    }
     lastMove = mv;
     if(mv == 0){
         anchor[0] += bactrianStep(0);
@@ -259,14 +216,12 @@ double ParameterShrinkageField::update(void){
     }
     if(mv == 2)
         return gibbsScales();
-    if(mv == 3)
-        return ellipticalSliceDelta();
-    return interweaveGlobalScale();
+    return ellipticalSliceDelta();
 }
 
 double ParameterShrinkageField::getAcceptanceRatio(void){
     int a = 0, r = 0;
-    for(int i = 0; i < 5; i++){
+    for(int i = 0; i < 4; i++){
         a += acc[i];
         r += rej[i];
     }
@@ -283,7 +238,6 @@ void ParameterShrinkageField::updateForAcceptance(void){
     delta[1] = delta[0];
     sigma[1] = sigma[0];
     rateVal[1] = rateVal[0];
-    recordReward(true);
 }
 
 void ParameterShrinkageField::updateForRejection(void){
@@ -296,5 +250,4 @@ void ParameterShrinkageField::updateForRejection(void){
     delta[0] = delta[1];
     sigma[0] = sigma[1];
     rateVal[0] = rateVal[1];
-    recordReward(false);
 }

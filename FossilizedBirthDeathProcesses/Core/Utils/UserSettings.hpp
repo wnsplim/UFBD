@@ -39,8 +39,7 @@ class UserSettings {
         RateMode                    getPsiMode(void) { checkSettings(); return psiMode; }
         double                      getHsmrfShifts(void) { checkSettings(); return hsmrfShifts; }
         double                      getHsmrfShiftSize(void) { checkSettings(); return hsmrfShiftSize; }
-        bool                        getHsmrfAsis(void) { checkSettings(); return hsmrfAsis; }
-        bool                        getHsmrfAo(void) { checkSettings(); return hsmrfAo; }
+        bool                        getCpuTime(void) { checkSettings(); return cpuTime; }
         std::vector<double>         getSkylineTimes(void) { checkSettings(); return skylineTimes; }
         Model                       getModel(void) { checkSettings(); return model; }
         double                      getRho(void) { checkSettings(); return rho; }
@@ -82,8 +81,7 @@ class UserSettings {
         RateMode                    psiMode;
         double                      hsmrfShifts;
         double                      hsmrfShiftSize;
-        bool                        hsmrfAsis;
-        bool                        hsmrfAo;
+        bool                        cpuTime;
         std::vector<double>         skylineTimes;
         Model                       model;
         double                      rho;

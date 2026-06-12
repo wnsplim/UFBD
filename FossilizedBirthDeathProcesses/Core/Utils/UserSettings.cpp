@@ -53,8 +53,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
     psiMode         = RateMode::IID;
     hsmrfShifts     = std::log(2.0);
     hsmrfShiftSize  = 2.0;
-    hsmrfAsis       = true;
-    hsmrfAo         = false;
+    cpuTime         = false;
 
     std::vector<std::string> arguments;
     for (int i = 0; i < argc; i++)
@@ -66,13 +65,13 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
     std::set<std::string> knownFlags = {
         "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt", "-help", "-h",
         "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times",
-        "-lambda-prior-mode", "-mu-prior-mode", "-psi-prior-mode", "-hsmrf-shifts", "-hsmrf-shift-size", "-hsmrf-asis", "-hsmrf-ao",
+        "-lambda-prior-mode", "-mu-prior-mode", "-psi-prior-mode", "-hsmrf-shifts", "-hsmrf-shift-size", "-cpu-time",
         "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma"
     };
     std::set<std::string> valueFlags = {
         "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt",
         "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times",
-        "-lambda-prior-mode", "-mu-prior-mode", "-psi-prior-mode", "-hsmrf-shifts", "-hsmrf-shift-size", "-hsmrf-asis", "-hsmrf-ao",
+        "-lambda-prior-mode", "-mu-prior-mode", "-psi-prior-mode", "-hsmrf-shifts", "-hsmrf-shift-size", "-cpu-time",
         "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma"
     };
 
@@ -168,15 +167,12 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
                 try { hsmrfShifts = std::stod(val); } catch (...) { Msg::error("Flag \"-hsmrf-shifts\" expects a number, but got \"" + val + "\"."); }
             } else if (arg == "-hsmrf-shift-size") {
                 try { hsmrfShiftSize = std::stod(val); } catch (...) { Msg::error("Flag \"-hsmrf-shift-size\" expects a number, but got \"" + val + "\"."); }
-            } else if (arg == "-hsmrf-asis" || arg == "-hsmrf-ao") {
+            } else if (arg == "-cpu-time") {
                 std::string v = val;
                 for (char& ch : v) ch = std::tolower((unsigned char)ch);
-                bool on = true;
-                if (v == "on" || v == "true" || v == "1") on = true;
-                else if (v == "off" || v == "false" || v == "0") on = false;
+                if (v == "on" || v == "true" || v == "1") cpuTime = true;
+                else if (v == "off" || v == "false" || v == "0") cpuTime = false;
                 else Msg::error("Flag \"" + arg + "\" expects on or off, but got \"" + val + "\".");
-                if (arg == "-hsmrf-asis") hsmrfAsis = on;
-                else hsmrfAo = on;
             } else if (arg == "-skyline-times") {
                 std::stringstream ss(val);
                 std::string tok;
