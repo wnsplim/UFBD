@@ -45,10 +45,10 @@ class BranchRateModel : public Parameter {
         std::vector<double>         mu[2];
         std::vector<double>         sigma2[2];
         std::vector<std::vector<double>> rate[2];
-        double                      step[3];
-        std::deque<bool>            recentAR[3];
-        int                         acc[3];
-        int                         rej[3];
+        double                      step[4];
+        std::deque<bool>            recentAR[4];
+        int                         acc[4];
+        int                         rej[4];
         int                         lastMove;
         int                         lastLocus;
         int                         lastNode;

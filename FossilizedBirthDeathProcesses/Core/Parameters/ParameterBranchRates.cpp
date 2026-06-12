@@ -20,7 +20,7 @@ BranchRateModel::BranchRateModel(double prob, PhylogeneticModel* m, Tree* t, int
         rgeneParam[i] = rg[i];
         sigma2Param[i] = s2[i];
     }
-    for(int i = 0; i < 3; i++){
+    for(int i = 0; i < 4; i++){
         step[i] = 1.0;
         acc[i] = 0;
         rej[i] = 0;
@@ -38,7 +38,7 @@ BranchRateModel::BranchRateModel(double prob, PhylogeneticModel* m, Tree* t, int
 
 double BranchRateModel::getAcceptanceRatio(void){
     int a = 0, r = 0;
-    for(int i = 0; i < 3; i++){
+    for(int i = 0; i < 4; i++){
         a += acc[i];
         r += rej[i];
     }
@@ -248,22 +248,11 @@ void BranchRateModel::updateForRejection(void){
 ParameterBranchRates::ParameterBranchRates(double prob, PhylogeneticModel* m, Tree* t, int L, ClockModel cm, const double* rg, const double* s2) : BranchRateModel(prob, m, t, L, rg, s2){
     clockModel = cm;
     RandomVariable& rng = RandomVariable::randomVariableInstance();
-    Node* crown = tree->getCrown();
-    std::vector<Node*>& dp = tree->getDownPassSequence();
     for(int p = 0; p < numLoci; p++){
-        double muDraw = Probability::Gamma::rv(&rng, rgeneParam[0], rgeneParam[1]);
-        double s2Draw = Probability::Gamma::rv(&rng, sigma2Param[0], sigma2Param[1]);
-        mu[0][p] = mu[1][p] = muDraw;
-        sigma2[0][p] = sigma2[1][p] = s2Draw;
-        for(std::vector<Node*>::reverse_iterator it = dp.rbegin(); it != dp.rend(); ++it){
-            Node* n = *it;
-            if(n == crown || n->getIsFossil())
-                continue;
-            double rPar = (n->getAncestor() == crown) ? muDraw : rate[0][p][n->getAncestor()->getOffset()];
-            double L2 = n->getAncestor()->getTime() - n->getTime();
-            double logr = std::log(rPar) - 0.5 * s2Draw * L2 + Probability::Normal::rv(&rng) * std::sqrt(s2Draw * L2);
-            rate[0][p][n->getOffset()] = rate[1][p][n->getOffset()] = std::exp(logr);
-        }
+        mu[0][p] = mu[1][p] = Probability::Gamma::rv(&rng, rgeneParam[0], rgeneParam[1]);
+        sigma2[0][p] = sigma2[1][p] = Probability::Gamma::rv(&rng, sigma2Param[0], sigma2Param[1]);
+        for(int b : branchNodes)
+            rate[0][p][b] = rate[1][p][b] = 1e-3 + Probability::Gamma::rv(&rng, rgeneParam[0], rgeneParam[1]);
     }
 }
 
@@ -367,29 +356,18 @@ ParameterBranchRatesCIR::ParameterBranchRatesCIR(double prob, PhylogeneticModel*
     for(int s = 0; s < 2; s++)
         theta[s].assign(numLoci, 1.0);
     RandomVariable& rng = RandomVariable::randomVariableInstance();
-    Node* crown = tree->getCrown();
-    std::vector<Node*>& dp = tree->getDownPassSequence();
     for(int p = 0; p < numLoci; p++){
-        double muDraw = Probability::Gamma::rv(&rng, rgeneParam[0], rgeneParam[1]);
-        double s2Draw = Probability::Gamma::rv(&rng, sigma2Param[0], sigma2Param[1]);
-        double thDraw = Probability::Gamma::rv(&rng, thetaParam[0], thetaParam[1]);
-        mu[0][p] = mu[1][p] = muDraw;
-        sigma2[0][p] = sigma2[1][p] = s2Draw;
-        theta[0][p] = theta[1][p] = thDraw;
-        for(std::vector<Node*>::reverse_iterator it = dp.rbegin(); it != dp.rend(); ++it){
-            Node* n = *it;
-            if(n == crown || n->getIsFossil())
-                continue;
-            double rPar = (n->getAncestor() == crown) ? muDraw : rate[0][p][n->getAncestor()->getOffset()];
-            double L2 = n->getAncestor()->getTime() - n->getTime();
-            double logr = std::log(rPar) - 0.5 * s2Draw * L2 + Probability::Normal::rv(&rng) * std::sqrt(s2Draw * L2);
-            rate[0][p][n->getOffset()] = rate[1][p][n->getOffset()] = std::exp(logr);
-        }
+        mu[0][p] = mu[1][p] = Probability::Gamma::rv(&rng, rgeneParam[0], rgeneParam[1]);
+        sigma2[0][p] = sigma2[1][p] = Probability::Gamma::rv(&rng, sigma2Param[0], sigma2Param[1]);
+        theta[0][p] = theta[1][p] = Probability::Gamma::rv(&rng, thetaParam[0], thetaParam[1]);
+        for(int b : branchNodes)
+            rate[0][p][b] = rate[1][p][b] = 1.0;
     }
 }
 
 double ParameterBranchRatesCIR::cirLnP(void){
     double lnp = 0.0;
+    double H = tree->getCrown()->getTime();
     for(int p = 0; p < numLoci; p++){
         double s2 = sigma2[0][p];
         double th = theta[0][p];
@@ -397,7 +375,7 @@ double ParameterBranchRatesCIR::cirLnP(void){
             return -INFINITY;
         for(int b : branchNodes){
             Node* n = tree->getNodeByOffset(b);
-            double L = n->getAncestor()->getTime() - n->getTime();
+            double L = (n->getAncestor()->getTime() - n->getTime()) / H;
             if(L <= 0.0)
                 return -INFINITY;
             double rhoUp = rate[0][p][n->getAncestor()->getOffset()];
@@ -474,13 +452,14 @@ double ParameterBranchRatesCIR::lnProbability(void){
 std::vector<std::vector<double>> ParameterBranchRatesCIR::getAbsoluteRates(void){
     std::vector<std::vector<double>> a(numLoci, std::vector<double>(numNodes, 0.0));
     Node* crown = tree->getCrown();
+    double H = crown->getTime();
     for(int p = 0; p < numLoci; p++){
         for(int b = 0; b < numNodes; b++){
             Node* n = tree->getNodeByOffset(b);
             if(n != crown){
-                double L = n->getAncestor()->getTime() - n->getTime();
+                double Ln = (n->getAncestor()->getTime() - n->getTime()) / H;
                 double sigmaPB = 2.0 * theta[0][p] * sigma2[0][p];
-                a[p][b] = mu[0][p] * getMeanTau(rate[0][p][b], rate[0][p][n->getAncestor()->getOffset()], L, sigmaPB, theta[0][p]) / L;
+                a[p][b] = mu[0][p] * getMeanTau(rate[0][p][b], rate[0][p][n->getAncestor()->getOffset()], Ln, sigmaPB, theta[0][p]) / Ln;
             }else{
                 a[p][b] = mu[0][p] * rate[0][p][b];
             }
