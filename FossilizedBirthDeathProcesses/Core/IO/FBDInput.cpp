@@ -1,12 +1,14 @@
 #include "FBDInput.hpp"
 #include "Msg.hpp"
 #include "Node.hpp"
+#include "Probability.hpp"
 #include "ReadTSV.hpp"
 #include "Tree.hpp"
 #include "UserSettings.hpp"
 
 #include <cctype>
 #include <fstream>
+#include <limits>
 #include <map>
 #include <sstream>
 #include <string>
@@ -137,4 +139,20 @@ void FBDInput::assignFossilAwareAges(void){
             minAges[anchor] = bound;
     }
     tree->assignStartingAges(minAges, unit);
+
+    UserSettings& us = UserSettings::userSettings();
+    if(us.getConditionAgePriorSet()){
+        bool origin  = (us.getConditioning() == Conditioning::ORIGIN);
+        bool bounded = (us.getConditionAgePrior() == Probability::PriorFamily::UNIFORM);
+        double hi = bounded ? us.getConditionAgePriorP2() : std::numeric_limits<double>::max();
+        if(bounded && hi < maxBound)
+            Msg::error("conditioning age prior lower bound (" + std::to_string(hi) + ") is younger than the oldest fossil (" + std::to_string(maxBound) + ")");
+        double mean = Probability::priorMean(us.getConditionAgePrior(), us.getConditionAgePriorP1(), us.getConditionAgePriorP2());
+        double target = origin ? 0.9 * mean : mean;
+        if(origin == false && target < maxBound)
+            target = bounded ? hi : (maxBound * 1.05);
+        double cur = tree->getCrown()->getTime();
+        if(cur > 0.0)
+            tree->scaleInternalAges(target / cur);
+    }
 }

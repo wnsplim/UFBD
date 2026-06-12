@@ -40,6 +40,8 @@ class UserSettings {
         double                      getHsmrfShifts(void) { checkSettings(); return hsmrfShifts; }
         double                      getHsmrfShiftSize(void) { checkSettings(); return hsmrfShiftSize; }
         bool                        getCpuTime(void) { checkSettings(); return cpuTime; }
+        bool                        getClockAsis(void) { checkSettings(); return clockAsis; }
+        bool                        getClockAo(void) { checkSettings(); return clockAo; }
         std::vector<double>         getSkylineTimes(void) { checkSettings(); return skylineTimes; }
         Model                       getModel(void) { checkSettings(); return model; }
         double                      getRho(void) { checkSettings(); return rho; }
@@ -82,6 +84,8 @@ class UserSettings {
         double                      hsmrfShifts;
         double                      hsmrfShiftSize;
         bool                        cpuTime;
+        bool                        clockAsis;
+        bool                        clockAo;
         std::vector<double>         skylineTimes;
         Model                       model;
         double                      rho;

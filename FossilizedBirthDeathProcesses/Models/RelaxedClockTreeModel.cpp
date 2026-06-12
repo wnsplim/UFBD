@@ -34,6 +34,8 @@ RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades
         clock = new ParameterBranchRatesCIR(1.0, this, fbd->getTree(), lik->getNumPartitions(), rgeneParam, sigma2Param);
     else
         clock = new ParameterBranchRates(1.0, this, fbd->getTree(), lik->getNumPartitions(), clockModel, rgeneParam, sigma2Param);
+    clock->setClockAsis(UserSettings::userSettings().getClockAsis());
+    clock->setClockAo(UserSettings::userSettings().getClockAo());
     parameters.push_back(fbd->getParameterTree());
     lastMoveType = 2;
     RandomVariable::setActiveInstance(prevRng);

@@ -6,13 +6,22 @@
 #include "RandomVariable.hpp"
 #include "Tree.hpp"
 
-BranchRateModel::BranchRateModel(double prob, PhylogeneticModel* m, Tree* t, int L, const double* rg, const double* s2) : Parameter(prob, m, "branchRates"){
+BranchRateModel::BranchRateModel(double prob, PhylogeneticModel* m, Tree* t, int L, const double* rg, const double* s2) : Parameter(prob, m, "branchRates"), sampler(5){
     tree = t;
     numLoci = L;
     numNodes = t->getNumNodes();
     lastMove = -1;
     lastLocus = -1;
     lastNode = -1;
+    clockAsis = false;
+    clockAo = false;
+    lastAoMove = -1;
+    sampler.setWeight(0, 0.65);
+    sampler.setWeight(1, 0.15);
+    sampler.setWeight(2, 0.10);
+    sampler.setWeight(3, 0.10);
+    sampler.setWeight(4, 0.0);
+    sampler.setActive(4, false);
     cdStep = 1.0;
     cdAccW = 0;
     cdAttW = 0;
@@ -85,6 +94,33 @@ double BranchRateModel::bactrianMultiplier(int mt){
     if(Probability::Uniform::rv(&rng, 0.0, 1.0) < 0.5)
         delta = -delta;
     return std::exp(step[mt] * delta);
+}
+
+void BranchRateModel::snapshotClock(int p){
+    snapLs2 = std::log(sigma2[0][p]);
+    snapLmu = std::log(mu[0][p]);
+    snapLr.assign(branchNodes.size(), 0.0);
+    for(size_t i = 0; i < branchNodes.size(); i++)
+        snapLr[i] = std::log(rate[0][p][branchNodes[i]]);
+}
+
+void BranchRateModel::recordClockReward(bool accepted){
+    double sjd = 0.0;
+    if(accepted){
+        int p = lastLocus;
+        double d;
+        d = std::log(sigma2[0][p]) - snapLs2;
+        sjd += d * d;
+        d = std::log(mu[0][p]) - snapLmu;
+        sjd += d * d;
+        double rs = 0.0;
+        for(size_t i = 0; i < branchNodes.size(); i++){
+            d = std::log(rate[0][p][branchNodes[i]]) - snapLr[i];
+            rs += d * d;
+        }
+        sjd += rs / (double)branchNodes.size();
+    }
+    sampler.reward(lastAoMove, sjd);
 }
 
 double BranchRateModel::scaleLocusRate(int p){
@@ -195,6 +231,8 @@ double BranchRateModel::constantDistanceMove(void){
 }
 
 void BranchRateModel::updateForAcceptance(void){
+    if(clockAo && lastMove != 4)
+        recordClockReward(true);
     if(lastMove == 4){
         cdAccW++;
         for(int k = 0; k < (int)cdNodes.size(); k++)
@@ -204,6 +242,16 @@ void BranchRateModel::updateForAcceptance(void){
     }
     if(lastMove == 5){
         mu[1][lastLocus] = mu[0][lastLocus];
+        for(int b : branchNodes)
+            rate[1][lastLocus][b] = rate[0][lastLocus][b];
+        return;
+    }
+    if(lastMove == 3){
+        acc[3]++;
+        recentAR[3].push_back(true);
+        if(recentAR[3].size() > 1000)
+            recentAR[3].pop_front();
+        sigma2[1][lastLocus] = sigma2[0][lastLocus];
         for(int b : branchNodes)
             rate[1][lastLocus][b] = rate[0][lastLocus][b];
         return;
@@ -221,6 +269,8 @@ void BranchRateModel::updateForAcceptance(void){
 }
 
 void BranchRateModel::updateForRejection(void){
+    if(clockAo && lastMove != 4)
+        recordClockReward(false);
     if(lastMove == 4){
         for(int k = 0; k < (int)cdNodes.size(); k++)
             for(int p = 0; p < numLoci; p++)
@@ -229,6 +279,16 @@ void BranchRateModel::updateForRejection(void){
     }
     if(lastMove == 5){
         mu[0][lastLocus] = mu[1][lastLocus];
+        for(int b : branchNodes)
+            rate[0][lastLocus][b] = rate[1][lastLocus][b];
+        return;
+    }
+    if(lastMove == 3){
+        rej[3]++;
+        recentAR[3].push_back(false);
+        if(recentAR[3].size() > 1000)
+            recentAR[3].pop_front();
+        sigma2[0][lastLocus] = sigma2[1][lastLocus];
         for(int b : branchNodes)
             rate[0][lastLocus][b] = rate[1][lastLocus][b];
         return;
@@ -265,6 +325,20 @@ ParameterBranchRates::ParameterBranchRates(double prob, PhylogeneticModel* m, Tr
             rate[0][p][n->getOffset()] = rate[1][p][n->getOffset()] = std::exp(logr);
         }
     }
+}
+
+double ParameterBranchRates::interweaveScale(int p){
+    double c = bactrianMultiplier(3);
+    double logc = std::log(c);
+    double m = mu[0][p];
+    double jac = 2.0 * logc;
+    sigma2[0][p] *= c * c;
+    for(int b : branchNodes){
+        double d = std::log(rate[0][p][b] / m);
+        jac += logc + (c - 1.0) * d;
+        rate[0][p][b] = m * std::exp(c * d);
+    }
+    return jac;
 }
 
 double ParameterBranchRates::lognormalLnP(double r, double s2, double m){
@@ -342,6 +416,29 @@ std::vector<std::vector<double>> ParameterBranchRates::getAbsoluteRates(void){
 double ParameterBranchRates::update(void){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastLocus = (int)(rng.uniformRv() * numLoci);
+    if(clockAo){
+        snapshotClock(lastLocus);
+        lastAoMove = sampler.pick(rng.uniformRv());
+        if(lastAoMove == 0){
+            lastMove = 2;
+            lastNode = branchNodes[(int)(rng.uniformRv() * branchNodes.size())];
+            return scaleBranchRate(lastLocus, lastNode);
+        }
+        if(lastAoMove == 1){
+            lastMove = 5;
+            return globalRateBranchRatesScale(lastLocus);
+        }
+        if(lastAoMove == 2){
+            lastMove = 0;
+            return scaleLocusRate(lastLocus);
+        }
+        if(lastAoMove == 3){
+            lastMove = 1;
+            return scaleLocusSigma2(lastLocus);
+        }
+        lastMove = 3;
+        return interweaveScale(lastLocus);
+    }
     double u = rng.uniformRv();
     if(u < 0.65){
         lastMove = 2;
@@ -355,6 +452,10 @@ double ParameterBranchRates::update(void){
     if(u < 0.90){
         lastMove = 0;
         return scaleLocusRate(lastLocus);
+    }
+    if(clockAsis && u < 0.95){
+        lastMove = 3;
+        return interweaveScale(lastLocus);
     }
     lastMove = 1;
     return scaleLocusSigma2(lastLocus);

@@ -54,6 +54,8 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
     hsmrfShifts     = std::log(2.0);
     hsmrfShiftSize  = 2.0;
     cpuTime         = false;
+    clockAsis       = false;
+    clockAo         = false;
 
     std::vector<std::string> arguments;
     for (int i = 0; i < argc; i++)
@@ -66,13 +68,13 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
         "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt", "-help", "-h",
         "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times",
         "-lambda-prior-mode", "-mu-prior-mode", "-psi-prior-mode", "-hsmrf-shifts", "-hsmrf-shift-size", "-cpu-time",
-        "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma"
+        "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma", "-clock-asis", "-clock-ao"
     };
     std::set<std::string> valueFlags = {
         "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt",
         "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times",
         "-lambda-prior-mode", "-mu-prior-mode", "-psi-prior-mode", "-hsmrf-shifts", "-hsmrf-shift-size", "-cpu-time",
-        "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma"
+        "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma", "-clock-asis", "-clock-ao"
     };
 
     for (int i = 1; i < (int)arguments.size(); i++) {
@@ -173,6 +175,15 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
                 if (v == "on" || v == "true" || v == "1") cpuTime = true;
                 else if (v == "off" || v == "false" || v == "0") cpuTime = false;
                 else Msg::error("Flag \"" + arg + "\" expects on or off, but got \"" + val + "\".");
+            } else if (arg == "-clock-asis" || arg == "-clock-ao") {
+                std::string v = val;
+                for (char& ch : v) ch = std::tolower((unsigned char)ch);
+                bool on = true;
+                if (v == "on" || v == "true" || v == "1") on = true;
+                else if (v == "off" || v == "false" || v == "0") on = false;
+                else Msg::error("Flag \"" + arg + "\" expects on or off, but got \"" + val + "\".");
+                if (arg == "-clock-asis") clockAsis = on;
+                else clockAo = on;
             } else if (arg == "-skyline-times") {
                 std::stringstream ss(val);
                 std::string tok;

@@ -4,6 +4,7 @@
 #include <deque>
 #include <vector>
 
+#include "AdaptiveOperatorSampler.hpp"
 #include "Parameter.hpp"
 
 class Tree;
@@ -23,6 +24,8 @@ class BranchRateModel : public Parameter {
         void                        commitAll(void);
         void                        restoreAll(void);
         double                      constantDistanceMove(void);
+        void                        setClockAsis(bool b) { clockAsis = b; sampler.setActive(4, b); }
+        void                        setClockAo(bool b) { clockAo = b; sampler.setAdapting(b); }
         void                        print(void) {}
         void                        updateForAcceptance(void);
         void                        updateForRejection(void);
@@ -34,6 +37,8 @@ class BranchRateModel : public Parameter {
         double                      scaleBranchRate(int p, int b);
         double                      globalRateBranchRatesScale(int p);
         double                      bactrianMultiplier(int moveType);
+        void                        snapshotClock(int p);
+        void                        recordClockReward(bool accepted);
         double                      gammaDirichletLnP(const std::vector<double>& v, const double* param);
         double                      gammaLnPdf(double a, double b, double x);
         Tree*                       tree;
@@ -52,6 +57,13 @@ class BranchRateModel : public Parameter {
         int                         lastMove;
         int                         lastLocus;
         int                         lastNode;
+        bool                        clockAsis;
+        bool                        clockAo;
+        int                         lastAoMove;
+        AdaptiveOperatorSampler     sampler;
+        double                      snapLs2;
+        double                      snapLmu;
+        std::vector<double>         snapLr;
         double                      cdStep;
         long                        cdAccW;
         long                        cdAttW;
@@ -68,6 +80,7 @@ class ParameterBranchRates : public BranchRateModel {
         double                      update(void);
 
     private:
+        double                      interweaveScale(int p);
         double                      lognormalLnP(double r, double s2, double m);
         double                      whiteNoiseLnP(double r, double s2, double t, double m);
         double                      gbmLnP(void);
