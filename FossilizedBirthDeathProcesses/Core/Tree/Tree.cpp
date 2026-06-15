@@ -46,9 +46,13 @@ Tree::Tree(std::string newick){
         }else{
             if(readingBl == false){
                 Node* newNode = addNode();
-                newNode->addNeighbor(p);
-                newNode->setAncestor(p);
-                p->addNeighbor(newNode);
+                if(p == nullptr){
+                    crown = newNode;
+                }else{
+                    newNode->addNeighbor(p);
+                    newNode->setAncestor(p);
+                    p->addNeighbor(newNode);
+                }
                 newNode->setName(token);
                 newNode->setIsTip(true);
                 tips.push_back(newNode);

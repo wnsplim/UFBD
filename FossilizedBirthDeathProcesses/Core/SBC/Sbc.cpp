@@ -136,10 +136,13 @@ void Sbc::runInference(void){
     long burnin = (long)(cfg.burninFraction * cfg.mcmcGen);
     std::map<std::string, std::vector<double>> ranks;
     std::map<std::string, long> cov50, cov90;
+    std::vector<int> repNExt, repNFoss;
 
     for(int rep = 0; rep < cfg.numReps; rep++){
         SimParams truth = drawParams();
         SimResult r = sim.simulate(truth);
+        repNExt.push_back(r.numExtantSampled);
+        repNFoss.push_back(r.numFossils);
 
         Tree* tree = new Tree(r.backboneNewick);
         tree->validateBackbone();

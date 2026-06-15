@@ -37,7 +37,7 @@ def main():
         ax.set_xlim(0, 1)
     axes[0][0].set_ylabel("count")
     fig.tight_layout()
-    fig.savefig(out, dpi=130)
+    fig.savefig(out, dpi=300)
     print("wrote", out)
 
 

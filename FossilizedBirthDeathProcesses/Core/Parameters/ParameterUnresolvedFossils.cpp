@@ -154,6 +154,8 @@ double ParameterUnresolvedFossils::scaleAttachAges(const std::vector<int>& indic
 
 void ParameterUnresolvedFossils::updateForAcceptance(void){
     numAcceptances++;
+    if(numFossils == 0)
+        return;
     if(lastWasBulk){
         for(int i = 0; i < numFossils; i++)
             z[1][i] = z[0][i];
@@ -165,6 +167,8 @@ void ParameterUnresolvedFossils::updateForAcceptance(void){
 
 void ParameterUnresolvedFossils::updateForRejection(void){
     numRejections++;
+    if(numFossils == 0)
+        return;
     if(lastWasBulk){
         for(int i = 0; i < numFossils; i++)
             z[0][i] = z[1][i];
