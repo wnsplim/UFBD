@@ -78,5 +78,5 @@ void RandomVariable::twist(void) {
 
 double RandomVariable::uniformRv(void) {
 
-    return (double)extractU32() / UINT32_MAX;
+    return (double)extractU32() / ((double)UINT32_MAX + 1.0);
 }

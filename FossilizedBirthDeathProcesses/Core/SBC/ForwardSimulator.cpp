@@ -148,8 +148,6 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
                 curAge = younger; ii--; continue;
             }
             int k = (int)(rng->uniformRv() * N);
-            if(k >= N)
-                k = N - 1;
             SimNode* n = active[k];
             n->age = nextAge;
             double u = rng->uniformRv();
