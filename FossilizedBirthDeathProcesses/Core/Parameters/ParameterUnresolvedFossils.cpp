@@ -23,6 +23,7 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
     crownNode.resize(numFossils);
     originNode.resize(numFossils);
     isCrown.resize(numFossils);
+    ue.resize(numFossils);
     y[0].resize(numFossils);
     y[1].resize(numFossils);
     z[0].resize(numFossils);
@@ -42,6 +43,7 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
         crownNode[i]  = cr;
         originNode[i] = cr->getAncestor();
         isCrown[i]    = (f.getAssignment() == Assignment::CROWN);
+        ue[i]         = (f.getMaxAge() == 0.0);
         yMin[i]       = f.getMinAge();
         yMax[i]       = f.getMaxAge();
     }
@@ -86,6 +88,8 @@ double ParameterUnresolvedFossils::update(void){
 }
 
 double ParameterUnresolvedFossils::updateFossilAge(int i){
+    if(ue[i])
+        return 0.0;
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     if(z[0][i] == y[0][i]){
         double ceiling = getMaxAttachAge(i);
@@ -110,6 +114,8 @@ double ParameterUnresolvedFossils::updateAttachAge(int i){
 }
 
 double ParameterUnresolvedFossils::updateSampledAncestor(int i){
+    if(ue[i])
+        return 0.0;
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     double lo = getMinAttachAge(i);
     double hi = getMaxAttachAge(i);

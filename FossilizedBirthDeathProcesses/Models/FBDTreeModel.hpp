@@ -36,6 +36,7 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      calculateResolvedFBD(void);
         double                      lnD(double t);
         double                      fossilPqLn(double y, double z);
+        double                      uePqLn(double z);
         double                      calculateLnSurvival(double t);
         void                        prepareIntervals(void);
         int                         findIndex(double t);

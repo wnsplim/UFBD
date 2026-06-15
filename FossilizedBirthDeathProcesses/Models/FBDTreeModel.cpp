@@ -452,6 +452,10 @@ double FBDTreeModel::calculateFBDProbability(void){
             fbdProb += std::log(psiAt(findIndex(unresolvedFossils->getFossilAge(i)))) + cachedGammaLn[i];
             continue;
         }
+        if(unresolvedFossils->isUE(i)){
+            fbdProb += uePqLn(unresolvedFossils->getAttachAge(i)) + cachedGammaLn[i];
+            continue;
+        }
         fbdProb += fossilPqLn(unresolvedFossils->getFossilAge(i), unresolvedFossils->getAttachAge(i)) + cachedGammaLn[i];
     }
     return fbdProb;
@@ -501,6 +505,10 @@ double FBDTreeModel::lnD(double t){
 
 double FBDTreeModel::fossilPqLn(double y, double z){
     return std::log(psiAt(findIndex(y))) + std::log(2*lambdaAt(findIndex(z))) + std::log(calculatePo(y)) + lnD(z) - lnD(y);
+}
+
+double FBDTreeModel::uePqLn(double z){
+    return std::log(rhoVal) + std::log(2*lambdaAt(findIndex(z))) + lnD(z);
 }
 
 double FBDTreeModel::calculateLnSurvival(double t){

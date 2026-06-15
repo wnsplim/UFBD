@@ -242,12 +242,14 @@ void Sbc::runInference(void){
         std::vector<std::string> cols;
         for(std::map<std::string, std::vector<double>>::iterator it = ranks.begin(); it != ranks.end(); ++it)
             cols.push_back(it->first);
+        out << "nExt\tnFoss";
         for(size_t c = 0; c < cols.size(); c++)
-            out << (c ? "\t" : "") << cols[c];
+            out << "\t" << cols[c];
         out << "\n";
         for(int rep = 0; rep < cfg.numReps; rep++){
+            out << repNExt[rep] << "\t" << repNFoss[rep];
             for(size_t c = 0; c < cols.size(); c++)
-                out << (c ? "\t" : "") << ranks[cols[c]][rep];
+                out << "\t" << ranks[cols[c]][rep];
             out << "\n";
         }
         printf("  wrote ranks to %s_ranks.tsv\n", cfg.dumpPrefix.c_str());

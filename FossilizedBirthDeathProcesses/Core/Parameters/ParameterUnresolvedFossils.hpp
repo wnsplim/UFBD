@@ -20,8 +20,9 @@ class ParameterUnresolvedFossils : public Parameter {
         int                         getNumFossils(void) { return numFossils; }
         double                      getFossilAge(int i) { return y[0][i]; }
         double                      getAttachAge(int i) { return z[0][i]; }
-        bool                        isSA(int i) { return z[0][i] == y[0][i]; }
-        int                         getNumSampledAncestors(void) { int n = 0; for(int i = 0; i < numFossils; i++) if(z[0][i] == y[0][i]) n++; return n; }
+        bool                        isUE(int i) { return ue[i]; }
+        bool                        isSA(int i) { return ue[i] == false && z[0][i] == y[0][i]; }
+        int                         getNumSampledAncestors(void) { int n = 0; for(int i = 0; i < numFossils; i++) if(ue[i] == false && z[0][i] == y[0][i]) n++; return n; }
         Node*                       getCrownNode(int i) { return crownNode[i]; }
         Node*                       getMaxAttachNode(int i) { return isCrown[i] ? crownNode[i] : originNode[i]; }
         bool                        getIsCrown(int i) { return isCrown[i]; }
@@ -47,6 +48,7 @@ class ParameterUnresolvedFossils : public Parameter {
         std::vector<Node*>          crownNode;
         std::vector<Node*>          originNode;
         std::vector<bool>           isCrown;
+        std::vector<char>           ue;
         std::vector<double>         y[2]; // 0 = working (scored), 1 = last accepted
         std::vector<double>         z[2];
         int                         lastFossil;
