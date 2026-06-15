@@ -6,7 +6,7 @@
 #include "Probability.hpp"
 
 enum class Conditioning { CROWN, ORIGIN };
-enum class Model { BD, FBD, HEA14, UFBD };
+enum class Model { FBD, HEA14, UFBD };
 enum class RateMode { IID, SMOOTH };
 
 class UserSettings {

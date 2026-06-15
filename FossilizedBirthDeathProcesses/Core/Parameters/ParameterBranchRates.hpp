@@ -7,6 +7,7 @@
 #include "Parameter.hpp"
 
 class Tree;
+class ParameterUnresolvedFossils;
 
 enum class ClockModel { UCLN, WN, GBM, CIR };
 
@@ -23,6 +24,8 @@ class BranchRateModel : public Parameter {
         void                        commitAll(void);
         void                        restoreAll(void);
         double                      constantDistanceMove(void);
+        double                      rateAgeSubtreeMove(void);
+        void                        setUnresolvedFossils(ParameterUnresolvedFossils* u) { uf = u; }
         void                        print(void) {}
         void                        updateForAcceptance(void);
         void                        updateForRejection(void);
@@ -52,6 +55,7 @@ class BranchRateModel : public Parameter {
         int                         lastMove;
         int                         lastLocus;
         int                         lastNode;
+        ParameterUnresolvedFossils* uf;
         double                      cdStep;
         long                        cdAccW;
         long                        cdAttW;

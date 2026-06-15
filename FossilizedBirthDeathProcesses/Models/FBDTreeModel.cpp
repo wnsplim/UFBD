@@ -46,7 +46,6 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     Probability::PriorSpec lp = UserSettings::userSettings().getLambdaPrior();
     Probability::PriorSpec mp = UserSettings::userSettings().getMuPrior();
     Probability::PriorSpec pp = UserSettings::userSettings().getPsiPrior();
-    bool fossilSampling = (UserSettings::userSettings().getModel() != Model::BD);
     UserSettings& rateUs = UserSettings::userSettings();
     int nB = (int)intervalStart.size();
     bool lamSmooth = (rateUs.getLambdaMode() == RateMode::SMOOTH);
@@ -57,7 +56,7 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     if(psiSmooth && nB < 2){ Msg::warning("Smooth (HSMRF) requested for psi but only 1 rate interval; using iid."); psiSmooth = false; }
     double nShifts = rateUs.getHsmrfShifts();
     double shiftSize = rateUs.getHsmrfShiftSize();
-    if(lamSmooth || muSmooth || (psiSmooth && fossilSampling)){
+    if(lamSmooth || muSmooth || psiSmooth){
         if(lamSmooth){
             lambdaField = new ParameterShrinkageField(1.0, this, nB, lp, nShifts, shiftSize);
             parameters.push_back(lambdaField);
@@ -82,18 +81,16 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
                 parameters.push_back(m);
             }
         }
-        if(fossilSampling){
-            if(psiSmooth){
-                psiField = new ParameterShrinkageField(1.0, this, nB, pp, nShifts, shiftSize);
-                parameters.push_back(psiField);
-            }else{
-                for(int i = 0; i < nB; i++){
-                    std::string suf = (nB > 1) ? std::to_string(i) : "";
-                    ParameterDouble* p = new ParameterDouble(1.0, this, "psi" + suf, 0.0, std::numeric_limits<double>::max());
-                    if(pp.set) p->setPrior(pp.family, pp.p1, pp.p2);
-                    psi.push_back(p);
-                    parameters.push_back(p);
-                }
+        if(psiSmooth){
+            psiField = new ParameterShrinkageField(1.0, this, nB, pp, nShifts, shiftSize);
+            parameters.push_back(psiField);
+        }else{
+            for(int i = 0; i < nB; i++){
+                std::string suf = (nB > 1) ? std::to_string(i) : "";
+                ParameterDouble* p = new ParameterDouble(1.0, this, "psi" + suf, 0.0, std::numeric_limits<double>::max());
+                if(pp.set) p->setPrior(pp.family, pp.p1, pp.p2);
+                psi.push_back(p);
+                parameters.push_back(p);
             }
         }
     }else{
@@ -107,12 +104,10 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
             mu.push_back(m);
             parameters.push_back(l);
             parameters.push_back(m);
-            if(fossilSampling){
-                ParameterDouble* p = new ParameterDouble(1.0, this, "psi" + suf, 0.0, std::numeric_limits<double>::max());
-                if(pp.set) p->setPrior(pp.family, pp.p1, pp.p2);
-                psi.push_back(p);
-                parameters.push_back(p);
-            }
+            ParameterDouble* p = new ParameterDouble(1.0, this, "psi" + suf, 0.0, std::numeric_limits<double>::max());
+            if(pp.set) p->setPrior(pp.family, pp.p1, pp.p2);
+            psi.push_back(p);
+            parameters.push_back(p);
         }
     }
     rho = UserSettings::userSettings().getRho();
@@ -146,7 +141,7 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
             fossilCrown.push_back(wt->getMRCA(clade->getTaxa()));
             fossilOrigin.push_back(wt->getNodeByOffset(clade->getOrigin()->getOffset()));
         }
-    }else if(fossilSampling){
+    }else{
         unresolvedFossils = new ParameterUnresolvedFossils(1.0, this, parameterTree->getTree(), clades, fossils, originAge);
         parameters.push_back(unresolvedFossils);
     }
@@ -252,7 +247,7 @@ std::vector<double> FBDTreeModel::getParameterString(void){
 }
 
 double FBDTreeModel::lnLikelihood(void){
-    double v = (UserSettings::userSettings().getModel() == Model::BD) ? calculateBDProbability() : calculateFBDProbability();
+    double v = calculateFBDProbability();
     if(std::isfinite(v) == false)
         return -INFINITY;
     return v;
@@ -496,54 +491,6 @@ double FBDTreeModel::calculateResolvedFBD(void){
             if(fakeSplit == false)
                 lnP += std::log(2.0 * lambdaAt(findIndex(n->getTime())));
         }
-    }
-    return lnP;
-}
-
-double FBDTreeModel::calculateBDProbability(void){
-    Tree* tree = parameterTree->getTree();
-    Node* crown = tree->getCrown();
-    double crownAge = crown->getTime();
-    double lam = lambdaAt(0);
-    double m = muAt(0);
-    double r = rho;
-    bool useOrigin = (UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN);
-
-    double a = lam - m;
-    double c1 = std::abs(a);
-    double c2 = (-lam + m + 2.0 * lam * r) / c1;
-    auto bdLnD = [&](double t) -> double {
-        if(t <= 0.0)
-            return 0.0;
-        double a = c1 * t;
-        double bracket = std::pow(1.0 + c2, 2) + std::exp(-a) * 2.0 * (1.0 - c2 * c2) + std::exp(-2.0 * a) * std::pow(1.0 - c2, 2);
-        return std::log(4.0) - a - std::log(bracket);
-    };
-    auto bdLnSurvival = [&](double t) -> double {
-        double B = lam * (1.0 - r) - m;
-        double lnNum = std::log(std::abs(r * a));
-        double lnDenom = (-a * t > 0.0)
-            ? (-a * t) + std::log(std::abs(lam * r * std::exp(a * t) + B))
-            : std::log(std::abs(lam * r + B * std::exp(-a * t)));
-        return lnNum - lnDenom;
-    };
-
-    double lnP;
-    if(useOrigin){
-        double x0 = originAge->getValue();
-        if(x0 < crownAge)
-            return -INFINITY;
-        lnP = -bdLnSurvival(x0) + bdLnD(x0) - bdLnD(crownAge);
-    }else{
-        lnP = -2.0 * bdLnSurvival(crownAge);
-    }
-    for(Node* n : tree->getDownPassSequence()){
-        if(n != crown)
-            lnP += bdLnD(n->getAncestor()->getTime()) - bdLnD(n->getTime());
-        if(n->getIsTip())
-            lnP += std::log(r);
-        else if(useOrigin || n != crown)
-            lnP += std::log(2.0 * lam);
     }
     return lnP;
 }
@@ -1113,6 +1060,14 @@ double FBDTreeModel::doUpDownScale(void){
         if(n != t->getCrown() && n->getAncestor()->getTime() < n->getTime())
             return -INFINITY;
     return h;
+}
+
+double FBDTreeModel::doClockNodeAge(void){
+    std::map<Node*,double> floors;
+    computeAgeFloors(floors);
+    parameterTree->getTree()->setAgeFloors(floors);
+    parameterTree->getTree()->setLastUpdateWasScale(false);
+    return parameterTree->getTree()->updateNodeAge();
 }
 
 double FBDTreeModel::doJointScale(void){

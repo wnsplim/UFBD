@@ -7,6 +7,7 @@
 #include "FBDTreeModel.hpp"
 #include "Node.hpp"
 #include "ParameterTree.hpp"
+#include "ParameterUnresolvedFossils.hpp"
 #include "Probability.hpp"
 #include "RandomVariable.hpp"
 #include "Tree.hpp"
@@ -16,15 +17,6 @@ RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades
     rng.setSeed(seed);
     RandomVariable* prevRng = RandomVariable::getActiveInstance();
     RandomVariable::setActiveInstance(&rng);
-    if(UserSettings::userSettings().getModel() == Model::BD){
-        UserSettings& us = UserSettings::userSettings();
-        double cur = t->getCrown()->getTime();
-        if(us.getConditionAgePriorSet() && cur > 0.0){
-            double pm = Probability::priorMean(us.getConditionAgePrior(), us.getConditionAgePriorP1(), us.getConditionAgePriorP2());
-            double target = (us.getConditioning() == Conditioning::ORIGIN) ? 0.9 * pm : pm;
-            t->scaleInternalAges(target / cur);
-        }
-    }
     fbd = new FBDTreeModel(t, clades, fossils, seed);
     std::vector<std::string> rogue;
     for(Fossil& f : fossils)
@@ -34,6 +26,7 @@ RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades
         clock = new ParameterBranchRatesCIR(1.0, this, fbd->getTree(), lik->getNumPartitions(), rgeneParam, sigma2Param);
     else
         clock = new ParameterBranchRates(1.0, this, fbd->getTree(), lik->getNumPartitions(), clockModel, rgeneParam, sigma2Param);
+    clock->setUnresolvedFossils(fbd->getUnresolvedFossils());
     parameters.push_back(fbd->getParameterTree());
     lastMoveType = 2;
     RandomVariable::setActiveInstance(prevRng);
@@ -51,9 +44,11 @@ double RelaxedClockTreeModel::update(void){
     RandomVariable& r = RandomVariable::randomVariableInstance();
     double u = r.uniformRv();
     if(u < 0.25){ lastMoveType = 0; return clock->update(); }
+    if(u < 0.60){ lastMoveType = 1; return clock->constantDistanceMove(); }
+    if(u < 0.75){ lastMoveType = 5; return fbd->doClockNodeAge(); }
     if(u < 0.85){
-        lastMoveType = 1;
-        return clock->constantDistanceMove();
+        lastMoveType = 4;
+        return clock->rateAgeSubtreeMove();
     }
     if(u < 0.95){
         lastMoveType = 3;
@@ -75,6 +70,13 @@ void RelaxedClockTreeModel::updateForAcceptance(void){
     }else if(lastMoveType == 3){
         clock->commitAll();
         fbd->getParameterTree()->updateForAcceptance();
+    }else if(lastMoveType == 4){
+        clock->updateForAcceptance();
+        fbd->getParameterTree()->updateForAcceptance();
+        if(fbd->getUnresolvedFossils() != nullptr)
+            fbd->getUnresolvedFossils()->updateForAcceptance();
+    }else if(lastMoveType == 5){
+        fbd->getParameterTree()->updateForAcceptance();
     }else
         fbd->updateForAcceptance();
 }
@@ -87,6 +89,13 @@ void RelaxedClockTreeModel::updateForRejection(void){
         fbd->getParameterTree()->updateForRejection();
     }else if(lastMoveType == 3){
         clock->restoreAll();
+        fbd->getParameterTree()->updateForRejection();
+    }else if(lastMoveType == 4){
+        clock->updateForRejection();
+        fbd->getParameterTree()->updateForRejection();
+        if(fbd->getUnresolvedFossils() != nullptr)
+            fbd->getUnresolvedFossils()->updateForRejection();
+    }else if(lastMoveType == 5){
         fbd->getParameterTree()->updateForRejection();
     }else
         fbd->updateForRejection();

@@ -127,11 +127,10 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
             } else if (arg == "-fbd_model") {
                 std::string v = val;
                 for (char& ch : v) ch = std::toupper((unsigned char)ch);
-                if (v == "BD")          model = Model::BD;
-                else if (v == "FBD")    model = Model::FBD;
+                if (v == "FBD")         model = Model::FBD;
                 else if (v == "HEA14")  model = Model::HEA14;
                 else if (v == "UFBD")   model = Model::UFBD;
-                else Msg::error("Flag \"-fbd_model\" expects BD, FBD, HEA14, or UFBD, but got \"" + val + "\".");
+                else Msg::error("Flag \"-fbd_model\" expects FBD, HEA14, or UFBD, but got \"" + val + "\".");
             } else if (arg == "-rho") {
                 try {
                     rho = std::stod(val);
@@ -331,7 +330,7 @@ void UserSettings::print(void) {
         case Probability::PriorFamily::IMPROPER:         std::cout << "improper"; break;
     }
     std::cout << std::endl;
-    std::cout << "Model:                                 " << (model == Model::BD ? "BD" : (model == Model::FBD ? "FBD" : (model == Model::HEA14 ? "HEA14" : "UFBD"))) << std::endl;
+    std::cout << "Model:                                 " << (model == Model::FBD ? "FBD" : (model == Model::HEA14 ? "HEA14" : "UFBD")) << std::endl;
     std::cout << "Tree output file name:                 " << treeOut << std::endl;
     std::cout << "Parameter output file name:            " << parametersOut << std::endl;
     std::cout << "Extant sampling fraction (rho):        " << rho << std::endl;

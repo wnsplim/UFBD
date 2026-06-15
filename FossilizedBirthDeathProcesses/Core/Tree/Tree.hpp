@@ -39,6 +39,7 @@ class Tree {
         double                              update(double scaleLambda);
         int                                 scaleInternalAges(double m);
         int                                 scaleSubtreeAges(Node* subtreeCrown, double m);
+        double                              updateNodeAge(void);
         void                                setLastUpdateWasScale(bool b) { lastUpdateWasScale = b; }
         void                                assignStartingAges(const std::map<Node*,double>& minAges, double unit);
         Node*                               insertFossilTip(Node* hostChild, std::string name, double y, double z);
@@ -54,7 +55,6 @@ class Tree {
         std::vector<std::string>            parseNewickString(std::string);
         void                                passDown(Node* p, Node* from);
         void                                showNode(Node* p, int indent);
-        double                              updateNodeAge(void);
         double                              updateCrownAge(double scaleLambda);
         void                                writeTree(Node* p, std::stringstream& strm);
         std::map<Node*,double>              ageFloors;

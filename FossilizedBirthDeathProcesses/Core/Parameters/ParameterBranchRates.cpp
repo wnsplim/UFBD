@@ -2,6 +2,7 @@
 
 #include "Node.hpp"
 #include "ParameterBranchRates.hpp"
+#include "ParameterUnresolvedFossils.hpp"
 #include "Probability.hpp"
 #include "RandomVariable.hpp"
 #include "Tree.hpp"
@@ -13,6 +14,7 @@ BranchRateModel::BranchRateModel(double prob, PhylogeneticModel* m, Tree* t, int
     lastMove = -1;
     lastLocus = -1;
     lastNode = -1;
+    uf = nullptr;
     cdStep = 1.0;
     cdAccW = 0;
     cdAttW = 0;
@@ -158,7 +160,10 @@ double BranchRateModel::constantDistanceMove(void){
     double yHi = std::log(parentAge);
     double yLo = (maxChild > 0.0) ? std::log(maxChild) : (yHi - 30.0);
     double y = std::log(myAge);
-    double ynew = y + cdStep * (rng.uniformRv() - 0.5);
+    double mBact = 0.95;
+    double dBact = mBact + Probability::Normal::rv(&rng) * std::sqrt(1.0 - mBact * mBact);
+    if(rng.uniformRv() < 0.5) dBact = -dBact;
+    double ynew = y + cdStep * dBact;
     while(ynew < yLo || ynew > yHi){
         if(ynew < yLo) ynew = 2.0 * yLo - ynew;
         if(ynew > yHi) ynew = 2.0 * yHi - ynew;
@@ -192,6 +197,73 @@ double BranchRateModel::constantDistanceMove(void){
     }
     tree->setLastUpdateWasScale(false);
     return numLoci * (lnNum - lnDen) + (ynew - y);
+}
+
+double BranchRateModel::rateAgeSubtreeMove(void){
+    RandomVariable& rng = RandomVariable::randomVariableInstance();
+    lastMove = 4;
+    cdNodes.clear();
+    std::vector<Node*> internals;
+    for(Node* n : tree->getDownPassSequence())
+        if(n != tree->getCrown() && n->getIsTip() == false)
+            internals.push_back(n);
+    if(internals.empty())
+        return -INFINITY;
+    Node* node = internals[(int)(rng.uniformRv() * internals.size())];
+    double parentAge = node->getAncestor()->getTime();
+    double myAge = node->getTime();
+    std::vector<Node*> desc = tree->getAllDescendants(node);
+    double minAge = 0.0;
+    int nInternal = 1;
+    for(Node* d : desc){
+        if(d->getIsTip()){ if(d->getTime() > minAge) minAge = d->getTime(); }
+        else nInternal++;
+    }
+    double newAge = minAge + (parentAge - minAge) * rng.uniformRv();
+    if(newAge <= minAge || newAge >= parentAge)
+        return -INFINITY;
+    double sf = newAge / myAge;
+    double zJac = 0.0;
+    if(uf != nullptr){
+        std::vector<int> insideZ;
+        int nf = uf->getNumFossils();
+        for(int i = 0; i < nf; i++){
+            if(uf->isSA(i))
+                continue;
+            bool inSub = false;
+            for(Node* a = uf->getMaxAttachNode(i); ; a = a->getAncestor()){
+                if(a == node){ inSub = true; break; }
+                if(a->getAncestor() == a) break;
+            }
+            if(inSub)
+                insideZ.push_back(i);
+        }
+        zJac = uf->scaleAttachAges(insideZ, sf);
+        if(zJac == -INFINITY)
+            return -INFINITY;
+    }
+    std::vector<Node*> rateN;
+    std::vector<double> oldDur;
+    if(node->getIsFossil() == false){ rateN.push_back(node); oldDur.push_back(parentAge - myAge); }
+    for(Node* d : desc){
+        if(d->getIsFossil())
+            continue;
+        rateN.push_back(d);
+        oldDur.push_back(d->getAncestor()->getTime() - d->getTime());
+    }
+    tree->scaleSubtreeAges(node, sf);
+    double lnH = (nInternal > 1) ? std::log(sf) * (double)(nInternal - 1) : 0.0;
+    for(size_t i = 0; i < rateN.size(); i++){
+        Node* a = rateN[i];
+        double newD = a->getAncestor()->getTime() - a->getTime();
+        double factor = oldDur[i] / newD;
+        for(int p = 0; p < numLoci; p++)
+            rate[0][p][a->getOffset()] *= factor;
+        cdNodes.push_back(a->getOffset());
+        lnH += numLoci * std::log(factor);
+    }
+    tree->setLastUpdateWasScale(false);
+    return lnH + zJac;
 }
 
 void BranchRateModel::updateForAcceptance(void){

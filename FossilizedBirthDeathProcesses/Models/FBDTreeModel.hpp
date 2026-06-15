@@ -29,10 +29,11 @@ class FBDTreeModel : public PhylogeneticModel {
         void                        updateForAcceptance(void);
         void                        updateForRejection(void);
         ParameterTree*              getParameterTree(void) { return parameterTree; }
+        ParameterUnresolvedFossils* getUnresolvedFossils(void) { return unresolvedFossils; }
+        double                      doClockNodeAge(void);
     private:
         double                      calculateFBDProbability(void);
         double                      calculateResolvedFBD(void);
-        double                      calculateBDProbability(void);
         double                      lnD(double t);
         double                      fossilPqLn(double y, double z);
         double                      calculateLnSurvival(double t);
