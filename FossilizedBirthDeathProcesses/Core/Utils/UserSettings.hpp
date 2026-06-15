@@ -17,7 +17,7 @@ class UserSettings {
                                         static UserSettings us;
                                         return us;
                                         }
-        void                        initializeSettings(int argc, const char* argv[]);
+        void                        initializeSettings(int argc, const char* argv[], bool sbcMode = false);
         unsigned long               getChainLength(void) { checkSettings(); return chainLength; }
         int                         getNumChains(void) { return numChains; }
         int                         getNumThreads(void) { return numThreads; }

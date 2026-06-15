@@ -20,7 +20,7 @@ void UserSettings::checkSettings(void) {
         Msg::error("Settings are not initialized");
 }
 
-void UserSettings::initializeSettings(int argc, const char* argv[]) {
+void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode) {
     if (settingsInitialized == true) {
         Msg::warning("Settings have already been initialized");
         return;
@@ -263,10 +263,12 @@ void UserSettings::initializeSettings(int argc, const char* argv[]) {
         numThreads = 1;
     }
 
-    if (treeOut.empty())
-        Msg::warning("No tree output file specified (-to). Use -help for usage.");
-    if (parametersOut.empty())
-        Msg::warning("No parameter output file specified (-po). Use -help for usage.");
+    if (sbcMode == false) {
+        if (treeOut.empty())
+            Msg::warning("No tree output file specified (-to). Use -help for usage.");
+        if (parametersOut.empty())
+            Msg::warning("No parameter output file specified (-po). Use -help for usage.");
+    }
 }
 
 void UserSettings::parsePriorInto(const std::string& spec, Probability::PriorFamily& family, double& p1, double& p2) {

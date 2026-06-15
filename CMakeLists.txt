@@ -14,17 +14,29 @@ set(FBD_SRC ${CMAKE_SOURCE_DIR}/FossilizedBirthDeathProcesses)
 file(GLOB_RECURSE FBD_SOURCES CONFIGURE_DEPENDS ${FBD_SRC}/*.cpp)
 list(FILTER FBD_SOURCES EXCLUDE REGEX "/Eigen/")
 
-add_executable(ufbd ${FBD_SOURCES})
+set(FBD_MAIN ${FBD_SRC}/main.cpp)
+set(SBC_MAIN ${FBD_SRC}/Core/SBC/sbc_main.cpp)
+set(FBD_LIB_SOURCES ${FBD_SOURCES})
+list(REMOVE_ITEM FBD_LIB_SOURCES ${FBD_MAIN} ${SBC_MAIN})
 
-target_include_directories(ufbd PRIVATE
-    ${FBD_SRC}                          # bundled Eigen ("Eigen/Dense") + root-level headers
+add_library(fbdcore STATIC ${FBD_LIB_SOURCES})
+target_include_directories(fbdcore PUBLIC
+    ${FBD_SRC}
     ${FBD_SRC}/Models
     ${FBD_SRC}/Mcmc
     ${FBD_SRC}/Core/Parameters
     ${FBD_SRC}/Core/Tree
     ${FBD_SRC}/Core/IO
     ${FBD_SRC}/Core/Utils
+    ${FBD_SRC}/Core/SBC
 )
 
 find_package(Threads REQUIRED)
-target_link_libraries(ufbd PRIVATE Threads::Threads)
+target_link_libraries(fbdcore PUBLIC Threads::Threads)
+
+add_executable(ufbd ${FBD_MAIN})
+target_link_libraries(ufbd PRIVATE fbdcore)
+
+add_executable(sbc ${SBC_MAIN})
+target_compile_definitions(sbc PRIVATE BUILD_SBC)
+target_link_libraries(sbc PRIVATE fbdcore)
