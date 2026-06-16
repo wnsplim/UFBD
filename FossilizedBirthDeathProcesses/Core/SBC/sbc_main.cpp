@@ -17,6 +17,7 @@ int main(int argc, const char* argv[]){
     int reps = 0, thin = 0, bins = 0;
     long gen = 0;
     double burnin = 0.0;
+    double bb = 1.0;
     std::vector<const char*> rest;
     rest.push_back(argv[0]);
     for(int i = 1; i < argc; i++){
@@ -27,6 +28,7 @@ int main(int argc, const char* argv[]){
         else if(a == "-sbc-burnin" && i + 1 < argc){ burnin = std::stod(argv[++i]); burninSet = true; }
         else if(a == "-sbc-thin" && i + 1 < argc){  thin = std::stoi(argv[++i]); thinSet = true; }
         else if(a == "-sbc-bins" && i + 1 < argc){  bins = std::stoi(argv[++i]); binsSet = true; }
+        else if(a == "-sbc-bb" && i + 1 < argc)     bb = std::stod(argv[++i]);
         else if(a == "-sbc-out" && i + 1 < argc)    out = argv[++i];
         else                                        rest.push_back(argv[i]);
     }
@@ -52,6 +54,7 @@ int main(int argc, const char* argv[]){
     cfg.simulateOnly = (mode == "simulate");
     cfg.originConditioning = (s.getConditioning() == Conditioning::ORIGIN);
     cfg.rho = s.getRho();
+    cfg.bb = bb;
     cfg.intervalStart.push_back(0.0);
     for(double t : s.getSkylineTimes())
         cfg.intervalStart.push_back(t);

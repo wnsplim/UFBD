@@ -87,6 +87,7 @@ SimParams Sbc::drawParams(void){
     SimParams p;
     p.intervalStart = cfg.intervalStart;
     p.rho = cfg.rho;
+    p.bb = cfg.bb;
     p.originConditioning = cfg.originConditioning;
     p.startAge = drawPrior(cfg.startAgePrior, rng);
     for(size_t i = 0; i < cfg.intervalStart.size(); i++){
@@ -106,29 +107,34 @@ void Sbc::run(void){
 
 void Sbc::runSimulateOnly(void){
     ForwardSimulator sim(rng);
-    double sExt = 0, sFoss = 0, sLam = 0, sMu = 0, sPsi = 0, sX = 0;
+    double sExt = 0, sFoss = 0, sBB = 0, sUE = 0, sLam = 0, sMu = 0, sPsi = 0, sX = 0;
     long minE = std::numeric_limits<long>::max(), maxE = 0;
     long minF = std::numeric_limits<long>::max(), maxF = 0;
+    long minB = std::numeric_limits<long>::max(), maxB = 0;
     long nLt2 = 0, nEq1 = 0;
     for(int i = 0; i < cfg.numReps; i++){
         SimParams p = drawParams();
         SimResult r = sim.simulate(p);
-        sExt += r.numExtantSampled; sFoss += r.numFossils;
+        sExt += r.numExtantSampled; sFoss += r.numFossils; sBB += r.numBackbone; sUE += r.numUE;
         sLam += p.lambda[0]; sMu += p.mu[0]; sPsi += p.psi[0]; sX += p.startAge;
+        if(r.numBackbone < minB) minB = r.numBackbone;
+        if(r.numBackbone > maxB) maxB = r.numBackbone;
         if(r.numExtantSampled < minE) minE = r.numExtantSampled;
         if(r.numExtantSampled > maxE) maxE = r.numExtantSampled;
         if(r.numFossils < minF) minF = r.numFossils;
         if(r.numFossils > maxF) maxF = r.numFossils;
-        if(r.numExtantSampled < 2) nLt2++;
-        if(r.numExtantSampled == 1) nEq1++;
+        if(r.numBackbone < 2) nLt2++;
+        if(r.numBackbone == 1) nEq1++;
     }
     double n = cfg.numReps;
-    printf("SBC simulate-only: %d replicates, %s conditioning, rho=%.3g, %zu interval(s)\n",
-           cfg.numReps, cfg.originConditioning ? "origin" : "crown", cfg.rho, cfg.intervalStart.size());
+    printf("SBC simulate-only: %d replicates, %s conditioning, rho=%.3g, bb=%.3g, %zu interval(s)\n",
+           cfg.numReps, cfg.originConditioning ? "origin" : "crown", cfg.rho, cfg.bb, cfg.intervalStart.size());
     printf("  drawn means : lambda0 %.5g  mu0 %.5g  psi0 %.5g  x %.5g\n", sLam/n, sMu/n, sPsi/n, sX/n);
-    printf("  #extant     : mean %.3f  [%ld..%ld]\n", sExt/n, minE, maxE);
+    printf("  #extant(tot): mean %.3f  [%ld..%ld]\n", sExt/n, minE, maxE);
+    printf("  #backbone   : mean %.3f  [%ld..%ld]\n", sBB/n, minB, maxB);
+    printf("  #UE         : mean %.3f\n", sUE/n);
     printf("  #fossils    : mean %.3f  [%ld..%ld]\n", sFoss/n, minF, maxF);
-    printf("  P(nExt<2)=%.4f  P(nExt=1)=%.4f\n", nLt2/n, nEq1/n);
+    printf("  P(nBackbone<2)=%.4f  P(nBackbone=1)=%.4f\n", nLt2/n, nEq1/n);
 }
 
 void Sbc::runInference(void){
@@ -141,13 +147,13 @@ void Sbc::runInference(void){
     for(int rep = 0; rep < cfg.numReps; rep++){
         SimParams truth = drawParams();
         SimResult r = sim.simulate(truth);
-        repNExt.push_back(r.numExtantSampled);
+        repNExt.push_back(r.numBackbone);
         repNFoss.push_back(r.numFossils);
 
         Tree* tree = new Tree(r.backboneNewick);
         tree->validateBackbone();
         std::vector<std::string> taxa;
-        for(int i = 1; i <= r.numExtantSampled; i++)
+        for(int i = 1; i <= r.numBackbone; i++)
             taxa.push_back("T" + std::to_string(i));
         Node* crown = tree->getMRCA(taxa);
         std::vector<Clade> clades;
@@ -156,6 +162,8 @@ void Sbc::runInference(void){
         std::vector<Fossil> fossils;
         for(size_t i = 0; i < r.fossilAges.size(); i++)
             fossils.push_back(Fossil("F" + std::to_string(i + 1), r.fossilAges[i], r.fossilAges[i], "whole", asg));
+        for(int i = 0; i < r.numUE; i++)
+            fossils.push_back(Fossil("U" + std::to_string(i + 1), 0.0, 0.0, "whole", asg));
         initAges(tree, fossils, cfg.originConditioning, cfg.startAgePrior);
 
         unsigned int modelSeed = (unsigned int)(rng->uniformRv() * 4294967295.0);

@@ -118,14 +118,19 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
         for(Fossil& f : fossils)
             if(f.getMaxAge() > x0init)
                 x0init = f.getMaxAge();
+        x0init *= 1.05;
         originAge = new ParameterDouble(1.0, this, "originAge", 0.0, std::numeric_limits<double>::max());
-        originAge->setValue(x0init * 1.05);
         parameters.push_back(originAge);
         UserSettings& us = UserSettings::userSettings();
-        if(us.getConditionAgePriorSet())
+        if(us.getConditionAgePriorSet()){
             originAge->setPrior(us.getConditionAgePrior(), us.getConditionAgePriorP1(), us.getConditionAgePriorP2());
-        else
+            double pm = Probability::priorMean(us.getConditionAgePrior(), us.getConditionAgePriorP1(), us.getConditionAgePriorP2());
+            if(pm > x0init)
+                x0init = pm;
+        }else{
             originAge->setPrior(Probability::PriorFamily::IMPROPER, 0.0, 0.0);
+        }
+        originAge->setValue(x0init);
     }
 
     unresolvedFossils = nullptr;
@@ -1096,8 +1101,10 @@ double FBDTreeModel::doSubtreeScale(void){
     for(Node* n : tree->getDownPassSequence())
         if(n != tree->getCrown() && n->getIsTip() == false)
             candidates.push_back(n);
-    if(candidates.empty())
+    if(candidates.empty()){
+        unresolvedFossils->scaleAttachAges(std::vector<int>(), 1.0);
         return 0.0;
+    }
 
     Node* node = candidates[(int)(rng.uniformRv() * candidates.size())];
     double oldAge = node->getTime();

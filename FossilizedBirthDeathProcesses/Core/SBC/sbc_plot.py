@@ -14,15 +14,32 @@ def main():
     out = sys.argv[2] if len(sys.argv) > 2 else path.replace("_ranks.tsv", "") + "_sbc.png"
     nbins = int(sys.argv[3]) if len(sys.argv) > 3 else 20
 
-    names = open(path).readline().rstrip("\n").split("\t")
+    header = open(path).readline().rstrip("\n").split("\t")
     data = np.loadtxt(path, skiprows=1, ndmin=2)
-    if data.shape[1] != len(names):
+    if data.shape[1] != len(header):
         sys.exit("column count mismatch in " + path)
     R = data.shape[0]
+    cols = [(i, nm) for i, nm in enumerate(header) if nm not in ("nExt", "nFoss")]
 
-    fig, axes = plt.subplots(1, len(names), figsize=(4 * len(names), 3.4), squeeze=False)
-    for j, name in enumerate(names):
-        r = data[:, j]
+    print("%s  R=%d" % (path, R))
+    print("%-12s %8s %8s %10s %8s %7s %8s %7s %8s" %
+          ("param", "KS_D", "KS_p", "chi2", "chi2_p", "cov50", "p50", "cov90", "p90"))
+    for i, nm in cols:
+        r = data[:, i]
+        D, ksp = stats.kstest(r, "uniform")
+        cnt, _ = np.histogram(r, bins=nbins, range=(0.0, 1.0))
+        chi2 = ((cnt - R / nbins) ** 2 / (R / nbins)).sum()
+        chip = stats.chi2.sf(chi2, nbins - 1)
+        c50 = int(((r >= 0.25) & (r <= 0.75)).sum())
+        c90 = int(((r >= 0.05) & (r <= 0.95)).sum())
+        p50 = stats.binomtest(c50, R, 0.5).pvalue
+        p90 = stats.binomtest(c90, R, 0.9).pvalue
+        print("%-12s %8.4f %8.4f %10.3f %8.4f %7.3f %8.4f %7.3f %8.4f" %
+              (nm, D, ksp, chi2, chip, c50 / R, p50, c90 / R, p90))
+
+    fig, axes = plt.subplots(1, len(cols), figsize=(4 * len(cols), 3.4), squeeze=False)
+    for j, (i, nm) in enumerate(cols):
+        r = data[:, i]
         ax = axes[0][j]
         counts, edges = np.histogram(r, bins=nbins, range=(0.0, 1.0))
         centers = 0.5 * (edges[:-1] + edges[1:])
@@ -32,7 +49,7 @@ def main():
         ax.axhline(expected, color="black", lw=1)
         ax.axhspan(lo, hi, color="grey", alpha=0.25, lw=0)
         D, p = stats.kstest(r, "uniform")
-        ax.set_title("%s\nKS D=%.3f p=%.3f (R=%d)" % (name, D, p, R))
+        ax.set_title("%s\nKS D=%.3f p=%.3f (R=%d)" % (nm, D, p, R))
         ax.set_xlabel("normalized rank")
         ax.set_xlim(0, 1)
     axes[0][0].set_ylabel("count")

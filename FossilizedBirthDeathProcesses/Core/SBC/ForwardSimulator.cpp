@@ -14,6 +14,7 @@ struct SimNode {
     SimNode*  right;
     bool      isFossil;
     bool      extantSampled;
+    bool      inBackbone;
     bool      keep;
     int       label;
 };
@@ -26,20 +27,21 @@ SimNode* newNode(double age, std::vector<SimNode*>& all){
     n->right = nullptr;
     n->isFossil = false;
     n->extantSampled = false;
+    n->inBackbone = false;
     n->keep = false;
     n->label = 0;
     all.push_back(n);
     return n;
 }
 
-void markKeep(SimNode* n){
+void markKeep(SimNode* n, bool useBackbone){
     if(n->left == nullptr && n->right == nullptr){
-        n->keep = n->extantSampled;
+        n->keep = useBackbone ? n->inBackbone : n->extantSampled;
         return;
     }
     bool k = false;
-    if(n->left != nullptr){ markKeep(n->left); k = n->left->keep || k; }
-    if(n->right != nullptr){ markKeep(n->right); k = n->right->keep || k; }
+    if(n->left != nullptr){ markKeep(n->left, useBackbone); k = n->left->keep || k; }
+    if(n->right != nullptr){ markKeep(n->right, useBackbone); k = n->right->keep || k; }
     n->keep = k;
 }
 
@@ -175,7 +177,7 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
             n->extantSampled = (rng->uniformRv() < p.rho);
         }
 
-        markKeep(root);
+        markKeep(root, false);
         bool pass;
         if(p.originConditioning == false)
             pass = (root->left->keep && root->right->keep);
@@ -183,6 +185,21 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
             pass = root->keep;
         if(pass == false)
             continue;
+
+        std::vector<SimNode*> extants;
+        for(SimNode* n : allNodes)
+            if(n->extantSampled)
+                extants.push_back(n);
+        int inBB = 0;
+        for(SimNode* n : extants){
+            n->inBackbone = (rng->uniformRv() < p.bb);
+            if(n->inBackbone)
+                inBB++;
+        }
+        if(inBB == 0 && extants.empty() == false){
+            extants[0]->inBackbone = true;
+            inBB = 1;
+        }
 
         ok = true;
 
@@ -192,11 +209,14 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
                 res.numFossils++;
             }
         }
+        res.numExtantSampled = (int)extants.size();
+        res.numUE = res.numExtantSampled - inBB;
 
+        markKeep(root, true);
         SimNode* mrca = extantMRCA(root);
         int next = 1;
         assignLabels(mrca, next);
-        res.numExtantSampled = next - 1;
+        res.numBackbone = next - 1;
         res.crownAge = mrca->age;
         res.originAge = p.originConditioning ? p.startAge : mrca->age;
 

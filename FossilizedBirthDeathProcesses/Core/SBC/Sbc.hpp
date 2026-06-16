@@ -14,6 +14,7 @@ struct SbcConfig {
     bool                    simulateOnly;
     bool                    originConditioning;
     double                  rho;
+    double                  bb;
     std::vector<double>     intervalStart;
     Probability::PriorSpec  lambdaPrior;
     Probability::PriorSpec  muPrior;
