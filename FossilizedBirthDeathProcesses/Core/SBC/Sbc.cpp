@@ -31,8 +31,9 @@ double drawPrior(const Probability::PriorSpec& s, RandomVariable* rng){
     return 0.0;
 }
 
-double truthForName(const std::string& name, const SimParams& p, bool origin){
+double truthForName(const std::string& name, const SimParams& p, bool origin, double trueNSA){
     auto idxOf = [](const std::string& rest) -> int { return rest.empty() ? 0 : std::stoi(rest); };
+    if(name == "nSA")                 return trueNSA;
     if(name.rfind("lambda", 0) == 0)  return p.lambda[idxOf(name.substr(6))];
     if(name.rfind("psi", 0) == 0)     return p.psi[idxOf(name.substr(3))];
     if(name.rfind("mu", 0) == 0)      return p.mu[idxOf(name.substr(2))];
@@ -198,15 +199,18 @@ void Sbc::runInference(void){
         if(samp[0].empty())
             Msg::error("SBC: no post-burnin samples collected; mcmcGen too small relative to burnin/thin");
         for(size_t c = 0; c < names.size(); c++){
-            double t = truthForName(names[c], truth, cfg.originConditioning);
+            double t = truthForName(names[c], truth, cfg.originConditioning, (double)r.numSA);
             if(std::isnan(t))
                 continue;
             std::vector<double>& s = samp[c];
             std::sort(s.begin(), s.end());
-            long below = 0;
-            for(double x : s)
+            long below = 0, equal = 0;
+            for(double x : s){
                 if(x < t) below++;
-            ranks[names[c]].push_back((double)below / (double)s.size());
+                else if(x == t) equal++;
+            }
+            double rank = ((double)below + rng->uniformRv() * (double)equal) / (double)s.size();
+            ranks[names[c]].push_back(rank);
             if(t >= quantile(s, 0.25) && t <= quantile(s, 0.75)) cov50[names[c]]++;
             if(t >= quantile(s, 0.05) && t <= quantile(s, 0.95)) cov90[names[c]]++;
         }

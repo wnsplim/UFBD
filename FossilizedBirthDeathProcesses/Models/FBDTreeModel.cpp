@@ -225,7 +225,18 @@ std::vector<std::string> FBDTreeModel::getParameterNames(void){
             ParameterUnresolvedFossils* uf = dynamic_cast<ParameterUnresolvedFossils*>(p);
             names.push_back(uf != nullptr ? "nSA" : p->getName());
         }
+    if(isFBD)
+        names.push_back("nSA");
     return names;
+}
+
+int FBDTreeModel::countResolvedSA(void){
+    Tree* tree = parameterTree->getTree();
+    int s = 0;
+    for(Node* n : tree->getDownPassSequence())
+        if(n->getIsTip() && n->getIsFossil() && n->getAncestor()->getTime() == n->getTime())
+            s++;
+    return s;
 }
 
 std::vector<double> FBDTreeModel::getParameterString(void){
@@ -247,6 +258,8 @@ std::vector<double> FBDTreeModel::getParameterString(void){
             if(uf != nullptr)
                 vals.push_back((double)uf->getNumSampledAncestors());
         }
+    if(isFBD)
+        vals.push_back((double)countResolvedSA());
 
     return vals;
 }

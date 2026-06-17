@@ -34,6 +34,7 @@ class FBDTreeModel : public PhylogeneticModel {
     private:
         double                      calculateFBDProbability(void);
         double                      calculateResolvedFBD(void);
+        int                         countResolvedSA(void);
         double                      lnD(double t);
         double                      fossilPqLn(double y, double z);
         double                      uePqLn(double z);
