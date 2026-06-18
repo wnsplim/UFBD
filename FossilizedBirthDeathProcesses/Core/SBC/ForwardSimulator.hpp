@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include "UserSettings.hpp"
+
 class RandomVariable;
 
 struct SimParams {
@@ -15,6 +17,7 @@ struct SimParams {
     double              bb = 1.0;
     double              startAge = 0.0;
     bool                originConditioning = false;
+    ConditioningEvent   condEvent = ConditioningEvent::SURVIVAL;
 };
 
 struct SimResult {

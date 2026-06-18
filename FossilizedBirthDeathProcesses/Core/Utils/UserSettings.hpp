@@ -6,6 +6,7 @@
 #include "Probability.hpp"
 
 enum class Conditioning { CROWN, ORIGIN };
+enum class ConditioningEvent { SURVIVAL, ANYSAMPLE, EXTINCT };
 enum class Model { FBD, HEA14, UFBD };
 enum class RateMode { IID, SMOOTH };
 
@@ -27,6 +28,7 @@ class UserSettings {
         std::string                 getCladesFile(void) { checkSettings(); return cladesFile; }
         std::string                 getFossilFile(void) { checkSettings(); return fossilFile; }
         Conditioning                getConditioning(void) { checkSettings(); return conditioning; }
+        ConditioningEvent           getConditioningEvent(void) { checkSettings(); return conditioningEvent; }
         Probability::PriorFamily         getConditionAgePrior(void) { checkSettings(); return conditionAgePrior; }
         double                      getConditionAgePriorP1(void) { checkSettings(); return conditionAgePriorP1; }
         double                      getConditionAgePriorP2(void) { checkSettings(); return conditionAgePriorP2; }
@@ -68,6 +70,7 @@ class UserSettings {
         std::string                 cladesFile;
         std::string                 fossilFile;
         Conditioning                conditioning;
+        ConditioningEvent           conditioningEvent;
         bool                        conditioningSet;
         Probability::PriorFamily         conditionAgePrior;
         bool                        conditionAgePriorSet;

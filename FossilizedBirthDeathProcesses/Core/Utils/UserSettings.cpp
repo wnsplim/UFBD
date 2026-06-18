@@ -33,6 +33,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     cladesFile      = "";
     fossilFile      = "";
     conditioningSet = false;
+    conditioningEvent = ConditioningEvent::SURVIVAL;
     conditionAgePriorSet = false;
     model           = Model::UFBD;
     rho             = 1.0;
@@ -116,9 +117,11 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
             } else if (arg == "-cond") {
                 std::string v = val;
                 for (char& ch : v) ch = std::toupper((unsigned char)ch);
-                if (v == "CROWN")       conditioning = Conditioning::CROWN;
-                else if (v == "ORIGIN") conditioning = Conditioning::ORIGIN;
-                else Msg::error("Flag \"-cond\" expects crown or origin, but got \"" + val + "\".");
+                if (v == "CROWN")          { conditioning = Conditioning::CROWN;  conditioningEvent = ConditioningEvent::SURVIVAL; }
+                else if (v == "ORIGIN")    { conditioning = Conditioning::ORIGIN; conditioningEvent = ConditioningEvent::SURVIVAL; }
+                else if (v == "ANYSAMPLE") { conditioning = Conditioning::ORIGIN; conditioningEvent = ConditioningEvent::ANYSAMPLE; }
+                else if (v == "EXTINCT")   { conditioning = Conditioning::ORIGIN; conditioningEvent = ConditioningEvent::EXTINCT; }
+                else Msg::error("Flag \"-cond\" expects crown, origin, anysample, or extinct, but got \"" + val + "\".");
                 conditioningSet = true;
                 if (i + 1 < (int)arguments.size() && knownFlags.find(arguments[i + 1]) == knownFlags.end()) {
                     parsePriorInto(arguments[++i], conditionAgePrior, conditionAgePriorP1, conditionAgePriorP2);

@@ -53,6 +53,7 @@ int main(int argc, const char* argv[]){
     cfg.numReps = reps;
     cfg.simulateOnly = (mode == "simulate");
     cfg.originConditioning = (s.getConditioning() == Conditioning::ORIGIN);
+    cfg.condEvent = s.getConditioningEvent();
     cfg.rho = s.getRho();
     cfg.bb = bb;
     cfg.intervalStart.push_back(0.0);

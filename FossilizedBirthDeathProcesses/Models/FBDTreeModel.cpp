@@ -31,6 +31,16 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     parameterTree = new ParameterTree(1.0, this);
     isFBD = (UserSettings::userSettings().getModel() == Model::FBD);
 
+    int nExt = t->getNumTaxa();
+    Conditioning condPoint = UserSettings::userSettings().getConditioning();
+    ConditioningEvent condEvent = UserSettings::userSettings().getConditioningEvent();
+    if(condPoint == Conditioning::CROWN && nExt < 2)
+        Msg::error("crown conditioning requires at least 2 extant taxa on the backbone tree, but the tree has " + std::to_string(nExt) + ".");
+    if(condEvent == ConditioningEvent::SURVIVAL && nExt < 1)
+        Msg::error("survival conditioning requires at least 1 extant taxon; use -cond anysample or extinct for an all-fossil case.");
+    if(condEvent == ConditioningEvent::EXTINCT && nExt > 0)
+        Msg::error("extinct conditioning requires 0 extant taxa, but the data has " + std::to_string(nExt) + ".");
+
     originAge = nullptr;
     if(UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN){
         double x0init = t->getCrown()->getTime();
@@ -457,9 +467,12 @@ double FBDTreeModel::calculateFBDProbability(void){
         double x0 = originAge->getValue();
         if(x0 < crownAge)
             return -INFINITY;
+        for(int i = 0; i < unresolvedFossils->getNumFossils(); i++)
+            if(unresolvedFossils->getFossilAge(i) > x0)
+                return -INFINITY;
         double lx0 = lambdaAt(findIndex(x0));
         fbdProb -= std::log(lx0);
-        fbdProb -= calculateLnSurvival(x0);
+        fbdProb -= calculateLnConditioning(x0);
         fbdProb += std::log(4 * lx0 * rhoVal);
         fbdProb += lnD(x0) - std::log(4.0);
     }else{
@@ -470,12 +483,20 @@ double FBDTreeModel::calculateFBDProbability(void){
     }
 
     //term 2: main body
-    for(Node* n : dpseq)
-        if(n->getIsTip() == false)
+    for(Node* n : dpseq){
+        if(n->getIsTip())
+            continue;
+        bool hasChild = false;
+        for(Node* c : n->getNeighbors())
+            if(c != n->getAncestor()){ hasChild = true; break; }
+        if(hasChild)
             fbdProb += std::log(lambdaAt(findIndex(n->getTime())) * rhoVal) + lnD(n->getTime());
+    }
 
     //term 3: fossil attachment
     int numFossils = unresolvedFossils->getNumFossils();
+    if(originAge != nullptr)
+        unresolvedFossils->syncSpine(originAge->getValue());
     updateGammaCache();
     for(int i = 0; i < numFossils; i++){
         if(unresolvedFossils->isSA(i)){
@@ -484,6 +505,11 @@ double FBDTreeModel::calculateFBDProbability(void){
         }
         if(unresolvedFossils->isUE(i)){
             fbdProb += uePqLn(unresolvedFossils->getAttachAge(i)) + cachedGammaLn[i];
+            continue;
+        }
+        if(i == unresolvedFossils->getSpineIdx()){
+            double ys = unresolvedFossils->getFossilAge(i);
+            fbdProb += std::log(psiAt(findIndex(ys))) + std::log(calculateP0(ys)) - lnD(ys);
             continue;
         }
         fbdProb += fossilPqLn(unresolvedFossils->getFossilAge(i), unresolvedFossils->getAttachAge(i)) + cachedGammaLn[i];
@@ -503,7 +529,7 @@ double FBDTreeModel::calculateResolvedFBD(void){
         for(Node* c : crown->getNeighbors())
             if(c != crown->getAncestor() && c->getTime() >= x0)
                 return -INFINITY;
-        lnP = -calculateLnSurvival(x0);
+        lnP = -calculateLnConditioning(x0);
     }else{
         lnP = -2.0 * calculateLnSurvival(crownAge);
     }
@@ -555,6 +581,21 @@ double FBDTreeModel::calculateLnSurvival(double t){
         return lnAbsNum - lnAbsDenom;
     }
     return std::log(1.0 - calculateP0Hat(t));
+}
+
+double FBDTreeModel::calculateLnConditioning(double t){
+    switch(UserSettings::userSettings().getConditioningEvent()){
+        case ConditioningEvent::SURVIVAL:
+            return calculateLnSurvival(t);
+        case ConditioningEvent::ANYSAMPLE:
+            return std::log(1.0 - calculateP0(t));
+        case ConditioningEvent::EXTINCT: {
+            double pHat = 1.0 - std::exp(calculateLnSurvival(t));
+            double d = pHat - calculateP0(t);
+            return (d > 0.0) ? std::log(d) : -INFINITY;
+        }
+    }
+    return -INFINITY;
 }
 
 void FBDTreeModel::prepareIntervals(void){
@@ -659,8 +700,13 @@ double FBDTreeModel::computeGamma(double z, int i){
     }
     if(total && crown == tree->getCrown() && originAge != nullptr){
         double x0 = originAge->getValue();
-        if(tree->getCrown()->getTime() < z && z < x0)
-            count++;
+        if(tree->getNumTaxa() == 0){
+            if(z >= x0)
+                count++;
+        }else{
+            if(tree->getCrown()->getTime() < z && z < x0)
+                count++;
+        }
     }
 
     bool SymmetryCorrection = (UserSettings::userSettings().getModel() == Model::UFBD);
@@ -680,7 +726,7 @@ double FBDTreeModel::computeGamma(double z, int i){
         if(total == false && zj > crown->getTime())
             continue;
         double w = 1.0;
-        if(SymmetryCorrection && focalIsTip){
+        if(SymmetryCorrection && focalIsTip && j != unresolvedFossils->getSpineIdx()){
             Node* crownJ = unresolvedFossils->getCrownNode(j);
             bool jTotal = (unresolvedFossils->getIsCrown(j) == false);
             bool reciprocal = nodeInSubtree(crown, crownJ)

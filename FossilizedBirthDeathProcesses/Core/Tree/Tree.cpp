@@ -20,6 +20,14 @@ Tree::Tree(const Tree& t) {
 Tree::Tree(std::string newick){
     numTaxa = 0;
     std::vector<std::string> newickTokens = parseNewickString(newick);
+    if(newickTokens.empty()){
+        Node* r = addNode();
+        r->setIsTip(false);
+        r->setTime(0.0);
+        crown = r;
+        initializeDownPassSequence();
+        return;
+    }
     Node* p = nullptr;
     bool readingBl = false;
     for(int i = 0; i < newickTokens.size(); i++){

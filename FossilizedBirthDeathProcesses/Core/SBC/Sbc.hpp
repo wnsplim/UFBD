@@ -13,6 +13,7 @@ struct SbcConfig {
     int                     numReps;
     bool                    simulateOnly;
     bool                    originConditioning;
+    ConditioningEvent       condEvent;
     double                  rho;
     double                  bb;
     std::vector<double>     intervalStart;

@@ -17,6 +17,7 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
     numRejections = 0;
     lastFossil = -1;
     lastWasBulk = false;
+    spineIdx = -1;
 
     yMin.resize(numFossils);
     yMax.resize(numFossils);
@@ -39,7 +40,7 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
             }
         if(clade == nullptr)
             Msg::error("unresolved fossil '" + f.getTaxon() + "' references undefined clade '" + f.getClade() + "'");
-        Node* cr = backbone->getMRCA(clade->getTaxa());
+        Node* cr = clade->getTaxa().empty() ? backbone->getCrown() : backbone->getMRCA(clade->getTaxa());
         crownNode[i]  = cr;
         originNode[i] = cr->getAncestor();
         isCrown[i]    = (f.getAssignment() == Assignment::CROWN);
@@ -58,6 +59,23 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
         double zi = lo + rng.uniformRv() * (hi - lo);
         z[0][i] = zi;
         z[1][i] = zi;
+    }
+
+    if(backbone->getNumTaxa() == 0 && numFossils > 0 && originAge != nullptr){
+        double bestMean = INFINITY;
+        for(int i = 0; i < numFossils; i++){
+            double mean = 0.5 * (yMin[i] + yMax[i]);
+            if(mean < bestMean)
+                bestMean = mean;
+        }
+        std::vector<int> tied;
+        for(int i = 0; i < numFossils; i++)
+            if(0.5 * (yMin[i] + yMax[i]) == bestMean)
+                tied.push_back(i);
+        spineIdx = tied[(int)(rng.uniformRv() * (int)tied.size())];
+        double x0 = originAge->getValue();
+        z[0][spineIdx] = x0;
+        z[1][spineIdx] = x0;
     }
 }
 
@@ -104,6 +122,8 @@ double ParameterUnresolvedFossils::updateFossilAge(int i){
 }
 
 double ParameterUnresolvedFossils::updateAttachAge(int i){
+    if(i == spineIdx)
+        return 0.0;
     if(z[0][i] == y[0][i])
         return 0.0;
     RandomVariable& rng = RandomVariable::randomVariableInstance();
@@ -114,6 +134,8 @@ double ParameterUnresolvedFossils::updateAttachAge(int i){
 }
 
 double ParameterUnresolvedFossils::updateSampledAncestor(int i){
+    if(i == spineIdx)
+        return 0.0;
     if(ue[i])
         return 0.0;
     RandomVariable& rng = RandomVariable::randomVariableInstance();
@@ -133,14 +155,14 @@ double ParameterUnresolvedFossils::updateSampledAncestor(int i){
 double ParameterUnresolvedFossils::scaleAllAttachAges(double m){
     lastWasBulk = true;
     for(int i = 0; i < numFossils; i++){
-        if(z[0][i] == y[0][i])
+        if(i == spineIdx || z[0][i] == y[0][i])
             continue;
         if(z[0][i] * m < y[0][i])
             return -INFINITY;
     }
     int count = 0;
     for(int i = 0; i < numFossils; i++){
-        if(z[0][i] == y[0][i])
+        if(i == spineIdx || z[0][i] == y[0][i])
             continue;
         z[0][i] *= m;
         count++;
@@ -151,11 +173,12 @@ double ParameterUnresolvedFossils::scaleAllAttachAges(double m){
 double ParameterUnresolvedFossils::scaleAttachAges(const std::vector<int>& indices, double m){
     lastWasBulk = true;
     for(int i : indices)
-        if(z[0][i] * m < y[0][i])
+        if(i != spineIdx && z[0][i] * m < y[0][i])
             return -INFINITY;
+    int count = 0;
     for(int i : indices)
-        z[0][i] *= m;
-    return (int)indices.size() * std::log(m);
+        if(i != spineIdx){ z[0][i] *= m; count++; }
+    return count * std::log(m);
 }
 
 void ParameterUnresolvedFossils::updateForAcceptance(void){

@@ -24,6 +24,8 @@ class ParameterUnresolvedFossils : public Parameter {
         bool                        isUE(int i) { return ue[i]; }
         bool                        isSA(int i) { return ue[i] == false && z[0][i] == y[0][i]; }
         int                         getNumSampledAncestors(void) { int n = 0; for(int i = 0; i < numFossils; i++) if(ue[i] == false && z[0][i] == y[0][i]) n++; return n; }
+        int                         getSpineIdx(void) { return spineIdx; }
+        void                        syncSpine(double x0) { if(spineIdx >= 0){ z[0][spineIdx] = x0; z[1][spineIdx] = x0; } }
         Node*                       getCrownNode(int i) { return crownNode[i]; }
         Node*                       getMaxAttachNode(int i) { return isCrown[i] ? crownNode[i] : originNode[i]; }
         bool                        getIsCrown(int i) { return isCrown[i]; }
@@ -53,6 +55,7 @@ class ParameterUnresolvedFossils : public Parameter {
         std::vector<double>         y[2]; // 0 = working (scored), 1 = last accepted
         std::vector<double>         z[2];
         int                         lastFossil;
+        int                         spineIdx;
         bool                        lastWasBulk;
         int                         numAcceptances;
         int                         numRejections;

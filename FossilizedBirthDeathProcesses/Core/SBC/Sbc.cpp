@@ -90,6 +90,7 @@ SimParams Sbc::drawParams(void){
     p.rho = cfg.rho;
     p.bb = cfg.bb;
     p.originConditioning = cfg.originConditioning;
+    p.condEvent = cfg.condEvent;
     p.startAge = drawPrior(cfg.startAgePrior, rng);
     for(size_t i = 0; i < cfg.intervalStart.size(); i++){
         p.lambda.push_back(drawPrior(cfg.lambdaPrior, rng));
@@ -152,11 +153,16 @@ void Sbc::runInference(void){
         repNFoss.push_back(r.numFossils);
 
         Tree* tree = new Tree(r.backboneNewick);
-        tree->validateBackbone();
         std::vector<std::string> taxa;
         for(int i = 1; i <= r.numBackbone; i++)
             taxa.push_back("T" + std::to_string(i));
-        Node* crown = tree->getMRCA(taxa);
+        Node* crown;
+        if(r.numBackbone > 0){
+            tree->validateBackbone();
+            crown = tree->getMRCA(taxa);
+        }else{
+            crown = tree->getCrown();
+        }
         std::vector<Clade> clades;
         clades.push_back(Clade("whole", taxa, crown, crown->getAncestor()));
         Assignment asg = cfg.originConditioning ? Assignment::TOTAL : Assignment::CROWN;
@@ -165,7 +171,8 @@ void Sbc::runInference(void){
             fossils.push_back(Fossil("F" + std::to_string(i + 1), r.fossilAges[i], r.fossilAges[i], "whole", asg));
         for(int i = 0; i < r.numUE; i++)
             fossils.push_back(Fossil("U" + std::to_string(i + 1), 0.0, 0.0, "whole", asg));
-        initAges(tree, fossils, cfg.originConditioning, cfg.startAgePrior);
+        if(r.numBackbone > 0)
+            initAges(tree, fossils, cfg.originConditioning, cfg.startAgePrior);
 
         unsigned int modelSeed = (unsigned int)(rng->uniformRv() * 4294967295.0);
         FBDTreeModel model(tree, clades, fossils, modelSeed);

@@ -193,11 +193,21 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
         }
 
         markKeep(root, false);
+        bool hasFossil = false;
+        for(SimNode* n : allNodes)
+            if(n->isFossil){ hasFossil = true; break; }
         bool pass;
-        if(p.originConditioning == false)
+        if(p.originConditioning == false){
             pass = (root->left->keep && root->right->keep);
-        else
-            pass = root->keep;
+        }else{
+            bool hasExtant = root->keep;
+            if(p.condEvent == ConditioningEvent::ANYSAMPLE)
+                pass = hasExtant || hasFossil;
+            else if(p.condEvent == ConditioningEvent::EXTINCT)
+                pass = (hasExtant == false) && hasFossil;
+            else
+                pass = hasExtant;
+        }
         if(pass == false)
             continue;
 
@@ -235,13 +245,17 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
         int next = 1;
         assignLabels(mrca, next);
         res.numBackbone = next - 1;
-        res.crownAge = mrca->age;
         res.originAge = p.originConditioning ? p.startAge : mrca->age;
-
-        std::stringstream s;
-        writeNewick(mrca, s);
-        s << ";";
-        res.backboneNewick = s.str();
+        if(res.numBackbone > 0){
+            res.crownAge = mrca->age;
+            std::stringstream s;
+            writeNewick(mrca, s);
+            s << ";";
+            res.backboneNewick = s.str();
+        }else{
+            res.crownAge = 0.0;
+            res.backboneNewick = "";
+        }
     }
 
     for(SimNode* n : allNodes)
