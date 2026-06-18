@@ -96,6 +96,14 @@ Node* Tree::addNode(void) {
     return newNode;
 }
 
+Node* Tree::getRoot(void) {
+
+    Node* n = crown;
+    while (n->getAncestor() != nullptr && n->getAncestor() != n)
+        n = n->getAncestor();
+    return n;
+}
+
 Node* Tree::insertFossilTip(Node* hostChild, std::string name, double y, double z){
     Node* hostParent = hostChild->getAncestor();
 

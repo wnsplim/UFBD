@@ -28,6 +28,7 @@ class Tree {
         Node*                               getNodeByOffset(int o) { return nodes[o]; }
         int                                 getNumTaxa(void);
         Node*                               getCrown(void) { return crown; }
+        Node*                               getRoot(void);
         bool                                getLastUpdateWasScale(void) { return lastUpdateWasScale; }
         bool                                isBinary(void);
         void                                validateBackbone(void);
