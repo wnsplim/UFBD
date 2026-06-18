@@ -517,7 +517,7 @@ double FBDTreeModel::calculateResolvedFBD(void){
             else if(n->getAncestor()->getTime() == n->getTime())
                 lnP += std::log(psiAt(findIndex(n->getTime())));
             else
-                lnP += std::log(psiAt(findIndex(n->getTime()))) + std::log(calculatePo(n->getTime()));
+                lnP += std::log(psiAt(findIndex(n->getTime()))) + std::log(calculateP0(n->getTime()));
         }
         else if(n != crown){
             bool fakeSplit = false;
@@ -535,7 +535,7 @@ double FBDTreeModel::lnD(double t){
 }
 
 double FBDTreeModel::fossilPqLn(double y, double z){
-    return std::log(psiAt(findIndex(y))) + std::log(2*lambdaAt(findIndex(z))) + std::log(calculatePo(y)) + lnD(z) - lnD(y);
+    return std::log(psiAt(findIndex(y))) + std::log(2*lambdaAt(findIndex(z))) + std::log(calculateP0(y)) + lnD(z) - lnD(y);
 }
 
 double FBDTreeModel::uePqLn(double z){
@@ -554,7 +554,7 @@ double FBDTreeModel::calculateLnSurvival(double t){
             lnAbsDenom = std::log(std::abs(lambdaVal * rhoVal + B * std::exp(-a * t)));
         return lnAbsNum - lnAbsDenom;
     }
-    return std::log(1.0 - calculatePoHat(t));
+    return std::log(1.0 - calculateP0Hat(t));
 }
 
 void FBDTreeModel::prepareIntervals(void){
@@ -574,7 +574,7 @@ void FBDTreeModel::prepareIntervals(void){
             c2Vec[0] = (-li + mi + 2*li * rhoVal + pi) / c1Vec[0];
         }else{
             double s = intervalStart[i];
-            ePrev[i] = calculatePoAt((int)i - 1, s);
+            ePrev[i] = calculateP0At((int)i - 1, s);
             lnDPrev[i] = lnDPrev[i-1] + std::log(4.0) - calculateLnQtAt((int)i - 1, s);
             c2Vec[i] = ((1.0 - 2.0 * ePrev[i]) * li + mi + pi) / c1Vec[i];
         }
@@ -591,7 +591,7 @@ void FBDTreeModel::prepareIntervals(void){
                 ePrevHat[0] = 1.0;
                 c2HatVec[0] = (-li + mi + 2*li * rhoVal) / c1HatVec[0];
             }else{
-                ePrevHat[i] = calculatePoHatAt((int)i - 1, intervalStart[i]);
+                ePrevHat[i] = calculateP0HatAt((int)i - 1, intervalStart[i]);
                 c2HatVec[i] = ((1.0 - 2.0 * ePrevHat[i]) * li + mi) / c1HatVec[i];
             }
         }
@@ -614,7 +614,7 @@ double FBDTreeModel::calculateLnQtAt(int i, double t){
     return a + std::log(bracket);
 }
 
-double FBDTreeModel::calculatePoAt(int i, double t){
+double FBDTreeModel::calculateP0At(int i, double t){
     double tau = t - intervalStart[i];
     double li = lambdaAt(i);
     double tmp = -li + muAt(i) + psiAt(i);
@@ -623,11 +623,11 @@ double FBDTreeModel::calculatePoAt(int i, double t){
     return 1 + tmp;
 }
 
-double FBDTreeModel::calculatePo(double t){
-    return calculatePoAt(findIndex(t), t);
+double FBDTreeModel::calculateP0(double t){
+    return calculateP0At(findIndex(t), t);
 }
 
-double FBDTreeModel::calculatePoHatAt(int i, double t){
+double FBDTreeModel::calculateP0HatAt(int i, double t){
     double tau = t - intervalStart[i];
     double li = lambdaAt(i);
     double tmp = -li + muAt(i);
@@ -636,8 +636,8 @@ double FBDTreeModel::calculatePoHatAt(int i, double t){
     return 1 + tmp;
 }
 
-double FBDTreeModel::calculatePoHat(double t){
-    return calculatePoHatAt(findIndex(t), t);
+double FBDTreeModel::calculateP0Hat(double t){
+    return calculateP0HatAt(findIndex(t), t);
 }
 
 double FBDTreeModel::computeGamma(double z, int i){

@@ -42,10 +42,10 @@ class FBDTreeModel : public PhylogeneticModel {
         void                        prepareIntervals(void);
         int                         findIndex(double t);
         double                      calculateLnQtAt(int i, double t);
-        double                      calculatePoAt(int i, double t);
-        double                      calculatePo(double t);
-        double                      calculatePoHatAt(int i, double t);
-        double                      calculatePoHat(double t);
+        double                      calculateP0At(int i, double t);
+        double                      calculateP0(double t);
+        double                      calculateP0HatAt(int i, double t);
+        double                      calculateP0Hat(double t);
         double                      computeGamma(double z, int i);
         void                        updateGammaCache(void);
         void                        computeAgeFloors(std::map<Node*,double>& floors);
