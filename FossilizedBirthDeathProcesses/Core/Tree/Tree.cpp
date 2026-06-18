@@ -104,6 +104,21 @@ Node* Tree::getRoot(void) {
     return n;
 }
 
+Node* Tree::addOriginNode(double x0) {
+
+    Node* origin = addNode();
+    origin->setIsTip(false);
+    origin->setIsFossil(false);
+    Node* oldCrown = crown;
+    origin->addNeighbor(oldCrown);
+    oldCrown->addNeighbor(origin);
+    crown = origin;
+    initializeDownPassSequence();
+    origin->setTime(x0);
+    reindexNodes();
+    return origin;
+}
+
 Node* Tree::insertFossilTip(Node* hostChild, std::string name, double y, double z){
     Node* hostParent = hostChild->getAncestor();
 
