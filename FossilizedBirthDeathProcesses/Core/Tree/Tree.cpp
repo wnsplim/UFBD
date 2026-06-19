@@ -244,7 +244,7 @@ std::string Tree::getNewickString(void) {
     return strm.str();
 }
 
-int Tree::getNumTaxa(void){
+int Tree::getNumBackbone(void){
     initializeDownPassSequence();
     int idx = 0;
     for(Node* n : downPassSequence)

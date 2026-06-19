@@ -47,7 +47,7 @@ void markKeep(SimNode* n, bool useBackbone){
 
 int countSA(SimNode* n, bool& hasRetained){
     if(n->left == nullptr && n->right == nullptr){
-        hasRetained = n->isFossil || (n->extantSampled && n->inBackbone);
+        hasRetained = n->isFossil || n->extantSampled;
         return 0;
     }
     bool lr = false, rr = false;
@@ -118,13 +118,13 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
     SimResult res;
     std::vector<SimNode*> allNodes;
 
-    const long maxAttempts = 2000000;
+    const long maxAttempts = 1000000;
     long attempts = 0;
     bool ok = false;
 
     while(ok == false){
         if(++attempts > maxAttempts)
-            Msg::error("ForwardSimulator: exceeded max conditioning attempts (params likely make the conditioning unattainable)");
+            Msg::error("ForwardSimulator: exceeded max attempts");
 
         for(SimNode* n : allNodes)
             delete n;

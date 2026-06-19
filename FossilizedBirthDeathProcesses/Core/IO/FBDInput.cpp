@@ -122,7 +122,7 @@ void FBDInput::assignFossilAwareAges(void){
     for(Fossil& f : fossils)
         if(f.getMaxAge() > maxBound)
             maxBound = f.getMaxAge();
-    int numInternal = tree->getNumNodes() - tree->getNumTaxa();
+    int numInternal = tree->getNumNodes() - tree->getNumBackbone();
     double unit = (maxBound > 0.0) ? maxBound / (numInternal + 1) : 1.0;
 
     std::map<Node*,double> minAges;

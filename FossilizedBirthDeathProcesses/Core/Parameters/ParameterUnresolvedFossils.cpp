@@ -61,7 +61,7 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
         z[1][i] = zi;
     }
 
-    if(backbone->getNumTaxa() == 0 && numFossils > 0 && originAge != nullptr){
+    if(backbone->getNumBackbone() == 0 && numFossils > 0 && originAge != nullptr){
         double bestMean = INFINITY;
         for(int i = 0; i < numFossils; i++){
             double mean = 0.5 * (yMin[i] + yMax[i]);

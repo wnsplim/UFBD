@@ -31,15 +31,18 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     parameterTree = new ParameterTree(1.0, this);
     isFBD = (UserSettings::userSettings().getModel() == Model::FBD);
 
-    int nExt = t->getNumTaxa();
+    int numBackbone = t->getNumBackbone();
+    int numUE = 0;
+    for(Fossil& f : fossils)
+        if(f.getMaxAge() == 0.0) numUE++;
     Conditioning condPoint = UserSettings::userSettings().getConditioning();
     ConditioningEvent condEvent = UserSettings::userSettings().getConditioningEvent();
-    if(condPoint == Conditioning::CROWN && nExt < 2)
-        Msg::error("crown conditioning requires at least 2 extant taxa on the backbone tree, but the tree has " + std::to_string(nExt) + ".");
-    if(condEvent == ConditioningEvent::SURVIVAL && nExt < 1)
-        Msg::error("survival conditioning requires at least 1 extant taxon; use -cond anysample or extinct for an all-fossil case.");
-    if(condEvent == ConditioningEvent::EXTINCT && nExt > 0)
-        Msg::error("extinct conditioning requires 0 extant taxa, but the data has " + std::to_string(nExt) + ".");
+    if(condPoint == Conditioning::CROWN && numBackbone < 2)
+        Msg::error("crown conditioning requires at least 2 backbone tips, but the tree has " + std::to_string(numBackbone) + ".");
+    if(condEvent == ConditioningEvent::SURVIVAL && (numBackbone + numUE) < 1)
+        Msg::error("survival conditioning requires at least 1 extant taxon.");
+    if(condEvent == ConditioningEvent::EXTINCT && (numBackbone + numUE) > 0)
+        Msg::error("extinct conditioning requires 0 extant taxa, but the data has " + std::to_string(numBackbone + numUE) + ".");
 
     originAge = nullptr;
     if(UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN){
@@ -86,9 +89,9 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     bool lamSmooth = (rateUs.getLambdaMode() == RateMode::SMOOTH);
     bool muSmooth  = (rateUs.getMuMode() == RateMode::SMOOTH);
     bool psiSmooth = (rateUs.getPsiMode() == RateMode::SMOOTH);
-    if(lamSmooth && nB < 2){ Msg::warning("Smooth (HSMRF) requested for lambda but only 1 rate interval; using iid (add -skyline-times)."); lamSmooth = false; }
-    if(muSmooth && nB < 2){ Msg::warning("Smooth (HSMRF) requested for mu but only 1 rate interval; using iid."); muSmooth = false; }
-    if(psiSmooth && nB < 2){ Msg::warning("Smooth (HSMRF) requested for psi but only 1 rate interval; using iid."); psiSmooth = false; }
+    if(lamSmooth && nB < 2){ Msg::warning("Smoothing (HSMRF) set for speciation rate (lambda) but only single rate interval."); lamSmooth = false; }
+    if(muSmooth && nB < 2){ Msg::warning("Smoothting (HSMRF) set for extinction rate (mu) but only single rate interval."); muSmooth = false; }
+    if(psiSmooth && nB < 2){ Msg::warning("Smoothing (HSMRF) set for sampling rate (psi) but only single rate interval."); psiSmooth = false; }
     double nShifts = rateUs.getHsmrfShifts();
     double shiftSize = rateUs.getHsmrfShiftSize();
     if(lamSmooth || muSmooth || psiSmooth){
@@ -444,7 +447,7 @@ double FBDTreeModel::calculateFBDProbability(void){
     if(isFBD && originAge != nullptr)
         tree->getCrown()->setTime(originAge->getValue());
 
-    int numInternalNodes = tree->getNumNodes() - tree->getNumTaxa();
+    int numInternalNodes = tree->getNumNodes() - tree->getNumBackbone();
     double crownAge = tree->getCrown()->getTime();
     std::vector<Node*> dpseq = tree->getDownPassSequence();
     
@@ -700,7 +703,7 @@ double FBDTreeModel::computeGamma(double z, int i){
     }
     if(total && crown == tree->getCrown() && originAge != nullptr){
         double x0 = originAge->getValue();
-        if(tree->getNumTaxa() == 0){
+        if(tree->getNumBackbone() == 0){
             if(z >= x0)
                 count++;
         }else{

@@ -45,7 +45,7 @@ void initAges(Tree* tree, std::vector<Fossil>& fossils, bool origin, const Proba
     double maxFoss = 0.0;
     for(Fossil& f : fossils)
         if(f.getMaxAge() > maxFoss) maxFoss = f.getMaxAge();
-    int numInternal = tree->getNumNodes() - tree->getNumTaxa();
+    int numInternal = tree->getNumNodes() - tree->getNumBackbone();
     double unit = (maxFoss > 0.0) ? maxFoss / (numInternal + 1) : 1.0;
     std::map<Node*,double> minAges;
     if(maxFoss > 0.0)
@@ -149,7 +149,7 @@ void Sbc::runInference(void){
     for(int rep = 0; rep < cfg.numReps; rep++){
         SimParams truth = drawParams();
         SimResult r = sim.simulate(truth);
-        repNExt.push_back(r.numBackbone);
+        repNExt.push_back(r.numExtantSampled);
         repNFoss.push_back(r.numFossils);
 
         Tree* tree = new Tree(r.backboneNewick);

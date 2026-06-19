@@ -26,7 +26,7 @@ class Tree {
         bool                                isFakeSplit(Node* n);
         int                                 getNumNodes(void) { return (int)nodes.size(); }
         Node*                               getNodeByOffset(int o) { return nodes[o]; }
-        int                                 getNumTaxa(void);
+        int                                 getNumBackbone(void);
         Node*                               getCrown(void) { return crown; }
         Node*                               getRoot(void);
         Node*                               addOriginNode(double x0);
