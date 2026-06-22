@@ -57,6 +57,13 @@ class ParameterUnresolvedFossils : public Parameter {
         int                         lastFossil;
         int                         spineIdx;
         bool                        lastWasBulk;
+        bool                        lastWasFlip;
+        int                         flipS;
+        int                         flipT;
+        double                      flipSy;
+        double                      flipSz;
+        double                      flipTy;
+        double                      flipTz;
         int                         numAcceptances;
         int                         numRejections;
 };

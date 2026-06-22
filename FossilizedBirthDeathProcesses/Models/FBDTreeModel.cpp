@@ -38,7 +38,7 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     Conditioning condPoint = UserSettings::userSettings().getConditioning();
     ConditioningEvent condEvent = UserSettings::userSettings().getConditioningEvent();
     if(condPoint == Conditioning::CROWN && numBackbone < 2)
-        Msg::error("crown conditioning requires at least 2 backbone tips, but the tree has " + std::to_string(numBackbone) + ".");
+        Msg::error("crown conditioning requires at least 2 backbone tips, but the backbone tree has " + std::to_string(numBackbone) + ".");
     if(condEvent == ConditioningEvent::SURVIVAL && (numBackbone + numUE) < 1)
         Msg::error("survival conditioning requires at least 1 extant taxon.");
     if(condEvent == ConditioningEvent::EXTINCT && (numBackbone + numUE) > 0)
@@ -470,9 +470,12 @@ double FBDTreeModel::calculateFBDProbability(void){
         double x0 = originAge->getValue();
         if(x0 < crownAge)
             return -INFINITY;
-        for(int i = 0; i < unresolvedFossils->getNumFossils(); i++)
+        for(int i = 0; i < unresolvedFossils->getNumFossils(); i++){
             if(unresolvedFossils->getFossilAge(i) > x0)
                 return -INFINITY;
+            if(i != unresolvedFossils->getSpineIdx() && unresolvedFossils->getAttachAge(i) > x0)
+                return -INFINITY;
+        }
         double lx0 = lambdaAt(findIndex(x0));
         fbdProb -= std::log(lx0);
         fbdProb -= calculateLnConditioning(x0);

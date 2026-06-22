@@ -17,6 +17,7 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
     numRejections = 0;
     lastFossil = -1;
     lastWasBulk = false;
+    lastWasFlip = false;
     spineIdx = -1;
 
     yMin.resize(numFossils);
@@ -62,15 +63,13 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
     }
 
     if(backbone->getNumBackbone() == 0 && numFossils > 0 && originAge != nullptr){
-        double bestMean = INFINITY;
-        for(int i = 0; i < numFossils; i++){
-            double mean = 0.5 * (yMin[i] + yMax[i]);
-            if(mean < bestMean)
-                bestMean = mean;
-        }
+        double bestY = INFINITY;
+        for(int i = 0; i < numFossils; i++)
+            if(y[0][i] < bestY)
+                bestY = y[0][i];
         std::vector<int> tied;
         for(int i = 0; i < numFossils; i++)
-            if(0.5 * (yMin[i] + yMax[i]) == bestMean)
+            if(y[0][i] == bestY)
                 tied.push_back(i);
         spineIdx = tied[(int)(rng.uniformRv() * (int)tied.size())];
         double x0 = originAge->getValue();
@@ -95,6 +94,7 @@ double ParameterUnresolvedFossils::update(void){
     if(numFossils == 0)
         return 0.0;
     lastWasBulk = false;
+    lastWasFlip = false;
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastFossil = (int)(rng.uniformRv() * numFossils);
     double u = rng.uniformRv();
@@ -109,15 +109,67 @@ double ParameterUnresolvedFossils::updateFossilAge(int i){
     if(ue[i])
         return 0.0;
     RandomVariable& rng = RandomVariable::randomVariableInstance();
-    if(z[0][i] == y[0][i]){
-        double ceiling = getMaxAttachAge(i);
-        double saHi = (yMax[i] < ceiling) ? yMax[i] : ceiling;
-        y[0][i] = yMin[i] + rng.uniformRv() * (saHi - yMin[i]);
-        z[0][i] = y[0][i];
+
+    if(spineIdx < 0){
+        if(z[0][i] == y[0][i]){
+            double ceiling = getMaxAttachAge(i);
+            double saHi = (yMax[i] < ceiling) ? yMax[i] : ceiling;
+            y[0][i] = yMin[i] + rng.uniformRv() * (saHi - yMin[i]);
+            z[0][i] = y[0][i];
+            return 0.0;
+        }
+        double hi = (yMax[i] < z[0][i]) ? yMax[i] : z[0][i];
+        y[0][i] = yMin[i] + rng.uniformRv() * (hi - yMin[i]);
         return 0.0;
     }
-    double hi = (yMax[i] < z[0][i]) ? yMax[i] : z[0][i]; // keep z older than y
-    y[0][i] = yMin[i] + rng.uniformRv() * (hi - yMin[i]);
+
+    double x0 = originAge->getValue();
+    int Sold = spineIdx;
+    bool iWasSA = (z[0][i] == y[0][i]);
+    double yiNew = yMin[i] + rng.uniformRv() * (yMax[i] - yMin[i]);
+    int Snew = i;
+    double bestY = yiNew;
+    for(int j = 0; j < numFossils; j++){
+        double yj = (j == i) ? yiNew : y[0][j];
+        if(yj < bestY){ bestY = yj; Snew = j; }
+    }
+    if(Snew == Sold){
+        if(i != Sold){
+            if(iWasSA){
+                y[0][i] = yiNew;
+                z[0][i] = yiNew;
+            }else{
+                if(z[0][i] < yiNew)
+                    return -INFINITY;
+                y[0][i] = yiNew;
+            }
+        }else{
+            y[0][i] = yiNew;
+        }
+        lastFossil = i;
+        return 0.0;
+    }
+    bool SnewWasSA = (z[0][Snew] == y[0][Snew]);
+    double ynewSold = (i == Sold) ? yiNew : y[0][Sold];
+    double zSold;
+    if(SnewWasSA){
+        zSold = ynewSold;
+    }else{
+        zSold = z[0][Snew];
+        if(zSold < ynewSold)
+            return -INFINITY;
+    }
+    lastWasFlip = true;
+    flipS = Sold;
+    flipT = Snew;
+    flipSy = y[0][Sold];
+    flipSz = z[0][Sold];
+    flipTy = y[0][Snew];
+    flipTz = z[0][Snew];
+    y[0][i] = yiNew;
+    z[0][Snew] = x0;
+    z[0][Sold] = zSold;
+    spineIdx = Snew;
     return 0.0;
 }
 
@@ -185,6 +237,11 @@ void ParameterUnresolvedFossils::updateForAcceptance(void){
     numAcceptances++;
     if(numFossils == 0)
         return;
+    if(lastWasFlip){
+        y[1][flipS] = y[0][flipS]; z[1][flipS] = z[0][flipS];
+        y[1][flipT] = y[0][flipT]; z[1][flipT] = z[0][flipT];
+        return;
+    }
     if(lastWasBulk){
         for(int i = 0; i < numFossils; i++)
             z[1][i] = z[0][i];
@@ -198,6 +255,12 @@ void ParameterUnresolvedFossils::updateForRejection(void){
     numRejections++;
     if(numFossils == 0)
         return;
+    if(lastWasFlip){
+        y[0][flipS] = flipSy; z[0][flipS] = flipSz; y[1][flipS] = flipSy; z[1][flipS] = flipSz;
+        y[0][flipT] = flipTy; z[0][flipT] = flipTz; y[1][flipT] = flipTy; z[1][flipT] = flipTz;
+        spineIdx = flipS;
+        return;
+    }
     if(lastWasBulk){
         for(int i = 0; i < numFossils; i++)
             z[0][i] = z[1][i];
