@@ -18,7 +18,6 @@ int main(int argc, const char* argv[]){
     long gen = 0;
     double burnin = 0.0;
     double bb = 1.0;
-    std::string postFossils;
     std::vector<const char*> rest;
     rest.push_back(argv[0]);
     for(int i = 1; i < argc; i++){
@@ -31,12 +30,11 @@ int main(int argc, const char* argv[]){
         else if(a == "-sbc-bins" && i + 1 < argc){  bins = std::stoi(argv[++i]); binsSet = true; }
         else if(a == "-sbc-bb" && i + 1 < argc)     bb = std::stod(argv[++i]);
         else if(a == "-sbc-out" && i + 1 < argc)    out = argv[++i];
-        else if(a == "-post-fossils" && i + 1 < argc) postFossils = argv[++i];
         else                                        rest.push_back(argv[i]);
     }
 
-    if(mode != "simulate" && mode != "infer" && mode != "posterior")
-        Msg::error("SBC: -sbc-mode must be supplied as 'simulate', 'infer', or 'posterior'.");
+    if(mode != "simulate" && mode != "infer")
+        Msg::error("SBC: -sbc-mode must be supplied as 'simulate' or 'infer'.");
     if(repsSet == false)
         Msg::error("SBC: -sbc-reps is required.");
 
@@ -66,21 +64,6 @@ int main(int argc, const char* argv[]){
     cfg.psiPrior = psiPrior;
     cfg.startAgePrior = { true, s.getConditionAgePrior(), s.getConditionAgePriorP1(), s.getConditionAgePriorP2() };
     cfg.dumpPrefix = out;
-    cfg.posteriorMode = (mode == "posterior");
-    if(cfg.posteriorMode){
-        size_t p = 0;
-        while(p < postFossils.size()){
-            size_t comma = postFossils.find(',', p);
-            std::string tok = postFossils.substr(p, (comma == std::string::npos) ? std::string::npos : comma - p);
-            size_t colon = tok.find(':');
-            cfg.postFossilMin.push_back(std::stod(tok.substr(0, colon)));
-            cfg.postFossilMax.push_back(std::stod(tok.substr(colon + 1)));
-            if(comma == std::string::npos) break;
-            p = comma + 1;
-        }
-        if(cfg.postFossilMin.empty())
-            Msg::error("SBC posterior: -post-fossils 'min:max,min:max,...' is required.");
-    }
 
     if(cfg.simulateOnly == false){
         if(genSet == false)    Msg::error("SBC infer: -sbc-gen (MCMC generations per replicate) is required.");

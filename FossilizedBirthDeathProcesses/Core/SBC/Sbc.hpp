@@ -26,9 +26,6 @@ struct SbcConfig {
     int                     mcmcThin;
     int                     rankBins;
     std::string             dumpPrefix;
-    bool                    posteriorMode;
-    std::vector<double>     postFossilMin;
-    std::vector<double>     postFossilMax;
 };
 
 class Sbc {
@@ -41,7 +38,6 @@ class Sbc {
         SimParams       drawParams(void);
         void            runSimulateOnly(void);
         void            runInference(void);
-        void            runPosterior(void);
         SbcConfig       cfg;
         RandomVariable* rng;
 };

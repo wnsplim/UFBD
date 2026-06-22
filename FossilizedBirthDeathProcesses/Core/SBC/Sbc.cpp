@@ -101,56 +101,10 @@ SimParams Sbc::drawParams(void){
 }
 
 void Sbc::run(void){
-    if(cfg.posteriorMode)
-        runPosterior();
-    else if(cfg.simulateOnly)
+    if(cfg.simulateOnly)
         runSimulateOnly();
     else
         runInference();
-}
-
-void Sbc::runPosterior(void){
-    long burnin = (long)(cfg.burninFraction * cfg.mcmcGen);
-    Tree* tree = new Tree("");
-    Node* crown = tree->getCrown();
-    std::vector<std::string> taxa;
-    std::vector<Clade> clades;
-    clades.push_back(Clade("whole", taxa, crown, crown->getAncestor()));
-    std::vector<Fossil> fossils;
-    for(size_t i = 0; i < cfg.postFossilMin.size(); i++)
-        fossils.push_back(Fossil("F" + std::to_string(i + 1), cfg.postFossilMin[i], cfg.postFossilMax[i], "whole", Assignment::TOTAL));
-
-    unsigned int modelSeed = (unsigned int)(rng->uniformRv() * 4294967295.0);
-    FBDTreeModel model(tree, clades, fossils, modelSeed);
-    RandomVariable::setActiveInstance(model.getRng());
-    RandomVariable& mrng = RandomVariable::randomVariableInstance();
-
-    std::vector<std::string> names = model.getParameterNames();
-    FILE* f = std::fopen((cfg.dumpPrefix + "_post.tsv").c_str(), "w");
-    for(size_t c = 0; c < names.size(); c++)
-        std::fprintf(f, "%s%s", names[c].c_str(), (c + 1 < names.size()) ? "\t" : "\n");
-
-    double curLnL = model.lnLikelihood();
-    double curLnP = model.lnPriorProbability();
-    for(long n = 1; n <= cfg.mcmcGen; n++){
-        double lpr = model.update();
-        double newLnL = model.lnLikelihood();
-        double newLnP = model.lnPriorProbability();
-        double lnR = (newLnL - curLnL) + (newLnP - curLnP) + lpr;
-        if(std::log(mrng.uniformRv()) < lnR){
-            curLnL = newLnL; curLnP = newLnP;
-            model.updateForAcceptance();
-        }else{
-            model.updateForRejection();
-        }
-        if(n > burnin && (n % cfg.mcmcThin == 0)){
-            std::vector<double> v = model.getParameterString();
-            for(size_t c = 0; c < v.size(); c++)
-                std::fprintf(f, "%.6g%s", v[c], (c + 1 < v.size()) ? "\t" : "\n");
-        }
-    }
-    std::fclose(f);
-    std::printf("posterior: wrote samples to %s_post.tsv\n", cfg.dumpPrefix.c_str());
 }
 
 void Sbc::runSimulateOnly(void){
