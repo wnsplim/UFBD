@@ -10,6 +10,8 @@
 #include "Msg.hpp"
 
 #include <iostream>
+#include <cstdlib>
+#include <algorithm>
 #include <cmath>
 #include <limits>
 
@@ -21,6 +23,7 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     upDownStep = 0.1;
     upDownTotal = 0;
     cacheInit = false;
+    gammaValidate = (std::getenv("DNUE_GAMMA_VALIDATE") != nullptr);
     lambdaField = nullptr;
     muField = nullptr;
     psiField = nullptr;
@@ -687,7 +690,7 @@ double FBDTreeModel::calculateP0Hat(double t){
     return calculateP0HatAt(findIndex(t), t);
 }
 
-double FBDTreeModel::computeGamma(double z, int i){
+double FBDTreeModel::computeGammaOracle(double z, int i){
     Tree* tree = parameterTree->getTree();
     Node* crown = unresolvedFossils->getCrownNode(i);
     bool stem = unresolvedFossils->getIsStem(i);
@@ -763,10 +766,153 @@ double FBDTreeModel::computeGamma(double z, int i){
     return count;
 }
 
+void FBDTreeModel::buildEulerIndex(void){
+    Tree* tree = parameterTree->getTree();
+    int n = tree->getNumNodes();
+    subPre.assign(n, 0);
+    subSize.assign(n, 0);
+    nodesByPre.assign(n, nullptr);
+    int counter = 0;
+    std::vector<std::pair<Node*,bool> > stk;
+    stk.push_back(std::make_pair(tree->getCrown(), false));
+    while(stk.empty() == false){
+        std::pair<Node*,bool> top = stk.back();
+        stk.pop_back();
+        Node* nd = top.first;
+        if(top.second == false){
+            subPre[nd->getOffset()] = counter;
+            nodesByPre[counter] = nd;
+            counter++;
+            stk.push_back(std::make_pair(nd, true));
+            for(Node* c : nd->getDescendants())
+                stk.push_back(std::make_pair(c, false));
+        }else{
+            int s = 1;
+            for(Node* c : nd->getDescendants())
+                s += subSize[c->getOffset()];
+            subSize[nd->getOffset()] = s;
+        }
+    }
+    eulerBuilt = true;
+}
+
+bool FBDTreeModel::inSub(Node* node, Node* subtreeCrown){
+    int pc = subPre[subtreeCrown->getOffset()];
+    int pn = subPre[node->getOffset()];
+    return pc <= pn && pn < pc + subSize[subtreeCrown->getOffset()];
+}
+
+double FBDTreeModel::computeGammaFast(double z, int i){
+    Tree* tree = parameterTree->getTree();
+    if(eulerBuilt == false)
+        buildEulerIndex();
+    Node* crown = unresolvedFossils->getCrownNode(i);
+    bool stem = unresolvedFossils->getIsStem(i);
+    bool total = (unresolvedFossils->getIsCrown(i) == false && stem == false);
+    double count = 0.0;
+    if(stem == false && crown == tree->getCrown()){
+        int younger = (int)(std::lower_bound(sortedYounger.begin(), sortedYounger.end(), z) - sortedYounger.begin());
+        int older   = (int)(std::upper_bound(sortedOlder.begin(), sortedOlder.end(), z) - sortedOlder.begin());
+        count += (double)(younger - older);
+    }else{
+        int lo = subPre[crown->getOffset()];
+        int hi = lo + subSize[crown->getOffset()];
+        for(int k = lo; k < hi; k++){
+            Node* n = nodesByPre[k];
+            if(n == tree->getCrown())
+                continue;
+            Node* anc = n->getAncestor();
+            if(n->getTime() < z && z < anc->getTime()){
+                bool inZone;
+                if(stem){
+                    inZone = (n == crown);
+                }else{
+                    inZone = inSub(anc, crown);
+                    if(inZone == false && total && n == crown)
+                        inZone = true;
+                }
+                if(inZone)
+                    count++;
+            }
+        }
+    }
+    if((total || stem) && crown == tree->getCrown() && originAge != nullptr){
+        double x0 = originAge->getValue();
+        if(tree->getNumBackbone() == 0){
+            if(z >= x0)
+                count++;
+        }else{
+            if(tree->getCrown()->getTime() < z && z < x0)
+                count++;
+        }
+    }
+    bool SymmetryCorrection = (UserSettings::userSettings().getModel() == Model::UFBD);
+    bool focalIsTip = (unresolvedFossils->isSA(i) == false);
+    int numFossils = unresolvedFossils->getNumFossils();
+    for(int j = 0; j < numFossils; j++){
+        if(j == i)
+            continue;
+        if(unresolvedFossils->isSA(j))
+            continue;
+        double yj = unresolvedFossils->getFossilAge(j);
+        double zj = unresolvedFossils->getAttachAge(j);
+        if(yj >= z || z >= zj)
+            continue;
+        bool reciprocal;
+        if(stem){
+            if(unresolvedFossils->getCrownNode(j) != crown)
+                continue;
+            bool jStem = unresolvedFossils->getIsStem(j);
+            bool jTotalOnStem = (unresolvedFossils->getIsCrown(j) == false) && (jStem == false) && (zj >= crown->getTime());
+            if(jStem == false && jTotalOnStem == false)
+                continue;
+            reciprocal = true;
+        }else{
+            if(inSub(unresolvedFossils->getCrownNode(j), crown) == false)
+                continue;
+            if(total == false && zj > crown->getTime())
+                continue;
+            Node* crownJ = unresolvedFossils->getCrownNode(j);
+            bool jStem = unresolvedFossils->getIsStem(j);
+            bool jTotal = (unresolvedFossils->getIsCrown(j) == false) && (jStem == false);
+            bool iPendReachesRj = jTotal ? true
+                                : jStem  ? (z >= crownJ->getTime())
+                                :          (z <= crownJ->getTime());
+            reciprocal = inSub(crown, crownJ) && iPendReachesRj;
+        }
+        double w = 1.0;
+        if(SymmetryCorrection && focalIsTip && j != unresolvedFossils->getSpineIdx() && reciprocal)
+            w = 0.5;
+        count += w;
+    }
+    return count;
+}
+
+double FBDTreeModel::computeGamma(double z, int i){
+    double f = computeGammaFast(z, i);
+    if(gammaValidate){
+        double o = computeGammaOracle(z, i);
+        if(std::fabs(f - o) > 1e-6)
+            Msg::error("computeGamma fast/oracle mismatch: fast=" + std::to_string(f) + " oracle=" + std::to_string(o) + " z=" + std::to_string(z) + " idx=" + std::to_string(i));
+    }
+    return f;
+}
+
 void FBDTreeModel::updateGammaCache(void){
     Tree* tree = parameterTree->getTree();
     int nf = unresolvedFossils->getNumFossils();
     std::vector<Node*>& dpseq = tree->getDownPassSequence();
+
+    sortedYounger.clear();
+    sortedOlder.clear();
+    for(Node* nd : dpseq){
+        if(nd == tree->getCrown())
+            continue;
+        sortedYounger.push_back(nd->getTime());
+        sortedOlder.push_back(nd->getAncestor()->getTime());
+    }
+    std::sort(sortedYounger.begin(), sortedYounger.end());
+    std::sort(sortedOlder.begin(), sortedOlder.end());
 
     if(cacheInit == false){
         cachedGammaLn.assign(nf, 0.0);

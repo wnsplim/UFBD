@@ -49,6 +49,10 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      calculateP0HatAt(int i, double t);
         double                      calculateP0Hat(double t);
         double                      computeGamma(double z, int i);
+        double                      computeGammaOracle(double z, int i);
+        double                      computeGammaFast(double z, int i);
+        void                        buildEulerIndex(void);
+        bool                        inSub(Node* node, Node* subtreeCrown);
         void                        updateGammaCache(void);
         void                        computeAgeFloors(std::map<Node*,double>& floors);
         void                        resolveFossils(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils);
@@ -111,6 +115,13 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      prevX0;
         bool                        cacheInit;
         bool                        isFBD;
+        std::vector<int>            subPre;
+        std::vector<int>            subSize;
+        std::vector<Node*>          nodesByPre;
+        bool                        eulerBuilt = false;
+        std::vector<double>         sortedYounger;
+        std::vector<double>         sortedOlder;
+        bool                        gammaValidate = false;
 };
 
 
