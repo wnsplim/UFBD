@@ -25,6 +25,7 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
     crownNode.resize(numFossils);
     originNode.resize(numFossils);
     isCrown.resize(numFossils);
+    isStem.resize(numFossils);
     ue.resize(numFossils);
     y[0].resize(numFossils);
     y[1].resize(numFossils);
@@ -45,6 +46,7 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
         crownNode[i]  = cr;
         originNode[i] = cr->getAncestor();
         isCrown[i]    = (f.getAssignment() == Assignment::CROWN);
+        isStem[i]     = (f.getAssignment() == Assignment::STEM);
         ue[i]         = (f.getMaxAge() == 0.0);
         yMin[i]       = f.getMinAge();
         yMax[i]       = f.getMaxAge();
@@ -79,7 +81,22 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
 }
 
 double ParameterUnresolvedFossils::getMinAttachAge(int i){
+    if(isStem[i] && isStemSpine(i))
+        return crownNode[i]->getTime();
     return y[0][i];
+}
+
+bool ParameterUnresolvedFossils::isStemSpine(int i){
+    Node* cr = crownNode[i];
+    if(y[0][i] >= cr->getTime())
+        return false;
+    for(int j = 0; j < numFossils; j++){
+        if(j == i || isStem[j] == false || crownNode[j] != cr)
+            continue;
+        if(y[0][j] < y[0][i] || (y[0][j] == y[0][i] && j < i))
+            return false;
+    }
+    return true;
 }
 
 double ParameterUnresolvedFossils::getMaxAttachAge(int i){

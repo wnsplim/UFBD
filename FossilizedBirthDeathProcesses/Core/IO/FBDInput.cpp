@@ -99,14 +99,19 @@ void FBDInput::readFossils(std::string path){
         if(clade == nullptr)
             Msg::error("fossil '" + taxon + "' references undefined clade '" + cladeName + "'");
 
-        if(assignStr != "CROWN" && assignStr != "TOTAL")
+        if(assignStr != "CROWN" && assignStr != "TOTAL" && assignStr != "STEM")
             Msg::error("fossil '" + taxon + "' has unknown assignment '" + assignStr + "'");
-        Assignment assignment = (assignStr == "CROWN") ? Assignment::CROWN : Assignment::TOTAL;
+        Assignment assignment = (assignStr == "CROWN") ? Assignment::CROWN
+                              : (assignStr == "STEM")  ? Assignment::STEM
+                              :                          Assignment::TOTAL;
 
         if(assignment == Assignment::CROWN && clade->getCrown()->getIsTip()){
             Msg::warning("fossil '" + taxon + "' assigned CROWN to singleton clade '" + cladeName + "'; treating as TOTAL");
             assignment = Assignment::TOTAL;
         }
+        if(assignment == Assignment::STEM && clade->getCrown() == tree->getCrown()
+           && UserSettings::userSettings().getConditioning() == Conditioning::CROWN)
+            Msg::error("fossil '" + taxon + "' is STEM on the whole-tree clade '" + cladeName + "' under crown conditioning: no stem edge exists rootward of the crown.");
         if(UserSettings::userSettings().getConditioning() == Conditioning::CROWN
            && assignment == Assignment::TOTAL && clade->getCrown() == tree->getCrown()){
             Msg::warning("fossil '" + taxon + "' is TOTAL on the whole-tree clade '" + cladeName + "'; treating as CROWN");

@@ -11,6 +11,7 @@
 
 #include <iostream>
 #include <cmath>
+#include <cstdlib>
 #include <limits>
 
 FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, unsigned int seed) :
@@ -179,6 +180,14 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     if(lambdaField) lambdaField->setProposalProbability(fieldWeight);
     if(muField)     muField->setProposalProbability(fieldWeight);
     if(psiField)    psiField->setProposalProbability(fieldWeight);
+
+    if(std::getenv("FBD_FIXTHETA") != nullptr){
+        parameterTree->setProposalProbability(0.0);
+        for(ParameterDouble* l : lambda) l->setProposalProbability(0.0);
+        for(ParameterDouble* m : mu)     m->setProposalProbability(0.0);
+        for(ParameterDouble* p : psi)    p->setProposalProbability(0.0);
+        if(originAge != nullptr) originAge->setProposalProbability(0.0);
+    }
 
     double sum = 0.0;
     for(Parameter* p : parameters)
@@ -690,21 +699,27 @@ double FBDTreeModel::calculateP0Hat(double t){
 double FBDTreeModel::computeGamma(double z, int i){
     Tree* tree = parameterTree->getTree();
     Node* crown = unresolvedFossils->getCrownNode(i);
-    bool total = (unresolvedFossils->getIsCrown(i) == false);
+    bool stem = unresolvedFossils->getIsStem(i);
+    bool total = (unresolvedFossils->getIsCrown(i) == false && stem == false);
     double count = 0.0;
     for(Node* n : tree->getDownPassSequence()){
         if(n == tree->getCrown())
             continue;
         Node* anc = n->getAncestor();
         if(n->getTime() < z && z < anc->getTime()){
-            bool inZone = nodeInSubtree(anc, crown);
-            if(inZone == false && total && n == crown)
-                inZone = true;
+            bool inZone;
+            if(stem){
+                inZone = (n == crown);
+            }else{
+                inZone = nodeInSubtree(anc, crown);
+                if(inZone == false && total && n == crown)
+                    inZone = true;
+            }
             if(inZone)
                 count++;
         }
     }
-    if(total && crown == tree->getCrown() && originAge != nullptr){
+    if((total || stem) && crown == tree->getCrown() && originAge != nullptr){
         double x0 = originAge->getValue();
         if(tree->getNumBackbone() == 0){
             if(z >= x0)
@@ -727,19 +742,31 @@ double FBDTreeModel::computeGamma(double z, int i){
         double zj = unresolvedFossils->getAttachAge(j);
         if(yj >= z || z >= zj)
             continue;
-        if(nodeInSubtree(unresolvedFossils->getCrownNode(j), crown) == false)
-            continue;
-        if(total == false && zj > crown->getTime())
-            continue;
-        double w = 1.0;
-        if(SymmetryCorrection && focalIsTip && j != unresolvedFossils->getSpineIdx()){
+        bool reciprocal;
+        if(stem){
+            if(unresolvedFossils->getCrownNode(j) != crown)
+                continue;
+            bool jStem = unresolvedFossils->getIsStem(j);
+            bool jTotalOnStem = (unresolvedFossils->getIsCrown(j) == false) && (jStem == false) && (zj >= crown->getTime());
+            if(jStem == false && jTotalOnStem == false)
+                continue;
+            reciprocal = true;
+        }else{
+            if(nodeInSubtree(unresolvedFossils->getCrownNode(j), crown) == false)
+                continue;
+            if(total == false && zj > crown->getTime())
+                continue;
             Node* crownJ = unresolvedFossils->getCrownNode(j);
-            bool jTotal = (unresolvedFossils->getIsCrown(j) == false);
-            bool reciprocal = nodeInSubtree(crown, crownJ)
-                              && (jTotal || z <= crownJ->getTime());
-            if(reciprocal)
-                w = 0.5;
+            bool jStem = unresolvedFossils->getIsStem(j);
+            bool jTotal = (unresolvedFossils->getIsCrown(j) == false) && (jStem == false);
+            bool iPendReachesRj = jTotal ? true
+                                : jStem  ? (z >= crownJ->getTime())
+                                :          (z <= crownJ->getTime());
+            reciprocal = nodeInSubtree(crown, crownJ) && iPendReachesRj;
         }
+        double w = 1.0;
+        if(SymmetryCorrection && focalIsTip && j != unresolvedFossils->getSpineIdx() && reciprocal)
+            w = 0.5;
         count += w;
     }
     return count;

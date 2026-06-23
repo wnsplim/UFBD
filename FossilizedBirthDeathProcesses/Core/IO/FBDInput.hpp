@@ -7,7 +7,7 @@
 class Node;
 class Tree;
 
-enum class Assignment { CROWN, TOTAL };
+enum class Assignment { CROWN, TOTAL, STEM };
 
 class Clade {
 

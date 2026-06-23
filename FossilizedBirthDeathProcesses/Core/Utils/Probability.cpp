@@ -390,7 +390,7 @@ double  Probability::Gamma::pdf(double alpha, double beta, double x) {
 
 double  Probability::Gamma::lnPdf(double alpha, double beta, double x) {
 
-    return alpha * log(beta) - Probability::Helper::lnGamma(alpha) + (alpha-1.0) * log(x) - x * beta; // TODO: Levi, check this
+    return alpha * log(beta) - Probability::Helper::lnGamma(alpha) + (alpha-1.0) * log(x) - x * beta;
 }
 
 double  Probability::Gamma::rv(RandomVariable* rng, double alpha, double beta) {

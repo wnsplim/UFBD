@@ -29,6 +29,7 @@ class ParameterUnresolvedFossils : public Parameter {
         Node*                       getCrownNode(int i) { return crownNode[i]; }
         Node*                       getMaxAttachNode(int i) { return isCrown[i] ? crownNode[i] : originNode[i]; }
         bool                        getIsCrown(int i) { return isCrown[i]; }
+        bool                        getIsStem(int i) { return isStem[i]; }
         double                      getMinAttachAge(int i);
         double                      getMaxAttachAge(int i);
         double                      lnProbability(void) { return 0.0; } // density is in the model's lnLikelihood, not a prior here
@@ -43,6 +44,7 @@ class ParameterUnresolvedFossils : public Parameter {
         double                      updateFossilAge(int i);
         double                      updateAttachAge(int i);
         double                      updateSampledAncestor(int i);
+        bool                        isStemSpine(int i);
         Tree*                       backbone;
         ParameterDouble*            originAge;
         int                         numFossils;
@@ -51,6 +53,7 @@ class ParameterUnresolvedFossils : public Parameter {
         std::vector<Node*>          crownNode;
         std::vector<Node*>          originNode;
         std::vector<bool>           isCrown;
+        std::vector<bool>           isStem;
         std::vector<char>           ue;
         std::vector<double>         y[2]; // 0 = working (scored), 1 = last accepted
         std::vector<double>         z[2];
