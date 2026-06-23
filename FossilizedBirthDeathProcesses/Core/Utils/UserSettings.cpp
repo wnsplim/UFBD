@@ -35,6 +35,9 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     conditioningSet = false;
     conditioningEvent = ConditioningEvent::SURVIVAL;
     conditionAgePriorSet = false;
+    conditionAgePrior    = Probability::PriorFamily::IMPROPER;
+    conditionAgePriorP1  = 0.0;
+    conditionAgePriorP2  = 0.0;
     model           = Model::UFBD;
     rho             = 1.0;
     seed            = 0;

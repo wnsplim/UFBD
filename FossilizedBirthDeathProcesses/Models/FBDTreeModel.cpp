@@ -297,7 +297,7 @@ double FBDTreeModel::lnPriorProbability(void){
             lnP += p->lnProbability();
 
     UserSettings& us = UserSettings::userSettings();
-    if(us.getConditionAgePriorSet() && us.getConditioning() == Conditioning::CROWN){
+    if(us.getConditioning() == Conditioning::CROWN){
         double crownAge = parameterTree->getTree()->getCrown()->getTime();
         lnP += Probability::priorLnPdf(us.getConditionAgePrior(), us.getConditionAgePriorP1(), us.getConditionAgePriorP2(), crownAge, 0.0, std::numeric_limits<double>::max());
     }
