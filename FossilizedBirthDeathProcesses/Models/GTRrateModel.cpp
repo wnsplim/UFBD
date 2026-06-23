@@ -1,16 +1,16 @@
-#include "GtrRateModel.hpp"
+#include "GTRrateModel.hpp"
 #include "Eigen/Dense"
 
 #include <cmath>
 
-GtrRateModel::GtrRateModel(int n) :
+GTRrateModel::GTRrateModel(int n) :
     numStates(n),
     eigenvalue(n),
     cijk(n * n * n)
 {
 }
 
-void GtrRateModel::setParameters(const std::vector<double>& exch, const std::vector<double>& freq){
+void GTRrateModel::setParameters(const std::vector<double>& exch, const std::vector<double>& freq){
     int n = numStates;
     Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(n, n);
     int k = 0;
@@ -53,7 +53,7 @@ void GtrRateModel::setParameters(const std::vector<double>& exch, const std::vec
     }
 }
 
-void GtrRateModel::transitionProbabilities(double t, double* P) const {
+void GTRrateModel::transitionProbabilities(double t, double* P) const {
     int n = numStates;
     std::vector<double> ev(n);
     for(int s = 0; s < n; s++)

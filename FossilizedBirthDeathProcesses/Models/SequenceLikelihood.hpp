@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include "GtrRateModel.hpp"
+#include "GTRrateModel.hpp"
 
 class Tree;
 class Node;
@@ -33,7 +33,7 @@ class SequenceLikelihood {
         std::vector<std::vector<std::vector<int>>>   patternState;
         std::vector<std::vector<int>>                patternWeight;
         std::vector<std::vector<int>>                constantState;
-        std::vector<GtrRateModel>                    rateModel;
+        std::vector<GTRrateModel>                    rateModel;
 
         Node*                                        mappedCrown;
         std::vector<std::vector<std::vector<int>>>   tipStateByOffset;

@@ -29,7 +29,7 @@ void SequenceLikelihood::addPartition(const std::vector<std::string>& taxa, cons
     patternState.push_back(patterns);
     patternWeight.push_back(weight);
     constantState.push_back(mask);
-    rateModel.push_back(GtrRateModel(numStates));
+    rateModel.push_back(GTRrateModel(numStates));
     numPartitions++;
 }
 
@@ -73,6 +73,9 @@ double SequenceLikelihood::computeLnL(Tree* tree,
         }else{
             cat.assign(1, 1.0);
         }
+        double pinv = proportionInvariant[p];
+        if(pinv > 0.0)
+            for(double& r : cat) r /= (1.0 - pinv);
         int K = (int)cat.size();
         int npat = (int)patternWeight[p].size();
         std::vector<double> siteG(npat, 0.0);
@@ -116,7 +119,6 @@ double SequenceLikelihood::computeLnL(Tree* tree,
             }
         }
 
-        double pinv = proportionInvariant[p];
         for(int h = 0; h < npat; h++){
             double pinvLk = 0.0;
             if(pinv > 0.0){

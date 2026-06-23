@@ -1,12 +1,12 @@
-#ifndef GtrRateModel_hpp
-#define GtrRateModel_hpp
+#ifndef GTRrateModel_hpp
+#define GTRrateModel_hpp
 
 #include <vector>
 
-class GtrRateModel {
+class GTRrateModel {
 
     public:
-                            GtrRateModel(int numStates);
+                            GTRrateModel(int numStates);
         void                setParameters(const std::vector<double>& exchangeability, const std::vector<double>& frequency);
         void                transitionProbabilities(double t, double* P) const;
         int                 getNumStates(void) const { return numStates; }
