@@ -37,6 +37,14 @@ class SequenceLikelihood {
 
         Node*                                        mappedCrown;
         std::vector<std::vector<std::vector<int>>>   tipStateByOffset;
+
+        bool                                            cacheValid;
+        std::vector<std::vector<std::vector<double>>>   conP;
+        std::vector<std::vector<double>>                lastBl;
+        std::vector<std::vector<double>>                lastExch;
+        std::vector<std::vector<double>>                lastFreq;
+        std::vector<double>                             lastAlpha;
+        std::vector<double>                             lastPinv;
 };
 
 #endif

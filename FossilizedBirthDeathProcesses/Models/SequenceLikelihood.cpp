@@ -11,7 +11,8 @@ SequenceLikelihood::SequenceLikelihood(int numStates, int numCats) :
     numStates(numStates),
     numCats(numCats),
     numPartitions(0),
-    mappedCrown(nullptr)
+    mappedCrown(nullptr),
+    cacheValid(false)
 {
 }
 
@@ -57,12 +58,23 @@ double SequenceLikelihood::computeLnL(Tree* tree,
     Node* crown = tree->getCrown();
     int n = numStates;
     int numNodes = tree->getNumNodes();
+    int full = (1 << n) - 1;
     std::vector<double> P(n * n);
-    std::vector<std::vector<double>> conP(numNodes);
-    double lnL = 0.0;
 
+    if(cacheValid == false){
+        conP.assign(numPartitions, std::vector<std::vector<double>>(numNodes));
+        lastBl.assign(numPartitions, std::vector<double>(numNodes, -1.0));
+        lastExch.assign(numPartitions, std::vector<double>());
+        lastFreq.assign(numPartitions, std::vector<double>());
+        lastAlpha.assign(numPartitions, -1.0);
+        lastPinv.assign(numPartitions, -1.0);
+    }
+
+    double lnL = 0.0;
     for(int p = 0; p < numPartitions; p++){
-        rateModel[p].setParameters(exchangeability[p], frequency[p]);
+        bool substDirty = (cacheValid == false) || (exchangeability[p] != lastExch[p]) || (frequency[p] != lastFreq[p]) || (alpha[p] != lastAlpha[p]) || (proportionInvariant[p] != lastPinv[p]);
+        if((cacheValid == false) || (exchangeability[p] != lastExch[p]) || (frequency[p] != lastFreq[p]))
+            rateModel[p].setParameters(exchangeability[p], frequency[p]);
 
         std::vector<double> cat;
         if(numCats > 1 && alpha[p] > 0.0){
@@ -76,60 +88,86 @@ double SequenceLikelihood::computeLnL(Tree* tree,
             for(double& r : cat) r /= (1.0 - pinv);
         int K = (int)cat.size();
         int npat = (int)patternWeight[p].size();
-        std::vector<double> siteG(npat, 0.0);
 
-        for(int k = 0; k < K; k++){
-            for(Node* node : downPass){
-                int off = node->getOffset();
-                conP[off].assign(npat * n, 0.0);
-                if(node->getIsTip()){
+        std::vector<double> curBl(numNodes, 0.0);
+        for(Node* node : downPass){
+            if(node == crown) continue;
+            int off = node->getOffset();
+            curBl[off] = branchRates[p][off] * (node->getAncestor()->getTime() - node->getTime());
+            if(curBl[off] < 0.0)
+                return -std::numeric_limits<double>::infinity();
+        }
+
+        std::vector<char> dirty(numNodes, 0);
+        for(Node* node : downPass){
+            int off = node->getOffset();
+            if(node->getIsTip()){
+                if(conP[p][off].empty()){
                     const std::vector<int>& st = tipStateByOffset[p][off];
-                    int full = (1 << n) - 1;
-                    for(int h = 0; h < npat; h++){
-                        int m = st.empty() ? full : st[h];
-                        for(int a = 0; a < n; a++)
-                            conP[off][h * n + a] = ((m >> a) & 1) ? 1.0 : 0.0;
-                    }
-                }else{
-                    for(int h = 0; h < npat * n; h++)
-                        conP[off][h] = 1.0;
-                    for(Node* c : node->getDescendants()){
-                        double bl = branchRates[p][c->getOffset()] * (node->getTime() - c->getTime());
-                        if(bl < 0.0)
-                            return -std::numeric_limits<double>::infinity();
-                        rateModel[p].transitionProbabilities(bl * cat[k], &P[0]);
-                        int coff = c->getOffset();
-                        for(int h = 0; h < npat; h++)
-                            for(int a = 0; a < n; a++){
-                                double sum = 0.0;
-                                for(int b = 0; b < n; b++)
-                                    sum += P[a * n + b] * conP[coff][h * n + b];
-                                conP[off][h * n + a] *= sum;
-                            }
-                    }
+                    conP[p][off].assign(K * npat * n, 0.0);
+                    for(int k = 0; k < K; k++)
+                        for(int h = 0; h < npat; h++){
+                            int m = st.empty() ? full : st[h];
+                            for(int a = 0; a < n; a++)
+                                conP[p][off][(k * npat + h) * n + a] = ((m >> a) & 1) ? 1.0 : 0.0;
+                        }
                 }
+                continue;
             }
-            int croff = crown->getOffset();
-            for(int h = 0; h < npat; h++){
-                double lk = 0.0;
-                for(int a = 0; a < n; a++)
-                    lk += frequency[p][a] * conP[croff][h * n + a];
-                siteG[h] += lk / K;
+            std::vector<Node*>& kids = node->getDescendants();
+            bool nd = substDirty;
+            for(Node* c : kids){
+                int coff = c->getOffset();
+                if(dirty[coff] || curBl[coff] != lastBl[p][coff]) nd = true;
+            }
+            if(nd == false) continue;
+            dirty[off] = 1;
+            std::vector<double>& cp = conP[p][off];
+            cp.assign(K * npat * n, 1.0);
+            for(Node* c : kids){
+                int coff = c->getOffset();
+                const std::vector<double>& ccp = conP[p][coff];
+                for(int k = 0; k < K; k++){
+                    rateModel[p].transitionProbabilities(curBl[coff] * cat[k], &P[0]);
+                    for(int h = 0; h < npat; h++)
+                        for(int a = 0; a < n; a++){
+                            double sum = 0.0;
+                            for(int b = 0; b < n; b++)
+                                sum += P[a * n + b] * ccp[(k * npat + h) * n + b];
+                            cp[(k * npat + h) * n + a] *= sum;
+                        }
+                }
             }
         }
 
+        int croff = crown->getOffset();
+        const std::vector<double>& root = conP[p][croff];
         for(int h = 0; h < npat; h++){
+            double gammaLk = 0.0;
+            for(int k = 0; k < K; k++){
+                double lk = 0.0;
+                for(int a = 0; a < n; a++)
+                    lk += frequency[p][a] * root[(k * npat + h) * n + a];
+                gammaLk += lk / K;
+            }
             double pinvLk = 0.0;
             if(pinv > 0.0){
                 int mask = constantState[p][h];
                 for(int a = 0; a < n; a++)
                     if(mask & (1 << a)) pinvLk += frequency[p][a];
             }
-            double site = pinv * pinvLk + (1.0 - pinv) * siteG[h];
+            double site = pinv * pinvLk + (1.0 - pinv) * gammaLk;
             if(site <= 0.0)
                 return -std::numeric_limits<double>::infinity();
             lnL += patternWeight[p][h] * std::log(site);
         }
+
+        lastBl[p] = curBl;
+        lastExch[p] = exchangeability[p];
+        lastFreq[p] = frequency[p];
+        lastAlpha[p] = alpha[p];
+        lastPinv[p] = proportionInvariant[p];
     }
+    cacheValid = true;
     return lnL;
 }
