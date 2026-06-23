@@ -11,7 +11,6 @@
 
 #include <iostream>
 #include <cmath>
-#include <cstdlib>
 #include <limits>
 
 FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, unsigned int seed) :
@@ -180,14 +179,6 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     if(lambdaField) lambdaField->setProposalProbability(fieldWeight);
     if(muField)     muField->setProposalProbability(fieldWeight);
     if(psiField)    psiField->setProposalProbability(fieldWeight);
-
-    if(std::getenv("FBD_FIXTHETA") != nullptr){
-        parameterTree->setProposalProbability(0.0);
-        for(ParameterDouble* l : lambda) l->setProposalProbability(0.0);
-        for(ParameterDouble* m : mu)     m->setProposalProbability(0.0);
-        for(ParameterDouble* p : psi)    p->setProposalProbability(0.0);
-        if(originAge != nullptr) originAge->setProposalProbability(0.0);
-    }
 
     double sum = 0.0;
     for(Parameter* p : parameters)
