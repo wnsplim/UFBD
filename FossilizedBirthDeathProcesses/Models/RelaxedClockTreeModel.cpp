@@ -19,6 +19,26 @@
 #include "Tree.hpp"
 #include "UserSettings.hpp"
 
+static int nucleotideBitmask(char c){
+    switch(std::toupper((unsigned char)c)){
+        case 'A': return 1;
+        case 'C': return 2;
+        case 'G': return 4;
+        case 'T': return 8;
+        case 'R': return 5;
+        case 'Y': return 10;
+        case 'S': return 6;
+        case 'W': return 9;
+        case 'K': return 12;
+        case 'M': return 3;
+        case 'B': return 14;
+        case 'D': return 13;
+        case 'H': return 11;
+        case 'V': return 7;
+        default:  return 15;
+    }
+}
+
 void RelaxedClockTreeModel::buildClock(ClockModel clockModel, const double* rgeneParam, const double* sigma2Param){
     int nLoci = (lik != nullptr) ? lik->getNumPartitions() : seqLik->getNumPartitions();
     if(clockModel == ClockModel::CIR)
@@ -63,10 +83,8 @@ RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades
     for(int i = 0; i < ntax; i++){
         std::string seq;
         sf >> taxa[i] >> seq;
-        for(int h = 0; h < nsite; h++){
-            char c = std::toupper((unsigned char)seq[h]);
-            patterns[i][h] = (c == 'A') ? 0 : (c == 'C') ? 1 : (c == 'G') ? 2 : (c == 'T') ? 3 : -1;
-        }
+        for(int h = 0; h < nsite; h++)
+            patterns[i][h] = nucleotideBitmask(seq[h]);
     }
     std::vector<int> weight(nsite, 1);
     seqLik->addPartition(taxa, patterns, weight);

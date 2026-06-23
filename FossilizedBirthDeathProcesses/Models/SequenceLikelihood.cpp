@@ -20,10 +20,8 @@ void SequenceLikelihood::addPartition(const std::vector<std::string>& taxa, cons
     int fullMask = (1 << numStates) - 1;
     std::vector<int> mask(npat, fullMask);
     for(int h = 0; h < npat; h++)
-        for(int t = 0; t < (int)taxa.size(); t++){
-            int st = patterns[t][h];
-            if(st >= 0) mask[h] &= (1 << st);
-        }
+        for(int t = 0; t < (int)taxa.size(); t++)
+            mask[h] &= patterns[t][h];
 
     taxonNames.push_back(taxa);
     patternState.push_back(patterns);
@@ -86,10 +84,11 @@ double SequenceLikelihood::computeLnL(Tree* tree,
                 conP[off].assign(npat * n, 0.0);
                 if(node->getIsTip()){
                     const std::vector<int>& st = tipStateByOffset[p][off];
+                    int full = (1 << n) - 1;
                     for(int h = 0; h < npat; h++){
-                        int s = st.empty() ? -1 : st[h];
+                        int m = st.empty() ? full : st[h];
                         for(int a = 0; a < n; a++)
-                            conP[off][h * n + a] = (s < 0 || s == a) ? 1.0 : 0.0;
+                            conP[off][h * n + a] = ((m >> a) & 1) ? 1.0 : 0.0;
                     }
                 }else{
                     for(int h = 0; h < npat * n; h++)
