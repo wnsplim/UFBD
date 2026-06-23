@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <limits>
 #include <sstream>
 #include "AlignmentReader.hpp"
 #include "ApproxBranchLengthLikelihood.hpp"
@@ -116,20 +117,53 @@ double RelaxedClockTreeModel::lnPriorProbability(void){
     return lnp;
 }
 
+double RelaxedClockTreeModel::nodeAgeSweep(void){
+    RandomVariable& r = RandomVariable::randomVariableInstance();
+    fbd->setupNodeAgeFloors();
+    std::vector<Node*> nodes = fbd->getTree()->getInternalAgeNodes();
+    for(int i = (int)nodes.size() - 1; i > 0; i--){
+        int j = (int)(r.uniformRv() * (i + 1));
+        std::swap(nodes[i], nodes[j]);
+    }
+    double curL = lnLikelihood();
+    double curP = lnPriorProbability();
+    for(Node* n : nodes){
+        double ratio = fbd->getTree()->updateNodeAgeOnNode(n);
+        double newL = lnLikelihood();
+        double newP = lnPriorProbability();
+        if(std::log(r.uniformRv()) < (newL - curL) + (newP - curP) + ratio){
+            curL = newL;
+            curP = newP;
+            fbd->getParameterTree()->updateForAcceptance();
+        }else{
+            fbd->getParameterTree()->updateForRejection();
+        }
+    }
+    return std::numeric_limits<double>::infinity(); // each node already MH-accepted above; force outer accept
+}
+
 double RelaxedClockTreeModel::update(void){
     RandomVariable& r = RandomVariable::randomVariableInstance();
     if(seqLik != nullptr && r.uniformRv() < 0.25){ lastMoveType = 6; return substitutionUpdate(); }
     double u = r.uniformRv();
     if(u < 0.25){ lastMoveType = 0; return clock->update(); }
-    if(u < 0.60){ lastMoveType = 1; return clock->constantDistanceMove(); }
-    if(u < 0.75){ lastMoveType = 5; return fbd->doClockNodeAge(); }
-    if(u < 0.85){
+    if(u < 0.50){ lastMoveType = 1; return clock->constantDistanceMove(); }
+    if(u < 0.65){ lastMoveType = 7; return nodeAgeSweep(); }
+    if(u < 0.72){
         lastMoveType = 4;
         return clock->rateAgeSubtreeMove();
     }
-    if(u < 0.95){
+    if(u < 0.82){
         lastMoveType = 3;
-        double cc = std::exp(0.02 * (r.uniformRv() - 0.5));
+        ageScaleAtt++;
+        if(ageScaleAtt % 50 == 0){
+            double ar = (double)ageScaleAcc / ageScaleAtt;
+            double gain = 1.0 / std::sqrt((double)(ageScaleAtt / 50));
+            ageScaleStep *= std::exp(gain * (ar - 0.44));
+            if(ageScaleStep < 1e-4) ageScaleStep = 1e-4;
+            if(ageScaleStep > 20.0)  ageScaleStep = 20.0;
+        }
+        double cc = std::exp(ageScaleStep * (r.uniformRv() - 0.5));
         int kAge = fbd->getTree()->scaleInternalAges(cc);
         clock->scaleAll(1.0 / cc);
         int nRate = clock->getNumLoci() * (1 + clock->getNumBranchNodes());
@@ -139,6 +173,7 @@ double RelaxedClockTreeModel::update(void){
 }
 
 void RelaxedClockTreeModel::updateForAcceptance(void){
+    if(lastMoveType == 7) return;
     if(lastMoveType == 6)
         lastSubstParm->updateForAcceptance();
     else if(lastMoveType == 0)
@@ -147,6 +182,7 @@ void RelaxedClockTreeModel::updateForAcceptance(void){
         clock->updateForAcceptance();
         fbd->getParameterTree()->updateForAcceptance();
     }else if(lastMoveType == 3){
+        ageScaleAcc++;
         clock->commitAll();
         fbd->getParameterTree()->updateForAcceptance();
     }else if(lastMoveType == 4){
@@ -161,6 +197,7 @@ void RelaxedClockTreeModel::updateForAcceptance(void){
 }
 
 void RelaxedClockTreeModel::updateForRejection(void){
+    if(lastMoveType == 7) return;
     if(lastMoveType == 6)
         lastSubstParm->updateForRejection();
     else if(lastMoveType == 0)

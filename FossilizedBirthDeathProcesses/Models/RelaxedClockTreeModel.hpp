@@ -34,6 +34,7 @@ class RelaxedClockTreeModel : public PhylogeneticModel {
     private:
         void                        buildClock(ClockModel clockModel, const double* rgeneParam, const double* sigma2Param);
         double                      substitutionUpdate(void);
+        double                      nodeAgeSweep(void);
         FBDTreeModel*               fbd;
         BranchRateModel*            clock;
         ApproxBranchLengthLikelihood* lik;
@@ -44,6 +45,9 @@ class RelaxedClockTreeModel : public PhylogeneticModel {
         std::vector<ParameterDouble*> pinv;
         Parameter*                  lastSubstParm;
         int                         lastMoveType;
+        double                      ageScaleStep = 0.5;
+        int                         ageScaleAtt = 0;
+        int                         ageScaleAcc = 0;
 };
 
 #endif

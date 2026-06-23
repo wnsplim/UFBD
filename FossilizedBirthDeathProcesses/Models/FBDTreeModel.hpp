@@ -31,6 +31,7 @@ class FBDTreeModel : public PhylogeneticModel {
         ParameterTree*              getParameterTree(void) { return parameterTree; }
         ParameterUnresolvedFossils* getUnresolvedFossils(void) { return unresolvedFossils; }
         double                      doClockNodeAge(void);
+        void                        setupNodeAgeFloors(void);
     private:
         double                      calculateFBDProbability(void);
         double                      calculateResolvedFBD(void);

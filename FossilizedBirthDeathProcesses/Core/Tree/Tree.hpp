@@ -42,6 +42,8 @@ class Tree {
         int                                 scaleInternalAges(double m);
         int                                 scaleSubtreeAges(Node* subtreeCrown, double m);
         double                              updateNodeAge(void);
+        double                              updateNodeAgeOnNode(Node* n);
+        std::vector<Node*>                  getInternalAgeNodes(void);
         void                                setLastUpdateWasScale(bool b) { lastUpdateWasScale = b; }
         void                                assignStartingAges(const std::map<Node*,double>& minAges, double unit);
         Node*                               insertFossilTip(Node* hostChild, std::string name, double y, double z);

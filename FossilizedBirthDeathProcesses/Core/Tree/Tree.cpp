@@ -527,17 +527,16 @@ int Tree::scaleSubtreeAges(Node* subtreeCrown, double m){
     return numScaled;
 }
 
-double Tree::updateNodeAge(void){
-    RandomVariable& rng = RandomVariable::randomVariableInstance();
-
+std::vector<Node*> Tree::getInternalAgeNodes(void){
     std::vector<Node*> candidates;
     for(Node* n : downPassSequence)
         if(n != crown && n->getIsTip() == false && isFakeSplit(n) == false)
             candidates.push_back(n);
-    if(candidates.size() == 0)
-        return 0.0;
+    return candidates;
+}
 
-    Node* n = candidates[(int)(rng.uniformRv() * candidates.size())];
+double Tree::updateNodeAgeOnNode(Node* n){
+    RandomVariable& rng = RandomVariable::randomVariableInstance();
     double parentAge = n->getAncestor()->getTime();
     double maxChildAge = 0.0;
     for(Node* nb : n->getNeighbors())
@@ -551,6 +550,15 @@ double Tree::updateNodeAge(void){
     n->setTime(maxChildAge + rng.uniformRv() * (parentAge - maxChildAge));
 
     return 0.0;
+}
+
+double Tree::updateNodeAge(void){
+    RandomVariable& rng = RandomVariable::randomVariableInstance();
+    std::vector<Node*> candidates = getInternalAgeNodes();
+    if(candidates.size() == 0)
+        return 0.0;
+    Node* n = candidates[(int)(rng.uniformRv() * candidates.size())];
+    return updateNodeAgeOnNode(n);
 }
 
 double Tree::updateCrownAge(double scaleLambda){

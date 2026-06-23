@@ -1175,11 +1175,15 @@ double FBDTreeModel::doUpDownScale(void){
 }
 
 double FBDTreeModel::doClockNodeAge(void){
+    setupNodeAgeFloors();
+    return parameterTree->getTree()->updateNodeAge();
+}
+
+void FBDTreeModel::setupNodeAgeFloors(void){
     std::map<Node*,double> floors;
     computeAgeFloors(floors);
     parameterTree->getTree()->setAgeFloors(floors);
     parameterTree->getTree()->setLastUpdateWasScale(false);
-    return parameterTree->getTree()->updateNodeAge();
 }
 
 double FBDTreeModel::doJointScale(void){
