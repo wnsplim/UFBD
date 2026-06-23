@@ -52,6 +52,9 @@ class UserSettings {
         std::string                 getHessianFile(void) { checkSettings(); return hessianFile; }
         std::string                 getClockModelName(void) { checkSettings(); return clockModelName; }
         int                         getNStates(void) { checkSettings(); return nStates; }
+        std::string                 getSequenceFile(void) { checkSettings(); return sequenceFile; }
+        std::string                 getPartitionFile(void) { checkSettings(); return partitionFile; }
+        int                         getNumCats(void) { checkSettings(); return numCats; }
         const double*               getRgeneGamma(void) { checkSettings(); return rgeneGamma; }
         const double*               getSigma2Gamma(void) { checkSettings(); return sigma2Gamma; }
         void                        print(void);
@@ -98,6 +101,9 @@ class UserSettings {
         std::string                 hessianFile;
         std::string                 clockModelName;
         int                         nStates;
+        std::string                 sequenceFile;
+        std::string                 partitionFile;
+        int                         numCats;
         double                      rgeneGamma[3];
         double                      sigma2Gamma[3];
         bool                        settingsInitialized;

@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
+#include "AlignmentReader.hpp"
 #include "ApproxBranchLengthLikelihood.hpp"
 #include "FBDTreeModel.hpp"
 #include "Msg.hpp"
@@ -18,26 +19,6 @@
 #include "SequenceLikelihood.hpp"
 #include "Tree.hpp"
 #include "UserSettings.hpp"
-
-static int nucleotideBitmask(char c){
-    switch(std::toupper((unsigned char)c)){
-        case 'A': return 1;
-        case 'C': return 2;
-        case 'G': return 4;
-        case 'T': return 8;
-        case 'R': return 5;
-        case 'Y': return 10;
-        case 'S': return 6;
-        case 'W': return 9;
-        case 'K': return 12;
-        case 'M': return 3;
-        case 'B': return 14;
-        case 'D': return 13;
-        case 'H': return 11;
-        case 'V': return 7;
-        default:  return 15;
-    }
-}
 
 void RelaxedClockTreeModel::buildClock(ClockModel clockModel, const double* rgeneParam, const double* sigma2Param){
     int nLoci = (lik != nullptr) ? lik->getNumPartitions() : seqLik->getNumPartitions();
@@ -65,7 +46,7 @@ RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades
     RandomVariable::setActiveInstance(prevRng);
 }
 
-RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, const std::string& sequenceFile, int nStates, int numCats, ClockModel clockModel, const double* rgeneParam, const double* sigma2Param, unsigned int seed){
+RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, const std::string& sequenceFile, const std::string& partitionFile, int nStates, int numCats, ClockModel clockModel, const double* rgeneParam, const double* sigma2Param, unsigned int seed){
     rng.setSeed(seed);
     RandomVariable* prevRng = RandomVariable::getActiveInstance();
     RandomVariable::setActiveInstance(&rng);
@@ -73,21 +54,9 @@ RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades
     lik = nullptr;
     seqLik = new SequenceLikelihood(nStates, numCats);
 
-    std::ifstream sf(sequenceFile);
-    if(sf.is_open() == false)
-        Msg::error("RelaxedClockTreeModel: cannot open sequence file '" + sequenceFile + "'");
-    int ntax = 0, nsite = 0;
-    sf >> ntax >> nsite;
-    std::vector<std::string> taxa(ntax);
-    std::vector<std::vector<int>> patterns(ntax, std::vector<int>(nsite));
-    for(int i = 0; i < ntax; i++){
-        std::string seq;
-        sf >> taxa[i] >> seq;
-        for(int h = 0; h < nsite; h++)
-            patterns[i][h] = nucleotideBitmask(seq[h]);
-    }
-    std::vector<int> weight(nsite, 1);
-    seqLik->addPartition(taxa, patterns, weight);
+    AlignmentReader aln(sequenceFile, partitionFile, nStates);
+    for(int p = 0; p < aln.getNumPartitions(); p++)
+        seqLik->addPartition(aln.getTaxa(), aln.getPatterns(p), aln.getWeights(p));
 
     buildClock(clockModel, rgeneParam, sigma2Param);
 

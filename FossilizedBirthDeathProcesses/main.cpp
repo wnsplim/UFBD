@@ -24,7 +24,8 @@ int main(int argc, const char* argv[]) {
     Tree* pt = input.getTree();
     pt->print();
 
-    bool dating = settings.getHessianFile().empty() == false;
+    bool seq = settings.getSequenceFile().empty() == false;
+    bool dating = seq || (settings.getHessianFile().empty() == false);
     ClockModel cm = ClockModel::UCLN;
     std::string cn = settings.getClockModelName();
     if(cn == "wn")        cm = ClockModel::WN;
@@ -38,17 +39,21 @@ int main(int argc, const char* argv[]) {
         std::vector<PhylogeneticModel*> models;
         models.resize(numChains);
         for(int i = 0; i < numChains; i++)
-            models[i] = dating
-                ? (PhylogeneticModel*)new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), settings.getHessianFile(), settings.getTreeFile(), settings.getNStates(), cm, settings.getRgeneGamma(), settings.getSigma2Gamma(), masterSeed + i)
-                : (PhylogeneticModel*)new FBDTreeModel(pt, input.getClades(), input.getFossils(), masterSeed + i);
+            models[i] = seq
+                ? (PhylogeneticModel*)new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), settings.getSequenceFile(), settings.getPartitionFile(), settings.getNStates(), settings.getNumCats(), cm, settings.getRgeneGamma(), settings.getSigma2Gamma(), masterSeed + i)
+                : dating
+                    ? (PhylogeneticModel*)new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), settings.getHessianFile(), settings.getTreeFile(), settings.getNStates(), cm, settings.getRgeneGamma(), settings.getSigma2Gamma(), masterSeed + i)
+                    : (PhylogeneticModel*)new FBDTreeModel(pt, input.getClades(), input.getFossils(), masterSeed + i);
         MetropolisCoupledMcmc mcmc(settings.getChainLength(), settings.getPrintFrequency(), settings.getSampleFrequency(), models, masterSeed);
         mcmc.run();
     }else if (numChains == 1){
         std::cout << "Running standard MCMC \n";
         std::cout << "-----------------------------------------------------------------------" << std::endl;
-        PhylogeneticModel* model = dating
-            ? (PhylogeneticModel*)new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), settings.getHessianFile(), settings.getTreeFile(), settings.getNStates(), cm, settings.getRgeneGamma(), settings.getSigma2Gamma(), masterSeed)
-            : (PhylogeneticModel*)new FBDTreeModel(pt, input.getClades(), input.getFossils(), masterSeed);
+        PhylogeneticModel* model = seq
+            ? (PhylogeneticModel*)new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), settings.getSequenceFile(), settings.getPartitionFile(), settings.getNStates(), settings.getNumCats(), cm, settings.getRgeneGamma(), settings.getSigma2Gamma(), masterSeed)
+            : dating
+                ? (PhylogeneticModel*)new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), settings.getHessianFile(), settings.getTreeFile(), settings.getNStates(), cm, settings.getRgeneGamma(), settings.getSigma2Gamma(), masterSeed)
+                : (PhylogeneticModel*)new FBDTreeModel(pt, input.getClades(), input.getFossils(), masterSeed);
         Mcmc mcmc(settings.getChainLength(), settings.getPrintFrequency(), settings.getSampleFrequency(), model);
         mcmc.run();
     }

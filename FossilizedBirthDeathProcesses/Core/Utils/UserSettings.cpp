@@ -47,6 +47,9 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     hessianFile     = "";
     clockModelName  = "ucln";
     nStates         = 4;
+    sequenceFile    = "";
+    partitionFile   = "";
+    numCats         = 4;
     rgeneGamma[0]   = 2.0;  rgeneGamma[1]  = 2000.0; rgeneGamma[2]  = 1.0;
     sigma2Gamma[0]  = 1.0;  sigma2Gamma[1] = 10.0;   sigma2Gamma[2] = 1.0;
     lambdaMode      = RateMode::IID;
@@ -67,13 +70,15 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt", "-help", "-h",
         "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times",
         "-lambda-prior-mode", "-mu-prior-mode", "-psi-prior-mode", "-hsmrf-shifts", "-hsmrf-shift-size", "-cpu-time",
-        "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma"
+        "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma",
+        "-seq", "-partition", "-ncat"
     };
     std::set<std::string> valueFlags = {
         "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt",
         "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times",
         "-lambda-prior-mode", "-mu-prior-mode", "-psi-prior-mode", "-hsmrf-shifts", "-hsmrf-shift-size", "-cpu-time",
-        "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma"
+        "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma",
+        "-seq", "-partition", "-ncat"
     };
 
     for (int i = 1; i < (int)arguments.size(); i++) {
@@ -183,6 +188,10 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 std::sort(skylineTimes.begin(), skylineTimes.end());
             } else if (arg == "-hessian") {
                 hessianFile = val;
+            } else if (arg == "-seq") {
+                sequenceFile = val;
+            } else if (arg == "-partition") {
+                partitionFile = val;
             } else if (arg == "-clock") {
                 clockModelName = val;
                 for (char& ch : clockModelName) ch = std::tolower((unsigned char)ch);
@@ -210,6 +219,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 else if (arg == "-nc")  numChains       = intVal;
                 else if (arg == "-nt")  numThreads      = intVal;
                 else if (arg == "-nstates") nStates     = intVal;
+                else if (arg == "-ncat")    numCats     = intVal;
             }
         }
     }
