@@ -1112,10 +1112,10 @@ void FBDTreeModel::updateGammaCache(void){
 
     if(wholeTreeTotalFast < 0){
         wholeTreeTotalFast = 1;
-        Node* commonClade = (nf > 0) ? unresolvedFossils->getCrownNode(0) : tree->getCrown();
+        Node* root = tree->getCrown();
         bool anyCrown = false, anyTotal = false;
         for(int i = 0; i < nf; i++){
-            if(unresolvedFossils->getCrownNode(i) != commonClade || unresolvedFossils->getIsStem(i)){
+            if(unresolvedFossils->getCrownNode(i) != root || unresolvedFossils->getIsStem(i)){
                 wholeTreeTotalFast = 0;
                 break;
             }
