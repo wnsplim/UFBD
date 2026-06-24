@@ -116,9 +116,6 @@ void MetropolisCoupledMcmc::run(void) {
             }
         }
         
-        if(coldModelIdx == -1)
-            Msg::error("did not find cold model");
-        
         if (n % printFrequency == 0){
             std::cout << std::fixed << std::setprecision(2);
             const size_t numAccepted = std::count(recentAcceptRej.begin(), recentAcceptRej.end(), true);

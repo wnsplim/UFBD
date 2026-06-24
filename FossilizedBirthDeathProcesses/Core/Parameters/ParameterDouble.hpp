@@ -27,7 +27,6 @@ class ParameterDouble : public Parameter {
         void                        updateForAcceptance(void);
         void                        updateForRejection(void);
     private:
-        double                      updateSlidingWindow(void);
         double                      updateBactrianScale(void);
         std::vector<double>         value;
         std::deque<bool>            recentAcceptRej;

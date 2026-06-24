@@ -29,10 +29,7 @@ class ParameterTree : public Parameter {
         void                        tuneScale(bool accepted);
         //ordered by menmory footprint
         Tree*                       trees[2];
-#if 0
-        double                      lambda; //branch length prior parameter exp(lambda)
-#endif
-        double                      cachedLnP; 
+        double                      cachedLnP;
         bool                        useCachedLnP;
         int                         numAcceptances;
         int                         numRejections;

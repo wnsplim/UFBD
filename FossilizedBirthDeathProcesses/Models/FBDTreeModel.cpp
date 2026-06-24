@@ -1602,11 +1602,6 @@ double FBDTreeModel::doUpDownScale(void){
     return h;
 }
 
-double FBDTreeModel::doClockNodeAge(void){
-    setupNodeAgeFloors();
-    return parameterTree->getTree()->updateNodeAge();
-}
-
 void FBDTreeModel::setupNodeAgeFloors(void){
     std::map<Node*,double> floors;
     computeAgeFloors(floors);

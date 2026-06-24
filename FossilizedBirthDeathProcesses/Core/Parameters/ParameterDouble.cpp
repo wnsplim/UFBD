@@ -51,35 +51,6 @@ double ParameterDouble::update(void) {
     return updateBactrianScale();
 }
 
-double ParameterDouble::updateSlidingWindow(){
-    RandomVariable& rng = RandomVariable::randomVariableInstance();
-    
-    double acceptRej = 0.0;
-    for(bool b : recentAcceptRej)
-        if(b == true)
-            acceptRej++;
-    acceptRej /= recentAcceptRej.size();
-    
-    if((numRejections + numAcceptances) % 100 ==0 && ((numRejections + numAcceptances) < numAdaptive)){
-            if(acceptRej < targetAr - 0.2)
-                windowSize /= 1.1;
-            else if (acceptRej > targetAr + 0.2)
-                windowSize *= 1.1;
-            
-    }else if ((numRejections + numAcceptances) == numAdaptive){
-        adaptiveProposalActive = false;
-    }
-
-    double u = Probability::Uniform::rv(&rng, value[1] - windowSize, value[1] + windowSize);
-    if(u <= lowerBound){ //bounce
-        u = lowerBound + (lowerBound - u);
-    }else if ( u >= upperBound){
-        u = upperBound - ( u - upperBound);
-    }
-    value[0] = u;
-    return 0.0;
-}
-
 double ParameterDouble::updateBactrianScale(){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
 

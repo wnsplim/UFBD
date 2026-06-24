@@ -225,6 +225,7 @@ double Tree::getBranchLength(Node* e1, Node* e2) {
 }
 
 
+// slow O(N) reference gamma-count, kept only for ref
 int Tree::getNumLineagesAtTime(double t){
     std::set<Node*> branchesContainingFossils;
     branchesContainingFossils.clear();
@@ -334,8 +335,6 @@ Node* Tree::getMRCA(const std::vector<std::string>& taxonNames){
 }
 
 void Tree::initializeDownPassSequence(void) {
-    if(crown == nullptr)
-        Msg::error("crown is nullptr");
     downPassSequence.clear();
     passDown(crown, crown);
 }

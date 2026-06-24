@@ -14,18 +14,7 @@
 #include "UserSettings.hpp"
 
 
-void UserSettings::checkSettings(void) {
-
-    if (settingsInitialized == false)
-        Msg::error("Settings are not initialized");
-}
-
 void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode) {
-    if (settingsInitialized == true) {
-        Msg::warning("Settings have already been initialized");
-        return;
-    }
-        
     // Defaults
     treeOut         = "";
     parametersOut   = "";
@@ -258,8 +247,6 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         }
     }
 
-    settingsInitialized = true;
-
     // ── Post-parse validation  ──────────────────────────────
 
     if (conditioningSet == false)
@@ -384,7 +371,6 @@ void UserSettings::parsePriorInto(const std::string& spec, Probability::PriorFam
 
 void UserSettings::print(void) {
 
-    checkSettings();
     std::cout << "Tree input file name:                  " << treeFile << std::endl;
     std::cout << "Clades input file name:                " << cladesFile << std::endl;
     std::cout << "Fossils input file name:               " << fossilFile << std::endl;

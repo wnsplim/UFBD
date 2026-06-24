@@ -112,6 +112,10 @@ void FBDInput::readFossils(std::string path){
             Msg::warning("fossil '" + taxon + "' assigned CROWN to singleton clade '" + cladeName + "'; treating as TOTAL");
             assignment = Assignment::TOTAL;
         }
+        if(assignment == Assignment::STEM && clade->getCrown()->getIsTip()){
+            Msg::warning("fossil '" + taxon + "' assigned STEM to singleton clade '" + cladeName + "'; STEM and TOTAL coincide for a single-tip clade, treating as TOTAL");
+            assignment = Assignment::TOTAL;
+        }
         if(assignment == Assignment::STEM && clade->getCrown() == tree->getCrown()
            && UserSettings::userSettings().getConditioning() == Conditioning::CROWN)
             Msg::error("fossil '" + taxon + "' is STEM on the whole-tree clade '" + cladeName + "' under crown conditioning: no stem edge exists rootward of the crown.");

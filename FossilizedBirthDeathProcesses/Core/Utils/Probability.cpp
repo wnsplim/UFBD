@@ -285,8 +285,6 @@ double Probability::Dirichlet::pdf(const std::vector<double> &a, const std::vect
 		{
 		std::cout << "Fatal error in dirichletPdf" << std::endl;
 		exit(1);
-		//ui->error("Fatal error in dirichletPdf");
-		//throw(MbException(MbException::ERROR));
 		}
 
 	double aSum = 0.0;
@@ -496,7 +494,6 @@ double Probability::Normal::lnPdf(double mu, double sigma2, double x) {
     //sigma2 is variance of distribution
     //x is scope of distribution
     return -0.5 * std::log(2.0 * PI * sigma2) - 0.5 * (x - mu) * (x - mu) / (sigma2);
-	/*return -0.5 * std::log(2.0 * PI * sigma) - 0.5 * (x - mu) * (x - mu) / (sigma * sigma);*/ //original
 }
 
 double Probability::Normal::cdf(double mu, double sigma, double x) {
@@ -1082,9 +1079,7 @@ double Probability::Wishart::lnPdf(Eigen::MatrixXd* support, Eigen::MatrixXd* sc
         Msg::error("DOF must be greater or equal to dimension of matrix");
     double detX = X.determinant();
     double detV = V.determinant();
-//    if (detX <= 0 || detV <= 0)
-//        Msg::error("Support and scale matrices must be positive definite");
-    
+
     Eigen::LDLT<Eigen::MatrixXd> ldltV(V);
     Eigen::LDLT<Eigen::MatrixXd> ldltX(X);
     if (ldltX.info() == Eigen::NumericalIssue)
@@ -1193,41 +1188,6 @@ Eigen::MatrixXd Probability::InverseWishart::rv(RandomVariable* rng, const Eigen
     
     // Return inverse for Inverse-Wishart(psi, n)
     return W.inverse();
-//    int dim = psi.rows();
-//    if(psi.cols() != dim)
-//        throw std::runtime_error("Scale matrix psi must be square");
-//
-//    if(n <= dim - 1)
-//        throw std::runtime_error("Degrees of freedom n must be > dim - 1");
-//
-//    // Cholesky decomposition: psi = L * L^T
-//    Eigen::LLT<Eigen::MatrixXd> llt(psi);
-//    Eigen::MatrixXd L = llt.matrixL();
-//
-//    // Build generalized Bartlett matrix A
-//    Eigen::MatrixXd A = Eigen::MatrixXd::Zero(dim, dim);
-//    for(int i = 0; i < dim; ++i) {
-//        // Diagonal: sqrt of chi-square with real df = n - i
-//        double df = n - i;
-//        if(df <= 0.0) throw std::runtime_error("Invalid degrees of freedom on diagonal");
-//        A(i,i) = std::sqrt(Probability::ChiSquare::rv(rng, df));
-//
-//        // Lower triangle: standard normal
-//        for(int j = 0; j < i; ++j) {
-//            A(i,j) = Probability::Normal::rv(rng);
-//        }
-//    }
-//
-//    // QR decomposition of A to get upper-triangular R
-//    Eigen::HouseholderQR<Eigen::MatrixXd> qr(A);
-//    Eigen::MatrixXd R = qr.matrixQR().triangularView<Eigen::Upper>();
-//
-//    // Solve R^T * T^T = L^T  => T = ...
-//    Eigen::MatrixXd Tt = R.transpose().triangularView<Eigen::Upper>().solve(L.transpose());
-//    Eigen::MatrixXd T = Tt.transpose();
-//
-//    // Return Inverse Wishart sample
-//    return T * T.transpose();
 }
 
 double Probability::InverseWishart::lnPdf(const Eigen::MatrixXd& x, const Eigen::MatrixXd& psi, double v){
@@ -1510,12 +1470,10 @@ double Probability::Helper::lnBeta(double a, double b)
     else if (p == 0)
     {
         return -1;
-        //return RbConstants::Double::inf;
     }
     else if (!isFinite(q))
     { /* q == +Inf */
         return -1;
-        //return RbConstants::Double::neginf;
     }
     
     if (p >= 10) {
@@ -1666,7 +1624,6 @@ double Probability::Helper::incompleteBeta(double a, double b, double x) {
         it++;
         if ( it_max < it )
         {
-            //std::cerr << "Error in incompleteBeta: Maximum number of iterations exceeded!" << std::endl;
             return -1;
         }
         term = term * temp * rx / ( pp + ( double ) ( i ) );

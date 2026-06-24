@@ -19,58 +19,57 @@ class UserSettings {
                                         return us;
                                         }
         void                        initializeSettings(int argc, const char* argv[], bool sbcMode = false);
-        unsigned long               getChainLength(void) { checkSettings(); return chainLength; }
+        unsigned long               getChainLength(void) { return chainLength; }
         int                         getNumChains(void) { return numChains; }
         int                         getNumThreads(void) { return numThreads; }
         int                         getNumCores(void) { return numCores; }
-        std::string                 getTreeOutput(void) { checkSettings(); return treeOut; }
-        std::string                 getParamOutput(void) { checkSettings(); return parametersOut; }
-        std::string                 getTreeFile(void) { checkSettings(); return treeFile; }
-        std::string                 getCladesFile(void) { checkSettings(); return cladesFile; }
-        std::string                 getFossilFile(void) { checkSettings(); return fossilFile; }
-        Conditioning                getConditioning(void) { checkSettings(); return conditioning; }
-        ConditioningEvent           getConditioningEvent(void) { checkSettings(); return conditioningEvent; }
-        Probability::PriorFamily         getConditionAgePrior(void) { checkSettings(); return conditionAgePrior; }
-        double                      getConditionAgePriorP1(void) { checkSettings(); return conditionAgePriorP1; }
-        double                      getConditionAgePriorP2(void) { checkSettings(); return conditionAgePriorP2; }
-        bool                        getConditionAgePriorSet(void) { checkSettings(); return conditionAgePriorSet; }
-        Probability::PriorSpec      getLambdaPrior(void) { checkSettings(); return lambdaPrior; }
-        Probability::PriorSpec      getMuPrior(void) { checkSettings(); return muPrior; }
-        Probability::PriorSpec      getPsiPrior(void) { checkSettings(); return psiPrior; }
-        RateMode                    getLambdaMode(void) { checkSettings(); return lambdaMode; }
-        RateMode                    getMuMode(void) { checkSettings(); return muMode; }
-        RateMode                    getPsiMode(void) { checkSettings(); return psiMode; }
-        double                      getHsmrfShifts(void) { checkSettings(); return hsmrfShifts; }
-        double                      getHsmrfShiftSize(void) { checkSettings(); return hsmrfShiftSize; }
-        bool                        getCpuTime(void) { checkSettings(); return cpuTime; }
-        std::vector<double>         getSkylineTimes(void) { checkSettings(); return skylineTimes; }
-        Model                       getModel(void) { checkSettings(); return model; }
-        double                      getRho(void) { checkSettings(); return rho; }
-        unsigned int                getSeed(void) { checkSettings(); return seed; }
-        bool                        getSeedSet(void) { checkSettings(); return seedSet; }
-        int                         getPrintFrequency(void) { checkSettings(); return printFrequency; }
-        int                         getSampleFrequency(void) { checkSettings(); return sampleFrequency; }
-        std::string                 getHessianFile(void) { checkSettings(); return hessianFile; }
-        std::string                 getClockModelName(void) { checkSettings(); return clockModelName; }
-        int                         getNStates(void) { checkSettings(); return nStates; }
-        int                         getModelNStates(void) { checkSettings(); return datatypeProvided ? (seqDataType == "aa" ? 20 : 4) : nStates; }
-        std::string                 getSequenceFile(void) { checkSettings(); return sequenceFile; }
-        std::string                 getPartitionFile(void) { checkSettings(); return partitionFile; }
-        int                         getNumCats(void) { checkSettings(); return numCats; }
-        std::string                 getSeqDataType(void) { checkSettings(); return seqDataType; }
-        std::string                 getSubstModel(void) { checkSettings(); return substModel; }
-        std::string                 getFreqMode(void) { checkSettings(); return freqMode; }
-        bool                        getUseInvariant(void) { checkSettings(); return useInvariant; }
-        const double*               getRgeneGamma(void) { checkSettings(); return rgeneGamma; }
-        const double*               getSigma2Gamma(void) { checkSettings(); return sigma2Gamma; }
+        std::string                 getTreeOutput(void) { return treeOut; }
+        std::string                 getParamOutput(void) { return parametersOut; }
+        std::string                 getTreeFile(void) { return treeFile; }
+        std::string                 getCladesFile(void) { return cladesFile; }
+        std::string                 getFossilFile(void) { return fossilFile; }
+        Conditioning                getConditioning(void) { return conditioning; }
+        ConditioningEvent           getConditioningEvent(void) { return conditioningEvent; }
+        Probability::PriorFamily         getConditionAgePrior(void) { return conditionAgePrior; }
+        double                      getConditionAgePriorP1(void) { return conditionAgePriorP1; }
+        double                      getConditionAgePriorP2(void) { return conditionAgePriorP2; }
+        bool                        getConditionAgePriorSet(void) { return conditionAgePriorSet; }
+        Probability::PriorSpec      getLambdaPrior(void) { return lambdaPrior; }
+        Probability::PriorSpec      getMuPrior(void) { return muPrior; }
+        Probability::PriorSpec      getPsiPrior(void) { return psiPrior; }
+        RateMode                    getLambdaMode(void) { return lambdaMode; }
+        RateMode                    getMuMode(void) { return muMode; }
+        RateMode                    getPsiMode(void) { return psiMode; }
+        double                      getHsmrfShifts(void) { return hsmrfShifts; }
+        double                      getHsmrfShiftSize(void) { return hsmrfShiftSize; }
+        bool                        getCpuTime(void) { return cpuTime; }
+        std::vector<double>         getSkylineTimes(void) { return skylineTimes; }
+        Model                       getModel(void) { return model; }
+        double                      getRho(void) { return rho; }
+        unsigned int                getSeed(void) { return seed; }
+        bool                        getSeedSet(void) { return seedSet; }
+        int                         getPrintFrequency(void) { return printFrequency; }
+        int                         getSampleFrequency(void) { return sampleFrequency; }
+        std::string                 getHessianFile(void) { return hessianFile; }
+        std::string                 getClockModelName(void) { return clockModelName; }
+        int                         getNStates(void) { return nStates; }
+        int                         getModelNStates(void) { return datatypeProvided ? (seqDataType == "aa" ? 20 : 4) : nStates; }
+        std::string                 getSequenceFile(void) { return sequenceFile; }
+        std::string                 getPartitionFile(void) { return partitionFile; }
+        int                         getNumCats(void) { return numCats; }
+        std::string                 getSeqDataType(void) { return seqDataType; }
+        std::string                 getSubstModel(void) { return substModel; }
+        std::string                 getFreqMode(void) { return freqMode; }
+        bool                        getUseInvariant(void) { return useInvariant; }
+        const double*               getRgeneGamma(void) { return rgeneGamma; }
+        const double*               getSigma2Gamma(void) { return sigma2Gamma; }
         void                        print(void);
         void                        printHelp(void);
 
     private:
-                                    UserSettings(void) { settingsInitialized = false; }
+                                    UserSettings(void) {}
                                     UserSettings(const UserSettings& u);
         UserSettings&               operator=(const UserSettings&);
-        void                        checkSettings(void);
         void                        parsePriorInto(const std::string& spec, Probability::PriorFamily& family, double& p1, double& p2);
         std::string                 executablePath;
         std::string                 treeOut;
@@ -120,7 +119,6 @@ class UserSettings {
         bool                        coresProvided;
         double                      rgeneGamma[3];
         double                      sigma2Gamma[3];
-        bool                        settingsInitialized;
 };
 
 #endif

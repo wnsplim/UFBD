@@ -141,8 +141,6 @@ void RelaxedClockTreeModel::updateForAcceptance(void){
         fbd->getParameterTree()->updateForAcceptance();
         if(fbd->getUnresolvedFossils() != nullptr)
             fbd->getUnresolvedFossils()->updateForAcceptance();
-    }else if(lastMoveType == 5){
-        fbd->getParameterTree()->updateForAcceptance();
     }else
         fbd->updateForAcceptance();
 }
@@ -164,8 +162,6 @@ void RelaxedClockTreeModel::updateForRejection(void){
         fbd->getParameterTree()->updateForRejection();
         if(fbd->getUnresolvedFossils() != nullptr)
             fbd->getUnresolvedFossils()->updateForRejection();
-    }else if(lastMoveType == 5){
-        fbd->getParameterTree()->updateForRejection();
     }else
         fbd->updateForRejection();
 }

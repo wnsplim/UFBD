@@ -21,22 +21,6 @@ ParameterTree::ParameterTree(double prob, PhylogeneticModel* m) :
 }
 
 double ParameterTree::lnProbability(void) {
-#if 0
-    if(useCachedLnP == false){
-        Tree* t = trees[0];
-        cachedLnP = 0.0;
-        for (Node* p : t->getDownPassSequence())
-            {
-            if (p != t->getCrown())
-                {
-                double v = t->getBranchLength(p, p->getAncestor());
-                cachedLnP += Probability::Exponential::lnPdf(lambda, v);
-                }
-            }
-        useCachedLnP = true;
-    }
-    return cachedLnP;
-#endif
     return 0.0;
 }
 
