@@ -389,12 +389,7 @@ std::vector<std::string>  Tree::parseNewickString(std::string newickStr){
     
     if(token != "")
         tokens.push_back(token);
-    
-//    for(int i = 0; i < tokens.size(); i++){
-//        std::cout << i << " " << tokens[i] << std::endl;
-//    }
-//        
-    
+
     return tokens;
 }
 
@@ -421,7 +416,6 @@ void Tree::print(void) {
     for (int i=0; i<downPassSequence.size(); i++)
         std::cout << downPassSequence[i]->getIndex() << " ";
     std::cout << std::endl;
-    //printVCV();
 }
 
 void Tree::print(std::string header) {

@@ -21,7 +21,8 @@ class SequenceLikelihood {
                                        const std::vector<std::vector<double>>& exchangeability,
                                        const std::vector<std::vector<double>>& frequency,
                                        const std::vector<double>& alpha,
-                                       const std::vector<double>& proportionInvariant);
+                                       const std::vector<double>& proportionInvariant,
+                                       const std::vector<std::vector<double>>& branchRateVars);
 
     private:
         void                mapTaxaToNodes(Tree* tree);

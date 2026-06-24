@@ -53,11 +53,19 @@ void GTRrateModel::setParameters(const std::vector<double>& exch, const std::vec
     }
 }
 
-void GTRrateModel::transitionProbabilities(double t, double* P) const {
+void GTRrateModel::transitionProbabilities(double bl, double cat, double relVar, double* P) const {
     int n = numStates;
     std::vector<double> ev(n);
-    for(int s = 0; s < n; s++)
-        ev[s] = std::exp(eigenvalue[s] * t);
+    if(relVar <= 1.0e-12){
+        double t = bl * cat;
+        for(int s = 0; s < n; s++)
+            ev[s] = std::exp(eigenvalue[s] * t);
+    }else{
+        double alpha = 1.0 / relVar;
+        double beta = bl * cat * relVar;
+        for(int s = 0; s < n; s++)
+            ev[s] = std::pow(1.0 - beta * eigenvalue[s], -alpha);
+    }
     const double* c = &cijk[0];
     for(int i = 0; i < n; i++){
         double rowsum = 0.0;

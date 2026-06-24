@@ -30,6 +30,7 @@ class BranchRateModel : public Parameter {
         void                        updateForAcceptance(void);
         void                        updateForRejection(void);
         virtual std::vector<std::vector<double>> getAbsoluteRates(void) = 0;
+        virtual std::vector<std::vector<double>> getAbsoluteRateVars(void){ return std::vector<std::vector<double>>(numLoci, std::vector<double>(numNodes, 0.0)); }
 
     protected:
         double                      scaleLocusRate(int p);
@@ -88,6 +89,7 @@ class ParameterBranchRatesCIR : public BranchRateModel {
                                     ParameterBranchRatesCIR(void) = delete;
                                     ParameterBranchRatesCIR(double prob, PhylogeneticModel* m, Tree* tree, int numLoci, const double* rgeneParam, const double* sigma2Param);
         std::vector<std::vector<double>> getAbsoluteRates(void);
+        std::vector<std::vector<double>> getAbsoluteRateVars(void);
         double                      lnProbability(void);
         double                      update(void);
         void                        updateForAcceptance(void);
@@ -98,6 +100,8 @@ class ParameterBranchRatesCIR : public BranchRateModel {
         double                      scaleMuRates(int p);
         double                      cirLnP(void);
         double                      getMeanTau(double rho, double rhoUp, double t, double sigma, double theta);
+        double                      getVarTau(double rho, double rhoUp, double t, double sigma, double theta);
+        double                      logGprime(double eta, double rho, double rhoUp, double t, double sigma, double theta);
         double                      besselIRatio(double nu, double x);
         double                      thetaParam[3];
         std::vector<double>         theta[2];

@@ -67,7 +67,6 @@ double ParameterDouble::updateSlidingWindow(){
                 windowSize *= 1.1;
             
     }else if ((numRejections + numAcceptances) == numAdaptive){
-        std::cout << parmName << " done adaptive sampling | final acceptRej: " << acceptRej << std::endl;
         adaptiveProposalActive = false;
     }
 
