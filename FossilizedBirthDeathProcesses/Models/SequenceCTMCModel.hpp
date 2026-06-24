@@ -24,6 +24,7 @@ class SequenceCTMCModel {
         void                            appendParameterNames(std::vector<std::string>& names);
         void                            appendParameterValues(std::vector<double>& values);
         int                             getNumPartitions(void) const;
+        bool                            hasMovableParams(void) const;
 
     private:
         PhylogeneticModel*              owner;
@@ -32,9 +33,14 @@ class SequenceCTMCModel {
         std::vector<ParameterSimplex*>  freq;
         std::vector<ParameterDouble*>   alpha;
         std::vector<ParameterDouble*>   pinv;
+        std::vector<std::vector<double> > observedFreq;
         Parameter*                      lastSubstParm;
         int                             nStates;
         int                             numCats;
+        bool                            empirical;
+        bool                            freqEstimated;
+        bool                            useGammaHet;
+        bool                            useInvariant;
 };
 
 #endif

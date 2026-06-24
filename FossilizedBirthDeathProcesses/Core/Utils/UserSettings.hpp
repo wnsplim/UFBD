@@ -53,11 +53,13 @@ class UserSettings {
         std::string                 getHessianFile(void) { checkSettings(); return hessianFile; }
         std::string                 getClockModelName(void) { checkSettings(); return clockModelName; }
         int                         getNStates(void) { checkSettings(); return nStates; }
+        int                         getModelNStates(void) { checkSettings(); return datatypeProvided ? (seqDataType == "aa" ? 20 : 4) : nStates; }
         std::string                 getSequenceFile(void) { checkSettings(); return sequenceFile; }
         std::string                 getPartitionFile(void) { checkSettings(); return partitionFile; }
         int                         getNumCats(void) { checkSettings(); return numCats; }
         std::string                 getSeqDataType(void) { checkSettings(); return seqDataType; }
         std::string                 getSubstModel(void) { checkSettings(); return substModel; }
+        std::string                 getFreqMode(void) { checkSettings(); return freqMode; }
         bool                        getUseInvariant(void) { checkSettings(); return useInvariant; }
         const double*               getRgeneGamma(void) { checkSettings(); return rgeneGamma; }
         const double*               getSigma2Gamma(void) { checkSettings(); return sigma2Gamma; }
@@ -111,8 +113,10 @@ class UserSettings {
         int                         numCats;
         std::string                 seqDataType;
         std::string                 substModel;
+        std::string                 freqMode;
         bool                        useInvariant;
         bool                        nstatesProvided;
+        bool                        datatypeProvided;
         double                      rgeneGamma[3];
         double                      sigma2Gamma[3];
         bool                        settingsInitialized;

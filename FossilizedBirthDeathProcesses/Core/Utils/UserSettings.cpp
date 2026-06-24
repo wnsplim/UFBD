@@ -56,8 +56,10 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     numCats         = 4;
     seqDataType     = "nt";
     substModel      = "gtr";
+    freqMode        = "model";
     useInvariant    = false;
     nstatesProvided = false;
+    datatypeProvided = false;
     rgeneGamma[0]   = 2.0;  rgeneGamma[1]  = 2000.0; rgeneGamma[2]  = 1.0;
     sigma2Gamma[0]  = 1.0;  sigma2Gamma[1] = 10.0;   sigma2Gamma[2] = 1.0;
     lambdaMode      = RateMode::IID;
@@ -79,14 +81,14 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times",
         "-lambda-prior-mode", "-mu-prior-mode", "-psi-prior-mode", "-hsmrf-shifts", "-hsmrf-shift-size", "-cpu-time",
         "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma",
-        "-seq", "-partition", "-ncat", "-datatype", "-model", "-inv"
+        "-seq", "-partition", "-ncat", "-datatype", "-model", "-inv", "-freq"
     };
     std::set<std::string> valueFlags = {
         "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt", "-cores",
         "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times",
         "-lambda-prior-mode", "-mu-prior-mode", "-psi-prior-mode", "-hsmrf-shifts", "-hsmrf-shift-size", "-cpu-time",
         "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma",
-        "-seq", "-partition", "-ncat", "-datatype", "-model", "-inv"
+        "-seq", "-partition", "-ncat", "-datatype", "-model", "-inv", "-freq"
     };
 
     for (int i = 1; i < (int)arguments.size(); i++) {
@@ -210,6 +212,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 std::stringstream ss(val); std::string tok; int k = 0;
                 while (std::getline(ss, tok, ',') && k < 3) if (tok.empty() == false) sigma2Gamma[k++] = std::stod(tok);
             } else if (arg == "-datatype") {
+                datatypeProvided = true;
                 std::string v = val;
                 for (char& ch : v) ch = std::tolower((unsigned char)ch);
                 if (v == "nt" || v == "dna" || v == "nucleotide") seqDataType = "nt";
@@ -223,6 +226,13 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 if (v == "on" || v == "true" || v == "1") useInvariant = true;
                 else if (v == "off" || v == "false" || v == "0") useInvariant = false;
                 else Msg::error("Flag \"-inv\" expects on or off, but got \"" + val + "\".");
+            } else if (arg == "-freq") {
+                std::string v = val;
+                for (char& ch : v) ch = std::tolower((unsigned char)ch);
+                if (v == "model") freqMode = "model";
+                else if (v == "f" || v == "empirical" || v == "observed") freqMode = "empirical";
+                else if (v == "fo" || v == "estimate" || v == "estimated" || v == "free") freqMode = "estimate";
+                else Msg::error("Flag \"-freq\" expects model, F (empirical/observed counts), or FO (estimate), but got \"" + val + "\".");
             }else {
                 // Integer-valued flags
                 // Check all characters are digits (allowing leading minus for negative detection)
