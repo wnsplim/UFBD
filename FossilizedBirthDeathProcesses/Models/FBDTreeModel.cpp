@@ -928,6 +928,24 @@ double FBDTreeModel::computeGamma(double z, int i){
     bool SymmetryCorrection = (UserSettings::userSettings().getModel() == Model::UFBD);
     bool focalIsTip = (unresolvedFossils->isSA(i) == false);
     int numFossils = unresolvedFossils->getNumFossils();
+    if(wholeTreeTotalFast == 1){
+        int cY = (int)(std::lower_bound(sortedFossilY.begin(), sortedFossilY.end(), z) - sortedFossilY.begin());
+        int cZ = (int)(std::upper_bound(sortedFossilZ.begin(), sortedFossilZ.end(), z) - sortedFossilZ.begin());
+        double C = (double)(cY - cZ);
+        if(SymmetryCorrection == false || focalIsTip == false){
+            count += C;
+        }else{
+            int sp = unresolvedFossils->getSpineIdx();
+            double Sp = 0.0;
+            if(i != sp && sp >= 0 && unresolvedFossils->isSA(sp) == false){
+                double ys = unresolvedFossils->getFossilAge(sp), zs = unresolvedFossils->getAttachAge(sp);
+                if(ys < z && z < zs)
+                    Sp = 1.0;
+            }
+            count += 0.5 * C + 0.5 * Sp;
+        }
+        return count;
+    }
     for(int j = 0; j < numFossils; j++){
         if(j == i)
             continue;
@@ -972,16 +990,45 @@ void FBDTreeModel::updateGammaCache(void){
     int nf = unresolvedFossils->getNumFossils();
     std::vector<Node*>& dpseq = tree->getDownPassSequence();
 
-    sortedYounger.clear();
-    sortedOlder.clear();
-    for(Node* nd : dpseq){
-        if(nd == tree->getCrown())
-            continue;
-        sortedYounger.push_back(nd->getTime());
-        sortedOlder.push_back(nd->getAncestor()->getTime());
+    Node* crown = tree->getCrown();
+    int budget = 0;
+    for(int x = (int)sortedYounger.size(); x > 1; x >>= 1) budget++;
+    int edits = (cacheInit && sortedYounger.empty() == false) ? 0 : -1;
+    if(edits == 0){
+        for(Node* nd : dpseq)
+            if(nd->getTime() != prevNodeAge[nd->getOffset()]){
+                edits += (nd != crown ? 1 : 0) + (int)nd->getDescendants().size();
+                if(edits > budget){ edits = -1; break; }
+            }
     }
-    std::sort(sortedYounger.begin(), sortedYounger.end());
-    std::sort(sortedOlder.begin(), sortedOlder.end());
+    if(edits >= 0){
+        for(Node* nd : dpseq){
+            double oldA = prevNodeAge[nd->getOffset()];
+            double newA = nd->getTime();
+            if(oldA == newA)
+                continue;
+            if(nd != crown){
+                sortedYounger.erase(std::lower_bound(sortedYounger.begin(), sortedYounger.end(), oldA));
+                sortedYounger.insert(std::lower_bound(sortedYounger.begin(), sortedYounger.end(), newA), newA);
+            }
+            int nc = (int)nd->getDescendants().size();
+            for(int c = 0; c < nc; c++){
+                sortedOlder.erase(std::lower_bound(sortedOlder.begin(), sortedOlder.end(), oldA));
+                sortedOlder.insert(std::lower_bound(sortedOlder.begin(), sortedOlder.end(), newA), newA);
+            }
+        }
+    }else{
+        sortedYounger.clear();
+        sortedOlder.clear();
+        for(Node* nd : dpseq){
+            if(nd == crown)
+                continue;
+            sortedYounger.push_back(nd->getTime());
+            sortedOlder.push_back(nd->getAncestor()->getTime());
+        }
+        std::sort(sortedYounger.begin(), sortedYounger.end());
+        std::sort(sortedOlder.begin(), sortedOlder.end());
+    }
 
     if(cacheInit == false){
         cachedGammaLn.assign(nf, 0.0);
@@ -997,10 +1044,14 @@ void FBDTreeModel::updateGammaCache(void){
     if(originAge != nullptr){
         double x0 = originAge->getValue();
         if(x0 != prevX0){
-            Node* crown = tree->getCrown();
-            for(int i = 0; i < nf; i++)
-                if(unresolvedFossils->getCrownNode(i) == crown && unresolvedFossils->getIsCrown(i) == false)
+            double xlo = std::min(prevX0, x0), xhi = std::max(prevX0, x0);
+            for(int i = 0; i < nf; i++){
+                if(unresolvedFossils->getCrownNode(i) != crown || unresolvedFossils->getIsCrown(i))
+                    continue;
+                double zi2 = unresolvedFossils->getAttachAge(i);
+                if(zi2 >= xlo && zi2 < xhi)
                     gammaStale[i] = 1;
+            }
             prevX0 = x0;
         }
     }
@@ -1015,14 +1066,27 @@ void FBDTreeModel::updateGammaCache(void){
         bool wasTerm = (prevSA[i] == 0);
         bool isTerm = (sai == 0);
         if((wasTerm || isTerm) && prevY[i] >= 0.0){
-            double lo = std::min(prevY[i], yi);
-            double hi = -INFINITY;
-            if(wasTerm) hi = std::max(hi, prevZ[i]);
-            if(isTerm)  hi = std::max(hi, zi);
+            bool pureZ = (yi == prevY[i] && wasTerm && isTerm);
+            double lo, hi;
+            if(pureZ){
+                lo = std::min(prevZ[i], zi);
+                hi = std::max(prevZ[i], zi);
+            }else{
+                lo = std::min(prevY[i], yi);
+                hi = -INFINITY;
+                if(wasTerm) hi = std::max(hi, prevZ[i]);
+                if(isTerm)  hi = std::max(hi, zi);
+            }
             for(int j = 0; j < nf; j++){
                 if(gammaStale[j]) continue;
                 double tj = unresolvedFossils->isSA(j) ? unresolvedFossils->getFossilAge(j) : unresolvedFossils->getAttachAge(j);
-                if(tj > lo && tj < hi) gammaStale[j] = 1;
+                bool aff = pureZ ? (tj >= lo && tj < hi) : (tj > lo && tj < hi);
+                if(pureZ && aff == false && (unresolvedFossils->getIsCrown(j) || unresolvedFossils->getIsStem(j))){
+                    double ct = unresolvedFossils->getCrownNode(j)->getTime();
+                    aff = (ct >= lo && ct < hi);
+                }
+                if(aff)
+                    gammaStale[j] = 1;
             }
         }
     }
@@ -1044,6 +1108,33 @@ void FBDTreeModel::updateGammaCache(void){
             for(std::pair<double,double>& iv : changedIntervals)
                 if(ti > iv.first && ti < iv.second){ gammaStale[i] = 1; break; }
         }
+    }
+
+    if(wholeTreeTotalFast < 0){
+        wholeTreeTotalFast = 1;
+        Node* root = tree->getCrown();
+        bool anyCrown = false, anyTotal = false;
+        for(int i = 0; i < nf; i++){
+            if(unresolvedFossils->getCrownNode(i) != root || unresolvedFossils->getIsStem(i)){
+                wholeTreeTotalFast = 0;
+                break;
+            }
+            if(unresolvedFossils->getIsCrown(i)) anyCrown = true; else anyTotal = true;
+        }
+        if(wholeTreeTotalFast == 1 && anyCrown && anyTotal)
+            wholeTreeTotalFast = 0;
+    }
+    if(wholeTreeTotalFast == 1){
+        sortedFossilY.clear();
+        sortedFossilZ.clear();
+        for(int i = 0; i < nf; i++){
+            if(unresolvedFossils->isSA(i))
+                continue;
+            sortedFossilY.push_back(unresolvedFossils->getFossilAge(i));
+            sortedFossilZ.push_back(unresolvedFossils->getAttachAge(i));
+        }
+        std::sort(sortedFossilY.begin(), sortedFossilY.end());
+        std::sort(sortedFossilZ.begin(), sortedFossilZ.end());
     }
 
     std::vector<int> staleIdx;

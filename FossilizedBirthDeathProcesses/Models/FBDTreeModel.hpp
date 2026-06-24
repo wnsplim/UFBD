@@ -138,6 +138,9 @@ class FBDTreeModel : public PhylogeneticModel {
         bool                        eulerBuilt = false;
         std::vector<double>         sortedYounger;
         std::vector<double>         sortedOlder;
+        std::vector<double>         sortedFossilY;
+        std::vector<double>         sortedFossilZ;
+        int                         wholeTreeTotalFast = -1;
 };
 
 
