@@ -14,7 +14,6 @@ class ParameterDouble;
 class ParameterSimplex;
 class ParameterTree;
 class SequenceCTMCModel;
-class SequenceLikelihood;
 class Tree;
 
 class RelaxedClockTreeModel : public PhylogeneticModel {

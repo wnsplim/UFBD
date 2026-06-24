@@ -1,24 +1,16 @@
 #include "RelaxedClockTreeModel.hpp"
 
 #include <cmath>
-#include <cstdio>
-#include <cstdlib>
-#include <fstream>
 #include <limits>
-#include <sstream>
-#include "AlignmentReader.hpp"
 #include "ApproxBranchLengthLikelihood.hpp"
 #include "FBDTreeModel.hpp"
 #include "Msg.hpp"
 #include "Node.hpp"
-#include "ParameterDouble.hpp"
-#include "ParameterSimplex.hpp"
 #include "ParameterTree.hpp"
 #include "ParameterUnresolvedFossils.hpp"
 #include "Probability.hpp"
 #include "RandomVariable.hpp"
 #include "SequenceCTMCModel.hpp"
-#include "SequenceLikelihood.hpp"
 #include "Tree.hpp"
 #include "UserSettings.hpp"
 

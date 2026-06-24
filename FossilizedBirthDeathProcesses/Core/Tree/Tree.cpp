@@ -8,6 +8,7 @@
 #include <cmath>
 #include <iomanip>
 #include <iostream>
+#include <algorithm>
 #include <set>
 #include <vector>
 
@@ -401,12 +402,13 @@ void Tree::passDown(Node* p, Node* from) {
 
     if (p != nullptr)
         {
-        std::set<Node*>& pNeighbors = p->getNeighbors();
-        for (Node* d : pNeighbors)
-            {
+        std::vector<Node*> kids;
+        for (Node* d : p->getNeighbors())
             if (d != from)
-                passDown(d, p);
-            }
+                kids.push_back(d);
+        std::sort(kids.begin(), kids.end(), [](Node* a, Node* b){ return a->getOffset() < b->getOffset(); });
+        for (Node* d : kids)
+            passDown(d, p);
         p->setAncestor(from);
         downPassSequence.push_back(p);
         }

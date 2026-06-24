@@ -1,6 +1,8 @@
 #include "Node.hpp"
 #include "RandomVariable.hpp"
 
+#include <algorithm>
+
 
 Node::Node(void) : ancestor(nullptr), index(0), offset(0), isTip(false), name(""), flag(false), fossil(false), time(0.0){
     
@@ -25,6 +27,7 @@ std::vector<Node*>& Node::getDescendants(void){
             if (p != ancestor)
                 descendantsVector.push_back(p);
         }
+    std::sort(descendantsVector.begin(), descendantsVector.end(), [](Node* a, Node* b){ return a->getOffset() < b->getOffset(); });
     return descendantsVector;
 }
 
