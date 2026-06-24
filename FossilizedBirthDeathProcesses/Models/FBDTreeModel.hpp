@@ -49,8 +49,6 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      calculateP0HatAt(int i, double t);
         double                      calculateP0Hat(double t);
         double                      computeGamma(double z, int i);
-        double                      computeGammaOracle(double z, int i);
-        double                      computeGammaFast(double z, int i);
         void                        buildEulerIndex(void);
         bool                        inSub(Node* node, Node* subtreeCrown);
         void                        updateGammaCache(void);
@@ -66,6 +64,9 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      doUpDownScale(void);
         double                      doJointScale(void);
         double                      doSubtreeScale(void);
+        double                      doRateVectorScale(void);
+        double                      doRateShrinkExpand(void);
+        std::vector<ParameterDouble*>* pickIidRateVector(void);
         void                        enumeratePrunableRoots(Tree* t, std::vector<Node*>& roots);
         void                        enumerateSubtreeHosts(Tree* t, std::vector<Node*>& crowns, std::vector<char>& isCrowns, std::vector<Node*>& origins, double rAge, double ceilingS, std::vector<Node*>& hosts, std::vector<double>& los, std::vector<double>& his);
         bool                        subtreeFossilsValidAt(Tree* t, Node* s, Node* g);
@@ -103,6 +104,15 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      psiVal;
         bool                        lastWasJointScale;
         bool                        lastWasUpDown;
+        bool                        lastWasRateVec;
+        bool                        lastRateVecScale;
+        std::vector<ParameterDouble*>* lastRateVec;
+        double                      rateVecStep;
+        double                      shrinkStep;
+        long                        rvAccW;
+        long                        rvAttW;
+        long                        seAccW;
+        long                        seAttW;
         double                      upDownStep;
         int                         upDownTotal;
         std::deque<bool>            upDownRecent;
@@ -121,7 +131,6 @@ class FBDTreeModel : public PhylogeneticModel {
         bool                        eulerBuilt = false;
         std::vector<double>         sortedYounger;
         std::vector<double>         sortedOlder;
-        bool                        gammaValidate = false;
 };
 
 

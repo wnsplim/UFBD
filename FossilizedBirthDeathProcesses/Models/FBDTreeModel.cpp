@@ -10,7 +10,6 @@
 #include "Msg.hpp"
 
 #include <iostream>
-#include <cstdlib>
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -20,10 +19,14 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
 
     lastWasJointScale = false;
     lastWasUpDown = false;
+    lastWasRateVec = false;
+    lastRateVec = nullptr;
+    rateVecStep = 0.2;
+    shrinkStep = 0.2;
+    rvAccW = rvAttW = seAccW = seAttW = 0;
     upDownStep = 0.1;
     upDownTotal = 0;
     cacheInit = false;
-    gammaValidate = (std::getenv("DNUE_GAMMA_VALIDATE") != nullptr);
     lambdaField = nullptr;
     muField = nullptr;
     psiField = nullptr;
@@ -151,6 +154,9 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
             parameters.push_back(p);
         }
     }
+    for(size_t i = 1; i < lambda.size(); i++) lambda[i]->setValue(lambda[0]->getValue());
+    for(size_t i = 1; i < mu.size(); i++)     mu[i]->setValue(mu[0]->getValue());
+    for(size_t i = 1; i < psi.size(); i++)    psi[i]->setValue(psi[0]->getValue());
     rho = UserSettings::userSettings().getRho();
 
     unresolvedFossils = nullptr;
@@ -316,9 +322,81 @@ void FBDTreeModel::print(void){
     std::cout << "tree (A/R): " << parameterTree->getAcceptanceRatio() << "\tscaleLambda: " << parameterTree->getScaleLambda() << "\n";
 }
 
+std::vector<ParameterDouble*>* FBDTreeModel::pickIidRateVector(void){
+    std::vector<std::vector<ParameterDouble*>*> cands;
+    if(lambdaField == nullptr && lambda.size() >= 2) cands.push_back(&lambda);
+    if(muField == nullptr && mu.size() >= 2)         cands.push_back(&mu);
+    if(psiField == nullptr && psi.size() >= 2)       cands.push_back(&psi);
+    if(cands.empty())
+        return nullptr;
+    return cands[(int)(rng.uniformRv() * cands.size())];
+}
+
+double FBDTreeModel::doRateVectorScale(void){
+    lastWasRateVec = true;
+    lastRateVecScale = true;
+    lastRateVec = pickIidRateVector();
+    double mB = 0.95;
+    double d = mB + Probability::Normal::rv(&rng) * std::sqrt(1.0 - mB * mB);
+    if(rng.uniformRv() < 0.5) d = -d;
+    double c = std::exp(rateVecStep * d);
+    for(ParameterDouble* p : *lastRateVec)
+        p->scaleProposed(c);
+    rvAttW++;
+    if(rvAttW >= 200){
+        rateVecStep *= std::exp((double)rvAccW / rvAttW - 0.3);
+        if(rateVecStep < 1e-3) rateVecStep = 1e-3;
+        if(rateVecStep > 10.0)  rateVecStep = 10.0;
+        rvAccW = 0;
+        rvAttW = 0;
+    }
+    return (double)lastRateVec->size() * std::log(c);
+}
+
+double FBDTreeModel::doRateShrinkExpand(void){
+    lastWasRateVec = true;
+    lastRateVecScale = false;
+    lastRateVec = pickIidRateVector();
+    int n = (int)lastRateVec->size();
+    double logMean = 0.0;
+    for(ParameterDouble* p : *lastRateVec)
+        logMean += std::log(p->getValue());
+    logMean /= (double)n;
+    double mB = 0.95;
+    double d = mB + Probability::Normal::rv(&rng) * std::sqrt(1.0 - mB * mB);
+    if(rng.uniformRv() < 0.5) d = -d;
+    double a = std::exp(shrinkStep * d);
+    for(ParameterDouble* p : *lastRateVec){
+        double cur = p->getValue();
+        double target = std::exp(logMean + a * (std::log(cur) - logMean));
+        p->scaleProposed(target / cur);
+    }
+    seAttW++;
+    if(seAttW >= 200){
+        shrinkStep *= std::exp((double)seAccW / seAttW - 0.3);
+        if(shrinkStep < 1e-3) shrinkStep = 1e-3;
+        if(shrinkStep > 10.0)  shrinkStep = 10.0;
+        seAccW = 0;
+        seAttW = 0;
+    }
+    return (double)(n - 1) * std::log(a);
+}
+
 double FBDTreeModel::update(void){
     RandomVariable* prevRng = RandomVariable::getActiveInstance();
     RandomVariable::setActiveInstance(&rng);
+
+    lastWasJointScale = false;
+    lastWasUpDown = false;
+    lastWasRateVec = false;
+    bool haveIid = (lambdaField == nullptr && lambda.size() >= 2)
+                || (muField == nullptr && mu.size() >= 2)
+                || (psiField == nullptr && psi.size() >= 2);
+    if(haveIid && rng.uniformRv() < 0.20){
+        double r = (rng.uniformRv() < 0.5) ? doRateVectorScale() : doRateShrinkExpand();
+        RandomVariable::setActiveInstance(prevRng);
+        return r;
+    }
 
     double u = rng.uniformRv();
     double sum = 0.0;
@@ -329,8 +407,6 @@ double FBDTreeModel::update(void){
             break;
         }
     }
-    lastWasJointScale = false;
-    lastWasUpDown = false;
     if(updatedParameter == parameterTree && isFBD == false && unresolvedFossils != nullptr){
         Tree* t = parameterTree->getTree();
         int numSlideable = 0;
@@ -403,6 +479,12 @@ double FBDTreeModel::update(void){
 }
 
 void FBDTreeModel::updateForAcceptance(void){
+    if(lastWasRateVec){
+        for(ParameterDouble* p : *lastRateVec)
+            p->commitProposed();
+        if(lastRateVecScale) rvAccW++; else seAccW++;
+        return;
+    }
     if(lastWasUpDown){
         for(ParameterDouble* l : lambda) l->commitProposed();
         for(ParameterDouble* m : mu) m->commitProposed();
@@ -424,6 +506,11 @@ void FBDTreeModel::updateForAcceptance(void){
 }
 
 void FBDTreeModel::updateForRejection(void){
+    if(lastWasRateVec){
+        for(ParameterDouble* p : *lastRateVec)
+            p->restoreProposed();
+        return;
+    }
     if(lastWasUpDown){
         for(ParameterDouble* l : lambda) l->restoreProposed();
         for(ParameterDouble* m : mu) m->restoreProposed();
@@ -690,82 +777,6 @@ double FBDTreeModel::calculateP0Hat(double t){
     return calculateP0HatAt(findIndex(t), t);
 }
 
-double FBDTreeModel::computeGammaOracle(double z, int i){
-    Tree* tree = parameterTree->getTree();
-    Node* crown = unresolvedFossils->getCrownNode(i);
-    bool stem = unresolvedFossils->getIsStem(i);
-    bool total = (unresolvedFossils->getIsCrown(i) == false && stem == false);
-    double count = 0.0;
-    for(Node* n : tree->getDownPassSequence()){
-        if(n == tree->getCrown())
-            continue;
-        Node* anc = n->getAncestor();
-        if(n->getTime() < z && z < anc->getTime()){
-            bool inZone;
-            if(stem){
-                inZone = (n == crown);
-            }else{
-                inZone = nodeInSubtree(anc, crown);
-                if(inZone == false && total && n == crown)
-                    inZone = true;
-            }
-            if(inZone)
-                count++;
-        }
-    }
-    if((total || stem) && crown == tree->getCrown() && originAge != nullptr){
-        double x0 = originAge->getValue();
-        if(tree->getNumBackbone() == 0){
-            if(z >= x0)
-                count++;
-        }else{
-            if(tree->getCrown()->getTime() < z && z < x0)
-                count++;
-        }
-    }
-
-    bool SymmetryCorrection = (UserSettings::userSettings().getModel() == Model::UFBD);
-    bool focalIsTip = (unresolvedFossils->isSA(i) == false);
-    int numFossils = unresolvedFossils->getNumFossils();
-    for(int j = 0; j < numFossils; j++){
-        if(j == i)
-            continue;
-        if(unresolvedFossils->isSA(j))
-            continue;
-        double yj = unresolvedFossils->getFossilAge(j);
-        double zj = unresolvedFossils->getAttachAge(j);
-        if(yj >= z || z >= zj)
-            continue;
-        bool reciprocal;
-        if(stem){
-            if(unresolvedFossils->getCrownNode(j) != crown)
-                continue;
-            bool jStem = unresolvedFossils->getIsStem(j);
-            bool jTotalOnStem = (unresolvedFossils->getIsCrown(j) == false) && (jStem == false) && (zj >= crown->getTime());
-            if(jStem == false && jTotalOnStem == false)
-                continue;
-            reciprocal = true;
-        }else{
-            if(nodeInSubtree(unresolvedFossils->getCrownNode(j), crown) == false)
-                continue;
-            if(total == false && zj > crown->getTime())
-                continue;
-            Node* crownJ = unresolvedFossils->getCrownNode(j);
-            bool jStem = unresolvedFossils->getIsStem(j);
-            bool jTotal = (unresolvedFossils->getIsCrown(j) == false) && (jStem == false);
-            bool iPendReachesRj = jTotal ? true
-                                : jStem  ? (z >= crownJ->getTime())
-                                :          (z <= crownJ->getTime());
-            reciprocal = nodeInSubtree(crown, crownJ) && iPendReachesRj;
-        }
-        double w = 1.0;
-        if(SymmetryCorrection && focalIsTip && j != unresolvedFossils->getSpineIdx() && reciprocal)
-            w = 0.5;
-        count += w;
-    }
-    return count;
-}
-
 void FBDTreeModel::buildEulerIndex(void){
     Tree* tree = parameterTree->getTree();
     int n = tree->getNumNodes();
@@ -802,7 +813,7 @@ bool FBDTreeModel::inSub(Node* node, Node* subtreeCrown){
     return pc <= pn && pn < pc + subSize[subtreeCrown->getOffset()];
 }
 
-double FBDTreeModel::computeGammaFast(double z, int i){
+double FBDTreeModel::computeGamma(double z, int i){
     Tree* tree = parameterTree->getTree();
     if(eulerBuilt == false)
         buildEulerIndex();
@@ -886,16 +897,6 @@ double FBDTreeModel::computeGammaFast(double z, int i){
         count += w;
     }
     return count;
-}
-
-double FBDTreeModel::computeGamma(double z, int i){
-    double f = computeGammaFast(z, i);
-    if(gammaValidate){
-        double o = computeGammaOracle(z, i);
-        if(std::fabs(f - o) > 1e-6)
-            Msg::error("computeGamma fast/oracle mismatch: fast=" + std::to_string(f) + " oracle=" + std::to_string(o) + " z=" + std::to_string(z) + " idx=" + std::to_string(i));
-    }
-    return f;
 }
 
 void FBDTreeModel::updateGammaCache(void){

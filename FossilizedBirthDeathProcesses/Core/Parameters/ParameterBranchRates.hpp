@@ -60,6 +60,9 @@ class BranchRateModel : public Parameter {
         long                        cdAccW;
         long                        cdAttW;
         std::vector<int>            cdNodes;
+        double                      ncStep;
+        long                        ncAccW;
+        long                        ncAttW;
 };
 
 class ParameterBranchRates : public BranchRateModel {
@@ -75,6 +78,7 @@ class ParameterBranchRates : public BranchRateModel {
         double                      lognormalLnP(double r, double s2, double m);
         double                      whiteNoiseLnP(double r, double s2, double t, double m);
         double                      gbmLnP(void);
+        double                      sigmaNonCenteredMove(int p);
         ClockModel                  clockModel;
 };
 

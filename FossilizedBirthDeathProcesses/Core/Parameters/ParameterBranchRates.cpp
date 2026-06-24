@@ -18,6 +18,9 @@ BranchRateModel::BranchRateModel(double prob, PhylogeneticModel* m, Tree* t, int
     cdStep = 1.0;
     cdAccW = 0;
     cdAttW = 0;
+    ncStep = 0.5;
+    ncAccW = 0;
+    ncAttW = 0;
     for(int i = 0; i < 3; i++){
         rgeneParam[i] = rg[i];
         sigma2Param[i] = s2[i];
@@ -267,6 +270,13 @@ double BranchRateModel::rateAgeSubtreeMove(void){
 }
 
 void BranchRateModel::updateForAcceptance(void){
+    if(lastMove == 8){
+        ncAccW++;
+        sigma2[1][lastLocus] = sigma2[0][lastLocus];
+        for(int b : branchNodes)
+            rate[1][lastLocus][b] = rate[0][lastLocus][b];
+        return;
+    }
     if(lastMove == 4){
         cdAccW++;
         for(int k = 0; k < (int)cdNodes.size(); k++)
@@ -293,6 +303,12 @@ void BranchRateModel::updateForAcceptance(void){
 }
 
 void BranchRateModel::updateForRejection(void){
+    if(lastMove == 8){
+        sigma2[0][lastLocus] = sigma2[1][lastLocus];
+        for(int b : branchNodes)
+            rate[0][lastLocus][b] = rate[1][lastLocus][b];
+        return;
+    }
     if(lastMove == 4){
         for(int k = 0; k < (int)cdNodes.size(); k++)
             for(int p = 0; p < numLoci; p++)
@@ -400,25 +416,67 @@ std::vector<std::vector<double>> ParameterBranchRates::getAbsoluteRates(void){
     return a;
 }
 
+double ParameterBranchRates::sigmaNonCenteredMove(int p){
+    RandomVariable& rng = RandomVariable::randomVariableInstance();
+    lastMove = 8;
+    lastLocus = p;
+    double m = mu[0][p];
+    double s2 = sigma2[0][p];
+    double s = std::sqrt(s2);
+    double logm = std::log(m);
+    int B = (int)branchNodes.size();
+    std::vector<double> u(B);
+    for(int i = 0; i < B; i++)
+        u[i] = (std::log(rate[0][p][branchNodes[i]]) - (logm - 0.5 * s2)) / s;
+    double mB = 0.95;
+    double sB = std::sqrt(1.0 - mB * mB);
+    double d = mB + Probability::Normal::rv(&rng) * sB;
+    if(Probability::Uniform::rv(&rng, 0.0, 1.0) < 0.5)
+        d = -d;
+    double lnc = ncStep * d;
+    double s2new = s2 * std::exp(lnc);
+    double snew = std::sqrt(s2new);
+    sigma2[0][p] = s2new;
+    double lnH = lnc * (1.0 + 0.5 * B);
+    for(int i = 0; i < B; i++){
+        double rNew = std::exp(logm - 0.5 * s2new + snew * u[i]);
+        lnH += std::log(rNew / rate[0][p][branchNodes[i]]);
+        rate[0][p][branchNodes[i]] = rNew;
+    }
+    ncAttW++;
+    if(ncAttW >= 200){
+        double ar = (double)ncAccW / ncAttW;
+        ncStep *= std::exp(ar - 0.3);
+        if(ncStep < 1e-3) ncStep = 1e-3;
+        if(ncStep > 10.0) ncStep = 10.0;
+        ncAccW = 0;
+        ncAttW = 0;
+    }
+    return lnH;
+}
+
 double ParameterBranchRates::update(void){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastLocus = (int)(rng.uniformRv() * numLoci);
     double u = rng.uniformRv();
-    if(u < 0.65){
+    if(u < 0.55){
         lastMove = 2;
         lastNode = branchNodes[(int)(rng.uniformRv() * branchNodes.size())];
         return scaleBranchRate(lastLocus, lastNode);
     }
-    if(u < 0.80){
+    if(u < 0.70){
         lastMove = 5;
         return globalRateBranchRatesScale(lastLocus);
     }
-    if(u < 0.90){
+    if(u < 0.80){
         lastMove = 0;
         return scaleLocusRate(lastLocus);
     }
-    lastMove = 1;
-    return scaleLocusSigma2(lastLocus);
+    if(clockModel != ClockModel::UCLN || u < 0.88){
+        lastMove = 1;
+        return scaleLocusSigma2(lastLocus);
+    }
+    return sigmaNonCenteredMove(lastLocus);
 }
 
 ParameterBranchRatesCIR::ParameterBranchRatesCIR(double prob, PhylogeneticModel* m, Tree* t, int L, const double* rg, const double* s2) : BranchRateModel(prob, m, t, L, rg, s2){
