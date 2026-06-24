@@ -622,16 +622,18 @@ std::vector<std::vector<double>> ParameterBranchRatesCIR::getAbsoluteRates(void)
     Node* crown = tree->getCrown();
     double H = crown->getTime();
     for(int p = 0; p < numLoci; p++){
-        for(int b = 0; b < numNodes; b++){
-            Node* n = tree->getNodeByOffset(b);
-            if(n != crown){
-                double Ln = (n->getAncestor()->getTime() - n->getTime()) / H;
-                double sigmaPB = 2.0 * theta[0][p] * sigma2[0][p];
-                a[p][b] = mu[0][p] * getMeanTau(rate[0][p][b], rate[0][p][n->getAncestor()->getOffset()], Ln, sigmaPB, theta[0][p]) / Ln;
-            }else{
-                a[p][b] = mu[0][p] * rate[0][p][b];
+        ThreadPool::shared().parallelFor(OP_CLOCK, numNodes, [&](int lo, int hi){
+            for(int b = lo; b < hi; b++){
+                Node* n = tree->getNodeByOffset(b);
+                if(n != crown){
+                    double Ln = (n->getAncestor()->getTime() - n->getTime()) / H;
+                    double sigmaPB = 2.0 * theta[0][p] * sigma2[0][p];
+                    a[p][b] = mu[0][p] * getMeanTau(rate[0][p][b], rate[0][p][n->getAncestor()->getOffset()], Ln, sigmaPB, theta[0][p]) / Ln;
+                }else{
+                    a[p][b] = mu[0][p] * rate[0][p][b];
+                }
             }
-        }
+        });
     }
     return a;
 }
