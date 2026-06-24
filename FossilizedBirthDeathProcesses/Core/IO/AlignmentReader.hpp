@@ -20,7 +20,9 @@ class AlignmentReader {
         void                            readNexus(std::ifstream& f);
         void                            readPartitions(const std::string& file);
         void                            compress(void);
+        int                             charBitmask(char c) const;
 
+        int                             numStates;
         std::vector<std::string>                    taxa;
         std::vector<std::vector<int>>               matrix;
         std::vector<std::vector<int>>               partitionSites;

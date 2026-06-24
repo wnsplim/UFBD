@@ -105,6 +105,9 @@ void FBDInput::readFossils(std::string path){
                               : (assignStr == "STEM")  ? Assignment::STEM
                               :                          Assignment::TOTAL;
 
+        if(assignment == Assignment::STEM && maxAge == 0.0)
+            Msg::error("fossil '" + taxon + "' is an unresolved extant (age 0) assigned STEM; UE can only be CROWN or TOTAL.");
+
         if(assignment == Assignment::CROWN && clade->getCrown()->getIsTip()){
             Msg::warning("fossil '" + taxon + "' assigned CROWN to singleton clade '" + cladeName + "'; treating as TOTAL");
             assignment = Assignment::TOTAL;

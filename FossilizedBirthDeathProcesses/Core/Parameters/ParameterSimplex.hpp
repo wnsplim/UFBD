@@ -12,6 +12,7 @@ class ParameterSimplex : public Parameter {
                                     ParameterSimplex(double prob, PhylogeneticModel* m, std::string n, int dimension, double concentration, double tuning);
         double                      getAcceptanceRatio(void) { return ((double)numAcceptances) / ((double)(numAcceptances + numRejections)); }
         const std::vector<double>&  getValue(void) { return value[0]; }
+        void                        setValue(const std::vector<double>& v) { value[0] = v; value[1] = v; }
         double                      lnProbability(void);
         void                        print(void);
         double                      update(void);

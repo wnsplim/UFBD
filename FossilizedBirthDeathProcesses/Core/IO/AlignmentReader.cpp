@@ -26,7 +26,23 @@ static int nucleotideBitmask(char c){
     }
 }
 
+static int aminoAcidBitmask(char c){
+    static const char order[21] = "ARNDCQEGHILKMFPSTWYV";
+    char u = (char)std::toupper((unsigned char)c);
+    if(u == 'B') return aminoAcidBitmask('N') | aminoAcidBitmask('D');
+    if(u == 'Z') return aminoAcidBitmask('Q') | aminoAcidBitmask('E');
+    if(u == 'J') return aminoAcidBitmask('I') | aminoAcidBitmask('L');
+    for(int i = 0; i < 20; i++)
+        if(order[i] == u) return 1 << i;
+    return (1 << 20) - 1;
+}
+
+int AlignmentReader::charBitmask(char c) const {
+    return numStates == 20 ? aminoAcidBitmask(c) : nucleotideBitmask(c);
+}
+
 AlignmentReader::AlignmentReader(const std::string& alignmentFile, const std::string& partitionFile, int numStates){
+    this->numStates = numStates;
     readAlignment(alignmentFile);
     int nsite = matrix.empty() ? 0 : (int)matrix[0].size();
     if(partitionFile.empty()){
@@ -71,7 +87,7 @@ void AlignmentReader::readPhylip(std::ifstream& f){
         if((int)seq.size() != nsite)
             Msg::error("alignment row for '" + taxa[i] + "' has wrong length");
         for(int s = 0; s < nsite; s++)
-            matrix[i][s] = nucleotideBitmask(seq[s]);
+            matrix[i][s] = charBitmask(seq[s]);
     }
 }
 
@@ -82,7 +98,7 @@ void AlignmentReader::readFasta(std::ifstream& f){
         taxa.push_back(name);
         std::vector<int> row(seq.size());
         for(size_t s = 0; s < seq.size(); s++)
-            row[s] = nucleotideBitmask(seq[s]);
+            row[s] = charBitmask(seq[s]);
         matrix.push_back(row);
         seq.clear();
     };
@@ -143,7 +159,7 @@ void AlignmentReader::readNexus(std::ifstream& f){
         const std::string& s = seqs[nm];
         std::vector<int> row(s.size());
         for(size_t i = 0; i < s.size(); i++)
-            row[i] = nucleotideBitmask(s[i]);
+            row[i] = charBitmask(s[i]);
         matrix.push_back(row);
     }
 }

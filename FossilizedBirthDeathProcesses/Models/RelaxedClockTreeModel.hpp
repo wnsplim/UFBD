@@ -13,6 +13,7 @@ class FBDTreeModel;
 class ParameterDouble;
 class ParameterSimplex;
 class ParameterTree;
+class SequenceCTMCModel;
 class SequenceLikelihood;
 class Tree;
 
@@ -33,17 +34,11 @@ class RelaxedClockTreeModel : public PhylogeneticModel {
 
     private:
         void                        buildClock(ClockModel clockModel, const double* rgeneParam, const double* sigma2Param);
-        double                      substitutionUpdate(void);
         double                      nodeAgeSweep(void);
         FBDTreeModel*               fbd;
         BranchRateModel*            clock;
         ApproxBranchLengthLikelihood* lik;
-        SequenceLikelihood*         seqLik;
-        std::vector<ParameterSimplex*> exch;
-        std::vector<ParameterSimplex*> freq;
-        std::vector<ParameterDouble*> alpha;
-        std::vector<ParameterDouble*> pinv;
-        Parameter*                  lastSubstParm;
+        SequenceCTMCModel*          ctmc;
         int                         lastMoveType;
         double                      ageScaleStep = 0.5;
         int                         ageScaleAtt = 0;

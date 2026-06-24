@@ -17,12 +17,13 @@
 #include "ParameterUnresolvedFossils.hpp"
 #include "Probability.hpp"
 #include "RandomVariable.hpp"
+#include "SequenceCTMCModel.hpp"
 #include "SequenceLikelihood.hpp"
 #include "Tree.hpp"
 #include "UserSettings.hpp"
 
 void RelaxedClockTreeModel::buildClock(ClockModel clockModel, const double* rgeneParam, const double* sigma2Param){
-    int nLoci = (lik != nullptr) ? lik->getNumPartitions() : seqLik->getNumPartitions();
+    int nLoci = (lik != nullptr) ? lik->getNumPartitions() : ctmc->getNumPartitions();
     if(clockModel == ClockModel::CIR)
         clock = new ParameterBranchRatesCIR(1.0, this, fbd->getTree(), nLoci, rgeneParam, sigma2Param);
     else
@@ -35,14 +36,13 @@ RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades
     RandomVariable* prevRng = RandomVariable::getActiveInstance();
     RandomVariable::setActiveInstance(&rng);
     fbd = new FBDTreeModel(t, clades, fossils, seed);
-    seqLik = nullptr;
+    ctmc = nullptr;
     std::vector<std::string> rogue;
     for(Fossil& f : fossils)
         rogue.push_back(f.getTaxon());
     lik = new ApproxBranchLengthLikelihood(hessianFile, mlTreeFile, rogue, 0, nStates);
     buildClock(clockModel, rgeneParam, sigma2Param);
     parameters.push_back(fbd->getParameterTree());
-    lastSubstParm = nullptr;
     lastMoveType = 2;
     RandomVariable::setActiveInstance(prevRng);
 }
@@ -53,67 +53,25 @@ RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades
     RandomVariable::setActiveInstance(&rng);
     fbd = new FBDTreeModel(t, clades, fossils, seed);
     lik = nullptr;
-    seqLik = new SequenceLikelihood(nStates, numCats);
-
-    AlignmentReader aln(sequenceFile, partitionFile, nStates);
-    for(int p = 0; p < aln.getNumPartitions(); p++)
-        seqLik->addPartition(aln.getTaxa(), aln.getPatterns(p), aln.getWeights(p));
+    ctmc = new SequenceCTMCModel(this, sequenceFile, partitionFile, nStates, numCats);
 
     buildClock(clockModel, rgeneParam, sigma2Param);
 
-    int nLoci = seqLik->getNumPartitions();
-    int nExch = nStates * (nStates - 1) / 2;
-    for(int p = 0; p < nLoci; p++){
-        std::string suf = (nLoci > 1) ? std::to_string(p) : "";
-        exch.push_back(new ParameterSimplex(1.0, this, "exch" + suf, nExch, 1.0, 500.0));
-        freq.push_back(new ParameterSimplex(1.0, this, "freq" + suf, nStates, 1.0, 300.0));
-        ParameterDouble* a = new ParameterDouble(1.0, this, "alpha" + suf, 0.0, 1.0e8);
-        a->setPrior(Probability::PriorFamily::UNIFORM, 0.0, 1.0e8);
-        a->setValue(0.5);
-        ParameterDouble* pv = new ParameterDouble(1.0, this, "pinv" + suf, 0.0, 1.0);
-        pv->setPrior(Probability::PriorFamily::UNIFORM, 0.0, 1.0);
-        pv->setValue(0.1);
-        alpha.push_back(a);
-        pinv.push_back(pv);
-    }
-
     parameters.push_back(fbd->getParameterTree());
-    lastSubstParm = nullptr;
     lastMoveType = 2;
     RandomVariable::setActiveInstance(prevRng);
 }
 
 double RelaxedClockTreeModel::lnLikelihood(void){
-    if(seqLik == nullptr)
+    if(ctmc == nullptr)
         return lik->computeLnL(fbd->getTree(), clock->getAbsoluteRates());
-    int nLoci = seqLik->getNumPartitions();
-    std::vector<std::vector<double>> exchV(nLoci), freqV(nLoci);
-    std::vector<double> alphaV(nLoci), pinvV(nLoci);
-    for(int p = 0; p < nLoci; p++){
-        exchV[p] = exch[p]->getValue();
-        freqV[p] = freq[p]->getValue();
-        alphaV[p] = alpha[p]->getValue();
-        pinvV[p] = pinv[p]->getValue();
-    }
-    return seqLik->computeLnL(fbd->getTree(), clock->getAbsoluteRates(), exchV, freqV, alphaV, pinvV);
-}
-
-double RelaxedClockTreeModel::substitutionUpdate(void){
-    RandomVariable& r = RandomVariable::randomVariableInstance();
-    int p = (int)(r.uniformRv() * seqLik->getNumPartitions());
-    double v = r.uniformRv();
-    if(v < 0.40)       lastSubstParm = exch[p];
-    else if(v < 0.65)  lastSubstParm = freq[p];
-    else if(v < 0.82)  lastSubstParm = alpha[p];
-    else               lastSubstParm = pinv[p];
-    return lastSubstParm->update();
+    return ctmc->computeLnL(fbd->getTree(), clock->getAbsoluteRates());
 }
 
 double RelaxedClockTreeModel::lnPriorProbability(void){
     double lnp = fbd->lnLikelihood() + fbd->lnPriorProbability() + clock->lnProbability();
-    if(seqLik != nullptr)
-        for(int p = 0; p < seqLik->getNumPartitions(); p++)
-            lnp += exch[p]->lnProbability() + freq[p]->lnProbability() + alpha[p]->lnProbability() + pinv[p]->lnProbability();
+    if(ctmc != nullptr)
+        lnp += ctmc->lnPrior();
     return lnp;
 }
 
@@ -144,7 +102,7 @@ double RelaxedClockTreeModel::nodeAgeSweep(void){
 
 double RelaxedClockTreeModel::update(void){
     RandomVariable& r = RandomVariable::randomVariableInstance();
-    if(seqLik != nullptr && r.uniformRv() < 0.25){ lastMoveType = 6; return substitutionUpdate(); }
+    if(ctmc != nullptr && r.uniformRv() < 0.25){ lastMoveType = 6; return ctmc->update(); }
     double u = r.uniformRv();
     if(u < 0.25){ lastMoveType = 0; return clock->update(); }
     if(u < 0.50){ lastMoveType = 1; return clock->constantDistanceMove(); }
@@ -175,7 +133,7 @@ double RelaxedClockTreeModel::update(void){
 void RelaxedClockTreeModel::updateForAcceptance(void){
     if(lastMoveType == 7) return;
     if(lastMoveType == 6)
-        lastSubstParm->updateForAcceptance();
+        ctmc->updateForAcceptance();
     else if(lastMoveType == 0)
         clock->updateForAcceptance();
     else if(lastMoveType == 1){
@@ -199,7 +157,7 @@ void RelaxedClockTreeModel::updateForAcceptance(void){
 void RelaxedClockTreeModel::updateForRejection(void){
     if(lastMoveType == 7) return;
     if(lastMoveType == 6)
-        lastSubstParm->updateForRejection();
+        ctmc->updateForRejection();
     else if(lastMoveType == 0)
         clock->updateForRejection();
     else if(lastMoveType == 1){
@@ -229,16 +187,8 @@ std::vector<std::string> RelaxedClockTreeModel::getParameterNames(void){
         n.push_back("clockMean" + suf);
         n.push_back("clockSigma2" + suf);
     }
-    if(seqLik != nullptr)
-        for(int p = 0; p < seqLik->getNumPartitions(); p++){
-            std::string suf = (seqLik->getNumPartitions() > 1) ? std::to_string(p) : "";
-            for(int i = 0; i < (int)exch[p]->getValue().size(); i++)
-                n.push_back("exch" + suf + "_" + std::to_string(i));
-            for(int i = 0; i < (int)freq[p]->getValue().size(); i++)
-                n.push_back("freq" + suf + "_" + std::to_string(i));
-            n.push_back("alpha" + suf);
-            n.push_back("pinv" + suf);
-        }
+    if(ctmc != nullptr)
+        ctmc->appendParameterNames(n);
     return n;
 }
 
@@ -251,15 +201,8 @@ std::vector<double> RelaxedClockTreeModel::getParameterString(void){
         v.push_back(clock->getLocusRate(p));
         v.push_back(clock->getLocusSigma2(p));
     }
-    if(seqLik != nullptr)
-        for(int p = 0; p < seqLik->getNumPartitions(); p++){
-            for(double x : exch[p]->getValue())
-                v.push_back(x);
-            for(double x : freq[p]->getValue())
-                v.push_back(x);
-            v.push_back(alpha[p]->getValue());
-            v.push_back(pinv[p]->getValue());
-        }
+    if(ctmc != nullptr)
+        ctmc->appendParameterValues(v);
     return v;
 }
 
