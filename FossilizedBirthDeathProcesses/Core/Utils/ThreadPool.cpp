@@ -1,4 +1,5 @@
 #include "ThreadPool.hpp"
+#include "UserSettings.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -109,11 +110,6 @@ void ThreadPool::parallelFor(int opId, int n, const std::function<void(int, int)
 }
 
 ThreadPool& ThreadPool::shared(void){
-    static int nt = [](){
-        const char* e = std::getenv("FBD_LIK_THREADS");
-        int v = e ? std::atoi(e) : 1;
-        return v < 1 ? 1 : v;
-    }();
-    static ThreadPool pool(nt);
+    static ThreadPool pool(UserSettings::userSettings().getNumCores());
     return pool;
 }

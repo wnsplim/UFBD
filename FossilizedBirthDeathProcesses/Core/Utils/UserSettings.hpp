@@ -22,6 +22,7 @@ class UserSettings {
         unsigned long               getChainLength(void) { checkSettings(); return chainLength; }
         int                         getNumChains(void) { return numChains; }
         int                         getNumThreads(void) { return numThreads; }
+        int                         getNumCores(void) { return numCores; }
         std::string                 getTreeOutput(void) { checkSettings(); return treeOut; }
         std::string                 getParamOutput(void) { checkSettings(); return parametersOut; }
         std::string                 getTreeFile(void) { checkSettings(); return treeFile; }
@@ -96,6 +97,7 @@ class UserSettings {
         unsigned long               chainLength;
         int                         numChains;
         int                         numThreads;
+        int                         numCores;
         int                         printFrequency;
         int                         sampleFrequency;
         std::string                 hessianFile;

@@ -45,6 +45,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     chainLength     = 100;
     numChains       = 4;
     numThreads      = 4;
+    numCores        = 1;
     printFrequency  = 1;
     sampleFrequency = 1;
     hessianFile     = "";
@@ -70,14 +71,14 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
 
     // Known flags and whether they take a value (terrible to read currently; will clean up later)
     std::set<std::string> knownFlags = {
-        "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt", "-help", "-h",
+        "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt", "-cores", "-help", "-h",
         "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times",
         "-lambda-prior-mode", "-mu-prior-mode", "-psi-prior-mode", "-hsmrf-shifts", "-hsmrf-shift-size", "-cpu-time",
         "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma",
         "-seq", "-partition", "-ncat"
     };
     std::set<std::string> valueFlags = {
-        "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt",
+        "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt", "-cores",
         "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times",
         "-lambda-prior-mode", "-mu-prior-mode", "-psi-prior-mode", "-hsmrf-shifts", "-hsmrf-shift-size", "-cpu-time",
         "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma",
@@ -221,6 +222,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 else if (arg == "-s")   sampleFrequency = intVal;
                 else if (arg == "-nc")  numChains       = intVal;
                 else if (arg == "-nt")  numThreads      = intVal;
+                else if (arg == "-cores") numCores      = intVal;
                 else if (arg == "-nstates") nStates     = intVal;
                 else if (arg == "-ncat")    numCats     = intVal;
             }
@@ -278,6 +280,15 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         Msg::warning("Threads must be >= 1; resetting to 1.");
         numThreads = 1;
     }
+
+    if (numCores > maxNumThreads) {
+        Msg::warning("Requested " + std::to_string(numCores) +
+                     " cores, but only " + std::to_string(maxNumThreads) +
+                     " available; capping at " + std::to_string(maxNumThreads) + ".");
+        numCores = maxNumThreads;
+    }
+    if (numCores < 1)
+        numCores = 1;
 
     if (sbcMode == false) {
         if (treeOut.empty())
