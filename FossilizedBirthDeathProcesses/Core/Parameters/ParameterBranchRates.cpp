@@ -5,6 +5,7 @@
 #include "ParameterUnresolvedFossils.hpp"
 #include "Probability.hpp"
 #include "RandomVariable.hpp"
+#include "ThreadPool.hpp"
 #include "Tree.hpp"
 
 BranchRateModel::BranchRateModel(double prob, PhylogeneticModel* m, Tree* t, int L, const double* rg, const double* s2) : Parameter(prob, m, "branchRates"){
@@ -362,31 +363,44 @@ double ParameterBranchRates::whiteNoiseLnP(double r, double s2, double t, double
 double ParameterBranchRates::gbmLnP(void){
     double lnp = 0.0;
     Node* crown = tree->getCrown();
+    std::vector<Node*>& dp = tree->getDownPassSequence();
+    int M = (int)dp.size();
+    std::vector<std::vector<Node*> > sonsCache(M);
+    for(int idx = 0; idx < M; idx++)
+        sonsCache[idx] = dp[idx]->getDescendants();
+    std::vector<double> terms(M);
     for(int p = 0; p < numLoci; p++){
         double s2 = sigma2[0][p];
         if(s2 <= 0.0)
             return -INFINITY;
         lnp -= 0.5 * std::log(2.0 * PI) * (double)branchNodes.size();
-        for(Node* inode : tree->getDownPassSequence()){
-            std::vector<Node*>& sons = inode->getDescendants();
-            if(sons.size() != 2)
-                continue;
-            double t = inode->getTime();
-            double tA = (inode == crown) ? 0.0 : (inode->getAncestor()->getTime() - t) / 2.0;
-            double t1 = (t - sons[0]->getTime()) / 2.0;
-            double t2 = (t - sons[1]->getTime()) / 2.0;
-            double detT = t1 * t2 + tA * (t1 + t2);
-            double Tinv0 = (tA + t2) / detT;
-            double Tinv1 = -tA / detT;
-            double Tinv3 = (tA + t1) / detT;
-            double rA = (inode == crown) ? mu[0][p] : rate[0][p][inode->getOffset()];
-            double r1 = rate[0][p][sons[0]->getOffset()];
-            double r2 = rate[0][p][sons[1]->getOffset()];
-            double y1 = std::log(r1 / rA) + (tA + t1) * s2 / 2.0;
-            double y2 = std::log(r2 / rA) + (tA + t2) * s2 / 2.0;
-            double quadForm = y1 * y1 * Tinv0 + 2.0 * y1 * y2 * Tinv1 + y2 * y2 * Tinv3;
-            lnp -= quadForm / (2.0 * s2) + 0.5 * std::log(detT * s2 * s2) + std::log(r1 * r2);
-        }
+        ThreadPool::shared().parallelFor(OP_CLOCK, M, [&](int lo, int hi){
+            for(int idx = lo; idx < hi; idx++){
+                Node* inode = dp[idx];
+                const std::vector<Node*>& sons = sonsCache[idx];
+                if(sons.size() != 2){
+                    terms[idx] = 0.0;
+                    continue;
+                }
+                double t = inode->getTime();
+                double tA = (inode == crown) ? 0.0 : (inode->getAncestor()->getTime() - t) / 2.0;
+                double t1 = (t - sons[0]->getTime()) / 2.0;
+                double t2 = (t - sons[1]->getTime()) / 2.0;
+                double detT = t1 * t2 + tA * (t1 + t2);
+                double Tinv0 = (tA + t2) / detT;
+                double Tinv1 = -tA / detT;
+                double Tinv3 = (tA + t1) / detT;
+                double rA = (inode == crown) ? mu[0][p] : rate[0][p][inode->getOffset()];
+                double r1 = rate[0][p][sons[0]->getOffset()];
+                double r2 = rate[0][p][sons[1]->getOffset()];
+                double y1 = std::log(r1 / rA) + (tA + t1) * s2 / 2.0;
+                double y2 = std::log(r2 / rA) + (tA + t2) * s2 / 2.0;
+                double quadForm = y1 * y1 * Tinv0 + 2.0 * y1 * y2 * Tinv1 + y2 * y2 * Tinv3;
+                terms[idx] = -(quadForm / (2.0 * s2) + 0.5 * std::log(detT * s2 * s2) + std::log(r1 * r2));
+            }
+        });
+        for(int idx = 0; idx < M; idx++)
+            lnp += terms[idx];
     }
     return lnp;
 }
@@ -395,16 +409,23 @@ double ParameterBranchRates::lnProbability(void){
     double lnp = gammaDirichletLnP(mu[0], rgeneParam) + gammaDirichletLnP(sigma2[0], sigma2Param);
     if(clockModel == ClockModel::GBM)
         return lnp + gbmLnP();
-    for(int p = 0; p < numLoci; p++){
-        for(int b : branchNodes){
-            if(clockModel == ClockModel::WN){
+    int B = (int)branchNodes.size();
+    bool wn = (clockModel == ClockModel::WN);
+    std::vector<double> terms((size_t)numLoci * B);
+    ThreadPool::shared().parallelFor(OP_CLOCK, numLoci * B, [&](int lo, int hi){
+        for(int idx = lo; idx < hi; idx++){
+            int p = idx / B;
+            int b = branchNodes[idx % B];
+            if(wn){
                 Node* n = tree->getNodeByOffset(b);
-                lnp += whiteNoiseLnP(rate[0][p][b], sigma2[0][p], n->getAncestor()->getTime() - n->getTime(), mu[0][p]);
+                terms[idx] = whiteNoiseLnP(rate[0][p][b], sigma2[0][p], n->getAncestor()->getTime() - n->getTime(), mu[0][p]);
             }else{
-                lnp += lognormalLnP(rate[0][p][b], sigma2[0][p], mu[0][p]);
+                terms[idx] = lognormalLnP(rate[0][p][b], sigma2[0][p], mu[0][p]);
             }
         }
-    }
+    });
+    for(size_t i = 0; i < terms.size(); i++)
+        lnp += terms[i];
     return lnp;
 }
 
@@ -498,26 +519,42 @@ ParameterBranchRatesCIR::ParameterBranchRatesCIR(double prob, PhylogeneticModel*
 double ParameterBranchRatesCIR::cirLnP(void){
     double lnp = 0.0;
     double H = tree->getCrown()->getTime();
+    int B = (int)branchNodes.size();
+    std::vector<double> terms(B);
     for(int p = 0; p < numLoci; p++){
         double s2 = sigma2[0][p];
         double th = theta[0][p];
         if(s2 <= 0.0 || s2 >= 1.0 || th <= 0.0)
             return -INFINITY;
-        for(int b : branchNodes){
-            Node* n = tree->getNodeByOffset(b);
-            double L = (n->getAncestor()->getTime() - n->getTime()) / H;
-            if(L <= 0.0)
-                return -INFINITY;
-            double rhoUp = rate[0][p][n->getAncestor()->getOffset()];
-            double decay = std::exp(-th * L);
-            double mean = 1.0 + (rhoUp - 1.0) * decay;
-            double var = s2 * ((1.0 - decay) * (1.0 - decay) + 2.0 * rhoUp * (decay - decay * decay));
-            if(var <= 0.0)
-                return -INFINITY;
-            double alpha = mean * mean / var;
-            double beta = mean / var;
-            lnp += gammaLnPdf(alpha, beta, rate[0][p][b]);
-        }
+        std::atomic<bool> bad(false);
+        ThreadPool::shared().parallelFor(OP_CLOCK, B, [&](int lo, int hi){
+            for(int idx = lo; idx < hi; idx++){
+                int b = branchNodes[idx];
+                Node* n = tree->getNodeByOffset(b);
+                double L = (n->getAncestor()->getTime() - n->getTime()) / H;
+                if(L <= 0.0){
+                    bad = true;
+                    terms[idx] = 0.0;
+                    continue;
+                }
+                double rhoUp = rate[0][p][n->getAncestor()->getOffset()];
+                double decay = std::exp(-th * L);
+                double mean = 1.0 + (rhoUp - 1.0) * decay;
+                double var = s2 * ((1.0 - decay) * (1.0 - decay) + 2.0 * rhoUp * (decay - decay * decay));
+                if(var <= 0.0){
+                    bad = true;
+                    terms[idx] = 0.0;
+                    continue;
+                }
+                double alpha = mean * mean / var;
+                double beta = mean / var;
+                terms[idx] = gammaLnPdf(alpha, beta, rate[0][p][b]);
+            }
+        });
+        if(bad)
+            return -INFINITY;
+        for(int idx = 0; idx < B; idx++)
+            lnp += terms[idx];
     }
     return lnp;
 }

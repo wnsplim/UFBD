@@ -3,6 +3,7 @@
 #include "Node.hpp"
 #include "Probability.hpp"
 #include "Msg.hpp"
+#include "ThreadPool.hpp"
 
 #include <cmath>
 #include <limits>
@@ -59,7 +60,6 @@ double SequenceLikelihood::computeLnL(Tree* tree,
     int n = numStates;
     int numNodes = tree->getNumNodes();
     int full = (1 << n) - 1;
-    std::vector<double> P(n * n);
 
     if(cacheValid == false){
         conP.assign(numPartitions, std::vector<std::vector<double>>(numNodes));
@@ -99,6 +99,9 @@ double SequenceLikelihood::computeLnL(Tree* tree,
         }
 
         std::vector<char> dirty(numNodes, 0);
+        std::vector<Node*> dirtyNodes;
+        std::vector<std::vector<Node*> > dirtyKids;
+        std::vector<std::vector<double> > Pcache(numNodes);
         for(Node* node : downPass){
             int off = node->getOffset();
             if(node->getIsTip()){
@@ -122,44 +125,63 @@ double SequenceLikelihood::computeLnL(Tree* tree,
             }
             if(nd == false) continue;
             dirty[off] = 1;
-            std::vector<double>& cp = conP[p][off];
-            cp.assign(K * npat * n, 1.0);
+            dirtyNodes.push_back(node);
+            dirtyKids.push_back(kids);
+            conP[p][off].assign(K * npat * n, 1.0);
             for(Node* c : kids){
                 int coff = c->getOffset();
-                const std::vector<double>& ccp = conP[p][coff];
-                for(int k = 0; k < K; k++){
-                    rateModel[p].transitionProbabilities(curBl[coff] * cat[k], &P[0]);
-                    for(int h = 0; h < npat; h++)
-                        for(int a = 0; a < n; a++){
-                            double sum = 0.0;
-                            for(int b = 0; b < n; b++)
-                                sum += P[a * n + b] * ccp[(k * npat + h) * n + b];
-                            cp[(k * npat + h) * n + a] *= sum;
-                        }
-                }
+                Pcache[coff].assign(K * n * n, 0.0);
+                for(int k = 0; k < K; k++)
+                    rateModel[p].transitionProbabilities(curBl[coff] * cat[k], &Pcache[coff][k * n * n]);
             }
         }
 
         int croff = crown->getOffset();
         const std::vector<double>& root = conP[p][croff];
+        std::vector<double> siteLn(npat);
+        ThreadPool::shared().parallelFor(OP_CTMC, npat, [&](int h0, int h1){
+            for(size_t di = 0; di < dirtyNodes.size(); di++){
+                Node* node = dirtyNodes[di];
+                std::vector<double>& cp = conP[p][node->getOffset()];
+                const std::vector<Node*>& kids = dirtyKids[di];
+                for(Node* c : kids){
+                    int coff = c->getOffset();
+                    const std::vector<double>& ccp = conP[p][coff];
+                    const double* Pm = Pcache[coff].data();
+                    for(int k = 0; k < K; k++){
+                        const double* Pk = Pm + k * n * n;
+                        for(int h = h0; h < h1; h++)
+                            for(int a = 0; a < n; a++){
+                                double sum = 0.0;
+                                for(int b = 0; b < n; b++)
+                                    sum += Pk[a * n + b] * ccp[(k * npat + h) * n + b];
+                                cp[(k * npat + h) * n + a] *= sum;
+                            }
+                    }
+                }
+            }
+            for(int h = h0; h < h1; h++){
+                double gammaLk = 0.0;
+                for(int k = 0; k < K; k++){
+                    double lk = 0.0;
+                    for(int a = 0; a < n; a++)
+                        lk += frequency[p][a] * root[(k * npat + h) * n + a];
+                    gammaLk += lk / K;
+                }
+                double pinvLk = 0.0;
+                if(pinv > 0.0){
+                    int mask = constantState[p][h];
+                    for(int a = 0; a < n; a++)
+                        if(mask & (1 << a)) pinvLk += frequency[p][a];
+                }
+                double site = pinv * pinvLk + (1.0 - pinv) * gammaLk;
+                siteLn[h] = (site <= 0.0) ? -std::numeric_limits<double>::infinity() : patternWeight[p][h] * std::log(site);
+            }
+        });
         for(int h = 0; h < npat; h++){
-            double gammaLk = 0.0;
-            for(int k = 0; k < K; k++){
-                double lk = 0.0;
-                for(int a = 0; a < n; a++)
-                    lk += frequency[p][a] * root[(k * npat + h) * n + a];
-                gammaLk += lk / K;
-            }
-            double pinvLk = 0.0;
-            if(pinv > 0.0){
-                int mask = constantState[p][h];
-                for(int a = 0; a < n; a++)
-                    if(mask & (1 << a)) pinvLk += frequency[p][a];
-            }
-            double site = pinv * pinvLk + (1.0 - pinv) * gammaLk;
-            if(site <= 0.0)
+            if(siteLn[h] == -std::numeric_limits<double>::infinity())
                 return -std::numeric_limits<double>::infinity();
-            lnL += patternWeight[p][h] * std::log(site);
+            lnL += siteLn[h];
         }
 
         lastBl[p] = curBl;

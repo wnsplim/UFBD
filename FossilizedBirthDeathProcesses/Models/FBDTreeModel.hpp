@@ -66,6 +66,7 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      doSubtreeScale(void);
         double                      doRateVectorScale(void);
         double                      doRateShrinkExpand(void);
+        double                      doTurnoverMove(void);
         std::vector<ParameterDouble*>* pickIidRateVector(void);
         void                        enumeratePrunableRoots(Tree* t, std::vector<Node*>& roots);
         void                        enumerateSubtreeHosts(Tree* t, std::vector<Node*>& crowns, std::vector<char>& isCrowns, std::vector<Node*>& origins, double rAge, double ceilingS, std::vector<Node*>& hosts, std::vector<double>& los, std::vector<double>& his);
@@ -113,6 +114,12 @@ class FBDTreeModel : public PhylogeneticModel {
         long                        rvAttW;
         long                        seAccW;
         long                        seAttW;
+        bool                        lastWasFbdRate;
+        ParameterDouble*            frA;
+        ParameterDouble*            frB;
+        double                      turnoverStep;
+        long                        frAccW;
+        long                        frAttW;
         double                      upDownStep;
         int                         upDownTotal;
         std::deque<bool>            upDownRecent;

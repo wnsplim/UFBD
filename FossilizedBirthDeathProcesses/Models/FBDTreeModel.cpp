@@ -5,6 +5,7 @@
 #include "FBDTreeModel.hpp"
 #include "PhylogeneticModel.hpp"
 #include "RandomVariable.hpp"
+#include "ThreadPool.hpp"
 #include "UserSettings.hpp"
 #include "Probability.hpp"
 #include "Msg.hpp"
@@ -12,7 +13,9 @@
 #include <iostream>
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <limits>
+#include <string>
 
 FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, unsigned int seed) :
     PhylogeneticModel(){
@@ -24,6 +27,10 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     rateVecStep = 0.2;
     shrinkStep = 0.2;
     rvAccW = rvAttW = seAccW = seAttW = 0;
+    lastWasFbdRate = false;
+    frA = frB = nullptr;
+    turnoverStep = 0.1;
+    frAccW = frAttW = 0;
     upDownStep = 0.1;
     upDownTotal = 0;
     cacheInit = false;
@@ -382,6 +389,37 @@ double FBDTreeModel::doRateShrinkExpand(void){
     return (double)(n - 1) * std::log(a);
 }
 
+double FBDTreeModel::doTurnoverMove(void){
+    lastWasFbdRate = true;
+    int i = (int)(rng.uniformRv() * lambda.size());
+    frA = lambda[i];
+    frB = mu[i];
+    double lam = frA->getValue();
+    double muv = frB->getValue();
+    double d = lam - muv;
+    if(d <= 0.0)
+        return -std::numeric_limits<double>::infinity();
+    double t = muv / lam;
+    double tNew = t + turnoverStep * (rng.uniformRv() - 0.5);
+    while(tNew <= 0.0 || tNew >= 1.0){
+        if(tNew <= 0.0) tNew = -tNew;
+        if(tNew >= 1.0) tNew = 2.0 - tNew;
+    }
+    double lamNew = d / (1.0 - tNew);
+    double muNew = tNew * lamNew;
+    frA->scaleProposed(lamNew / lam);
+    frB->scaleProposed(muNew / muv);
+    frAttW++;
+    if(frAttW >= 200){
+        turnoverStep *= std::exp((double)frAccW / frAttW - 0.3);
+        if(turnoverStep < 1e-3) turnoverStep = 1e-3;
+        if(turnoverStep > 0.9)  turnoverStep = 0.9;
+        frAccW = 0;
+        frAttW = 0;
+    }
+    return 2.0 * std::log(lamNew / lam);
+}
+
 double FBDTreeModel::update(void){
     RandomVariable* prevRng = RandomVariable::getActiveInstance();
     RandomVariable::setActiveInstance(&rng);
@@ -394,6 +432,12 @@ double FBDTreeModel::update(void){
                 || (psiField == nullptr && psi.size() >= 2);
     if(haveIid && rng.uniformRv() < 0.20){
         double r = (rng.uniformRv() < 0.5) ? doRateVectorScale() : doRateShrinkExpand();
+        RandomVariable::setActiveInstance(prevRng);
+        return r;
+    }
+    lastWasFbdRate = false;
+    if(lambdaField == nullptr && muField == nullptr && lambda.size() >= 1 && mu.size() >= 1 && rng.uniformRv() < 0.10){
+        double r = doTurnoverMove();
         RandomVariable::setActiveInstance(prevRng);
         return r;
     }
@@ -479,6 +523,12 @@ double FBDTreeModel::update(void){
 }
 
 void FBDTreeModel::updateForAcceptance(void){
+    if(lastWasFbdRate){
+        frA->commitProposed();
+        frB->commitProposed();
+        frAccW++;
+        return;
+    }
     if(lastWasRateVec){
         for(ParameterDouble* p : *lastRateVec)
             p->commitProposed();
@@ -506,6 +556,11 @@ void FBDTreeModel::updateForAcceptance(void){
 }
 
 void FBDTreeModel::updateForRejection(void){
+    if(lastWasFbdRate){
+        frA->restoreProposed();
+        frB->restoreProposed();
+        return;
+    }
     if(lastWasRateVec){
         for(ParameterDouble* p : *lastRateVec)
             p->restoreProposed();
@@ -579,37 +634,50 @@ double FBDTreeModel::calculateFBDProbability(void){
     }
 
     //term 2: main body
-    for(Node* n : dpseq){
-        if(n->getIsTip())
-            continue;
-        bool hasChild = false;
-        for(Node* c : n->getNeighbors())
-            if(c != n->getAncestor()){ hasChild = true; break; }
-        if(hasChild)
-            fbdProb += std::log(lambdaAt(findIndex(n->getTime())) * rhoVal) + lnD(n->getTime());
-    }
+    int nDp = (int)dpseq.size();
+    std::vector<double> termNode(nDp, 0.0);
+    ThreadPool::shared().parallelFor(OP_FBD, nDp, [&](int lo, int hi){
+        for(int idx = lo; idx < hi; idx++){
+            Node* n = dpseq[idx];
+            if(n->getIsTip())
+                continue;
+            bool hasChild = false;
+            for(Node* c : n->getNeighbors())
+                if(c != n->getAncestor()){ hasChild = true; break; }
+            if(hasChild)
+                termNode[idx] = std::log(lambdaAt(findIndex(n->getTime())) * rhoVal) + lnD(n->getTime());
+        }
+    });
+    for(int idx = 0; idx < nDp; idx++)
+        fbdProb += termNode[idx];
 
     //term 3: fossil attachment
     int numFossils = unresolvedFossils->getNumFossils();
     if(originAge != nullptr)
         unresolvedFossils->syncSpine(originAge->getValue());
     updateGammaCache();
-    for(int i = 0; i < numFossils; i++){
-        if(unresolvedFossils->isSA(i)){
-            fbdProb += std::log(psiAt(findIndex(unresolvedFossils->getFossilAge(i)))) + cachedGammaLn[i];
-            continue;
+    int spineIdx = unresolvedFossils->getSpineIdx();
+    std::vector<double> termFoss(numFossils, 0.0);
+    ThreadPool::shared().parallelFor(OP_FBD, numFossils, [&](int lo, int hi){
+        for(int i = lo; i < hi; i++){
+            if(unresolvedFossils->isSA(i)){
+                termFoss[i] = std::log(psiAt(findIndex(unresolvedFossils->getFossilAge(i)))) + cachedGammaLn[i];
+                continue;
+            }
+            if(unresolvedFossils->isUE(i)){
+                termFoss[i] = uePqLn(unresolvedFossils->getAttachAge(i)) + cachedGammaLn[i];
+                continue;
+            }
+            if(i == spineIdx){
+                double ys = unresolvedFossils->getFossilAge(i);
+                termFoss[i] = std::log(psiAt(findIndex(ys))) + std::log(calculateP0(ys)) - lnD(ys);
+                continue;
+            }
+            termFoss[i] = fossilPqLn(unresolvedFossils->getFossilAge(i), unresolvedFossils->getAttachAge(i)) + cachedGammaLn[i];
         }
-        if(unresolvedFossils->isUE(i)){
-            fbdProb += uePqLn(unresolvedFossils->getAttachAge(i)) + cachedGammaLn[i];
-            continue;
-        }
-        if(i == unresolvedFossils->getSpineIdx()){
-            double ys = unresolvedFossils->getFossilAge(i);
-            fbdProb += std::log(psiAt(findIndex(ys))) + std::log(calculateP0(ys)) - lnD(ys);
-            continue;
-        }
-        fbdProb += fossilPqLn(unresolvedFossils->getFossilAge(i), unresolvedFossils->getAttachAge(i)) + cachedGammaLn[i];
-    }
+    });
+    for(int i = 0; i < numFossils; i++)
+        fbdProb += termFoss[i];
     return fbdProb;
 }
 
@@ -978,12 +1046,20 @@ void FBDTreeModel::updateGammaCache(void){
         }
     }
 
-    for(int i = 0; i < nf; i++){
-        if(gammaStale[i] == 0) continue;
-        double g = computeGamma(unresolvedFossils->getAttachAge(i), i);
-        cachedGammaLn[i] = (g > 0.0) ? std::log(g) : -INFINITY;
-        gammaStale[i] = 0;
-    }
+    std::vector<int> staleIdx;
+    for(int i = 0; i < nf; i++)
+        if(gammaStale[i])
+            staleIdx.push_back(i);
+    if(eulerBuilt == false)
+        buildEulerIndex();
+    ThreadPool::shared().parallelFor(OP_GAMMA, (int)staleIdx.size(), [&](int a, int b){
+        for(int k = a; k < b; k++){
+            int i = staleIdx[k];
+            double g = computeGamma(unresolvedFossils->getAttachAge(i), i);
+            cachedGammaLn[i] = (g > 0.0) ? std::log(g) : -INFINITY;
+            gammaStale[i] = 0;
+        }
+    });
 
     for(int i = 0; i < nf; i++){
         prevY[i] = unresolvedFossils->getFossilAge(i);
