@@ -117,6 +117,7 @@ class UserSettings {
         bool                        useInvariant;
         bool                        nstatesProvided;
         bool                        datatypeProvided;
+        bool                        coresProvided;
         double                      rgeneGamma[3];
         double                      sigma2Gamma[3];
         bool                        settingsInitialized;

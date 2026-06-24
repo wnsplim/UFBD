@@ -436,8 +436,7 @@ double FBDTreeModel::update(void){
         return r;
     }
     lastWasFbdRate = false;
-    static bool noTurnover = (std::getenv("FBD_NOTURNOVER") != nullptr);
-    if(!noTurnover && lambdaField == nullptr && muField == nullptr && lambda.size() >= 1 && mu.size() >= 1 && rng.uniformRv() < 0.10){
+    if(lambdaField == nullptr && muField == nullptr && lambda.size() >= 1 && mu.size() >= 1 && rng.uniformRv() < 0.10){
         double r = doTurnoverMove();
         RandomVariable::setActiveInstance(prevRng);
         return r;

@@ -1,5 +1,3 @@
-#include "SequenceCTMCModel.hpp"
-
 #include <string>
 
 #include "AlignmentReader.hpp"
@@ -10,6 +8,7 @@
 #include "Probability.hpp"
 #include "RandomVariable.hpp"
 #include "SequenceLikelihood.hpp"
+#include "SequenceCTMCModel.hpp"
 #include "UserSettings.hpp"
 
 SequenceCTMCModel::SequenceCTMCModel(PhylogeneticModel* owner, const std::string& sequenceFile, const std::string& partitionFile, int nStates, int numCats){

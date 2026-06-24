@@ -8,6 +8,7 @@
 #include "UserSettings.hpp"
 #include "WriteTSV.hpp"
 
+#include <algorithm>
 #include <future>
 #include <iomanip>
 #include <iostream>
@@ -19,7 +20,7 @@ MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int pf, int sf, s
     coldModelIdx(-1),
     numSwapsCold(0),
     deltaT(0.2),
-    threadPool((size_t)UserSettings::userSettings().getNumThreads() < models.size() ? (size_t)UserSettings::userSettings().getNumThreads() : models.size()){
+    threadPool(std::min({ (size_t)UserSettings::userSettings().getNumThreads(), models.size(), (size_t)UserSettings::userSettings().getNumCores() })){
     swapRng.setSeed(masterSeed + numModels);
     currLnL.reserve(numModels); //needs to be reserve for pushback
     newLnL.resize(numModels);
@@ -34,6 +35,8 @@ MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int pf, int sf, s
     UserSettings& settings = UserSettings::userSettings();
     treeOut = settings.getTreeOutput();
     paramOut = settings.getParamOutput();
+
+    ThreadPool::shared().setChainCap(std::max(1, settings.getNumCores() / threadPool.size()));
 }
 
 double MetropolisCoupledMcmc::calcHeating(int idx){

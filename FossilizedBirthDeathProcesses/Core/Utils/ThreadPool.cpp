@@ -13,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-ThreadPool::ThreadPool(int numThreads) : stop(false){
+ThreadPool::ThreadPool(int numThreads) : stop(false), chainCap(numThreads){
     for(int i = 0; i < OP_NUM; i++){
         opCost[i] = -1.0;
         opCalls[i] = 0;
@@ -67,6 +67,7 @@ void ThreadPool::parallelFor(int opId, int n, const std::function<void(int, int)
         return;
     int nt = (int)threads.size();
     if(nt > maxThreads) nt = maxThreads;
+    if(nt > chainCap) nt = chainCap;
     long calls = ++opCalls[opId];
     double cost = opCost[opId];
     if(nt <= 1 || cost < 0.0 || (calls % 256) == 0){

@@ -60,6 +60,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     useInvariant    = false;
     nstatesProvided = false;
     datatypeProvided = false;
+    coresProvided   = false;
     rgeneGamma[0]   = 2.0;  rgeneGamma[1]  = 2000.0; rgeneGamma[2]  = 1.0;
     sigma2Gamma[0]  = 1.0;  sigma2Gamma[1] = 10.0;   sigma2Gamma[2] = 1.0;
     lambdaMode      = RateMode::IID;
@@ -250,7 +251,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 else if (arg == "-s")   sampleFrequency = intVal;
                 else if (arg == "-nc")  numChains       = intVal;
                 else if (arg == "-nt")  numThreads      = intVal;
-                else if (arg == "-cores") numCores      = intVal;
+                else if (arg == "-cores") { numCores = intVal; coresProvided = true; }
                 else if (arg == "-nstates") { nStates = intVal; nstatesProvided = true; }
                 else if (arg == "-ncat")    numCats     = intVal;
             }
@@ -309,10 +310,14 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         numThreads = 1;
     }
 
+    if (coresProvided == false && numChains > 1)
+        numCores = numChains;
+
     if (numCores > maxNumThreads) {
-        Msg::warning("Requested " + std::to_string(numCores) +
-                     " cores, but only " + std::to_string(maxNumThreads) +
-                     " available; capping at " + std::to_string(maxNumThreads) + ".");
+        if (coresProvided)
+            Msg::warning("Requested " + std::to_string(numCores) +
+                         " cores, but only " + std::to_string(maxNumThreads) +
+                         " available; capping at " + std::to_string(maxNumThreads) + ".");
         numCores = maxNumThreads;
     }
     if (numCores < 1)
