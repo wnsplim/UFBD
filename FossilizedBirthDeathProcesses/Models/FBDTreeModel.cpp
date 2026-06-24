@@ -930,19 +930,68 @@ double FBDTreeModel::computeGamma(double z, int i){
     int numFossils = unresolvedFossils->getNumFossils();
     if(wholeTreeTotalFast == 1){
         int cY = (int)(std::lower_bound(sortedFossilY.begin(), sortedFossilY.end(), z) - sortedFossilY.begin());
-        int cZ = (int)(std::upper_bound(sortedFossilZ.begin(), sortedFossilZ.end(), z) - sortedFossilZ.begin());
-        double C = (double)(cY - cZ);
-        if(SymmetryCorrection == false || focalIsTip == false){
-            count += C;
-        }else{
-            int sp = unresolvedFossils->getSpineIdx();
-            double Sp = 0.0;
-            if(i != sp && sp >= 0 && unresolvedFossils->isSA(sp) == false){
-                double ys = unresolvedFossils->getFossilAge(sp), zs = unresolvedFossils->getAttachAge(sp);
-                if(ys < z && z < zs)
-                    Sp = 1.0;
+        double C;
+        if(total){
+            int cZ = (int)(std::upper_bound(sortedFossilZ.begin(), sortedFossilZ.end(), z) - sortedFossilZ.begin());
+            C = (double)(cY - cZ);
+            if(SymmetryCorrection && focalIsTip){
+                double Sp = 0.0;
+                int sp = unresolvedFossils->getSpineIdx();
+                if(i != sp && sp >= 0 && unresolvedFossils->isSA(sp) == false){
+                    double ys = unresolvedFossils->getFossilAge(sp), zs = unresolvedFossils->getAttachAge(sp);
+                    if(ys < z && z < zs)
+                        Sp = 1.0;
+                }
+                count += 0.5 * C + 0.5 * Sp;
+            }else{
+                count += C;
             }
-            count += 0.5 * C + 0.5 * Sp;
+        }else{
+            int cZ = (int)(std::upper_bound(sortedZY.begin(), sortedZY.end(), z,
+                          [](double v, const std::pair<double,double>& p){ return v < p.first; }) - sortedZY.begin());
+            C = (double)(cY - cZ);
+            double cT = crown->getTime();
+            for(std::vector<std::pair<double,double>>::iterator it = std::upper_bound(sortedZY.begin(), sortedZY.end(), std::pair<double,double>(cT, INFINITY));
+                     it != sortedZY.end(); ++it)
+                if(it->second < z && z < it->first)
+                    C -= 1.0;
+            if(SymmetryCorrection && focalIsTip)
+                count += 0.5 * C;
+            else
+                count += C;
+        }
+        return count;
+    }
+    if(multiCladeFast == 1){
+        const CladeGammaIndex& g = cladeGamma.find(crown)->second;
+        double T = crown->getTime();
+        auto stab = [](const std::vector<double>& Y, const std::vector<std::pair<double,double>>& ZY, double zz)->double{
+            int a = (int)(std::lower_bound(Y.begin(), Y.end(), zz) - Y.begin());
+            int b = (int)(std::upper_bound(ZY.begin(), ZY.end(), zz, [](double v, const std::pair<double,double>& p){ return v < p.first; }) - ZY.begin());
+            return (double)(a - b);
+        };
+        auto stalk = [](const std::vector<std::pair<double,double>>& ZY, double Tt, double zz)->double{
+            double s = 0.0;
+            for(std::vector<std::pair<double,double>>::const_iterator it = std::upper_bound(ZY.begin(), ZY.end(), std::pair<double,double>(Tt, INFINITY)); it != ZY.end(); ++it)
+                if(it->second < zz && zz < it->first)
+                    s += 1.0;
+            return s;
+        };
+        double A = stab(g.subY, g.subZY, z);
+        if(total == false)
+            A -= stalk(g.subZY, T, z);
+        if(SymmetryCorrection && focalIsTip){
+            double B;
+            if(total == false)
+                B = stab(g.totY, g.totZY, z) + stab(g.crY, g.crZY, z) - stalk(g.totZY, T, z) - stalk(g.crZY, T, z);
+            else{
+                B = stab(g.totY, g.totZY, z);
+                if(z <= T)
+                    B += stab(g.crY, g.crZY, z);
+            }
+            count += A - 0.5 * B;
+        }else{
+            count += A;
         }
         return count;
     }
@@ -1112,10 +1161,10 @@ void FBDTreeModel::updateGammaCache(void){
 
     if(wholeTreeTotalFast < 0){
         wholeTreeTotalFast = 1;
-        Node* root = tree->getCrown();
+        Node* commonClade = (nf > 0) ? unresolvedFossils->getCrownNode(0) : tree->getCrown();
         bool anyCrown = false, anyTotal = false;
         for(int i = 0; i < nf; i++){
-            if(unresolvedFossils->getCrownNode(i) != root || unresolvedFossils->getIsStem(i)){
+            if(unresolvedFossils->getCrownNode(i) != commonClade || unresolvedFossils->getIsStem(i)){
                 wholeTreeTotalFast = 0;
                 break;
             }
@@ -1123,18 +1172,83 @@ void FBDTreeModel::updateGammaCache(void){
         }
         if(wholeTreeTotalFast == 1 && anyCrown && anyTotal)
             wholeTreeTotalFast = 0;
+        fastIsCrown = (wholeTreeTotalFast == 1 && anyCrown) ? 1 : 0;
     }
     if(wholeTreeTotalFast == 1){
         sortedFossilY.clear();
-        sortedFossilZ.clear();
+        for(int i = 0; i < nf; i++)
+            if(unresolvedFossils->isSA(i) == false)
+                sortedFossilY.push_back(unresolvedFossils->getFossilAge(i));
+        std::sort(sortedFossilY.begin(), sortedFossilY.end());
+        if(fastIsCrown){
+            sortedZY.clear();
+            for(int i = 0; i < nf; i++)
+                if(unresolvedFossils->isSA(i) == false)
+                    sortedZY.push_back(std::make_pair(unresolvedFossils->getAttachAge(i), unresolvedFossils->getFossilAge(i)));
+            std::sort(sortedZY.begin(), sortedZY.end());
+        }else{
+            sortedFossilZ.clear();
+            for(int i = 0; i < nf; i++)
+                if(unresolvedFossils->isSA(i) == false)
+                    sortedFossilZ.push_back(unresolvedFossils->getAttachAge(i));
+            std::sort(sortedFossilZ.begin(), sortedFossilZ.end());
+        }
+    }
+
+    if(multiCladeFast < 0){
+        multiCladeFast = 0;
+        if(wholeTreeTotalFast == 0 && tree->getNumBackbone() > 0){
+            bool anyStem = false;
+            for(int i = 0; i < nf; i++)
+                if(unresolvedFossils->getIsStem(i)){ anyStem = true; break; }
+            if(anyStem == false){
+                multiCladeFast = 1;
+                activeClades.clear();
+                for(int i = 0; i < nf; i++){
+                    Node* c = unresolvedFossils->getCrownNode(i);
+                    bool found = false;
+                    for(Node* a : activeClades) if(a == c){ found = true; break; }
+                    if(found == false) activeClades.push_back(c);
+                }
+            }
+        }
+    }
+    if(multiCladeFast == 1){
+        if(eulerBuilt == false)
+            buildEulerIndex();
+        cladeGamma.clear();
+        for(Node* c : activeClades)
+            cladeGamma[c];
         for(int i = 0; i < nf; i++){
             if(unresolvedFossils->isSA(i))
                 continue;
-            sortedFossilY.push_back(unresolvedFossils->getFossilAge(i));
-            sortedFossilZ.push_back(unresolvedFossils->getAttachAge(i));
+            Node* cj = unresolvedFossils->getCrownNode(i);
+            double yj = unresolvedFossils->getFossilAge(i);
+            double zj = unresolvedFossils->getAttachAge(i);
+            CladeGammaIndex& own = cladeGamma[cj];
+            if(unresolvedFossils->getIsCrown(i)){
+                own.crY.push_back(yj);
+                own.crZY.push_back(std::make_pair(zj, yj));
+            }else{
+                own.totY.push_back(yj);
+                own.totZY.push_back(std::make_pair(zj, yj));
+            }
+            for(Node* c : activeClades)
+                if(inSub(cj, c)){
+                    CladeGammaIndex& g = cladeGamma[c];
+                    g.subY.push_back(yj);
+                    g.subZY.push_back(std::make_pair(zj, yj));
+                }
         }
-        std::sort(sortedFossilY.begin(), sortedFossilY.end());
-        std::sort(sortedFossilZ.begin(), sortedFossilZ.end());
+        for(Node* c : activeClades){
+            CladeGammaIndex& g = cladeGamma[c];
+            std::sort(g.subY.begin(), g.subY.end());
+            std::sort(g.subZY.begin(), g.subZY.end());
+            std::sort(g.totY.begin(), g.totY.end());
+            std::sort(g.totZY.begin(), g.totZY.end());
+            std::sort(g.crY.begin(), g.crY.end());
+            std::sort(g.crZY.begin(), g.crZY.end());
+        }
     }
 
     std::vector<int> staleIdx;

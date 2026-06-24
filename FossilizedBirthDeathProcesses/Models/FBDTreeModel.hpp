@@ -140,7 +140,18 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<double>         sortedOlder;
         std::vector<double>         sortedFossilY;
         std::vector<double>         sortedFossilZ;
+        std::vector<std::pair<double,double>> sortedZY;
         int                         wholeTreeTotalFast = -1;
+        int                         fastIsCrown = 0;
+        struct CladeGammaIndex {
+            std::vector<double> subY;
+            std::vector<std::pair<double,double>> subZY;
+            std::vector<double> totY, crY;
+            std::vector<std::pair<double,double>> totZY, crZY;
+        };
+        std::map<Node*,CladeGammaIndex> cladeGamma;
+        std::vector<Node*>          activeClades;
+        int                         multiCladeFast = -1;
 };
 
 
