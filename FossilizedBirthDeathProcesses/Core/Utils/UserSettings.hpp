@@ -56,6 +56,9 @@ class UserSettings {
         std::string                 getSequenceFile(void) { checkSettings(); return sequenceFile; }
         std::string                 getPartitionFile(void) { checkSettings(); return partitionFile; }
         int                         getNumCats(void) { checkSettings(); return numCats; }
+        std::string                 getSeqDataType(void) { checkSettings(); return seqDataType; }
+        std::string                 getSubstModel(void) { checkSettings(); return substModel; }
+        bool                        getUseInvariant(void) { checkSettings(); return useInvariant; }
         const double*               getRgeneGamma(void) { checkSettings(); return rgeneGamma; }
         const double*               getSigma2Gamma(void) { checkSettings(); return sigma2Gamma; }
         void                        print(void);
@@ -106,6 +109,10 @@ class UserSettings {
         std::string                 sequenceFile;
         std::string                 partitionFile;
         int                         numCats;
+        std::string                 seqDataType;
+        std::string                 substModel;
+        bool                        useInvariant;
+        bool                        nstatesProvided;
         double                      rgeneGamma[3];
         double                      sigma2Gamma[3];
         bool                        settingsInitialized;

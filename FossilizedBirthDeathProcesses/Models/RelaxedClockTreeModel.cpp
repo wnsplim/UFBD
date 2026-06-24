@@ -56,6 +56,7 @@ RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades
     ctmc = new SequenceCTMCModel(this, sequenceFile, partitionFile, nStates, numCats);
 
     buildClock(clockModel, rgeneParam, sigma2Param);
+    ctmc->buildParameters();
 
     parameters.push_back(fbd->getParameterTree());
     lastMoveType = 2;

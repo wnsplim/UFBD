@@ -11,13 +11,19 @@
 #include "SequenceLikelihood.hpp"
 
 SequenceCTMCModel::SequenceCTMCModel(PhylogeneticModel* owner, const std::string& sequenceFile, const std::string& partitionFile, int nStates, int numCats){
+    this->owner = owner;
     this->nStates = nStates;
+    this->numCats = numCats;
     seqLik = new SequenceLikelihood(nStates, numCats);
 
     AlignmentReader aln(sequenceFile, partitionFile, nStates);
     for(int p = 0; p < aln.getNumPartitions(); p++)
         seqLik->addPartition(aln.getTaxa(), aln.getPatterns(p), aln.getWeights(p));
 
+    lastSubstParm = nullptr;
+}
+
+void SequenceCTMCModel::buildParameters(void){
     int nLoci = seqLik->getNumPartitions();
     int nExch = nStates * (nStates - 1) / 2;
     for(int p = 0; p < nLoci; p++){
@@ -33,7 +39,6 @@ SequenceCTMCModel::SequenceCTMCModel(PhylogeneticModel* owner, const std::string
         alpha.push_back(a);
         pinv.push_back(pv);
     }
-    lastSubstParm = nullptr;
 }
 
 int SequenceCTMCModel::getNumPartitions(void) const {

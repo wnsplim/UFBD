@@ -15,6 +15,7 @@ class SequenceCTMCModel {
 
     public:
                                         SequenceCTMCModel(PhylogeneticModel* owner, const std::string& sequenceFile, const std::string& partitionFile, int nStates, int numCats);
+        void                            buildParameters(void);
         double                          computeLnL(Tree* tree, const std::vector<std::vector<double> >& branchRates);
         double                          lnPrior(void);
         double                          update(void);
@@ -25,6 +26,7 @@ class SequenceCTMCModel {
         int                             getNumPartitions(void) const;
 
     private:
+        PhylogeneticModel*              owner;
         SequenceLikelihood*             seqLik;
         std::vector<ParameterSimplex*>  exch;
         std::vector<ParameterSimplex*>  freq;
@@ -32,6 +34,7 @@ class SequenceCTMCModel {
         std::vector<ParameterDouble*>   pinv;
         Parameter*                      lastSubstParm;
         int                             nStates;
+        int                             numCats;
 };
 
 #endif

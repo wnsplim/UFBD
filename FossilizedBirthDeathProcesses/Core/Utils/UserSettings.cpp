@@ -54,6 +54,10 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     sequenceFile    = "";
     partitionFile   = "";
     numCats         = 4;
+    seqDataType     = "nt";
+    substModel      = "gtr";
+    useInvariant    = false;
+    nstatesProvided = false;
     rgeneGamma[0]   = 2.0;  rgeneGamma[1]  = 2000.0; rgeneGamma[2]  = 1.0;
     sigma2Gamma[0]  = 1.0;  sigma2Gamma[1] = 10.0;   sigma2Gamma[2] = 1.0;
     lambdaMode      = RateMode::IID;
@@ -75,14 +79,14 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times",
         "-lambda-prior-mode", "-mu-prior-mode", "-psi-prior-mode", "-hsmrf-shifts", "-hsmrf-shift-size", "-cpu-time",
         "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma",
-        "-seq", "-partition", "-ncat"
+        "-seq", "-partition", "-ncat", "-datatype", "-model", "-inv"
     };
     std::set<std::string> valueFlags = {
         "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt", "-cores",
         "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times",
         "-lambda-prior-mode", "-mu-prior-mode", "-psi-prior-mode", "-hsmrf-shifts", "-hsmrf-shift-size", "-cpu-time",
         "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma",
-        "-seq", "-partition", "-ncat"
+        "-seq", "-partition", "-ncat", "-datatype", "-model", "-inv"
     };
 
     for (int i = 1; i < (int)arguments.size(); i++) {
@@ -205,6 +209,20 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
             } else if (arg == "-sigma2_gamma") {
                 std::stringstream ss(val); std::string tok; int k = 0;
                 while (std::getline(ss, tok, ',') && k < 3) if (tok.empty() == false) sigma2Gamma[k++] = std::stod(tok);
+            } else if (arg == "-datatype") {
+                std::string v = val;
+                for (char& ch : v) ch = std::tolower((unsigned char)ch);
+                if (v == "nt" || v == "dna" || v == "nucleotide") seqDataType = "nt";
+                else if (v == "aa" || v == "protein" || v == "aminoacid") seqDataType = "aa";
+                else Msg::error("Flag \"-datatype\" expects nt or aa, but got \"" + val + "\".");
+            } else if (arg == "-model") {
+                substModel = val;
+            } else if (arg == "-inv") {
+                std::string v = val;
+                for (char& ch : v) ch = std::tolower((unsigned char)ch);
+                if (v == "on" || v == "true" || v == "1") useInvariant = true;
+                else if (v == "off" || v == "false" || v == "0") useInvariant = false;
+                else Msg::error("Flag \"-inv\" expects on or off, but got \"" + val + "\".");
             }else {
                 // Integer-valued flags
                 // Check all characters are digits (allowing leading minus for negative detection)
@@ -223,7 +241,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 else if (arg == "-nc")  numChains       = intVal;
                 else if (arg == "-nt")  numThreads      = intVal;
                 else if (arg == "-cores") numCores      = intVal;
-                else if (arg == "-nstates") nStates     = intVal;
+                else if (arg == "-nstates") { nStates = intVal; nstatesProvided = true; }
                 else if (arg == "-ncat")    numCats     = intVal;
             }
         }
@@ -289,6 +307,14 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     }
     if (numCores < 1)
         numCores = 1;
+
+    bool empiricalModel = (substModel != "gtr");
+    if (empiricalModel && seqDataType == "nt")
+        Msg::error("Empirical rate matrix (-model " + substModel + ") is for amino-acid; use -datatype aa.");
+    if (seqDataType == "aa" && empiricalModel == false)
+        Msg::warning("Amino-acid data (-datatype aa) with -model gtr estimates 190 exchangeability parameters.");
+    if (sequenceFile.empty() == false && nstatesProvided)
+        Msg::error("-nstates applies to the approximate-dating (-hessian) path only.");
 
     if (sbcMode == false) {
         if (treeOut.empty())
