@@ -521,10 +521,11 @@ double ParameterBranchRatesCIR::cirLnP(void){
     double H = tree->getCrown()->getTime();
     int B = (int)branchNodes.size();
     std::vector<double> terms(B);
+    const double s2Floor = 1.0 / 500.0;
     for(int p = 0; p < numLoci; p++){
         double s2 = sigma2[0][p];
         double th = theta[0][p];
-        if(s2 <= 0.0 || s2 >= 1.0 || th <= 0.0)
+        if(s2 <= s2Floor || s2 >= 1.0 || th <= 0.0)
             return -INFINITY;
         std::atomic<bool> bad(false);
         ThreadPool::shared().parallelFor(OP_CLOCK, B, [&](int lo, int hi){
