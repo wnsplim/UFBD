@@ -3,12 +3,14 @@
 
 #include <vector>
 
+struct CirBranch;
+
 class GTRrateModel {
 
     public:
                             GTRrateModel(int numStates);
         void                setParameters(const std::vector<double>& exchangeability, const std::vector<double>& frequency);
-        void                transitionProbabilities(double bl, double cat, double relVar, double* P) const;
+        void                transitionProbabilities(double bl, double cat, const CirBranch& cb, double* P) const;
         int                 getNumStates(void) const { return numStates; }
 
     private:

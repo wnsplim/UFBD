@@ -598,31 +598,6 @@ double ParameterBranchRatesCIR::getMeanTau(double rho, double rhoUp, double t, d
     return term1 + term2 + term3;
 }
 
-double ParameterBranchRatesCIR::logGprime(double eta, double rho, double rhoUp, double t, double sigma, double theta){
-    double b = theta, s2 = sigma, r0 = rho, rt = rhoUp;
-    double bbar = std::sqrt(b * b - 2.0 * eta * s2);
-    double decay = std::exp(-t * bbar);
-    double om = 1.0 - decay;
-    double ALG = b * t / bbar + r0 / bbar + rt / bbar - s2 * t * (b / s2 - 0.5) / bbar
-        + 0.5 * s2 * om * (2.0 * t * decay / (om * om) - 2.0 / (om * bbar)) / bbar
-        - 2.0 * t * (r0 + rt) * decay / om
-        - 2.0 * t * (r0 + rt) * decay * decay / (om * om)
-        + 2.0 * (r0 + rt) * decay / (om * bbar);
-    double sq = std::sqrt(r0 * rt * decay);
-    double U = 4.0 * sq * bbar / (s2 * om);
-    double DU = 2.0 * sq * t / om + 4.0 * sq * t * decay / (om * om) - 4.0 * sq / (om * bbar);
-    double nu = 2.0 * b / s2 - 1.0;
-    double BR = 1.0 / besselIRatio(nu, U) - nu / U;
-    return ALG + BR * DU;
-}
-
-double ParameterBranchRatesCIR::getVarTau(double rho, double rhoUp, double t, double sigma, double theta){
-    if(t * theta < 0.0001)
-        return 0.0;
-    double h = 1.0e-4;
-    return (logGprime(h, rho, rhoUp, t, sigma, theta) - logGprime(-h, rho, rhoUp, t, sigma, theta)) / (2.0 * h);
-}
-
 double ParameterBranchRatesCIR::scaleLocusTheta(int p){
     double c = bactrianMultiplier(3);
     theta[0][p] *= c;
@@ -663,25 +638,20 @@ std::vector<std::vector<double>> ParameterBranchRatesCIR::getAbsoluteRates(void)
     return a;
 }
 
-std::vector<std::vector<double>> ParameterBranchRatesCIR::getAbsoluteRateVars(void){
-    std::vector<std::vector<double>> a(numLoci, std::vector<double>(numNodes, 0.0));
+std::vector<std::vector<CirBranch>> ParameterBranchRatesCIR::getBranchCir(void){
+    std::vector<std::vector<CirBranch>> a(numLoci, std::vector<CirBranch>(numNodes, CirBranch{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, false}));
     Node* crown = tree->getCrown();
     double H = crown->getTime();
     for(int p = 0; p < numLoci; p++){
-        ThreadPool::shared().parallelFor(OP_CLOCK, numNodes, [&](int lo, int hi){
-            for(int b = lo; b < hi; b++){
-                Node* n = tree->getNodeByOffset(b);
-                if(n != crown){
-                    double Ln = (n->getAncestor()->getTime() - n->getTime()) / H;
-                    double sigmaPB = 2.0 * theta[0][p] * sigma2[0][p];
-                    double rho = rate[0][p][b];
-                    double rhoUp = rate[0][p][n->getAncestor()->getOffset()];
-                    double mean = getMeanTau(rho, rhoUp, Ln, sigmaPB, theta[0][p]);
-                    double var = getVarTau(rho, rhoUp, Ln, sigmaPB, theta[0][p]);
-                    a[p][b] = (mean > 0.0) ? var / (mean * mean) : 0.0;
-                }
+        double sigmaPB = 2.0 * theta[0][p] * sigma2[0][p];
+        double muH = mu[0][p] * H;
+        for(int b = 0; b < numNodes; b++){
+            Node* n = tree->getNodeByOffset(b);
+            if(n != crown){
+                double Ln = (n->getAncestor()->getTime() - n->getTime()) / H;
+                a[p][b] = CirBranch{rate[0][p][b], rate[0][p][n->getAncestor()->getOffset()], Ln, sigmaPB, theta[0][p], muH, true};
             }
-        });
+        }
     }
     return a;
 }

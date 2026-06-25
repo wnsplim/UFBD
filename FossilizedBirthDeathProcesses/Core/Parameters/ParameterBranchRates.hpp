@@ -1,6 +1,7 @@
 #ifndef ParameterBranchRates_hpp
 #define ParameterBranchRates_hpp
 
+#include <cmath>
 #include <deque>
 #include <vector>
 
@@ -10,6 +11,37 @@ class Tree;
 class ParameterUnresolvedFossils;
 
 enum class ClockModel { UCLN, WN, GBM, CIR };
+
+struct CirBranch {
+    double rho, rhoUp, Ln, sigmaPB, theta, muH;
+    bool   active;
+};
+
+inline double cirLogBesselI(double nu, double u){
+    if(u < 700.0)
+        return std::log(std::cyl_bessel_i(nu, u));
+    double z = 4.0 * nu * nu;
+    double corr = 1.0 - (z - 1.0) / (8.0 * u) + (z - 1.0) * (z - 9.0) / (128.0 * u * u);
+    return u - 0.5 * std::log(2.0 * M_PI * u) + std::log(corr);
+}
+
+inline double cirBridgeLogG(double eta, double r0, double rt, double t, double s2, double b){
+    double bbar = std::sqrt(b * b - 2.0 * eta * s2);
+    double decay = std::exp(-bbar * t);
+    double om = 1.0 - decay;
+    double c = 2.0 * bbar / (s2 * om);
+    double nu = 2.0 * b / s2 - 1.0;
+    double nu0 = b / s2 - 0.5;
+    double u = 2.0 * c * std::sqrt(r0 * rt * decay);
+    double A = -(b * t / s2) * (bbar - b) + ((b - bbar) / s2) * r0 - ((b + bbar) / s2) * rt - c * (r0 + rt) * decay;
+    return std::log(c) + A + nu0 * std::log(rt / (r0 * decay)) + cirLogBesselI(nu, u);
+}
+
+inline double cirBridgeMGF(double eta, double r0, double rt, double t, double s2, double b){
+    if(t * b < 0.0001)
+        return std::exp(eta * (r0 + rt) * t * 0.5);
+    return std::exp(cirBridgeLogG(eta, r0, rt, t, s2, b) - cirBridgeLogG(0.0, r0, rt, t, s2, b));
+}
 
 class BranchRateModel : public Parameter {
 
@@ -30,7 +62,7 @@ class BranchRateModel : public Parameter {
         void                        updateForAcceptance(void);
         void                        updateForRejection(void);
         virtual std::vector<std::vector<double>> getAbsoluteRates(void) = 0;
-        virtual std::vector<std::vector<double>> getAbsoluteRateVars(void){ return std::vector<std::vector<double>>(numLoci, std::vector<double>(numNodes, 0.0)); }
+        virtual std::vector<std::vector<CirBranch>> getBranchCir(void){ return std::vector<std::vector<CirBranch>>(numLoci, std::vector<CirBranch>(numNodes, CirBranch{0.0,0.0,0.0,0.0,0.0,0.0,false})); }
 
     protected:
         double                      scaleLocusRate(int p);
@@ -89,7 +121,7 @@ class ParameterBranchRatesCIR : public BranchRateModel {
                                     ParameterBranchRatesCIR(void) = delete;
                                     ParameterBranchRatesCIR(double prob, PhylogeneticModel* m, Tree* tree, int numLoci, const double* rgeneParam, const double* sigma2Param);
         std::vector<std::vector<double>> getAbsoluteRates(void);
-        std::vector<std::vector<double>> getAbsoluteRateVars(void);
+        std::vector<std::vector<CirBranch>> getBranchCir(void);
         double                      lnProbability(void);
         double                      update(void);
         void                        updateForAcceptance(void);
@@ -100,8 +132,6 @@ class ParameterBranchRatesCIR : public BranchRateModel {
         double                      scaleMuRates(int p);
         double                      cirLnP(void);
         double                      getMeanTau(double rho, double rhoUp, double t, double sigma, double theta);
-        double                      getVarTau(double rho, double rhoUp, double t, double sigma, double theta);
-        double                      logGprime(double eta, double rho, double rhoUp, double t, double sigma, double theta);
         double                      besselIRatio(double nu, double x);
         double                      thetaParam[3];
         std::vector<double>         theta[2];

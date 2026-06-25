@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "GTRrateModel.hpp"
+#include "ParameterBranchRates.hpp"
 
 class Tree;
 class Node;
@@ -22,7 +23,7 @@ class SequenceLikelihood {
                                        const std::vector<std::vector<double>>& frequency,
                                        const std::vector<double>& alpha,
                                        const std::vector<double>& proportionInvariant,
-                                       const std::vector<std::vector<double>>& branchRateVars);
+                                       const std::vector<std::vector<CirBranch>>& branchCir);
 
     private:
         void                mapTaxaToNodes(Tree* tree);

@@ -10,13 +10,14 @@ class ParameterSimplex;
 class PhylogeneticModel;
 class SequenceLikelihood;
 class Tree;
+struct CirBranch;
 
 class SequenceCTMCModel {
 
     public:
                                         SequenceCTMCModel(PhylogeneticModel* owner, const std::string& sequenceFile, const std::string& partitionFile, int nStates, int numCats);
         void                            buildParameters(void);
-        double                          computeLnL(Tree* tree, const std::vector<std::vector<double> >& branchRates, const std::vector<std::vector<double> >& branchRateVars);
+        double                          computeLnL(Tree* tree, const std::vector<std::vector<double> >& branchRates, const std::vector<std::vector<CirBranch> >& branchCir);
         double                          lnPrior(void);
         double                          update(void);
         void                            updateForAcceptance(void);

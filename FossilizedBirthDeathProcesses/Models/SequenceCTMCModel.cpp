@@ -83,7 +83,7 @@ int SequenceCTMCModel::getNumPartitions(void) const {
     return seqLik->getNumPartitions();
 }
 
-double SequenceCTMCModel::computeLnL(Tree* tree, const std::vector<std::vector<double> >& branchRates, const std::vector<std::vector<double> >& branchRateVars){
+double SequenceCTMCModel::computeLnL(Tree* tree, const std::vector<std::vector<double> >& branchRates, const std::vector<std::vector<CirBranch> >& branchCir){
     int nLoci = seqLik->getNumPartitions();
     std::vector<std::vector<double> > exchV(nLoci), freqV(nLoci);
     std::vector<double> alphaV(nLoci), pinvV(nLoci);
@@ -93,7 +93,7 @@ double SequenceCTMCModel::computeLnL(Tree* tree, const std::vector<std::vector<d
         alphaV[p] = alpha[p]->getValue();
         pinvV[p] = pinv[p]->getValue();
     }
-    return seqLik->computeLnL(tree, branchRates, exchV, freqV, alphaV, pinvV, branchRateVars);
+    return seqLik->computeLnL(tree, branchRates, exchV, freqV, alphaV, pinvV, branchCir);
 }
 
 double SequenceCTMCModel::lnPrior(void){

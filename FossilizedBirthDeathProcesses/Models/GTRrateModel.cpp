@@ -1,5 +1,6 @@
 #include "GTRrateModel.hpp"
 #include "Eigen/Dense"
+#include "ParameterBranchRates.hpp"
 
 #include <cmath>
 
@@ -53,18 +54,16 @@ void GTRrateModel::setParameters(const std::vector<double>& exch, const std::vec
     }
 }
 
-void GTRrateModel::transitionProbabilities(double bl, double cat, double relVar, double* P) const {
+void GTRrateModel::transitionProbabilities(double bl, double cat, const CirBranch& cb, double* P) const {
     int n = numStates;
     std::vector<double> ev(n);
-    if(relVar <= 1.0e-12){
+    if(cb.active == false){
         double t = bl * cat;
         for(int s = 0; s < n; s++)
             ev[s] = std::exp(eigenvalue[s] * t);
     }else{
-        double alpha = 1.0 / relVar;
-        double beta = bl * cat * relVar;
         for(int s = 0; s < n; s++)
-            ev[s] = std::pow(1.0 - beta * eigenvalue[s], -alpha);
+            ev[s] = cirBridgeMGF(eigenvalue[s] * cat * cb.muH, cb.rho, cb.rhoUp, cb.Ln, cb.sigmaPB, cb.theta);
     }
     const double* c = &cijk[0];
     for(int i = 0; i < n; i++){

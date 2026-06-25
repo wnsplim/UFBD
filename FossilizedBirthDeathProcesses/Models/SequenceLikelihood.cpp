@@ -54,7 +54,7 @@ double SequenceLikelihood::computeLnL(Tree* tree,
                                       const std::vector<std::vector<double>>& frequency,
                                       const std::vector<double>& alpha,
                                       const std::vector<double>& proportionInvariant,
-                                      const std::vector<std::vector<double>>& branchRateVars){
+                                      const std::vector<std::vector<CirBranch>>& branchCir){
     mapTaxaToNodes(tree);
     std::vector<Node*>& downPass = tree->getDownPassSequence();
     Node* crown = tree->getCrown();
@@ -133,7 +133,7 @@ double SequenceLikelihood::computeLnL(Tree* tree,
                 int coff = c->getOffset();
                 Pcache[coff].assign(K * n * n, 0.0);
                 for(int k = 0; k < K; k++)
-                    rateModel[p].transitionProbabilities(curBl[coff], cat[k], branchRateVars[p][coff], &Pcache[coff][k * n * n]);
+                    rateModel[p].transitionProbabilities(curBl[coff], cat[k], branchCir[p][coff], &Pcache[coff][k * n * n]);
             }
         }
 
