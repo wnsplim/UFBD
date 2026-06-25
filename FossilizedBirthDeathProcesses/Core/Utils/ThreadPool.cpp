@@ -93,21 +93,20 @@ void ThreadPool::parallelFor(int opId, int n, const std::function<void(int, int)
     std::vector<std::pair<int,int> > ranges;
     for(int s = 0; s < n; s += per)
         ranges.push_back(std::make_pair(s, std::min(s + per, n)));
-    std::atomic<int> remaining((int)ranges.size());
+    int remaining = (int)ranges.size();
     std::mutex m;
     std::condition_variable doneCv;
     for(size_t r = 0; r < ranges.size(); r++){
         int a = ranges[r].first, b = ranges[r].second;
         enqueue([&remaining, &m, &doneCv, &body, a, b](){
             body(a, b);
-            if(remaining.fetch_sub(1) == 1){
-                std::lock_guard<std::mutex> lk(m);
+            std::lock_guard<std::mutex> lk(m);
+            if(--remaining == 0)
                 doneCv.notify_one();
-            }
         });
     }
     std::unique_lock<std::mutex> lk(m);
-    doneCv.wait(lk, [&remaining]{ return remaining.load() == 0; });
+    doneCv.wait(lk, [&remaining]{ return remaining == 0; });
 }
 
 ThreadPool& ThreadPool::shared(void){

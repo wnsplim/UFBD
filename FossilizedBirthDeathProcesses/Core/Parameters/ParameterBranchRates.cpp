@@ -609,8 +609,118 @@ double ParameterBranchRates::sigmaNonCenteredMoveGBMC(int p){
     return lnH;
 }
 
+double ParameterBranchRates::sigmaNonCenteredMoveGBM(int p){
+    RandomVariable& rng = RandomVariable::randomVariableInstance();
+    lastMove = 8;
+    lastLocus = p;
+    Node* crown = tree->getCrown();
+    double s2 = sigma2[0][p];
+    double s = std::sqrt(s2);
+    double logm = std::log(mu[0][p]);
+    std::vector<double> x(numNodes);
+    for(int b = 0; b < numNodes; b++)
+        x[b] = std::log(rate[0][p][b]);
+    x[crown->getOffset()] = logm;
+    double mB = 0.95;
+    double sB = std::sqrt(1.0 - mB * mB);
+    double d = mB + Probability::Normal::rv(&rng) * sB;
+    if(Probability::Uniform::rv(&rng, 0.0, 1.0) < 0.5)
+        d = -d;
+    double lnc = ncStep * d;
+    double s2new = s2 * std::exp(lnc);
+    double snew = std::sqrt(s2new);
+    sigma2[0][p] = s2new;
+    std::vector<double> xnew = x;
+    double sum = 0.0;
+    int rec = 0;
+    std::vector<Node*>& dp = tree->getDownPassSequence();
+    for(int i = (int)dp.size() - 1; i >= 0; i--){
+        Node* v = dp[i];
+        std::vector<Node*> sons = v->getDescendants();
+        if(sons.size() != 2)
+            continue;
+        double tv = v->getTime();
+        double tA = (v == crown) ? 0.0 : (v->getAncestor()->getTime() - tv) / 2.0;
+        int voff = v->getOffset();
+        double xv = x[voff];
+        double xvNew = xnew[voff];
+        for(Node* b : sons){
+            if(b->getIsFossil())
+                continue;
+            double eff = tA + (tv - b->getTime()) / 2.0;
+            int off = b->getOffset();
+            double y = x[off] - xv + eff * s2 / 2.0;
+            double xbNew = xvNew - eff * s2new / 2.0 + (snew / s) * y;
+            xnew[off] = xbNew;
+            sum += xbNew - x[off];
+            rate[0][p][off] = std::exp(xbNew);
+            rec++;
+        }
+    }
+    double lnH = lnc * (1.0 + 0.5 * (double)rec) + sum;
+    ncAttW++;
+    if(ncAttW >= 200){
+        double ar = (double)ncAccW / ncAttW;
+        ncStep *= std::exp(ar - 0.3);
+        if(ncStep < 1e-3) ncStep = 1e-3;
+        if(ncStep > 10.0) ncStep = 10.0;
+        ncAccW = 0;
+        ncAttW = 0;
+    }
+    return lnH;
+}
+
+double ParameterBranchRates::sigmaNonCenteredMoveWN(int p){
+    RandomVariable& rng = RandomVariable::randomVariableInstance();
+    lastMove = 8;
+    lastLocus = p;
+    double s2 = sigma2[0][p];
+    double m = mu[0][p];
+    int B = (int)branchNodes.size();
+    std::vector<double> ub(B), tb(B);
+    for(int i = 0; i < B; i++){
+        Node* n = tree->getNodeByOffset(branchNodes[i]);
+        double t = n->getAncestor()->getTime() - n->getTime();
+        tb[i] = t;
+        double a = m * m * t / s2;
+        double b = m * t / s2;
+        double u = Probability::Gamma::cdf(a, b, rate[0][p][branchNodes[i]]);
+        if(u < 1e-15) u = 1e-15;
+        if(u > 1.0 - 1e-15) u = 1.0 - 1e-15;
+        ub[i] = u;
+    }
+    double mB = 0.95;
+    double sB = std::sqrt(1.0 - mB * mB);
+    double d = mB + Probability::Normal::rv(&rng) * sB;
+    if(Probability::Uniform::rv(&rng, 0.0, 1.0) < 0.5)
+        d = -d;
+    double lnc = ncStep * d;
+    double s2new = s2 * std::exp(lnc);
+    sigma2[0][p] = s2new;
+    double lnH = lnc;
+    for(int i = 0; i < B; i++){
+        double aOld = m * m * tb[i] / s2;
+        double bOld = m * tb[i] / s2;
+        double aNew = m * m * tb[i] / s2new;
+        double bNew = m * tb[i] / s2new;
+        double rOld = rate[0][p][branchNodes[i]];
+        double rNew = Probability::ChiSquare::quantile(ub[i], 2.0 * aNew) / (2.0 * bNew);
+        lnH += gammaLnPdf(aOld, bOld, rOld) - gammaLnPdf(aNew, bNew, rNew);
+        rate[0][p][branchNodes[i]] = rNew;
+    }
+    ncAttW++;
+    if(ncAttW >= 200){
+        double ar = (double)ncAccW / ncAttW;
+        ncStep *= std::exp(ar - 0.3);
+        if(ncStep < 1e-3) ncStep = 1e-3;
+        if(ncStep > 10.0) ncStep = 10.0;
+        ncAccW = 0;
+        ncAttW = 0;
+    }
+    return lnH;
+}
+
 double ParameterBranchRates::update(void){
-    static const bool gbmcNc = [](){ const char* e = std::getenv("FBD_SIGMA_NC"); return e != nullptr && e[0] == '1'; }();
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastLocus = (int)(rng.uniformRv() * numLoci);
     double u = rng.uniformRv();
@@ -627,16 +737,16 @@ double ParameterBranchRates::update(void){
         lastMove = 0;
         return scaleLocusRate(lastLocus);
     }
-    bool useNC = (u >= 0.88) && (clockModel == ClockModel::UCLN || (clockModel == ClockModel::GBMC && gbmcNc));
-    if(useNC == false){
-        lastMove = 1;
-        return scaleLocusSigma2(lastLocus);
-    }
     if(clockModel == ClockModel::UCLN)
         return sigmaNonCenteredMove(lastLocus);
-    return sigmaNonCenteredMoveGBMC(lastLocus);
+    if(clockModel == ClockModel::GBMC)
+        return sigmaNonCenteredMoveGBMC(lastLocus);
+    if(clockModel == ClockModel::GBM)
+        return sigmaNonCenteredMoveGBM(lastLocus);
+    return sigmaNonCenteredMoveWN(lastLocus);
 }
 
+// CIR clock: halt — detached dead code (kept, never constructed)
 ParameterBranchRatesCIR::ParameterBranchRatesCIR(double prob, PhylogeneticModel* m, Tree* t, int L, const double* rg, const double* s2) : BranchRateModel(prob, m, t, L, rg, s2){
     thetaParam[0] = 2.0;
     thetaParam[1] = 2.0;
@@ -793,7 +903,72 @@ std::vector<std::vector<BranchMGF>> ParameterBranchRatesCIR::getBranchMGF(void){
     return a;
 }
 
+double ParameterBranchRatesCIR::sigmaNonCenteredMoveCIR(int p){
+    RandomVariable& rng = RandomVariable::randomVariableInstance();
+    lastMove = 8;
+    lastLocus = p;
+    Node* crown = tree->getCrown();
+    double H = crown->getTime();
+    double th = theta[0][p];
+    double s2 = sigma2[0][p];
+    std::vector<double> ub(numNodes, 0.0), fOld(numNodes, 0.0);
+    for(int b : branchNodes){
+        Node* n = tree->getNodeByOffset(b);
+        double L = (n->getAncestor()->getTime() - n->getTime()) / H;
+        double decay = std::exp(-th * L);
+        double rhoUp = rate[0][p][n->getAncestor()->getOffset()];
+        double mean = 1.0 + (rhoUp - 1.0) * decay;
+        double var = s2 * ((1.0 - decay) * (1.0 - decay) + 2.0 * rhoUp * (decay - decay * decay));
+        double a = mean * mean / var;
+        double bb = mean / var;
+        double u = Probability::Gamma::cdf(a, bb, rate[0][p][b]);
+        if(u < 1e-15) u = 1e-15;
+        if(u > 1.0 - 1e-15) u = 1.0 - 1e-15;
+        ub[b] = u;
+        fOld[b] = gammaLnPdf(a, bb, rate[0][p][b]);
+    }
+    double mB = 0.95;
+    double sB = std::sqrt(1.0 - mB * mB);
+    double d = mB + Probability::Normal::rv(&rng) * sB;
+    if(Probability::Uniform::rv(&rng, 0.0, 1.0) < 0.5)
+        d = -d;
+    double lnc = ncStep * d;
+    double s2new = s2 * std::exp(lnc);
+    if(s2new <= 1.0 / 500.0 || s2new >= 1.0)
+        return -INFINITY;
+    sigma2[0][p] = s2new;
+    double lnH = lnc;
+    std::vector<Node*>& dp = tree->getDownPassSequence();
+    for(int i = (int)dp.size() - 1; i >= 0; i--){
+        Node* n = dp[i];
+        if(n == crown || n->getIsFossil())
+            continue;
+        double L = (n->getAncestor()->getTime() - n->getTime()) / H;
+        double decay = std::exp(-th * L);
+        double rhoUp = rate[0][p][n->getAncestor()->getOffset()];
+        double mean = 1.0 + (rhoUp - 1.0) * decay;
+        double var = s2new * ((1.0 - decay) * (1.0 - decay) + 2.0 * rhoUp * (decay - decay * decay));
+        double aNew = mean * mean / var;
+        double bNew = mean / var;
+        int off = n->getOffset();
+        double rNew = Probability::ChiSquare::quantile(ub[off], 2.0 * aNew) / (2.0 * bNew);
+        lnH += fOld[off] - gammaLnPdf(aNew, bNew, rNew);
+        rate[0][p][off] = rNew;
+    }
+    ncAttW++;
+    if(ncAttW >= 200){
+        double ar = (double)ncAccW / ncAttW;
+        ncStep *= std::exp(ar - 0.3);
+        if(ncStep < 1e-3) ncStep = 1e-3;
+        if(ncStep > 10.0) ncStep = 10.0;
+        ncAccW = 0;
+        ncAttW = 0;
+    }
+    return lnH;
+}
+
 double ParameterBranchRatesCIR::update(void){
+    static const bool ncOn = [](){ const char* e = std::getenv("FBD_SIGMA_NC"); return e != nullptr && e[0] == '1'; }();
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastLocus = (int)(rng.uniformRv() * numLoci);
     double u = rng.uniformRv();
@@ -807,6 +982,8 @@ double ParameterBranchRatesCIR::update(void){
         return scaleMuRates(lastLocus);
     }
     if(u < 0.88){
+        if(ncOn && u >= 0.82)
+            return sigmaNonCenteredMoveCIR(lastLocus);
         lastMove = 1;
         return scaleLocusSigma2(lastLocus);
     }

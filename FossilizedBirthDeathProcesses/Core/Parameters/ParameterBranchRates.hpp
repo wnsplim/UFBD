@@ -10,7 +10,7 @@
 class Tree;
 class ParameterUnresolvedFossils;
 
-enum class ClockModel { UCLN, WN, GBM, CIR, GBMC };
+enum class ClockModel { UCLN, WN, GBM, CIR, GBMC }; // CIR clock: halt — detached, not selectable
 
 struct BranchMGF {
     int    kind;
@@ -18,7 +18,10 @@ struct BranchMGF {
     double alpha, beta;
 };
 
+// CIR clock: halt — detached dead code (kept, not wired)
 inline double cirLogBesselI(double nu, double u){
+    if(nu < 0.0 || u < 0.0)
+        return -INFINITY;
     if(u < 700.0)
         return std::log(std::cyl_bessel_i(nu, u));
     double z = 4.0 * nu * nu;
@@ -139,9 +142,12 @@ class ParameterBranchRates : public BranchRateModel {
         double                      gbmContinuousLnP(void);
         double                      sigmaNonCenteredMove(int p);
         double                      sigmaNonCenteredMoveGBMC(int p);
+        double                      sigmaNonCenteredMoveGBM(int p);
+        double                      sigmaNonCenteredMoveWN(int p);
         ClockModel                  clockModel;
 };
 
+// CIR clock: halt — detached dead code (kept, never constructed)
 class ParameterBranchRatesCIR : public BranchRateModel {
 
     public:
@@ -157,6 +163,7 @@ class ParameterBranchRatesCIR : public BranchRateModel {
     private:
         double                      scaleLocusTheta(int p);
         double                      scaleMuRates(int p);
+        double                      sigmaNonCenteredMoveCIR(int p);
         double                      cirLnP(void);
         double                      getMeanTau(double rho, double rhoUp, double t, double sigma, double theta);
         double                      besselIRatio(double nu, double x);

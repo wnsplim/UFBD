@@ -16,10 +16,8 @@
 
 void RelaxedClockTreeModel::buildClock(ClockModel clockModel, const double* rgeneParam, const double* sigma2Param){
     int nLoci = (lik != nullptr) ? lik->getNumPartitions() : ctmc->getNumPartitions();
-    if(clockModel == ClockModel::CIR)
-        clock = new ParameterBranchRatesCIR(1.0, this, fbd->getTree(), nLoci, rgeneParam, sigma2Param);
-    else
-        clock = new ParameterBranchRates(1.0, this, fbd->getTree(), nLoci, clockModel, rgeneParam, sigma2Param);
+    // CIR clock: halt — construction detached (ParameterBranchRatesCIR kept but never built)
+    clock = new ParameterBranchRates(1.0, this, fbd->getTree(), nLoci, clockModel, rgeneParam, sigma2Param);
     clock->setUnresolvedFossils(fbd->getUnresolvedFossils());
 }
 

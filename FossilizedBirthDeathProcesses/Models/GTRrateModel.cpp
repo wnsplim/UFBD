@@ -61,7 +61,7 @@ void GTRrateModel::transitionProbabilities(double bl, double cat, const BranchMG
         double t = bl * cat;
         for(int s = 0; s < n; s++)
             ev[s] = std::exp(eigenvalue[s] * t);
-    }else if(cb.kind == 1){
+    }else if(cb.kind == 1){ // CIR clock: halt — detached, kind 1 never produced
         for(int s = 0; s < n; s++)
             ev[s] = cirBridgeMGF(eigenvalue[s] * cat * cb.muH, cb.rho, cb.rhoUp, cb.Ln, cb.sigmaPB, cb.theta);
     }else{

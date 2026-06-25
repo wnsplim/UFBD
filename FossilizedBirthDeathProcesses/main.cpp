@@ -10,8 +10,23 @@
 
 #include <iostream>
 #include <random>
+#include <execinfo.h>
+#include <csignal>
+#include <cstdio>
+#include <cstdlib>
+
+static void crashBacktrace(int sig){
+    void* frames[64];
+    int n = backtrace(frames, 64);
+    fprintf(stderr, "\n=== fatal signal %d — backtrace (%d frames) ===\n", sig, n);
+    backtrace_symbols_fd(frames, n, 2);
+    _exit(128 + sig);
+}
 
 int main(int argc, const char* argv[]) {
+
+    signal(SIGSEGV, crashBacktrace);
+    signal(SIGABRT, crashBacktrace);
 
     UserSettings& settings = UserSettings::userSettings();
     settings.initializeSettings(argc, argv);
@@ -30,7 +45,6 @@ int main(int argc, const char* argv[]) {
     std::string cn = settings.getClockModelName();
     if(cn == "wn")        cm = ClockModel::WN;
     else if(cn == "gbm")  cm = ClockModel::GBM;
-    else if(cn == "cir")  cm = ClockModel::CIR;
     else if(cn == "gbmc") cm = ClockModel::GBMC;
 
     int numChains = settings.getNumChains();
