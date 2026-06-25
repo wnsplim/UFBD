@@ -28,7 +28,6 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     shrinkStep = 0.2;
     rvAccW = rvAttW = seAccW = seAttW = 0;
     lastWasFbdRate = false;
-    frA = frB = nullptr;
     turnoverStep = 0.1;
     frAccW = frAttW = 0;
     upDownStep = 0.1;
@@ -391,24 +390,25 @@ double FBDTreeModel::doRateShrinkExpand(void){
 
 double FBDTreeModel::doTurnoverMove(void){
     lastWasFbdRate = true;
-    int i = (int)(rng.uniformRv() * lambda.size());
-    frA = lambda[i];
-    frB = mu[i];
-    double lam = frA->getValue();
-    double muv = frB->getValue();
-    double d = lam - muv;
-    if(d <= 0.0)
-        return -std::numeric_limits<double>::infinity();
-    double t = muv / lam;
-    double tNew = t + turnoverStep * (rng.uniformRv() - 0.5);
-    while(tNew <= 0.0 || tNew >= 1.0){
-        if(tNew <= 0.0) tNew = -tNew;
-        if(tNew >= 1.0) tNew = 2.0 - tNew;
+    double lnH = 0.0;
+    for(size_t i = 0; i < lambda.size(); i++){
+        double lam = lambda[i]->getValue();
+        double muv = mu[i]->getValue();
+        double d = lam - muv;
+        if(d <= 0.0)
+            return -std::numeric_limits<double>::infinity();
+        double t = muv / lam;
+        double tNew = t + turnoverStep * (rng.uniformRv() - 0.5);
+        while(tNew <= 0.0 || tNew >= 1.0){
+            if(tNew <= 0.0) tNew = -tNew;
+            if(tNew >= 1.0) tNew = 2.0 - tNew;
+        }
+        double lamNew = d / (1.0 - tNew);
+        double muNew = tNew * lamNew;
+        lambda[i]->scaleProposed(lamNew / lam);
+        mu[i]->scaleProposed(muNew / muv);
+        lnH += 2.0 * std::log(lamNew / lam);
     }
-    double lamNew = d / (1.0 - tNew);
-    double muNew = tNew * lamNew;
-    frA->scaleProposed(lamNew / lam);
-    frB->scaleProposed(muNew / muv);
     frAttW++;
     if(frAttW >= 200){
         turnoverStep *= std::exp((double)frAccW / frAttW - 0.3);
@@ -417,7 +417,7 @@ double FBDTreeModel::doTurnoverMove(void){
         frAccW = 0;
         frAttW = 0;
     }
-    return 2.0 * std::log(lamNew / lam);
+    return lnH;
 }
 
 double FBDTreeModel::update(void){
@@ -524,8 +524,8 @@ double FBDTreeModel::update(void){
 
 void FBDTreeModel::updateForAcceptance(void){
     if(lastWasFbdRate){
-        frA->commitProposed();
-        frB->commitProposed();
+        for(ParameterDouble* l : lambda) l->commitProposed();
+        for(ParameterDouble* m : mu) m->commitProposed();
         frAccW++;
         return;
     }
@@ -557,8 +557,8 @@ void FBDTreeModel::updateForAcceptance(void){
 
 void FBDTreeModel::updateForRejection(void){
     if(lastWasFbdRate){
-        frA->restoreProposed();
-        frB->restoreProposed();
+        for(ParameterDouble* l : lambda) l->restoreProposed();
+        for(ParameterDouble* m : mu) m->restoreProposed();
         return;
     }
     if(lastWasRateVec){

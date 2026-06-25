@@ -114,8 +114,6 @@ class FBDTreeModel : public PhylogeneticModel {
         long                        seAccW;
         long                        seAttW;
         bool                        lastWasFbdRate;
-        ParameterDouble*            frA;
-        ParameterDouble*            frB;
         double                      turnoverStep;
         long                        frAccW;
         long                        frAttW;
