@@ -54,16 +54,19 @@ void GTRrateModel::setParameters(const std::vector<double>& exch, const std::vec
     }
 }
 
-void GTRrateModel::transitionProbabilities(double bl, double cat, const CirBranch& cb, double* P) const {
+void GTRrateModel::transitionProbabilities(double bl, double cat, const BranchMGF& cb, double* P) const {
     int n = numStates;
     std::vector<double> ev(n);
-    if(cb.active == false){
+    if(cb.kind == 0){
         double t = bl * cat;
         for(int s = 0; s < n; s++)
             ev[s] = std::exp(eigenvalue[s] * t);
-    }else{
+    }else if(cb.kind == 1){
         for(int s = 0; s < n; s++)
             ev[s] = cirBridgeMGF(eigenvalue[s] * cat * cb.muH, cb.rho, cb.rhoUp, cb.Ln, cb.sigmaPB, cb.theta);
+    }else{
+        for(int s = 0; s < n; s++)
+            ev[s] = std::pow(1.0 - cb.beta * eigenvalue[s] * cat, -cb.alpha);
     }
     const double* c = &cijk[0];
     for(int i = 0; i < n; i++){

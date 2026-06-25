@@ -31,6 +31,7 @@ int main(int argc, const char* argv[]) {
     if(cn == "wn")        cm = ClockModel::WN;
     else if(cn == "gbm")  cm = ClockModel::GBM;
     else if(cn == "cir")  cm = ClockModel::CIR;
+    else if(cn == "gbmc") cm = ClockModel::GBMC;
 
     int numChains = settings.getNumChains();
     if(numChains > 1){

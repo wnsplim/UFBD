@@ -58,7 +58,7 @@ RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades
 double RelaxedClockTreeModel::lnLikelihood(void){
     if(ctmc == nullptr)
         return lik->computeLnL(fbd->getTree(), clock->getAbsoluteRates());
-    return ctmc->computeLnL(fbd->getTree(), clock->getAbsoluteRates(), clock->getBranchCir());
+    return ctmc->computeLnL(fbd->getTree(), clock->getAbsoluteRates(), clock->getBranchMGF());
 }
 
 double RelaxedClockTreeModel::lnPriorProbability(void){

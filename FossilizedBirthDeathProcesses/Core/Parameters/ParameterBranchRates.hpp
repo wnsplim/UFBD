@@ -10,11 +10,12 @@
 class Tree;
 class ParameterUnresolvedFossils;
 
-enum class ClockModel { UCLN, WN, GBM, CIR };
+enum class ClockModel { UCLN, WN, GBM, CIR, GBMC };
 
-struct CirBranch {
+struct BranchMGF {
+    int    kind;
     double rho, rhoUp, Ln, sigmaPB, theta, muH;
-    bool   active;
+    double alpha, beta;
 };
 
 inline double cirLogBesselI(double nu, double u){
@@ -43,6 +44,29 @@ inline double cirBridgeMGF(double eta, double r0, double rt, double t, double s2
     return std::exp(cirBridgeLogG(eta, r0, rt, t, s2, b) - cirBridgeLogG(0.0, r0, rt, t, s2, b));
 }
 
+inline double normalCdf(double x){ return 0.5 * std::erfc(-x * M_SQRT1_2); }
+
+inline void gbmBridgeMoments(double T, double A, double B, double u, double* mean, double* var){
+    double uuT = u * u * T;
+    double s = std::sqrt(uuT);
+    double lz = std::log(B / A);
+    double pa1 = lz / s + 0.5 * s;
+    double pa2 = pa1 - s;
+    if((pa1 > 2.0 && pa2 > 2.0) || (pa1 < -2.0 && pa2 < -2.0)){
+        *mean = ((B - A) / lz + u * u * T * ((A + B) / (2.0 * lz * lz) - (B - A) / (lz * lz * lz)));
+        *var = 0.0;
+        return;
+    }
+    double m = (A / (u * u)) * std::sqrt(2.0 * M_PI * uuT) * std::exp((uuT / 2.0 + lz) * (uuT / 2.0 + lz) / (2.0 * uuT)) * (normalCdf(pa1) - normalCdf(pa2)) / T;
+    *mean = m;
+    double U = uuT, z = B / A, sU = std::sqrt(U);
+    double ez2 = 2.0 * std::sqrt(2.0 * M_PI * U) * std::exp((U + lz) * (U + lz) / (2.0 * U)) * (normalCdf(lz / sU + sU) - normalCdf(lz / sU - sU))
+               - (1.0 + z) * 2.0 * std::sqrt(2.0 * M_PI * U) * std::exp((U / 2.0 + lz) * (U / 2.0 + lz) / (2.0 * U)) * (normalCdf(lz / sU + 0.5 * sU) - normalCdf(lz / sU - 0.5 * sU));
+    ez2 = ez2 * A * A / (u * u * u * u) / (T * T);
+    double v = ez2 - m * m;
+    *var = (v < 0.0) ? 0.0 : v;
+}
+
 class BranchRateModel : public Parameter {
 
     public:
@@ -62,7 +86,7 @@ class BranchRateModel : public Parameter {
         void                        updateForAcceptance(void);
         void                        updateForRejection(void);
         virtual std::vector<std::vector<double>> getAbsoluteRates(void) = 0;
-        virtual std::vector<std::vector<CirBranch>> getBranchCir(void){ return std::vector<std::vector<CirBranch>>(numLoci, std::vector<CirBranch>(numNodes, CirBranch{0.0,0.0,0.0,0.0,0.0,0.0,false})); }
+        virtual std::vector<std::vector<BranchMGF>> getBranchMGF(void){ return std::vector<std::vector<BranchMGF>>(numLoci, std::vector<BranchMGF>(numNodes, BranchMGF{0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0})); }
 
     protected:
         double                      scaleLocusRate(int p);
@@ -104,6 +128,7 @@ class ParameterBranchRates : public BranchRateModel {
                                     ParameterBranchRates(void) = delete;
                                     ParameterBranchRates(double prob, PhylogeneticModel* m, Tree* tree, int numLoci, ClockModel clockModel, const double* rgeneParam, const double* sigma2Param);
         std::vector<std::vector<double>> getAbsoluteRates(void);
+        std::vector<std::vector<BranchMGF>> getBranchMGF(void);
         double                      lnProbability(void);
         double                      update(void);
 
@@ -111,7 +136,9 @@ class ParameterBranchRates : public BranchRateModel {
         double                      lognormalLnP(double r, double s2, double m);
         double                      whiteNoiseLnP(double r, double s2, double t, double m);
         double                      gbmLnP(void);
+        double                      gbmContinuousLnP(void);
         double                      sigmaNonCenteredMove(int p);
+        double                      sigmaNonCenteredMoveGBMC(int p);
         ClockModel                  clockModel;
 };
 
@@ -121,7 +148,7 @@ class ParameterBranchRatesCIR : public BranchRateModel {
                                     ParameterBranchRatesCIR(void) = delete;
                                     ParameterBranchRatesCIR(double prob, PhylogeneticModel* m, Tree* tree, int numLoci, const double* rgeneParam, const double* sigma2Param);
         std::vector<std::vector<double>> getAbsoluteRates(void);
-        std::vector<std::vector<CirBranch>> getBranchCir(void);
+        std::vector<std::vector<BranchMGF>> getBranchMGF(void);
         double                      lnProbability(void);
         double                      update(void);
         void                        updateForAcceptance(void);
