@@ -5,6 +5,7 @@
 #include "Msg.hpp"
 #include "ThreadPool.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 
@@ -56,12 +57,7 @@ double SequenceLikelihood::computeLnL(Tree* tree,
                                       const std::vector<double>& proportionInvariant,
                                       const std::vector<std::vector<BranchMGF>>& branchMGF){
     mapTaxaToNodes(tree);
-    std::vector<Node*>& downPass = tree->getDownPassSequence();
-    Node* crown = tree->getCrown();
-    int n = numStates;
     int numNodes = tree->getNumNodes();
-    int full = (1 << n) - 1;
-
     if(cacheValid == false){
         conP.assign(numPartitions, std::vector<std::vector<double>>(numNodes));
         lastBl.assign(numPartitions, std::vector<double>(numNodes, -1.0));
@@ -72,7 +68,38 @@ double SequenceLikelihood::computeLnL(Tree* tree,
     }
 
     double lnL = 0.0;
-    for(int p = 0; p < numPartitions; p++){
+    const double ninf = -std::numeric_limits<double>::infinity();
+    if(numPartitions <= 1){
+        lnL = computePartitionLnL(0, tree, branchRates, exchangeability, frequency, alpha, proportionInvariant, branchMGF, true);
+    }else{
+        std::vector<double> partLnL(numPartitions, 0.0);
+        ThreadPool::shared().parallelFor(OP_CTMC, numPartitions, [&](int q0, int q1){
+            for(int q = q0; q < q1; q++)
+                partLnL[q] = computePartitionLnL(q, tree, branchRates, exchangeability, frequency, alpha, proportionInvariant, branchMGF, false);
+        });
+        for(double v : partLnL){
+            if(v == ninf){ lnL = ninf; break; }
+            lnL += v;
+        }
+    }
+    cacheValid = true;
+    return lnL;
+}
+
+double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
+                                      const std::vector<std::vector<double>>& branchRates,
+                                      const std::vector<std::vector<double>>& exchangeability,
+                                      const std::vector<std::vector<double>>& frequency,
+                                      const std::vector<double>& alpha,
+                                      const std::vector<double>& proportionInvariant,
+                                      const std::vector<std::vector<BranchMGF>>& branchMGF,
+                                      bool parallelPatterns){
+    std::vector<Node*>& downPass = tree->getDownPassSequence();
+    Node* crown = tree->getCrown();
+    int n = numStates;
+    int numNodes = tree->getNumNodes();
+    int full = (1 << n) - 1;
+    {
         bool substDirty = (cacheValid == false) || (exchangeability[p] != lastExch[p]) || (frequency[p] != lastFreq[p]) || (alpha[p] != lastAlpha[p]) || (proportionInvariant[p] != lastPinv[p]);
         if((cacheValid == false) || (exchangeability[p] != lastExch[p]) || (frequency[p] != lastFreq[p]))
             rateModel[p].setParameters(exchangeability[p], frequency[p]);
@@ -118,7 +145,11 @@ double SequenceLikelihood::computeLnL(Tree* tree,
                 }
                 continue;
             }
-            std::vector<Node*>& kids = node->getDescendants();
+            std::vector<Node*> kids;
+            for(Node* nb : node->getNeighbors())
+                if(nb != node->getAncestor())
+                    kids.push_back(nb);
+            std::sort(kids.begin(), kids.end(), [](Node* a, Node* b){ return a->getOffset() < b->getOffset(); });
             bool nd = substDirty;
             for(Node* c : kids){
                 int coff = c->getOffset();
@@ -140,7 +171,7 @@ double SequenceLikelihood::computeLnL(Tree* tree,
         int croff = crown->getOffset();
         const std::vector<double>& root = conP[p][croff];
         std::vector<double> siteLn(npat);
-        ThreadPool::shared().parallelFor(OP_CTMC, npat, [&](int h0, int h1){
+        auto patBody = [&](int h0, int h1){
             for(size_t di = 0; di < dirtyNodes.size(); di++){
                 Node* node = dirtyNodes[di];
                 std::vector<double>& cp = conP[p][node->getOffset()];
@@ -178,19 +209,22 @@ double SequenceLikelihood::computeLnL(Tree* tree,
                 double site = pinv * pinvLk + (1.0 - pinv) * gammaLk;
                 siteLn[h] = (site <= 0.0) ? -std::numeric_limits<double>::infinity() : patternWeight[p][h] * std::log(site);
             }
-        });
+        };
+        if(parallelPatterns)
+            ThreadPool::shared().parallelFor(OP_CTMC, npat, patBody);
+        else
+            patBody(0, npat);
+        double lnL = 0.0;
         for(int h = 0; h < npat; h++){
             if(siteLn[h] == -std::numeric_limits<double>::infinity())
                 return -std::numeric_limits<double>::infinity();
             lnL += siteLn[h];
         }
-
         lastBl[p] = curBl;
         lastExch[p] = exchangeability[p];
         lastFreq[p] = frequency[p];
         lastAlpha[p] = alpha[p];
         lastPinv[p] = proportionInvariant[p];
+        return lnL;
     }
-    cacheValid = true;
-    return lnL;
 }

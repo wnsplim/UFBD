@@ -27,6 +27,14 @@ class SequenceLikelihood {
 
     private:
         void                mapTaxaToNodes(Tree* tree);
+        double              computePartitionLnL(int p, Tree* tree,
+                                       const std::vector<std::vector<double>>& branchRates,
+                                       const std::vector<std::vector<double>>& exchangeability,
+                                       const std::vector<std::vector<double>>& frequency,
+                                       const std::vector<double>& alpha,
+                                       const std::vector<double>& proportionInvariant,
+                                       const std::vector<std::vector<BranchMGF>>& branchMGF,
+                                       bool parallelPatterns);
 
         int                                          numStates;
         int                                          numCats;

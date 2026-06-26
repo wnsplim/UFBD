@@ -1,6 +1,7 @@
 #include "ApproxBranchLengthLikelihood.hpp"
 #include "Msg.hpp"
 #include "Node.hpp"
+#include "ThreadPool.hpp"
 #include "Tree.hpp"
 
 #include <algorithm>
@@ -355,30 +356,44 @@ double ApproxBranchLengthLikelihood::computeLnL(Tree* tree, const std::vector<st
         if(c != crown->getAncestor())
             crownChildren.push_back(c);
 
-    std::vector<double> z(nb);
-    double lnL = 0.0;
-    for(int p = 0; p < nPartitions; p++){
-        const std::vector<double>& br = branchRates[p];
-        for(int i = 0; i < nb; i++){
-            double predBl;
-            if(i == crownBranchIdx){
-                if(crownChildren.size() != 2) return -INFINITY;
-                double d0 = crownChildren[0]->getAncestor()->getTime() - crownChildren[0]->getTime();
-                double d1 = crownChildren[1]->getAncestor()->getTime() - crownChildren[1]->getTime();
-                predBl = br[crownChildren[0]->getOffset()] * d0 + br[crownChildren[1]->getOffset()] * d1;
-            }else{
-                Node* n = tree->getNodeByOffset(branchNodeIdx[i]);
-                double d = n->getAncestor()->getTime() - n->getTime();
-                predBl = br[branchNodeIdx[i]] * d;
+    if(crownBranchIdx >= 0 && crownChildren.size() != 2)
+        return -INFINITY;
+
+    const double ninf = -std::numeric_limits<double>::infinity();
+    std::vector<double> partLnL(nPartitions, 0.0);
+    ThreadPool::shared().parallelFor(OP_CTMC, nPartitions, [&](int q0, int q1){
+        std::vector<double> z(nb);
+        for(int p = q0; p < q1; p++){
+            const std::vector<double>& br = branchRates[p];
+            bool bad = false;
+            for(int i = 0; i < nb; i++){
+                double predBl;
+                if(i == crownBranchIdx){
+                    double d0 = crownChildren[0]->getAncestor()->getTime() - crownChildren[0]->getTime();
+                    double d1 = crownChildren[1]->getAncestor()->getTime() - crownChildren[1]->getTime();
+                    predBl = br[crownChildren[0]->getOffset()] * d0 + br[crownChildren[1]->getOffset()] * d1;
+                }else{
+                    Node* n = tree->getNodeByOffset(branchNodeIdx[i]);
+                    double d = n->getAncestor()->getTime() - n->getTime();
+                    predBl = br[branchNodeIdx[i]] * d;
+                }
+                if(predBl <= 0.0){ bad = true; break; }
+                z[i] = 2.0 * std::asin(std::sqrt(cJc - cJc * std::exp(-predBl / cJc))) - blMle[p][i];
             }
-            if(predBl <= 0.0) return -INFINITY;
-            z[i] = 2.0 * std::asin(std::sqrt(cJc - cJc * std::exp(-predBl / cJc))) - blMle[p][i];
+            if(bad){ partLnL[p] = ninf; continue; }
+            double pl = 0.0;
+            for(int i = 0; i < nb; i++)
+                pl += z[i] * gradient[p][i];
+            for(int i = 0; i < nb; i++)
+                for(int j = 0; j < nb; j++)
+                    pl += 0.5 * z[i] * hessian[p][i*nb+j] * z[j];
+            partLnL[p] = pl;
         }
-        for(int i = 0; i < nb; i++)
-            lnL += z[i] * gradient[p][i];
-        for(int i = 0; i < nb; i++)
-            for(int j = 0; j < nb; j++)
-                lnL += 0.5 * z[i] * hessian[p][i*nb+j] * z[j];
+    });
+    double lnL = 0.0;
+    for(double v : partLnL){
+        if(v == ninf){ lnL = ninf; break; }
+        lnL += v;
     }
     return lnL;
 }
