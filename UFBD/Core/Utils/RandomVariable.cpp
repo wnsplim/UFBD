@@ -9,6 +9,21 @@
 
 thread_local RandomVariable* RandomVariable::activeInstance = nullptr;
 
+void RandomVariable::writeState(std::ostream& os) {
+    os << index;
+    for(int i = 0; i < N; i++)
+        os << ' ' << mt[i];
+    os << '\n';
+}
+
+void RandomVariable::readState(std::istream& is) {
+    unsigned int idx;
+    is >> idx;
+    index = (uint16_t)idx;
+    for(int i = 0; i < N; i++)
+        is >> mt[i];
+}
+
 RandomVariable::RandomVariable(void) {
 
     static std::atomic<uint64_t> seed_counter{0};

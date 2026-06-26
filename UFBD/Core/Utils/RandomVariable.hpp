@@ -2,6 +2,7 @@
 #define RandomVariable_hpp
 
 #include <cstdint>
+#include <iosfwd>
 #include <vector>
 
 #include "Msg.hpp"
@@ -38,6 +39,8 @@ class RandomVariable {
                                 RandomVariable(RandomVariable& r);
                                 RandomVariable(uint32_t seed);
         void                    setSeed(uint32_t seed) { initialize(seed); }
+        void                    writeState(std::ostream& os);
+        void                    readState(std::istream& is);
         double                  uniformRv(void);
                                 
     private:
