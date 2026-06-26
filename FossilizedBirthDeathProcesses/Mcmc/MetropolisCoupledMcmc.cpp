@@ -20,7 +20,7 @@ MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int pf, int sf, s
     coldModelIdx(-1),
     numSwapsCold(0),
     deltaT(0.2),
-    threadPool(std::min({ (size_t)UserSettings::userSettings().getNumThreads(), models.size(), (size_t)UserSettings::userSettings().getNumCores() })){
+    threadPool(1){
     swapRng.setSeed(masterSeed + numModels);
     currLnL.reserve(numModels); //needs to be reserve for pushback
     newLnL.resize(numModels);
@@ -82,43 +82,28 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
         if(n < 10000 && n % 50 == 0)
             updateDeltaT();
         
-        std::vector<std::future<void>> futures;
-        futures.reserve(numModels);
-
         for(int i = 0; i < numModels; i++){
-            auto promise = std::make_shared<std::promise<void>>();
-            futures.push_back(promise->get_future());
+            RandomVariable::setActiveInstance(models[i]->getRng());
+            lnProposalRatio[i] = models[i]->update();
 
-            threadPool.enqueue([this, i, promise]() {
-                RandomVariable::setActiveInstance(models[i]->getRng());
-                lnProposalRatio[i] = models[i]->update();
+            if(lnProposalRatio[i] == -INFINITY){
+                newLnL[i] = currLnL[i];
+                newLnP[i] = currLnP[i];
+                lnAcceptanceProbabilities[i] = -INFINITY;
+                continue;
+            }
 
-                if(lnProposalRatio[i] == -INFINITY){
-                    newLnL[i] = currLnL[i];
-                    newLnP[i] = currLnP[i];
-                    lnAcceptanceProbabilities[i] = -INFINITY;
-                    promise->set_value();
-                    return;
-                }
+            newLnL[i]          = models[i]->lnLikelihood();
+            newLnP[i]          = models[i]->lnPriorProbability();
 
-                newLnL[i]          = models[i]->lnLikelihood();
-                newLnP[i]          = models[i]->lnPriorProbability();
+            lnLikelihoodRatio[i] = newLnL[i] - currLnL[i];
+            lnPriorRatio[i]      = newLnP[i] - currLnP[i];
 
-                lnLikelihoodRatio[i] = newLnL[i] - currLnL[i];
-                lnPriorRatio[i]      = newLnP[i] - currLnP[i];
-
-                int    chainIdx = indices[i];
-                double heat     = (chainIdx == 0) ? 1.0 : calcHeating(chainIdx);
-                lnAcceptanceProbabilities[i] = heat * (lnLikelihoodRatio[i] + lnPriorRatio[i])
-                                               + lnProposalRatio[i];
-
-                promise->set_value();
-            });
+            int    chainIdx = indices[i];
+            double heat     = (chainIdx == 0) ? 1.0 : calcHeating(chainIdx);
+            lnAcceptanceProbabilities[i] = heat * (lnLikelihoodRatio[i] + lnPriorRatio[i])
+                                           + lnProposalRatio[i];
         }
-
-        // Wait for all chain updates to complete before proceeding
-        for(auto& f : futures)
-            f.get();
 
 
         // accept or reject the proposed state
