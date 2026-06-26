@@ -638,7 +638,7 @@ void ParameterBranchRates::branchLikePrecision(int p, std::vector<double>& tauL,
     ellB = sigEllB[p];
 }
 
-double ParameterBranchRates::sigmaNonCenteredMove(int p){
+double ParameterBranchRates::sigmaPncpMove(int p){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastMove = 8;
     lastLocus = p;
@@ -684,7 +684,7 @@ double ParameterBranchRates::sigmaNonCenteredMove(int p){
     return lnH;
 }
 
-double ParameterBranchRates::sigmaNonCenteredMoveGBMC(int p){
+double ParameterBranchRates::sigmaPncpMoveGBMC(int p){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastMove = 8;
     lastLocus = p;
@@ -740,7 +740,7 @@ double ParameterBranchRates::sigmaNonCenteredMoveGBMC(int p){
     return lnH;
 }
 
-double ParameterBranchRates::sigmaNonCenteredMoveGBM(int p){
+double ParameterBranchRates::sigmaPncpMoveGBM(int p){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastMove = 8;
     lastLocus = p;
@@ -804,7 +804,7 @@ double ParameterBranchRates::sigmaNonCenteredMoveGBM(int p){
     return lnH;
 }
 
-double ParameterBranchRates::sigmaNonCenteredMoveWN(int p){
+double ParameterBranchRates::sigmaPncpMoveWN(int p){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastMove = 8;
     lastLocus = p;
@@ -872,12 +872,12 @@ double ParameterBranchRates::update(void){
         return scaleLocusRate(lastLocus);
     }
     if(clockModel == ClockModel::UCLN)
-        return sigmaNonCenteredMove(lastLocus);
+        return sigmaPncpMove(lastLocus);
     if(clockModel == ClockModel::GBMC)
-        return sigmaNonCenteredMoveGBMC(lastLocus);
+        return sigmaPncpMoveGBMC(lastLocus);
     if(clockModel == ClockModel::GBM)
-        return sigmaNonCenteredMoveGBM(lastLocus);
-    return sigmaNonCenteredMoveWN(lastLocus);
+        return sigmaPncpMoveGBM(lastLocus);
+    return sigmaPncpMoveWN(lastLocus);
 }
 
 // CIR clock: halt — detached dead code (kept, never constructed)

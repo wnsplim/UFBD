@@ -161,10 +161,10 @@ class ParameterBranchRates : public BranchRateModel {
         double                      whiteNoiseLnP(double r, double s2, double t, double m);
         double                      gbmLnP(void);
         double                      gbmContinuousLnP(void);
-        double                      sigmaNonCenteredMove(int p);
-        double                      sigmaNonCenteredMoveGBMC(int p);
-        double                      sigmaNonCenteredMoveGBM(int p);
-        double                      sigmaNonCenteredMoveWN(int p);
+        double                      sigmaPncpMove(int p);
+        double                      sigmaPncpMoveGBMC(int p);
+        double                      sigmaPncpMoveGBM(int p);
+        double                      sigmaPncpMoveWN(int p);
         void                        branchLikePrecision(int p, std::vector<double>& tauL, std::vector<double>& ellB);
         ClockModel                  clockModel;
 };
