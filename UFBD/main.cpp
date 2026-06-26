@@ -4,6 +4,7 @@
 #include "FBDTreeModel.hpp"
 #include "Mcmc.hpp"
 #include "MetropolisCoupledMcmc.hpp"
+#include "Msg.hpp"
 #include "ParameterBranchRates.hpp"
 #include "RandomVariable.hpp"
 #include "RelaxedClockTreeModel.hpp"
@@ -42,7 +43,9 @@ int main(int argc, const char* argv[]) {
     pt->print();
 
     bool seq = settings.getSequenceFile().empty() == false;
-    bool dating = seq || (settings.getHessianFile().empty() == false);
+    bool hessian = settings.getHessianFile().empty() == false;
+    if(seq == false && hessian == false)
+        Msg::warning("No sequence of Hessian file supplied: running the FBD model without a molecular clock.");
     ClockModel cm = ClockModel::UCLN;
     std::string cn = settings.getClockModelName();
     if(cn == "wn")        cm = ClockModel::WN;
@@ -58,7 +61,7 @@ int main(int argc, const char* argv[]) {
     auto makeModel = [&](unsigned int sd) -> PhylogeneticModel* {
         if(seq)
             return new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), settings.getSequenceFile(), settings.getPartitionFile(), settings.getModelNStates(), settings.getNumCats(), cm, settings.getRgeneGamma(), settings.getSigma2Gamma(), sd);
-        if(dating)
+        if(hessian)
             return new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), settings.getHessianFile(), settings.getTreeFile(), settings.getModelNStates(), cm, settings.getRgeneGamma(), settings.getSigma2Gamma(), sd);
         return new FBDTreeModel(pt, input.getClades(), input.getFossils(), sd);
     };

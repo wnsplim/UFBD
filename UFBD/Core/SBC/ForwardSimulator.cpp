@@ -147,7 +147,6 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
             ii--;
 
         double curAge = p.startAge;
-        bool failed = false;
         while(curAge > 0.0 && active.empty() == false){
             double lam = p.lambda[ii];
             double m   = p.mu[ii];
@@ -182,10 +181,9 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
                 active[k] = c;
             }
             curAge = nextAge;
-            if((int)active.size() > maxLineages){ failed = true; break; }
+            if((int)active.size() > maxLineages)
+                Msg::error("ForwardSimulator: tree exceeded " + std::to_string(maxLineages) + " lineages (lambda=" + std::to_string(lam) + ", mu=" + std::to_string(m) + ", x0=" + std::to_string(p.startAge) + "); net diversification likely too high for the origin age.");
         }
-        if(failed)
-            continue;
 
         for(SimNode* n : active){
             n->age = 0.0;
@@ -221,11 +219,6 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
             if(n->inBackbone)
                 inBB++;
         }
-        if(inBB == 0 && extants.empty() == false){
-            extants[0]->inBackbone = true;
-            inBB = 1;
-        }
-
         ok = true;
 
         for(SimNode* n : allNodes){

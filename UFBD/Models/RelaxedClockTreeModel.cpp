@@ -214,6 +214,8 @@ void RelaxedClockTreeModel::collectNodeAges(std::vector<std::string>* names, std
         if(names) names->push_back("x0");
         if(vals)  vals->push_back(fbd->getOriginAgeValue());
     }
+    if(fbd->getTree()->getNumBackbone() == 0)
+        return;
     Node* crown = fbd->getTree()->getCrown();
     std::vector<Node*> stack(1, crown);
     int k = 1;

@@ -39,6 +39,7 @@ MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int pf, int sf, s
     UserSettings& settings = UserSettings::userSettings();
     treeOut = settings.getTreeOutput();
     paramOut = settings.getParamOutput();
+    writeTrees = (models[0]->getTree()->getNumBackbone() > 0);
     gen = 0;
 
     ThreadPool::shared().setChainCap(std::max(1, settings.getNumCores() / threadPool.size()));
@@ -180,7 +181,8 @@ void MetropolisCoupledMcmc::sample(unsigned long n) {
         cn.insert( cn.end(), headStr.begin(), headStr.end() );
         params.addColumnNamesTSV(cn);
 
-        trees.addFilepath(treeOut, true); // no CN for tree file
+        if(writeTrees)
+            trees.addFilepath(treeOut, true); // no CN for tree file
 
         traceNms.clear();
         traceNms.push_back("posterior");
@@ -198,7 +200,8 @@ void MetropolisCoupledMcmc::sample(unsigned long n) {
     dat.insert( dat.end(), parmStr.begin(), parmStr.end() );
     params.appendDataTSV(dat);
 
-    trees.appendDataTSV(models[coldModelIdx]->getTree()->getNewickString());
+    if(writeTrees)
+        trees.appendDataTSV(models[coldModelIdx]->getTree()->getNewickString());
 
     std::vector<double> tv = {cl + cp, cl, cp};
     tv.insert(tv.end(), parmStr.begin(), parmStr.end());
@@ -307,19 +310,20 @@ void MetropolisCoupledMcmc::resumeOutputs(void) {
         pout << line << '\n';
     pout.close();
 
-    std::ifstream tin(treeOut);
-    std::vector<std::string> tkeep;
-    std::string tline;
-    while(std::getline(tin, tline) && tkeep.size() < keep.size())
-        tkeep.push_back(tline);
-    tin.close();
-    std::ofstream tout(treeOut, std::ios::out | std::ios::trunc);
-    for(const std::string& l : tkeep)
-        tout << l << '\n';
-    tout.close();
-
     params.addFilepath(paramOut, false);
-    trees.addFilepath(treeOut, false);
+    if(writeTrees){
+        std::ifstream tin(treeOut);
+        std::vector<std::string> tkeep;
+        std::string tline;
+        while(std::getline(tin, tline) && tkeep.size() < keep.size())
+            tkeep.push_back(tline);
+        tin.close();
+        std::ofstream tout(treeOut, std::ios::out | std::ios::trunc);
+        for(const std::string& l : tkeep)
+            tout << l << '\n';
+        tout.close();
+        trees.addFilepath(treeOut, false);
+    }
 }
 
 void MetropolisCoupledMcmc::updateDeltaT(void) {

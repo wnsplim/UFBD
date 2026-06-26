@@ -51,6 +51,7 @@ class MetropolisCoupledMcmc : public ChainRunner {
         WriteTSV                            trees;
         std::string                         treeOut;
         std::string                         paramOut;
+        bool                                writeTrees;
         unsigned long                       numCycles;
         double                              deltaT;
         int                                 coldModelIdx;

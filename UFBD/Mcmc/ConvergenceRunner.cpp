@@ -153,6 +153,14 @@ void ConvergenceRunner::writeMerged(void){
     }
     mp.close();
 
+    bool anyTree = false;
+    for(const std::string& fn : repTreeFiles){
+        std::ifstream in(fn);
+        if(in.is_open()){ anyTree = true; in.close(); break; }
+    }
+    if(anyTree == false)
+        return;
+
     std::ofstream mt(treeBase);
     for(const std::string& fn : repTreeFiles){
         std::ifstream in(fn);

@@ -33,10 +33,12 @@ int main(int argc, const char* argv[]){
         else                                        rest.push_back(argv[i]);
     }
 
-    if(mode != "simulate" && mode != "infer")
-        Msg::error("SBC: -sbc-mode must be supplied as 'simulate' or 'infer'.");
+    if(mode != "simulate" && mode != "infer" && mode != "emit")
+        Msg::error("SBC: -sbc-mode must be supplied as 'simulate', 'infer', or 'emit'.");
     if(repsSet == false)
         Msg::error("SBC: -sbc-reps is required.");
+    if(mode == "emit" && out.empty())
+        Msg::error("SBC emit: -sbc-out (output file prefix) is required.");
 
     UserSettings& s = UserSettings::userSettings();
     s.initializeSettings((int)rest.size(), rest.data(), true);
@@ -45,13 +47,14 @@ int main(int argc, const char* argv[]){
     Probability::PriorSpec muPrior     = s.getMuPrior();
     Probability::PriorSpec psiPrior    = s.getPsiPrior();
     if(lambdaPrior.set == false || muPrior.set == false || psiPrior.set == false)
-        Msg::error("SBC: -lambda-prior, -mu-prior and -psi-prior are all required (these ARE the inference priors).");
+        Msg::error("SBC: -lambda-prior, -mu-prior and -psi-prior are all required.");
     if(s.getConditionAgePriorSet() == false)
-        Msg::error("SBC: -cond must supply a distribution to draw the start age x from (e.g. -cond crown \"lognormal(4.094,0.2)\").");
+        Msg::error("SBC: -cond must supply a distribution to draw the origin age from.");
 
     SbcConfig cfg;
     cfg.numReps = reps;
     cfg.simulateOnly = (mode == "simulate");
+    cfg.emitFiles = (mode == "emit");
     cfg.originConditioning = (s.getConditioning() == Conditioning::ORIGIN);
     cfg.condEvent = s.getConditioningEvent();
     cfg.rho = s.getRho();
@@ -65,7 +68,7 @@ int main(int argc, const char* argv[]){
     cfg.startAgePrior = { true, s.getConditionAgePrior(), s.getConditionAgePriorP1(), s.getConditionAgePriorP2() };
     cfg.dumpPrefix = out;
 
-    if(cfg.simulateOnly == false){
+    if(cfg.simulateOnly == false && cfg.emitFiles == false){
         if(genSet == false)    Msg::error("SBC infer: -sbc-gen (MCMC generations per replicate) is required.");
         if(burninSet == false) Msg::error("SBC infer: -sbc-burnin (burn-in fraction in [0,1)) is required.");
         if(thinSet == false)   Msg::error("SBC infer: -sbc-thin (sample thinning interval) is required.");

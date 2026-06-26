@@ -31,6 +31,7 @@ class Mcmc : public ChainRunner {
         WriteTSV                trees;
         std::string             treeOut;
         std::string             paramOut;
+        bool                    writeTrees;
         int                     numCycles;
         int                     printFrequency;
         int                     sampleFrequency;

@@ -125,9 +125,11 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 Msg::error("Flag \"" + arg + "\" expects a value, but got another flag \"" + val + "\".");
 
             if (arg == "-to") {
-                treeOut = val;
+                treeOut = val + ".trees";
             } else if (arg == "-po") {
-                parametersOut = val;
+                parametersOut = val + ".log";
+                if (treeOut.empty())
+                    treeOut = val + ".trees";
             } else if (arg == "-t") {
                 treeFile = val;
             } else if (arg == "-c") {

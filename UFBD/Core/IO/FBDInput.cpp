@@ -15,9 +15,15 @@
 #include <vector>
 
 FBDInput::FBDInput(std::string treePath, std::string cladesPath, std::string fossilPath){
-    tree = readTree(treePath);
-    if(cladesPath.empty() == false)
-        readClades(cladesPath);
+    if(treePath.empty()){
+        Msg::warning("No backbone tree supplied (-t): running with an empty backbone (all elements unresolved).");
+        tree = new Tree("");
+        clades.push_back(Clade("whole", std::vector<std::string>(), tree->getCrown(), tree->getCrown()->getAncestor()));
+    }else{
+        tree = readTree(treePath);
+        if(cladesPath.empty() == false)
+            readClades(cladesPath);
+    }
     if(fossilPath.empty() == false){
         readFossils(fossilPath);
         assignFossilAwareAges();

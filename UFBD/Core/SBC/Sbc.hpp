@@ -12,6 +12,7 @@ class RandomVariable;
 struct SbcConfig {
     int                     numReps;
     bool                    simulateOnly;
+    bool                    emitFiles;
     bool                    originConditioning;
     ConditioningEvent       condEvent;
     double                  rho;
@@ -38,6 +39,7 @@ class Sbc {
         SimParams       drawParams(void);
         void            runSimulateOnly(void);
         void            runInference(void);
+        void            runEmit(void);
         SbcConfig       cfg;
         RandomVariable* rng;
 };

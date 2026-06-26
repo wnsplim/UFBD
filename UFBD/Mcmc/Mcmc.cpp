@@ -20,6 +20,7 @@ Mcmc::Mcmc(int ng, int pf, int sf, PhylogeneticModel* m) : model(m), numCycles(n
     UserSettings& settings = UserSettings::userSettings();
     treeOut = settings.getTreeOutput();
     paramOut = settings.getParamOutput();
+    writeTrees = (model->getTree()->getNumBackbone() > 0);
 }
 
 void Mcmc::run(void) {
@@ -94,7 +95,8 @@ void Mcmc::sample(unsigned long n, double lnL, double lnP) {
             cn.push_back("cpu_s");
         params.addColumnNamesTSV(cn);
 
-        trees.addFilepath(treeOut, true); // no CN for tree file
+        if(writeTrees)
+            trees.addFilepath(treeOut, true); // no CN for tree file
 
         traceNms.clear();
         traceNms.push_back("posterior");
@@ -112,7 +114,8 @@ void Mcmc::sample(unsigned long n, double lnL, double lnP) {
         dat.push_back((double)std::clock() / CLOCKS_PER_SEC);
     params.appendDataTSV(dat);
 
-    trees.appendDataTSV(model->getTree()->getNewickString());
+    if(writeTrees)
+        trees.appendDataTSV(model->getTree()->getNewickString());
 
     std::vector<double> tv = {lnL + lnP, lnL, lnP};
     tv.insert(tv.end(), parmStr.begin(), parmStr.end());
@@ -201,17 +204,18 @@ void Mcmc::resumeOutputs(void) {
         pout << line << '\n';
     pout.close();
 
-    std::ifstream tin(treeOut);
-    std::vector<std::string> tkeep;
-    std::string tline;
-    while(std::getline(tin, tline) && tkeep.size() < keep.size())
-        tkeep.push_back(tline);
-    tin.close();
-    std::ofstream tout(treeOut, std::ios::out | std::ios::trunc);
-    for(const std::string& l : tkeep)
-        tout << l << '\n';
-    tout.close();
-
     params.addFilepath(paramOut, false);
-    trees.addFilepath(treeOut, false);
+    if(writeTrees){
+        std::ifstream tin(treeOut);
+        std::vector<std::string> tkeep;
+        std::string tline;
+        while(std::getline(tin, tline) && tkeep.size() < keep.size())
+            tkeep.push_back(tline);
+        tin.close();
+        std::ofstream tout(treeOut, std::ios::out | std::ios::trunc);
+        for(const std::string& l : tkeep)
+            tout << l << '\n';
+        tout.close();
+        trees.addFilepath(treeOut, false);
+    }
 }

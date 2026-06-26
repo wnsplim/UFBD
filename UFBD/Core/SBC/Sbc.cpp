@@ -101,10 +101,48 @@ SimParams Sbc::drawParams(void){
 }
 
 void Sbc::run(void){
-    if(cfg.simulateOnly)
+    if(cfg.emitFiles)
+        runEmit();
+    else if(cfg.simulateOnly)
         runSimulateOnly();
     else
         runInference();
+}
+
+void Sbc::runEmit(void){
+    ForwardSimulator sim(rng);
+    const char* asg = cfg.originConditioning ? "TOTAL" : "CROWN";
+    for(int rep = 0; rep < cfg.numReps; rep++){
+        SimParams truth = drawParams();
+        SimResult r = sim.simulate(truth);
+        std::string base = cfg.dumpPrefix + "_rep" + std::to_string(rep);
+
+        std::ofstream tf(base + ".tree");
+        tf << r.backboneNewick << "\n";
+        tf.close();
+
+        std::ofstream cf(base + ".clades");
+        cf << "whole\t";
+        for(int i = 1; i <= r.numBackbone; i++)
+            cf << (i > 1 ? "," : "") << "T" << i;
+        cf << "\n";
+        cf.close();
+
+        std::ofstream ff(base + ".fossils");
+        for(size_t i = 0; i < r.fossilAges.size(); i++)
+            ff << "F" << (i + 1) << '\t' << r.fossilAges[i] << '\t' << r.fossilAges[i] << "\twhole\t" << asg << '\n';
+        for(int i = 0; i < r.numUE; i++)
+            ff << "U" << (i + 1) << "\t0\t0\twhole\t" << asg << '\n';
+        ff.close();
+
+        std::ofstream xf(base + ".truth");
+        xf << "lambda0\t" << truth.lambda[0] << "\nmu0\t" << truth.mu[0] << "\npsi0\t" << truth.psi[0]
+           << "\nx\t" << truth.startAge << "\nnSA\t" << r.numSA << '\n';
+        xf.close();
+
+        printf("emit rep %d: %d backbone, %zu fossil, %d UE -> %s.{tree,clades,fossils,truth}\n",
+               rep, r.numBackbone, r.fossilAges.size(), r.numUE, base.c_str());
+    }
 }
 
 void Sbc::runSimulateOnly(void){
@@ -204,7 +242,7 @@ void Sbc::runInference(void){
         }
 
         if(samp[0].empty())
-            Msg::error("SBC: no post-burnin samples collected; mcmcGen too small relative to burnin/thin");
+            Msg::error("SBC: no post-burnin samples collected");
         for(size_t c = 0; c < names.size(); c++){
             double t = truthForName(names[c], truth, cfg.originConditioning, (double)r.numSA);
             if(std::isnan(t))
