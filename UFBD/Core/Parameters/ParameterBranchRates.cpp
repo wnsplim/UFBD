@@ -1037,7 +1037,7 @@ std::vector<std::vector<BranchMGF>> ParameterBranchRatesCIR::getBranchMGF(void){
     return a;
 }
 
-double ParameterBranchRatesCIR::sigmaNonCenteredMoveCIR(int p){
+double ParameterBranchRatesCIR::sigmaPncpMoveCIR(int p){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastMove = 8;
     lastLocus = p;
@@ -1117,7 +1117,7 @@ double ParameterBranchRatesCIR::update(void){
     }
     if(u < 0.88){
         if(ncOn && u >= 0.82)
-            return sigmaNonCenteredMoveCIR(lastLocus);
+            return sigmaPncpMoveCIR(lastLocus);
         lastMove = 1;
         return scaleLocusSigma2(lastLocus);
     }

@@ -185,7 +185,7 @@ class ParameterBranchRatesCIR : public BranchRateModel {
     private:
         double                      scaleLocusTheta(int p);
         double                      scaleMuRates(int p);
-        double                      sigmaNonCenteredMoveCIR(int p);
+        double                      sigmaPncpMoveCIR(int p);
         double                      cirLnP(void);
         double                      getMeanTau(double rho, double rhoUp, double t, double sigma, double theta);
         double                      besselIRatio(double nu, double x);
