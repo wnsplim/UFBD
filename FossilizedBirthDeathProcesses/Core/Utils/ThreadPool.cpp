@@ -15,8 +15,8 @@
 
 ThreadPool::ThreadPool(int numThreads) : stop(false), chainCap(numThreads){
     for(int i = 0; i < OP_NUM; i++){
-        opCost[i] = -1.0;
-        opCalls[i] = 0;
+        opCost[i].store(-1.0, std::memory_order_relaxed);
+        opCalls[i].store(0, std::memory_order_relaxed);
     }
     for (size_t i = 0; i < numThreads; ++i) {
         threads.emplace_back([this] {
@@ -68,13 +68,13 @@ void ThreadPool::parallelFor(int opId, int n, const std::function<void(int, int)
     int nt = (int)threads.size();
     if(nt > maxThreads) nt = maxThreads;
     if(nt > chainCap) nt = chainCap;
-    long calls = ++opCalls[opId];
-    double cost = opCost[opId];
+    long calls = opCalls[opId].fetch_add(1, std::memory_order_relaxed) + 1;
+    double cost = opCost[opId].load(std::memory_order_relaxed);
     if(nt <= 1 || cost < 0.0 || (calls % 256) == 0){
         std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
         body(0, n);
         double per = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() / (double)n;
-        opCost[opId] = (cost < 0.0) ? per : 0.8 * cost + 0.2 * per;
+        opCost[opId].store((cost < 0.0) ? per : 0.8 * cost + 0.2 * per, std::memory_order_relaxed);
         return;
     }
     if((double)n * cost < 150e-6){

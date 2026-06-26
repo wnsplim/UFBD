@@ -28,8 +28,8 @@ class ThreadPool {
     std::condition_variable             cv;
     bool                                stop;
     int                                 chainCap;
-    double                              opCost[OP_NUM];
-    long                                opCalls[OP_NUM];
+    std::atomic<double>                 opCost[OP_NUM];
+    std::atomic<long>                   opCalls[OP_NUM];
 };
 
 #endif

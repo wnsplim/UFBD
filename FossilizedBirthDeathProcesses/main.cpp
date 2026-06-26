@@ -1,3 +1,5 @@
+#include "ChainRunner.hpp"
+#include "ConvergenceRunner.hpp"
 #include "FBDInput.hpp"
 #include "FBDTreeModel.hpp"
 #include "Mcmc.hpp"
@@ -47,30 +49,58 @@ int main(int argc, const char* argv[]) {
     else if(cn == "gbm")  cm = ClockModel::GBM;
     else if(cn == "gbmc") cm = ClockModel::GBMC;
 
-    int numChains = settings.getNumChains();
-    if(numChains > 1){
-        std::cout << "Running Metropolis-coupled MCMC with " << numChains << " chains parallelized across " << settings.getNumThreads() << " threads \n";
-        std::cout << "-----------------------------------------------------------------------" << std::endl;
-        std::vector<PhylogeneticModel*> models;
-        models.resize(numChains);
-        for(int i = 0; i < numChains; i++)
-            models[i] = seq
-                ? (PhylogeneticModel*)new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), settings.getSequenceFile(), settings.getPartitionFile(), settings.getModelNStates(), settings.getNumCats(), cm, settings.getRgeneGamma(), settings.getSigma2Gamma(), masterSeed + i)
-                : dating
-                    ? (PhylogeneticModel*)new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), settings.getHessianFile(), settings.getTreeFile(), settings.getModelNStates(), cm, settings.getRgeneGamma(), settings.getSigma2Gamma(), masterSeed + i)
-                    : (PhylogeneticModel*)new FBDTreeModel(pt, input.getClades(), input.getFossils(), masterSeed + i);
-        MetropolisCoupledMcmc mcmc(settings.getChainLength(), settings.getPrintFrequency(), settings.getSampleFrequency(), models, masterSeed);
-        mcmc.run();
-    }else if (numChains == 1){
-        std::cout << "Running standard MCMC \n";
-        std::cout << "-----------------------------------------------------------------------" << std::endl;
-        PhylogeneticModel* model = seq
-            ? (PhylogeneticModel*)new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), settings.getSequenceFile(), settings.getPartitionFile(), settings.getModelNStates(), settings.getNumCats(), cm, settings.getRgeneGamma(), settings.getSigma2Gamma(), masterSeed)
-            : dating
-                ? (PhylogeneticModel*)new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), settings.getHessianFile(), settings.getTreeFile(), settings.getModelNStates(), cm, settings.getRgeneGamma(), settings.getSigma2Gamma(), masterSeed)
-                : (PhylogeneticModel*)new FBDTreeModel(pt, input.getClades(), input.getFossils(), masterSeed);
-        Mcmc mcmc(settings.getChainLength(), settings.getPrintFrequency(), settings.getSampleFrequency(), model);
-        mcmc.run();
+    int numCoupledChains = settings.getNumCoupledChains();
+    int numRuns = settings.getNumRuns();
+    bool autoStop = settings.getAutoChainLength();
+    int pf = settings.getPrintFrequency();
+    int sf = settings.getSampleFrequency();
+
+    auto makeModel = [&](unsigned int sd) -> PhylogeneticModel* {
+        if(seq)
+            return new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), settings.getSequenceFile(), settings.getPartitionFile(), settings.getModelNStates(), settings.getNumCats(), cm, settings.getRgeneGamma(), settings.getSigma2Gamma(), sd);
+        if(dating)
+            return new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), settings.getHessianFile(), settings.getTreeFile(), settings.getModelNStates(), cm, settings.getRgeneGamma(), settings.getSigma2Gamma(), sd);
+        return new FBDTreeModel(pt, input.getClades(), input.getFossils(), sd);
+    };
+
+    if(numRuns == 1 && autoStop == false){
+        if(numCoupledChains > 1){
+            std::cout << "Running Metropolis-coupled MCMC with " << numCoupledChains << " coupled chains across " << settings.getNumThreads() << " threads\n";
+            std::cout << "-----------------------------------------------------------------------" << std::endl;
+            std::vector<PhylogeneticModel*> models(numCoupledChains);
+            for(int c = 0; c < numCoupledChains; c++)
+                models[c] = makeModel(masterSeed + (unsigned int)c);
+            MetropolisCoupledMcmc mcmc(settings.getChainLength(), pf, sf, models, masterSeed);
+            mcmc.run();
+        }else{
+            std::cout << "Running standard MCMC\n";
+            std::cout << "-----------------------------------------------------------------------" << std::endl;
+            Mcmc mcmc((int)settings.getChainLength(), pf, sf, makeModel(masterSeed));
+            mcmc.run();
+        }
+    }else{
+        unsigned long ncyc = autoStop ? settings.getMaxGen() : settings.getChainLength();
+        std::cout << "Running " << numRuns << " independent runs";
+        if(numCoupledChains > 1) std::cout << " of " << numCoupledChains << "-chain MC^3";
+        if(autoStop) std::cout << ", auto-stopping on R-hat/ESS";
+        std::cout << "\n-----------------------------------------------------------------------" << std::endl;
+        std::vector<ChainRunner*> reps;
+        for(int r = 0; r < numRuns; r++){
+            unsigned int base = masterSeed + (unsigned int)(r * (numCoupledChains + 1));
+            if(numCoupledChains > 1){
+                std::vector<PhylogeneticModel*> models(numCoupledChains);
+                for(int c = 0; c < numCoupledChains; c++)
+                    models[c] = makeModel(base + (unsigned int)c);
+                reps.push_back(new MetropolisCoupledMcmc(ncyc, pf, sf, models, base));
+            }else{
+                int ng = (ncyc > 2000000000UL) ? 2000000000 : (int)ncyc;
+                reps.push_back(new Mcmc(ng, pf, sf, makeModel(base)));
+            }
+        }
+        ConvergenceRunner cr(reps, settings.getParamOutput(), settings.getTreeOutput());
+        cr.run();
+        for(ChainRunner* c : reps)
+            delete c;
     }
 
     return 0;

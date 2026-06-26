@@ -35,6 +35,7 @@ MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int pf, int sf, s
     UserSettings& settings = UserSettings::userSettings();
     treeOut = settings.getTreeOutput();
     paramOut = settings.getParamOutput();
+    gen = 0;
 
     ThreadPool::shared().setChainCap(std::max(1, settings.getNumCores() / threadPool.size()));
 }
@@ -46,9 +47,15 @@ double MetropolisCoupledMcmc::calcHeating(int idx){
 }
 
 void MetropolisCoupledMcmc::run(void) {
+    init();
+    advance(numCycles);
+    finalize();
+}
+
+void MetropolisCoupledMcmc::init(void) {
+    if(numCycles >= std::numeric_limits<unsigned long>::max())
+        Msg::error("Numer of cycles requested is greater than largest possible value");
     RandomVariable::setActiveInstance(&swapRng);
-    RandomVariable& rng = RandomVariable::randomVariableInstance();
-    
     int idx = 0;
     for(PhylogeneticModel* m : models){
         currLnL.push_back(m->lnLikelihood());
@@ -56,11 +63,22 @@ void MetropolisCoupledMcmc::run(void) {
         indices.push_back(idx);
         idx++;
     }
-    
-    if(numCycles >= std::numeric_limits<unsigned long>::max())
-        Msg::error("Numer of cycles requested is greater than largest possible value");
+    gen = 0;
+}
 
-    for (unsigned long n=1; n<=numCycles; n++){
+void MetropolisCoupledMcmc::finalize(void) {
+    params.closeTSV();
+    trees.closeTSV();
+}
+
+void MetropolisCoupledMcmc::advance(unsigned long nGens) {
+    RandomVariable::setActiveInstance(&swapRng);
+    RandomVariable& rng = RandomVariable::randomVariableInstance();
+
+    unsigned long target = gen + nGens;
+    while (gen < target){
+        gen++;
+        unsigned long n = gen;
         if(n < 10000 && n % 50 == 0)
             updateDeltaT();
         
@@ -174,19 +192,29 @@ void MetropolisCoupledMcmc::sample(unsigned long n) {
         params.addColumnNamesTSV(cn);
 
         trees.addFilepath(treeOut, true); // no CN for tree file
+
+        traceNms.clear();
+        traceNms.push_back("posterior");
+        traceNms.push_back("likelihood");
+        traceNms.push_back("prior");
+        for(const std::string& s : headStr)
+            traceNms.push_back(s);
+        traceCols.assign(traceNms.size(), std::vector<double>());
     }
 
-    std::vector<double> dat = {(double)n, currLnL[coldModelIdx] + currLnP[coldModelIdx], currLnL[coldModelIdx], currLnP[coldModelIdx]};
+    double cl = currLnL[coldModelIdx];
+    double cp = currLnP[coldModelIdx];
+    std::vector<double> dat = {(double)n, cl + cp, cl, cp};
     std::vector<double> parmStr = models[coldModelIdx]->getParameterString();
     dat.insert( dat.end(), parmStr.begin(), parmStr.end() );
     params.appendDataTSV(dat);
-    
+
     trees.appendDataTSV(models[coldModelIdx]->getTree()->getNewickString());
 
-    if (n == numCycles){
-        params.closeTSV();
-        trees.closeTSV();
-    }
+    std::vector<double> tv = {cl + cp, cl, cp};
+    tv.insert(tv.end(), parmStr.begin(), parmStr.end());
+    for(size_t j = 0; j < traceCols.size() && j < tv.size(); j++)
+        traceCols[j].push_back(tv[j]);
 }
 
 void MetropolisCoupledMcmc::updateDeltaT(void) {

@@ -20,7 +20,14 @@ class UserSettings {
                                         }
         void                        initializeSettings(int argc, const char* argv[], bool sbcMode = false);
         unsigned long               getChainLength(void) { return chainLength; }
-        int                         getNumChains(void) { return numChains; }
+        int                         getNumCoupledChains(void) { return numCoupledChains; }
+        int                         getNumRuns(void) { return numRuns; }
+        bool                        getAutoChainLength(void) { return autoChainLength; }
+        double                      getBurninFraction(void) { return burninFraction; }
+        double                      getRhatThreshold(void) { return rhatThreshold; }
+        double                      getEssThreshold(void) { return essThreshold; }
+        int                         getCheckEverySamples(void) { return checkEverySamples; }
+        unsigned long               getMaxGen(void) { return maxGen; }
         int                         getNumThreads(void) { return numThreads; }
         int                         getNumCores(void) { return numCores; }
         std::string                 getTreeOutput(void) { return treeOut; }
@@ -99,7 +106,14 @@ class UserSettings {
         unsigned int                seed;
         bool                        seedSet;
         unsigned long               chainLength;
-        int                         numChains;
+        int                         numCoupledChains;
+        int                         numRuns;
+        bool                        autoChainLength;
+        double                      burninFraction;
+        double                      rhatThreshold;
+        double                      essThreshold;
+        int                         checkEverySamples;
+        unsigned long               maxGen;
         int                         numThreads;
         int                         numCores;
         int                         printFrequency;

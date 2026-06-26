@@ -2,20 +2,28 @@
 #define MetropolisCoupledMcmc_hpp
 
 #include <fstream>
+#include <string>
 #include <vector>
 
+#include "ChainRunner.hpp"
 #include "RandomVariable.hpp"
 #include "ThreadPool.hpp"
 #include "WriteTSV.hpp"
 
 class PhylogeneticModel;
 
-class MetropolisCoupledMcmc {
+class MetropolisCoupledMcmc : public ChainRunner {
     public:
                                             MetropolisCoupledMcmc(void) = delete;
                                             MetropolisCoupledMcmc(unsigned long ng, int pf, int sf, std::vector<PhylogeneticModel*> m, unsigned int masterSeed);
         void                                run(void);
-    
+        void                                init(void);
+        void                                advance(unsigned long nGens);
+        void                                finalize(void);
+        void                                setOutputPaths(const std::string& po, const std::string& to) { paramOut = po; treeOut = to; }
+        const std::vector<std::vector<double>>& traceColumns(void) { return traceCols; }
+        const std::vector<std::string>&     traceNames(void) { return traceNms; }
+
     private:
         //functions
         double                              calcHeating(int idx);
@@ -46,6 +54,9 @@ class MetropolisCoupledMcmc {
         int                                 numSwapsCold;
         int                                 printFrequency;
         int                                 sampleFrequency;
+        unsigned long                       gen;
+        std::vector<std::vector<double>>    traceCols;
+        std::vector<std::string>            traceNms;
 };
 
 #endif

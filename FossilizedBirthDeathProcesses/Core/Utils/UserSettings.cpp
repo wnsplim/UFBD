@@ -32,11 +32,18 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     seed            = 0;
     seedSet         = false;
     chainLength     = 100;
-    numChains       = 4;
+    numCoupledChains       = 1;
+    numRuns         = 4;
+    autoChainLength = false;
+    burninFraction  = 0.25;
+    rhatThreshold   = 1.01;
+    essThreshold    = 200.0;
+    checkEverySamples = 200;
+    maxGen          = 1000000000;
     numThreads      = 4;
     numCores        = 1;
-    printFrequency  = 1;
-    sampleFrequency = 1;
+    printFrequency  = 1000;
+    sampleFrequency = 1000;
     hessianFile     = "";
     clockModelName  = "ucln";
     nStates         = 4;
@@ -71,14 +78,16 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times",
         "-lambda-prior-mode", "-mu-prior-mode", "-psi-prior-mode", "-hsmrf-shifts", "-hsmrf-shift-size", "-cpu-time",
         "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma",
-        "-seq", "-partition", "-ncat", "-datatype", "-model", "-inv", "-freq"
+        "-seq", "-partition", "-ncat", "-datatype", "-model", "-inv", "-freq",
+        "-runs", "-burnin", "-rhat", "-min-ess", "-check-every", "-max-gen"
     };
     std::set<std::string> valueFlags = {
         "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt", "-cores",
         "-lambda-prior", "-mu-prior", "-psi-prior", "-skyline-times",
         "-lambda-prior-mode", "-mu-prior-mode", "-psi-prior-mode", "-hsmrf-shifts", "-hsmrf-shift-size", "-cpu-time",
         "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma",
-        "-seq", "-partition", "-ncat", "-datatype", "-model", "-inv", "-freq"
+        "-seq", "-partition", "-ncat", "-datatype", "-model", "-inv", "-freq",
+        "-runs", "-burnin", "-rhat", "-min-ess", "-check-every", "-max-gen"
     };
 
     for (int i = 1; i < (int)arguments.size(); i++) {
@@ -223,6 +232,18 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 else if (v == "f" || v == "empirical" || v == "observed") freqMode = "empirical";
                 else if (v == "fo" || v == "estimate" || v == "estimated" || v == "free") freqMode = "estimate";
                 else Msg::error("Flag \"-freq\" expects model, F (empirical/observed counts), or FO (estimate), but got \"" + val + "\".");
+            } else if (arg == "-burnin") {
+                burninFraction = std::stod(val);
+                if(burninFraction < 0.0 || burninFraction >= 1.0)
+                    Msg::error("Flag \"-burnin\" expects a fraction in [0, 1).");
+            } else if (arg == "-rhat") {
+                rhatThreshold = std::stod(val);
+            } else if (arg == "-min-ess") {
+                essThreshold = std::stod(val);
+            } else if (arg == "-max-gen") {
+                maxGen = std::stoull(val);
+            } else if (arg == "-n" && val == "auto") {
+                autoChainLength = true;
             }else {
                 // Integer-valued flags
                 // Check all characters are digits (allowing leading minus for negative detection)
@@ -238,11 +259,13 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 if (arg == "-n")        chainLength     = intVal;
                 else if (arg == "-p")   printFrequency  = intVal;
                 else if (arg == "-s")   sampleFrequency = intVal;
-                else if (arg == "-nc")  numChains       = intVal;
+                else if (arg == "-nc")  numCoupledChains       = intVal;
                 else if (arg == "-nt")  numThreads      = intVal;
                 else if (arg == "-cores") { numCores = intVal; coresProvided = true; }
                 else if (arg == "-nstates") { nStates = intVal; nstatesProvided = true; }
                 else if (arg == "-ncat")    numCats     = intVal;
+                else if (arg == "-runs")    numRuns     = intVal;
+                else if (arg == "-check-every") checkEverySamples = intVal;
             }
         }
     }
@@ -258,9 +281,9 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         maxNumThreads = 1;
     }
 
-    if (numChains < 1) {
+    if (numCoupledChains < 1) {
         Msg::warning("Chains must be >= 1; resetting to 1.");
-        numChains = 1;
+        numCoupledChains = 1;
     }
 
     if (chainLength < 10) {
@@ -285,11 +308,11 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         numThreads = maxNumThreads - 1;
     }
 
-    if (numThreads > numChains) {
+    if (numCoupledChains > 1 && numThreads > numCoupledChains) {
         Msg::warning("Threads (" + std::to_string(numThreads) +
-                     ") cannot exceed chains (" + std::to_string(numChains) +
+                     ") cannot exceed coupled chains (" + std::to_string(numCoupledChains) +
                      "); reducing threads to match.");
-        numThreads = numChains;
+        numThreads = numCoupledChains;
     }
 
     if (numThreads < 1) {
@@ -297,8 +320,8 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         numThreads = 1;
     }
 
-    if (coresProvided == false && numChains > 1)
-        numCores = numChains;
+    if (coresProvided == false && numCoupledChains > 1)
+        numCores = numCoupledChains;
 
     if (numCores > maxNumThreads) {
         if (coresProvided)
@@ -395,7 +418,7 @@ void UserSettings::print(void) {
     else
         std::cout << "Random number seed:                    (time-based)" << std::endl;
     std::cout << "Chain length:                          " << chainLength << std::endl;
-    std::cout << "Number of chains:                      " << numChains << std::endl;
+    std::cout << "Coupled chains per run (MC3):          " << numCoupledChains << std::endl;
     std::cout << "Number of threads:                     " << numThreads << std::endl;
     std::cout << "Print-to-screen frequency:             " << printFrequency << std::endl;
     std::cout << "Chain sampling frequency:              " << sampleFrequency << std::endl;
