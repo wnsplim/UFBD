@@ -115,7 +115,7 @@ void Mcmc::sample(unsigned long n, double lnL, double lnP) {
     params.appendDataTSV(dat);
 
     if(writeTrees)
-        trees.appendDataTSV(model->getTree()->getNewickString());
+        trees.appendDataTSV(model->getTree()->getBackboneNewickString());
 
     std::vector<double> tv = {lnL + lnP, lnL, lnP};
     tv.insert(tv.end(), parmStr.begin(), parmStr.end());

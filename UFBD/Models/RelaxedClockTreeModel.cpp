@@ -214,34 +214,22 @@ void RelaxedClockTreeModel::collectNodeAges(std::vector<std::string>* names, std
         if(names) names->push_back("x0");
         if(vals)  vals->push_back(fbd->getOriginAgeValue());
     }
-    if(fbd->getTree()->getNumBackbone() == 0)
-        return;
-    Node* crown = fbd->getTree()->getCrown();
-    std::vector<Node*> stack(1, crown);
-    int k = 1;
-    while(stack.empty() == false){
-        Node* n = stack.back();
-        stack.pop_back();
-        if(n->getIsTip())
-            continue;
-        if(names) names->push_back("x" + std::to_string(k));
-        if(vals)  vals->push_back(n->getTime());
-        k++;
-        std::vector<Node*> kids;
-        for(Node* c : n->getNeighbors())
-            if(c != n->getAncestor())
-                kids.push_back(c);
-        std::sort(kids.begin(), kids.end(), [](Node* a, Node* b){ return a->getOffset() > b->getOffset(); });
-        for(Node* c : kids)
-            stack.push_back(c);
+    std::vector<Node*> bb = fbd->getTree()->getBackboneAgeNodes();
+    for(size_t i = 0; i < bb.size(); i++){
+        if(names) names->push_back("x" + std::to_string(i + 1));
+        if(vals)  vals->push_back(bb[i]->getTime());
     }
+}
+
+static bool isNodeAgeName(const std::string& s){
+    return s.size() >= 2 && s[0] == 'x' && s[1] >= '0' && s[1] <= '9';
 }
 
 std::vector<std::string> RelaxedClockTreeModel::getParameterNames(void){
     std::vector<std::string> n;
     collectNodeAges(&n, nullptr);
     for(const std::string& s : fbd->getParameterNames())
-        if(s != "originAge")
+        if(s != "originAge" && isNodeAgeName(s) == false)
             n.push_back(s);
     for(int p = 0; p < clock->getNumLoci(); p++){
         std::string suf = (clock->getNumLoci() > 1) ? std::to_string(p) : "";
@@ -259,7 +247,7 @@ std::vector<double> RelaxedClockTreeModel::getParameterString(void){
     std::vector<std::string> fbdN = fbd->getParameterNames();
     std::vector<double> fbdV = fbd->getParameterString();
     for(size_t i = 0; i < fbdV.size(); i++)
-        if(i >= fbdN.size() || fbdN[i] != "originAge")
+        if(i >= fbdN.size() || (fbdN[i] != "originAge" && isNodeAgeName(fbdN[i]) == false))
             v.push_back(fbdV[i]);
     for(int p = 0; p < clock->getNumLoci(); p++){
         v.push_back(clock->getLocusRate(p));

@@ -128,7 +128,7 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
 
         std::vector<char> dirty(numNodes, 0);
         std::vector<Node*> dirtyNodes;
-        std::vector<std::vector<Node*> > dirtyKids;
+        std::vector<std::vector<Node*> > dirtyChildren;
         std::vector<std::vector<double> > Pcache(numNodes);
         for(Node* node : downPass){
             int off = node->getOffset();
@@ -145,22 +145,22 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
                 }
                 continue;
             }
-            std::vector<Node*> kids;
+            std::vector<Node*> children;
             for(Node* nb : node->getNeighbors())
                 if(nb != node->getAncestor())
-                    kids.push_back(nb);
-            std::sort(kids.begin(), kids.end(), [](Node* a, Node* b){ return a->getOffset() < b->getOffset(); });
+                    children.push_back(nb);
+            std::sort(children.begin(), children.end(), [](Node* a, Node* b){ return a->getOffset() < b->getOffset(); });
             bool nd = substDirty;
-            for(Node* c : kids){
+            for(Node* c : children){
                 int coff = c->getOffset();
                 if(dirty[coff] || curBl[coff] != lastBl[p][coff]) nd = true;
             }
             if(nd == false) continue;
             dirty[off] = 1;
             dirtyNodes.push_back(node);
-            dirtyKids.push_back(kids);
+            dirtyChildren.push_back(children);
             conP[p][off].assign(K * npat * n, 1.0);
-            for(Node* c : kids){
+            for(Node* c : children){
                 int coff = c->getOffset();
                 Pcache[coff].assign(K * n * n, 0.0);
                 for(int k = 0; k < K; k++)
@@ -175,8 +175,8 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
             for(size_t di = 0; di < dirtyNodes.size(); di++){
                 Node* node = dirtyNodes[di];
                 std::vector<double>& cp = conP[p][node->getOffset()];
-                const std::vector<Node*>& kids = dirtyKids[di];
-                for(Node* c : kids){
+                const std::vector<Node*>& children = dirtyChildren[di];
+                for(Node* c : children){
                     int coff = c->getOffset();
                     const std::vector<double>& ccp = conP[p][coff];
                     const double* Pm = Pcache[coff].data();

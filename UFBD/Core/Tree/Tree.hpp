@@ -22,6 +22,8 @@ class Tree {
         double                              getBranchLength(Node* e1, Node* e2);
         std::vector<Node*>&                 getDownPassSequence(void) { return downPassSequence; }
         std::string                         getNewickString(void);
+        std::string                         getBackboneNewickString(void);
+        std::vector<Node*>                  getBackboneAgeNodes(void);
         int                                 getNumLineagesAtTime(double t);
         bool                                isSATip(Node* n);
         bool                                isFakeSplit(Node* n);

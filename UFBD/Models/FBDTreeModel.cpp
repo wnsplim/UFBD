@@ -247,6 +247,9 @@ static bool nodeOnStalk(Node* n, Node* crown, Node* origin){
 
 std::vector<std::string> FBDTreeModel::getParameterNames(void){
     std::vector<std::string> names;
+    std::vector<Node*> bbNodes = parameterTree->getTree()->getBackboneAgeNodes();
+    for(size_t i = 0; i < bbNodes.size(); i++)
+        names.push_back("x" + std::to_string(i + 1));
     for(Parameter* p : parameters)
         if( p != parameterTree){ //by convention, exclude parameter tree from these getters
             ParameterShrinkageField* sf = dynamic_cast<ParameterShrinkageField*>(p);
@@ -275,6 +278,8 @@ int FBDTreeModel::countResolvedSA(void){
 
 std::vector<double> FBDTreeModel::getParameterString(void){
     std::vector<double> vals;
+    for(Node* n : parameterTree->getTree()->getBackboneAgeNodes())
+        vals.push_back(n->getTime());
     for(Parameter* p : parameters)
         if( p != parameterTree){ //by convention, exclude parameter tree from these getters
             ParameterShrinkageField* sf = dynamic_cast<ParameterShrinkageField*>(p);

@@ -201,7 +201,7 @@ void MetropolisCoupledMcmc::sample(unsigned long n) {
     params.appendDataTSV(dat);
 
     if(writeTrees)
-        trees.appendDataTSV(models[coldModelIdx]->getTree()->getNewickString());
+        trees.appendDataTSV(models[coldModelIdx]->getTree()->getBackboneNewickString());
 
     std::vector<double> tv = {cl + cp, cl, cp};
     tv.insert(tv.end(), parmStr.begin(), parmStr.end());

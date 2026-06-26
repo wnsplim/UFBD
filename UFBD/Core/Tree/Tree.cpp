@@ -238,6 +238,103 @@ std::string Tree::getNewickString(void) {
     return strm.str();
 }
 
+static bool markBackbone(Node* n, std::set<Node*>& keep, std::map<Node*,std::string>& minName){
+    if(n->getIsTip()){
+        if(n->getIsFossil() == false){ keep.insert(n); minName[n] = n->getName(); return true; }
+        return false;
+    }
+    bool any = false;
+    std::string mn;
+    for(Node* c : n->getNeighbors())
+        if(c != n->getAncestor() && markBackbone(c, keep, minName)){
+            any = true;
+            const std::string& cm = minName[c];
+            if(mn.empty() || cm < mn) mn = cm;
+        }
+    if(any){ keep.insert(n); minName[n] = mn; }
+    return any;
+}
+
+static int keptChildren(Node* n, std::set<Node*>& keep, std::map<Node*,std::string>& minName, std::vector<Node*>& out){
+    out.clear();
+    for(Node* c : n->getNeighbors())
+        if(c != n->getAncestor() && keep.count(c) > 0)
+            out.push_back(c);
+    std::sort(out.begin(), out.end(), [&](Node* a, Node* b){ return minName[a] < minName[b]; });
+    return (int)out.size();
+}
+
+static Node* descendToBackbone(Node* n, std::set<Node*>& keep, std::map<Node*,std::string>& minName){
+    std::vector<Node*> kc;
+    while(n->getIsTip() == false && keptChildren(n, keep, minName, kc) == 1)
+        n = kc[0];
+    return n;
+}
+
+static void collectBbNodes(Node* p, std::set<Node*>& keep, std::map<Node*,std::string>& minName, std::vector<Node*>& out){
+    if(p->getIsTip())
+        return;
+    out.push_back(p);
+    std::vector<Node*> kc;
+    keptChildren(p, keep, minName, kc);
+    for(Node* c : kc)
+        collectBbNodes(descendToBackbone(c, keep, minName), keep, minName, out);
+}
+
+static void writeBackbone(Node* p, std::set<Node*>& keep, std::map<Node*,std::string>& minName, std::map<Node*,int>& xidx, std::stringstream& strm){
+    if(p->getIsTip()){
+        std::string nm = p->getName();
+        std::replace(nm.begin(), nm.end(), ' ', '_');
+        strm << nm;
+        return;
+    }
+    std::vector<Node*> kc;
+    keptChildren(p, keep, minName, kc);
+    strm << "(";
+    for(size_t i = 0; i < kc.size(); i++){
+        Node* t = descendToBackbone(kc[i], keep, minName);
+        if(i > 0) strm << ",";
+        writeBackbone(t, keep, minName, xidx, strm);
+        strm << ":" << std::fabs(p->getTime() - t->getTime());
+    }
+    strm << ")";
+    std::map<Node*,int>::iterator it = xidx.find(p);
+    if(it != xidx.end())
+        strm << "x" << it->second;
+}
+
+std::string Tree::getBackboneNewickString(void) {
+
+    std::set<Node*> keep;
+    std::map<Node*,std::string> minName;
+    markBackbone(getRoot(), keep, minName);
+    if(keep.empty())
+        return "";
+    Node* bbRoot = descendToBackbone(getRoot(), keep, minName);
+    std::vector<Node*> bb;
+    collectBbNodes(bbRoot, keep, minName, bb);
+    std::map<Node*,int> xidx;
+    for(size_t i = 0; i < bb.size(); i++)
+        xidx[bb[i]] = (int)(i + 1);
+    std::stringstream strm;
+    strm << std::setprecision(17);
+    writeBackbone(bbRoot, keep, minName, xidx, strm);
+    strm << ";";
+    return strm.str();
+}
+
+std::vector<Node*> Tree::getBackboneAgeNodes(void) {
+
+    std::set<Node*> keep;
+    std::map<Node*,std::string> minName;
+    markBackbone(getRoot(), keep, minName);
+    std::vector<Node*> out;
+    if(keep.empty())
+        return out;
+    collectBbNodes(descendToBackbone(getRoot(), keep, minName), keep, minName, out);
+    return out;
+}
+
 int Tree::getNumBackbone(void){
     initializeDownPassSequence();
     int idx = 0;
@@ -388,12 +485,12 @@ void Tree::passDown(Node* p, Node* from) {
 
     if (p != nullptr)
         {
-        std::vector<Node*> kids;
+        std::vector<Node*> children;
         for (Node* d : p->getNeighbors())
             if (d != from)
-                kids.push_back(d);
-        std::sort(kids.begin(), kids.end(), [](Node* a, Node* b){ return a->getOffset() < b->getOffset(); });
-        for (Node* d : kids)
+                children.push_back(d);
+        std::sort(children.begin(), children.end(), [](Node* a, Node* b){ return a->getOffset() < b->getOffset(); });
+        for (Node* d : children)
             passDown(d, p);
         p->setAncestor(from);
         downPassSequence.push_back(p);
