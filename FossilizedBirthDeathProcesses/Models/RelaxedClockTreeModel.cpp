@@ -1,5 +1,6 @@
 #include "RelaxedClockTreeModel.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include "ApproxBranchLengthLikelihood.hpp"
@@ -19,6 +20,17 @@ void RelaxedClockTreeModel::buildClock(ClockModel clockModel, const double* rgen
     // CIR clock: halt — construction detached (ParameterBranchRatesCIR kept but never built)
     clock = new ParameterBranchRates(1.0, this, fbd->getTree(), nLoci, clockModel, rgeneParam, sigma2Param);
     clock->setUnresolvedFossils(fbd->getUnresolvedFossils());
+    naSel.init(2);
+}
+
+double RelaxedClockTreeModel::nodeAgeJump2(void){
+    std::vector<Node*> nodes = fbd->getTree()->getInternalAgeNodes();
+    double s = 0.0;
+    for(size_t i = 0; i < nodes.size() && i < naSnap.size(); i++){
+        double d = std::log(nodes[i]->getTime()) - naSnap[i];
+        s += d * d;
+    }
+    return s;
 }
 
 RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, const std::string& hessianFile, const std::string& mlTreeFile, int nStates, ClockModel clockModel, const double* rgeneParam, const double* sigma2Param, unsigned int seed){
@@ -92,12 +104,23 @@ double RelaxedClockTreeModel::nodeAgeSweep(void){
 }
 
 double RelaxedClockTreeModel::update(void){
+    static const bool naSelOff = [](){ const char* e = std::getenv("FBD_NASEL"); return e != nullptr && e[0] == 'o'; }();
     RandomVariable& r = RandomVariable::randomVariableInstance();
     if(ctmc != nullptr && r.uniformRv() < 0.25){ lastMoveType = 6; return ctmc->update(); }
     double u = r.uniformRv();
     if(u < 0.25){ lastMoveType = 0; return clock->update(); }
-    if(u < 0.50){ lastMoveType = 1; return clock->constantDistanceMove(); }
-    if(u < 0.65){ lastMoveType = 7; return nodeAgeSweep(); }
+    if(u < 0.65){
+        naSnap.clear();
+        std::vector<Node*> nodes = fbd->getTree()->getInternalAgeNodes();
+        for(Node* n : nodes)
+            naSnap.push_back(std::log(n->getTime()));
+        naOp = naSelOff ? (u < 0.50 ? 0 : 1) : naSel.pick(r);
+        if(naOp == 0){ lastMoveType = 1; return clock->constantDistanceMove(); }
+        lastMoveType = 7;
+        double h = nodeAgeSweep();
+        naSel.record(1, nodeAgeJump2(), (double)naSnap.size());
+        return h;
+    }
     if(u < 0.72){
         lastMoveType = 4;
         return clock->rateAgeSubtreeMove();
@@ -130,6 +153,7 @@ void RelaxedClockTreeModel::updateForAcceptance(void){
     else if(lastMoveType == 1){
         clock->updateForAcceptance();
         fbd->getParameterTree()->updateForAcceptance();
+        naSel.record(0, nodeAgeJump2(), 1.0);
     }else if(lastMoveType == 3){
         ageScaleAcc++;
         clock->commitAll();
@@ -152,6 +176,7 @@ void RelaxedClockTreeModel::updateForRejection(void){
     else if(lastMoveType == 1){
         clock->updateForRejection();
         fbd->getParameterTree()->updateForRejection();
+        naSel.record(0, 0.0, 1.0);
     }else if(lastMoveType == 3){
         clock->restoreAll();
         fbd->getParameterTree()->updateForRejection();
@@ -164,11 +189,38 @@ void RelaxedClockTreeModel::updateForRejection(void){
         fbd->updateForRejection();
 }
 
+void RelaxedClockTreeModel::collectNodeAges(std::vector<std::string>* names, std::vector<double>* vals){
+    if(fbd->hasOrigin()){
+        if(names) names->push_back("x0");
+        if(vals)  vals->push_back(fbd->getOriginAgeValue());
+    }
+    Node* crown = fbd->getTree()->getCrown();
+    std::vector<Node*> stack(1, crown);
+    int k = 1;
+    while(stack.empty() == false){
+        Node* n = stack.back();
+        stack.pop_back();
+        if(n->getIsTip())
+            continue;
+        if(names) names->push_back("x" + std::to_string(k));
+        if(vals)  vals->push_back(n->getTime());
+        k++;
+        std::vector<Node*> kids;
+        for(Node* c : n->getNeighbors())
+            if(c != n->getAncestor())
+                kids.push_back(c);
+        std::sort(kids.begin(), kids.end(), [](Node* a, Node* b){ return a->getOffset() > b->getOffset(); });
+        for(Node* c : kids)
+            stack.push_back(c);
+    }
+}
+
 std::vector<std::string> RelaxedClockTreeModel::getParameterNames(void){
     std::vector<std::string> n;
-    n.push_back("crownAge");
+    collectNodeAges(&n, nullptr);
     for(const std::string& s : fbd->getParameterNames())
-        n.push_back(s);
+        if(s != "originAge")
+            n.push_back(s);
     for(int p = 0; p < clock->getNumLoci(); p++){
         std::string suf = (clock->getNumLoci() > 1) ? std::to_string(p) : "";
         n.push_back("clockMean" + suf);
@@ -181,9 +233,12 @@ std::vector<std::string> RelaxedClockTreeModel::getParameterNames(void){
 
 std::vector<double> RelaxedClockTreeModel::getParameterString(void){
     std::vector<double> v;
-    v.push_back(fbd->getTree()->getCrown()->getTime());
-    for(double x : fbd->getParameterString())
-        v.push_back(x);
+    collectNodeAges(nullptr, &v);
+    std::vector<std::string> fbdN = fbd->getParameterNames();
+    std::vector<double> fbdV = fbd->getParameterString();
+    for(size_t i = 0; i < fbdV.size(); i++)
+        if(i >= fbdN.size() || fbdN[i] != "originAge")
+            v.push_back(fbdV[i]);
     for(int p = 0; p < clock->getNumLoci(); p++){
         v.push_back(clock->getLocusRate(p));
         v.push_back(clock->getLocusSigma2(p));
