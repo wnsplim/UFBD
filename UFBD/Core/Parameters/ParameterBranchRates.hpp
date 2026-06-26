@@ -141,8 +141,6 @@ class BranchRateModel : public Parameter {
         double                      ncStep;
         long                        ncAccW;
         long                        ncAttW;
-        AdaptiveMixSelector         sigSel;
-        double                      sigPreLog;
         std::vector<std::vector<double>> sigTauL;
         std::vector<std::vector<double>> sigEllB;
         long                        sigRefresh;

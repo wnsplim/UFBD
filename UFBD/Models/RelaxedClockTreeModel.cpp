@@ -105,7 +105,6 @@ double RelaxedClockTreeModel::nodeAgeSweep(void){
 }
 
 double RelaxedClockTreeModel::update(void){
-    static const bool naSelOff = [](){ const char* e = std::getenv("FBD_NASEL"); return e != nullptr && e[0] == 'o'; }();
     RandomVariable& r = RandomVariable::randomVariableInstance();
     if(ctmc != nullptr && r.uniformRv() < 0.25){ lastMoveType = 6; return ctmc->update(); }
     double u = r.uniformRv();
@@ -115,7 +114,7 @@ double RelaxedClockTreeModel::update(void){
         std::vector<Node*> nodes = fbd->getTree()->getInternalAgeNodes();
         for(Node* n : nodes)
             naSnap.push_back(std::log(n->getTime()));
-        naOp = naSelOff ? (u < 0.50 ? 0 : 1) : naSel.pick(r);
+        naOp = naSel.pick(r);
         if(naOp == 0){ lastMoveType = 1; return clock->constantDistanceMove(); }
         lastMoveType = 7;
         double h = nodeAgeSweep();

@@ -79,8 +79,6 @@ BranchRateModel::BranchRateModel(double prob, PhylogeneticModel* m, Tree* t, int
     ncStep = 0.5;
     ncAccW = 0;
     ncAttW = 0;
-    sigSel.init(2);
-    sigPreLog = 0.0;
     sigRefresh = 0;
     for(int i = 0; i < 3; i++){
         rgeneParam[i] = rg[i];
@@ -213,8 +211,7 @@ void BranchRateModel::writeState(std::ostream& os){
     os << '\n';
     for(int k = 0; k < 4; k++) Serialize::writeBoolDeque(os, recentAR[k]);
     os << cdStep << ' ' << cdAccW << ' ' << cdAttW << ' ' << ncStep << ' ' << ncAccW << ' ' << ncAttW << '\n';
-    os << sigPreLog << ' ' << sigRefresh << '\n';
-    sigSel.writeState(os);
+    os << sigRefresh << '\n';
     Serialize::write2D(os, sigTauL);
     Serialize::write2D(os, sigEllB);
 }
@@ -230,8 +227,7 @@ void BranchRateModel::readState(std::istream& is){
     for(int k = 0; k < 4; k++) is >> acc[k] >> rej[k];
     for(int k = 0; k < 4; k++) Serialize::readBoolDeque(is, recentAR[k]);
     is >> cdStep >> cdAccW >> cdAttW >> ncStep >> ncAccW >> ncAttW;
-    is >> sigPreLog >> sigRefresh;
-    sigSel.readState(is);
+    is >> sigRefresh;
     Serialize::read2D(is, sigTauL);
     Serialize::read2D(is, sigEllB);
 }
@@ -364,10 +360,6 @@ double BranchRateModel::rateAgeSubtreeMove(void){
 }
 
 void BranchRateModel::updateForAcceptance(void){
-    if(lastMove == 1 || lastMove == 8){
-        double j = std::log(sigma2[0][lastLocus]) - sigPreLog;
-        sigSel.record((lastMove == 1) ? 0 : 1, j * j, 1.0);
-    }
     if(lastMove == 8){
         ncAccW++;
         sigma2[1][lastLocus] = sigma2[0][lastLocus];
@@ -401,9 +393,6 @@ void BranchRateModel::updateForAcceptance(void){
 }
 
 void BranchRateModel::updateForRejection(void){
-    if(lastMove == 1 || lastMove == 8){
-        sigSel.record((lastMove == 1) ? 0 : 1, 0.0, 1.0);
-    }
     if(lastMove == 8){
         sigma2[0][lastLocus] = sigma2[1][lastLocus];
         for(int b : branchNodes)
@@ -866,7 +855,6 @@ double ParameterBranchRates::sigmaNonCenteredMoveWN(int p){
 }
 
 double ParameterBranchRates::update(void){
-    static const double cFrac = [](){ const char* e = std::getenv("FBD_SIGMA_CFRAC"); return e != nullptr ? atof(e) : -1.0; }();
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastLocus = (int)(rng.uniformRv() * numLoci);
     double u = rng.uniformRv();
@@ -882,12 +870,6 @@ double ParameterBranchRates::update(void){
     if(u < 0.80){
         lastMove = 0;
         return scaleLocusRate(lastLocus);
-    }
-    sigPreLog = std::log(sigma2[0][lastLocus]);
-    int op = (cFrac >= 0.0) ? ((rng.uniformRv() < cFrac) ? 0 : 1) : sigSel.pick(rng);
-    if(op == 0){
-        lastMove = 1;
-        return scaleLocusSigma2(lastLocus);
     }
     if(clockModel == ClockModel::UCLN)
         return sigmaNonCenteredMove(lastLocus);
