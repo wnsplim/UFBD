@@ -13,7 +13,7 @@ SequenceLikelihood::SequenceLikelihood(int numStates, int numCats) :
     numStates(numStates),
     numCats(numCats),
     numPartitions(0),
-    mappedCrown(nullptr),
+    mappedRoot(nullptr),
     cacheValid(false)
 {
 }
@@ -35,7 +35,7 @@ void SequenceLikelihood::addPartition(const std::vector<std::string>& taxa, cons
 }
 
 void SequenceLikelihood::mapTaxaToNodes(Tree* tree){
-    if(tree->getCrown() == mappedCrown)
+    if(tree->getRoot() == mappedRoot)
         return;
     int numNodes = tree->getNumNodes();
     tipStateByOffset.assign(numPartitions, std::vector<std::vector<int>>(numNodes));
@@ -46,7 +46,7 @@ void SequenceLikelihood::mapTaxaToNodes(Tree* tree){
                 Msg::error("SequenceLikelihood: alignment taxon '" + taxonNames[p][t] + "' not found in the tree");
             tipStateByOffset[p][nd->getOffset()] = patternState[p][t];
         }
-    mappedCrown = tree->getCrown();
+    mappedRoot = tree->getRoot();
 }
 
 double SequenceLikelihood::computeLnL(Tree* tree,
@@ -95,7 +95,7 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
                                       const std::vector<std::vector<BranchMGF>>& branchMGF,
                                       bool parallelPatterns){
     std::vector<Node*>& downPass = tree->getDownPassSequence();
-    Node* crown = tree->getCrown();
+    Node* root = tree->getRoot();
     int n = numStates;
     int numNodes = tree->getNumNodes();
     int full = (1 << n) - 1;
@@ -119,7 +119,7 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
 
         std::vector<double> curBl(numNodes, 0.0);
         for(Node* node : downPass){
-            if(node == crown) continue;
+            if(node == root) continue;
             int off = node->getOffset();
             curBl[off] = branchRates[p][off] * (node->getAncestor()->getTime() - node->getTime());
             if(curBl[off] < 0.0)
@@ -168,8 +168,8 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
             }
         }
 
-        int croff = crown->getOffset();
-        const std::vector<double>& root = conP[p][croff];
+        int croff = root->getOffset();
+        const std::vector<double>& rootConP = conP[p][croff];
         std::vector<double> siteLn(npat);
         auto patBody = [&](int h0, int h1){
             for(size_t di = 0; di < dirtyNodes.size(); di++){
@@ -197,7 +197,7 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
                 for(int k = 0; k < K; k++){
                     double lk = 0.0;
                     for(int a = 0; a < n; a++)
-                        lk += frequency[p][a] * root[(k * npat + h) * n + a];
+                        lk += frequency[p][a] * rootConP[(k * npat + h) * n + a];
                     gammaLk += lk / K;
                 }
                 double pinvLk = 0.0;

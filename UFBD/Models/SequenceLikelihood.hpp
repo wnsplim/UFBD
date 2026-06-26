@@ -45,7 +45,7 @@ class SequenceLikelihood {
         std::vector<std::vector<int>>                constantState;
         std::vector<GTRrateModel>                    rateModel;
 
-        Node*                                        mappedCrown;
+        Node*                                        mappedRoot;
         std::vector<std::vector<std::vector<int>>>   tipStateByOffset;
 
         bool                                            cacheValid;

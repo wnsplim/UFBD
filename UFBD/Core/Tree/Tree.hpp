@@ -29,7 +29,8 @@ class Tree {
         Node*                               getNodeByOffset(int o) { return nodes[o]; }
         int                                 getNumBackbone(void);
         Node*                               getCrown(void) { return crown; }
-        Node*                               getRoot(void);
+        Node*                               getRoot(void) { return origin != nullptr ? origin : crown; }
+        Node*                               getOrigin(void) { return origin; }
         Node*                               addOriginNode(double x0);
         bool                                getLastUpdateWasScale(void) { return lastUpdateWasScale; }
         bool                                isBinary(void);
@@ -70,6 +71,7 @@ class Tree {
         std::vector<Node*>                  tips;
         Node*                               freeNode;
         Node*                               crown;
+        Node*                               origin = nullptr;
         double                              treeHeight;
         int                                 numTaxa;
         int                                 numInternalNodes;

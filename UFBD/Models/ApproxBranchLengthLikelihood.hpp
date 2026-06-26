@@ -38,7 +38,7 @@ class ApproxBranchLengthLikelihood {
         std::set<std::string>       backboneTaxa;
         std::set<std::string>       rogueTaxa;
         std::vector<int>            branchNodeIdx;
-        Node*                       cachedCrown;
+        Node*                       cachedRoot;
 };
 
 #endif

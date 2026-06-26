@@ -105,27 +105,18 @@ Node* Tree::addNode(void) {
     return newNode;
 }
 
-Node* Tree::getRoot(void) {
-
-    Node* n = crown;
-    while (n->getAncestor() != nullptr && n->getAncestor() != n)
-        n = n->getAncestor();
-    return n;
-}
-
 Node* Tree::addOriginNode(double x0) {
 
-    Node* origin = addNode();
-    origin->setIsTip(false);
-    origin->setIsFossil(false);
-    Node* oldCrown = crown;
-    origin->addNeighbor(oldCrown);
-    oldCrown->addNeighbor(origin);
-    crown = origin;
+    Node* originNode = addNode();
+    originNode->setIsTip(false);
+    originNode->setIsFossil(false);
+    originNode->addNeighbor(crown);
+    crown->addNeighbor(originNode);
+    origin = originNode;
     initializeDownPassSequence();
-    origin->setTime(x0);
+    originNode->setTime(x0);
     reindexNodes();
-    return origin;
+    return originNode;
 }
 
 Node* Tree::insertFossilTip(Node* hostChild, std::string name, double y, double z){
@@ -174,6 +165,7 @@ void Tree::clone(const Tree& t) {
         
     this->numTaxa = t.numTaxa;
     this->crown = this->nodes[t.crown->getOffset()];
+    this->origin = (t.origin != nullptr) ? this->nodes[t.origin->getOffset()] : nullptr;
     
     for (int i=0; i<t.nodes.size(); i++)
         {
@@ -230,7 +222,7 @@ int Tree::getNumLineagesAtTime(double t){
     std::set<Node*> branchesContainingFossils;
     branchesContainingFossils.clear();
     for(Node* n :downPassSequence){
-        if(n != crown && n->getTime() < t && n->getAncestor()->getTime() > t){
+        if(n != getRoot() && n->getTime() < t && n->getAncestor()->getTime() > t){
             branchesContainingFossils.insert(n);
         }
     }
@@ -241,7 +233,7 @@ std::string Tree::getNewickString(void) {
 
     std::stringstream strm;
     strm << std::setprecision(17);
-    writeTree(crown, strm);
+    writeTree(getRoot(), strm);
     strm << ";";
     return strm.str();
 }
@@ -260,7 +252,7 @@ bool Tree::isBinary(void){
         if(n->getIsTip())
             continue;
         int numChildren = (int)n->getNeighbors().size();
-        if(n != crown)
+        if(n != getRoot())
             numChildren -= 1;
         if(numChildren != 2)
             return false;
@@ -318,7 +310,7 @@ Node* Tree::getMRCA(const std::vector<std::string>& taxonNames){
         std::set<Node*> ancestors;
         for(Node* p = mrca; ; p = p->getAncestor()){
             ancestors.insert(p);
-            if(p->getAncestor() == p) // crown's ancestor is itself in this tree
+            if(p->getAncestor() == p) // root's ancestor is itself in this tree
                 break;
         }
 
@@ -336,7 +328,7 @@ Node* Tree::getMRCA(const std::vector<std::string>& taxonNames){
 
 void Tree::initializeDownPassSequence(void) {
     downPassSequence.clear();
-    passDown(crown, crown);
+    passDown(getRoot(), getRoot());
 }
 
 void Tree::initializeTimes(void){
@@ -362,7 +354,7 @@ void Tree::assignStartingAges(const std::map<Node*,double>& minAges, double unit
             age = it->second;
         n->setTime(age);
     }
-    treeHeight = crown->getTime();
+    treeHeight = getRoot()->getTime();
 }
 
 
@@ -409,8 +401,8 @@ void Tree::passDown(Node* p, Node* from) {
 }
 
 void Tree::print(void) {
-    
-    showNode(crown, 0);
+
+    showNode(getRoot(), 0);
     std::cout << "Postorder sequence: ";
     for (int i=0; i<downPassSequence.size(); i++)
         std::cout << downPassSequence[i]->getIndex() << " ";
@@ -456,12 +448,12 @@ void Tree::showNode(Node* p, int indent) {
         std::cout << ") ";
         std::cout << p->getName() << " " << p->getIsTip() << " ";
         std::cout << std::fixed << std::setprecision(6);
-        if (p != crown)
+        if (p != getRoot())
             std::cout << getBranchLength(p, p->getAncestor()) << " ";
         else
             std::cout << "--- ";
-        if (p == crown)
-            std::cout << "<- Crown ";
+        if (p == getRoot())
+            std::cout << "<- Root ";
         std::cout << std::endl;
 
         for (Node* n : pNeighbors)
@@ -477,7 +469,7 @@ double Tree::update(double scaleLambda){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     int numSlideable = 0;
     for(Node* n : downPassSequence)
-        if(n != crown && n->getIsTip() == false)
+        if(n != getRoot() && n->getIsTip() == false)
             numSlideable++;
     double crownWeight = 3.0;
     if(rng.uniformRv() * (numSlideable + crownWeight) >= numSlideable)
@@ -525,7 +517,7 @@ int Tree::scaleSubtreeAges(Node* subtreeCrown, double m){
 std::vector<Node*> Tree::getInternalAgeNodes(void){
     std::vector<Node*> candidates;
     for(Node* n : downPassSequence)
-        if(n != crown && n->getIsTip() == false && isFakeSplit(n) == false)
+        if(n != getRoot() && n->getIsTip() == false && isFakeSplit(n) == false)
             candidates.push_back(n);
     return candidates;
 }
@@ -560,21 +552,21 @@ double Tree::updateCrownAge(double scaleLambda){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
 
     double maxChildAge = 0.0;
-    for(Node* c : crown->getNeighbors())
+    for(Node* c : getRoot()->getNeighbors())
         if(c->getTime() > maxChildAge)
             maxChildAge = c->getTime();
 
-    std::map<Node*,double>::iterator it = ageFloors.find(crown);
+    std::map<Node*,double>::iterator it = ageFloors.find(getRoot());
     if(it != ageFloors.end() && it->second > maxChildAge)
         maxChildAge = it->second;
 
     double m = std::exp( scaleLambda * (rng.uniformRv() - 0.5) );
-    double newCrownAge = crown->getTime() * m;
+    double newCrownAge = getRoot()->getTime() * m;
     lastUpdateWasScale = true;
     if(newCrownAge <= maxChildAge)
         return -INFINITY;
 
-    crown->setTime(newCrownAge);
+    getRoot()->setTime(newCrownAge);
 
     return std::log(m);
 }
@@ -612,7 +604,7 @@ void Tree::writeTree(Node* p, std::stringstream& strm) {
 
 void Tree::writeState(std::ostream& os) {
 
-    os << nodes.size() << ' ' << crown->getOffset() << ' ' << numTaxa << '\n';
+    os << nodes.size() << ' ' << crown->getOffset() << ' ' << (origin != nullptr ? origin->getOffset() : -1) << ' ' << numTaxa << '\n';
     for (Node* n : nodes)
         {
         os << (n->getIsTip() ? 1 : 0) << ' ' << (n->getIsFossil() ? 1 : 0) << ' ' << (n->getFlag() ? 1 : 0)
@@ -629,8 +621,8 @@ void Tree::writeState(std::ostream& os) {
 void Tree::readState(std::istream& is) {
 
     size_t nn;
-    int crownOff;
-    is >> nn >> crownOff >> numTaxa;
+    int crownOff, originOff;
+    is >> nn >> crownOff >> originOff >> numTaxa;
     if (nodes.size() != nn)
         {
         deleteNodes();
@@ -668,6 +660,7 @@ void Tree::readState(std::istream& is) {
             tips.push_back(p);
         }
     crown = nodes[crownOff];
+    origin = (originOff >= 0) ? nodes[originOff] : nullptr;
     initializeDownPassSequence();
-    treeHeight = crown->getTime();
+    treeHeight = getRoot()->getTime();
 }

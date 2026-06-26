@@ -178,7 +178,7 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
                 }
             fossilCrown.push_back(wt->getMRCA(clade->getTaxa()));
             bool originCond = (UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN);
-            fossilOrigin.push_back(originCond ? wt->getCrown() : wt->getNodeByOffset(clade->getOrigin()->getOffset()));
+            fossilOrigin.push_back(originCond ? wt->getRoot() : wt->getNodeByOffset(clade->getOrigin()->getOffset()));
         }
     }else{
         unresolvedFossils = new ParameterUnresolvedFossils(1.0, this, parameterTree->getTree(), clades, fossils, originAge);
@@ -456,7 +456,7 @@ double FBDTreeModel::update(void){
         Tree* t = parameterTree->getTree();
         int numSlideable = 0;
         for(Node* n : t->getDownPassSequence())
-            if(n != t->getCrown() && n->getIsTip() == false)
+            if(n != t->getRoot() && n->getIsTip() == false)
                 numSlideable++;
         double fixedWeight = 3.0;
         double slideAndCrown = numSlideable + fixedWeight;
@@ -553,7 +553,7 @@ void FBDTreeModel::updateForAcceptance(void){
         updatedParameter->updateForAcceptance();
     }
     if(isFBD && originAge != nullptr)
-        parameterTree->getTree()->getCrown()->setTime(originAge->getValue());
+        parameterTree->getTree()->getRoot()->setTime(originAge->getValue());
 }
 
 void FBDTreeModel::updateForRejection(void){
@@ -584,7 +584,7 @@ void FBDTreeModel::updateForRejection(void){
         updatedParameter->updateForRejection();
     }
     if(isFBD && originAge != nullptr)
-        parameterTree->getTree()->getCrown()->setTime(originAge->getValue());
+        parameterTree->getTree()->getRoot()->setTime(originAge->getValue());
 }
 
 void FBDTreeModel::writeState(std::ostream& os){
@@ -608,7 +608,7 @@ double FBDTreeModel::calculateFBDProbability(void){
     Tree* tree = parameterTree->getTree();
 
     if(isFBD && originAge != nullptr)
-        tree->getCrown()->setTime(originAge->getValue());
+        tree->getRoot()->setTime(originAge->getValue());
 
     int numInternalNodes = tree->getNumNodes() - tree->getNumBackbone();
     double crownAge = tree->getCrown()->getTime();
@@ -701,23 +701,23 @@ double FBDTreeModel::calculateFBDProbability(void){
 
 double FBDTreeModel::calculateResolvedFBD(void){
     Tree* tree = parameterTree->getTree();
-    Node* crown = tree->getCrown();
-    double crownAge = crown->getTime();
+    Node* root = tree->getRoot();
+    double rootAge = root->getTime();
     bool useOrigin = (UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN);
 
     double lnP;
     if(useOrigin){
         double x0 = originAge->getValue();
-        for(Node* c : crown->getNeighbors())
-            if(c != crown->getAncestor() && c->getTime() >= x0)
+        for(Node* c : root->getNeighbors())
+            if(c != root->getAncestor() && c->getTime() >= x0)
                 return -INFINITY;
         lnP = -calculateLnConditioning(x0);
     }else{
-        lnP = -2.0 * calculateLnSurvival(crownAge);
+        lnP = -2.0 * calculateLnSurvival(rootAge);
     }
 
     for(Node* n : tree->getDownPassSequence()){
-        if(n != crown)
+        if(n != root)
             lnP += lnD(n->getAncestor()->getTime()) - lnD(n->getTime());
         if(n->getIsTip()){
             if(n->getIsFossil() == false)
@@ -727,7 +727,7 @@ double FBDTreeModel::calculateResolvedFBD(void){
             else
                 lnP += std::log(psiAt(findIndex(n->getTime()))) + std::log(calculateP0(n->getTime()));
         }
-        else if(n != crown){
+        else if(n != root){
             bool fakeSplit = false;
             for(Node* c : n->getNeighbors())
                 if(c != n->getAncestor() && c->getIsTip() && c->getIsFossil() && c->getTime() == n->getTime()){ fakeSplit = true; break; }
@@ -871,7 +871,7 @@ void FBDTreeModel::buildEulerIndex(void){
     nodesByPre.assign(n, nullptr);
     int counter = 0;
     std::vector<std::pair<Node*,bool> > stk;
-    stk.push_back(std::make_pair(tree->getCrown(), false));
+    stk.push_back(std::make_pair(tree->getRoot(), false));
     while(stk.empty() == false){
         std::pair<Node*,bool> top = stk.back();
         stk.pop_back();
@@ -916,7 +916,7 @@ double FBDTreeModel::computeGamma(double z, int i){
         int hi = lo + subSize[crown->getOffset()];
         for(int k = lo; k < hi; k++){
             Node* n = nodesByPre[k];
-            if(n == tree->getCrown())
+            if(n == tree->getRoot())
                 continue;
             Node* anc = n->getAncestor();
             if(n->getTime() < z && z < anc->getTime()){
@@ -1057,14 +1057,14 @@ void FBDTreeModel::updateGammaCache(void){
     int nf = unresolvedFossils->getNumFossils();
     std::vector<Node*>& dpseq = tree->getDownPassSequence();
 
-    Node* crown = tree->getCrown();
+    Node* root = tree->getRoot();
     int budget = 0;
     for(int x = (int)sortedYounger.size(); x > 1; x >>= 1) budget++;
     int edits = (cacheInit && sortedYounger.empty() == false) ? 0 : -1;
     if(edits == 0){
         for(Node* nd : dpseq)
             if(nd->getTime() != prevNodeAge[nd->getOffset()]){
-                edits += (nd != crown ? 1 : 0) + (int)nd->getDescendants().size();
+                edits += (nd != root ? 1 : 0) + (int)nd->getDescendants().size();
                 if(edits > budget){ edits = -1; break; }
             }
     }
@@ -1074,7 +1074,7 @@ void FBDTreeModel::updateGammaCache(void){
             double newA = nd->getTime();
             if(oldA == newA)
                 continue;
-            if(nd != crown){
+            if(nd != root){
                 sortedYounger.erase(std::lower_bound(sortedYounger.begin(), sortedYounger.end(), oldA));
                 sortedYounger.insert(std::lower_bound(sortedYounger.begin(), sortedYounger.end(), newA), newA);
             }
@@ -1088,7 +1088,7 @@ void FBDTreeModel::updateGammaCache(void){
         sortedYounger.clear();
         sortedOlder.clear();
         for(Node* nd : dpseq){
-            if(nd == crown)
+            if(nd == root)
                 continue;
             sortedYounger.push_back(nd->getTime());
             sortedOlder.push_back(nd->getAncestor()->getTime());
@@ -1113,7 +1113,7 @@ void FBDTreeModel::updateGammaCache(void){
         if(x0 != prevX0){
             double xlo = std::min(prevX0, x0), xhi = std::max(prevX0, x0);
             for(int i = 0; i < nf; i++){
-                if(unresolvedFossils->getCrownNode(i) != crown || unresolvedFossils->getIsCrown(i))
+                if(unresolvedFossils->getCrownNode(i) != root || unresolvedFossils->getIsCrown(i))
                     continue;
                 double zi2 = unresolvedFossils->getAttachAge(i);
                 if(zi2 >= xlo && zi2 < xhi)
@@ -1160,7 +1160,7 @@ void FBDTreeModel::updateGammaCache(void){
 
     std::vector<std::pair<double,double> > changedIntervals;
     for(Node* n : dpseq){
-        if(n == tree->getCrown()) continue;
+        if(n == tree->getRoot()) continue;
         Node* anc = n->getAncestor();
         double pc = prevNodeAge[n->getOffset()];
         double pp = prevNodeAge[anc->getOffset()];
@@ -1323,7 +1323,7 @@ void FBDTreeModel::resolveFossils(Tree* t, std::vector<Clade>& clades, std::vect
             Msg::error("fossil '" + f.getTaxon() + "' assigned to undefined clade '" + f.getClade() + "'");
         Node* crown = t->getMRCA(clade->getTaxa());
         bool originCond = (UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN);
-        Node* origin = originCond ? t->getCrown() : t->getNodeByOffset(clade->getOrigin()->getOffset());
+        Node* origin = originCond ? t->getRoot() : t->getNodeByOffset(clade->getOrigin()->getOffset());
         bool isCrown = (f.getAssignment() == Assignment::CROWN);
         if(crown->getAncestor() == crown)
             isCrown = true;
@@ -1345,7 +1345,7 @@ void FBDTreeModel::resolveFossils(Tree* t, std::vector<Clade>& clades, std::vect
 void FBDTreeModel::enumerateFossilHosts(Tree* t, Node* crown, Node* origin, bool isCrown, double y, std::vector<Node*>& hosts, std::vector<double>& los, std::vector<double>& his){
     double ceiling = isCrown ? crown->getTime() : origin->getTime();
     for(Node* n : t->getDownPassSequence()){
-        if(n == t->getCrown())
+        if(n == t->getRoot())
             continue;
         Node* anc = n->getAncestor();
         bool inZone = nodeInSubtree(anc, crown);
@@ -1455,7 +1455,7 @@ double FBDTreeModel::doNarrowExchange(void){
     const std::vector<Node*>& dp = tree->getDownPassSequence();
     Node* i = dp[(int)(rng.uniformRv() * (double)dp.size())];
     Node* parent = i->getAncestor();
-    if(i == tree->getCrown() || parent == tree->getCrown())
+    if(i == tree->getRoot() || parent == tree->getRoot())
         return -INFINITY;
     Node* grandparent = parent->getAncestor();
     Node* uncle = nullptr;
@@ -1500,7 +1500,7 @@ double FBDTreeModel::doWideExchange(void){
         return -INFINITY;
     Node* pi = i->getAncestor();
     Node* pj = j->getAncestor();
-    if(i == tree->getCrown() || j == tree->getCrown() || pi == tree->getCrown() || pj == tree->getCrown())
+    if(i == tree->getRoot() || j == tree->getRoot() || pi == tree->getRoot() || pj == tree->getRoot())
         return -INFINITY;
     if(pi == pj)
         return -INFINITY;
@@ -1535,7 +1535,7 @@ double FBDTreeModel::doTreeScale(void){
     double m = std::exp(parameterTree->getScaleLambda() * (rng.uniformRv() - 0.5));
     int numScaled = tree->scaleInternalAges(m);
     for(Node* n : tree->getDownPassSequence())
-        if(n != tree->getCrown() && tree->isSATip(n) == false && n->getTime() >= n->getAncestor()->getTime())
+        if(n != tree->getRoot() && tree->isSATip(n) == false && n->getTime() >= n->getAncestor()->getTime())
             return -INFINITY;
     return numScaled * std::log(m);
 }
@@ -1551,8 +1551,8 @@ double FBDTreeModel::doSARJMCMC(void){
     Node* f = fossils[(int)(rng.uniformRv() * fossils.size())];
     Node* sp = f->getAncestor();
     bool useOrigin = (UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN);
-    bool spIsCrown = (sp == tree->getCrown());
-    if(spIsCrown && useOrigin == false)
+    bool spIsRoot = (sp == tree->getRoot());
+    if(spIsRoot && useOrigin == false)
         return -INFINITY;
     Node* gp = sp->getAncestor();
     Node* sib = nullptr;
@@ -1560,7 +1560,7 @@ double FBDTreeModel::doSARJMCMC(void){
         if(c != gp && c != f)
             sib = c;
     double y = f->getTime();
-    double maxAge = spIsCrown ? originAge->getValue() : gp->getTime();
+    double maxAge = spIsRoot ? originAge->getValue() : gp->getTime();
     double range = maxAge - y;
     if(range <= 0.0)
         return -INFINITY;
@@ -1617,7 +1617,7 @@ double FBDTreeModel::doUpDownScale(void){
         h += std::log(invc);
     }
     for(Node* n : t->getDownPassSequence())
-        if(n != t->getCrown() && n->getAncestor()->getTime() < n->getTime())
+        if(n != t->getRoot() && n->getAncestor()->getTime() < n->getTime())
             return -INFINITY;
     return h;
 }
@@ -1649,7 +1649,7 @@ double FBDTreeModel::doSubtreeScale(void){
 
     std::vector<Node*> candidates;
     for(Node* n : tree->getDownPassSequence())
-        if(n != tree->getCrown() && n->getIsTip() == false)
+        if(n != tree->getRoot() && n->getIsTip() == false)
             candidates.push_back(n);
     if(candidates.empty()){
         unresolvedFossils->scaleAttachAges(std::vector<int>(), 1.0);
@@ -1682,7 +1682,7 @@ double FBDTreeModel::doSubtreeScale(void){
 }
 
 void FBDTreeModel::enumeratePrunableRoots(Tree* t, std::vector<Node*>& roots){
-    Node* treeCrown = t->getCrown();
+    Node* treeRoot = t->getRoot();
     std::set<Node*> allFossil;
     for(Node* n : t->getDownPassSequence()){
         bool af;
@@ -1701,7 +1701,7 @@ void FBDTreeModel::enumeratePrunableRoots(Tree* t, std::vector<Node*>& roots){
         }
         if(af){
             allFossil.insert(n);
-            if(n->getAncestor() != treeCrown && t->isSATip(n) == false)
+            if(n->getAncestor() != treeRoot && t->isSATip(n) == false)
                 roots.push_back(n);
         }
     }
@@ -1709,7 +1709,7 @@ void FBDTreeModel::enumeratePrunableRoots(Tree* t, std::vector<Node*>& roots){
 
 void FBDTreeModel::enumerateSubtreeHosts(Tree* t, std::vector<Node*>& crowns, std::vector<char>& isCrowns, std::vector<Node*>& origins, double rAge, double ceilingS, std::vector<Node*>& hosts, std::vector<double>& los, std::vector<double>& his){
     for(Node* n : t->getDownPassSequence()){
-        if(n == t->getCrown())
+        if(n == t->getRoot())
             continue;
         Node* anc = n->getAncestor();
         bool allInZone = true;

@@ -49,14 +49,14 @@ void initAges(Tree* tree, std::vector<Fossil>& fossils, bool origin, const Proba
     double unit = (maxFoss > 0.0) ? maxFoss / (numInternal + 1) : 1.0;
     std::map<Node*,double> minAges;
     if(maxFoss > 0.0)
-        minAges[tree->getCrown()] = maxFoss * 1.05;
+        minAges[tree->getRoot()] = maxFoss * 1.05;
     tree->assignStartingAges(minAges, unit);
 
     double mean = Probability::priorMean(xp.family, xp.p1, xp.p2);
     double target = origin ? 0.9 * mean : mean;
     if(origin == false && target < maxFoss)
         target = maxFoss * 1.05;
-    double cur = tree->getCrown()->getTime();
+    double cur = tree->getRoot()->getTime();
     if(cur > 0.0)
         tree->scaleInternalAges(target / cur);
 }

@@ -89,9 +89,9 @@ BranchRateModel::BranchRateModel(double prob, PhylogeneticModel* m, Tree* t, int
         acc[i] = 0;
         rej[i] = 0;
     }
-    Node* crown = t->getCrown();
+    Node* root = t->getRoot();
     for(Node* n : t->getDownPassSequence())
-        if(n != crown && n->getIsFossil() == false)
+        if(n != root && n->getIsFossil() == false)
             branchNodes.push_back(n->getOffset());
     for(int s = 0; s < 2; s++){
         mu[s].assign(numLoci, 1.0);
@@ -236,7 +236,7 @@ double BranchRateModel::constantDistanceMove(void){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     std::vector<Node*> internals;
     for(Node* n : tree->getDownPassSequence())
-        if(n != tree->getCrown() && n->getIsTip() == false)
+        if(n != tree->getRoot() && n->getIsTip() == false)
             internals.push_back(n);
     Node* node = internals[(int)(rng.uniformRv() * internals.size())];
     Node* parent = node->getAncestor();
@@ -298,7 +298,7 @@ double BranchRateModel::rateAgeSubtreeMove(void){
     cdNodes.clear();
     std::vector<Node*> internals;
     for(Node* n : tree->getDownPassSequence())
-        if(n != tree->getCrown() && n->getIsTip() == false)
+        if(n != tree->getRoot() && n->getIsTip() == false)
             internals.push_back(n);
     if(internals.empty())
         return -INFINITY;
@@ -451,7 +451,7 @@ double ParameterBranchRates::whiteNoiseLnP(double r, double s2, double t, double
 
 double ParameterBranchRates::gbmLnP(void){
     double lnp = 0.0;
-    Node* crown = tree->getCrown();
+    Node* root = tree->getRoot();
     std::vector<Node*>& dp = tree->getDownPassSequence();
     int M = (int)dp.size();
     std::vector<std::vector<Node*> > sonsCache(M);
@@ -472,14 +472,14 @@ double ParameterBranchRates::gbmLnP(void){
                     continue;
                 }
                 double t = inode->getTime();
-                double tA = (inode == crown) ? 0.0 : (inode->getAncestor()->getTime() - t) / 2.0;
+                double tA = (inode == root) ? 0.0 : (inode->getAncestor()->getTime() - t) / 2.0;
                 double t1 = (t - sons[0]->getTime()) / 2.0;
                 double t2 = (t - sons[1]->getTime()) / 2.0;
                 double detT = t1 * t2 + tA * (t1 + t2);
                 double Tinv0 = (tA + t2) / detT;
                 double Tinv1 = -tA / detT;
                 double Tinv3 = (tA + t1) / detT;
-                double rA = (inode == crown) ? mu[0][p] : rate[0][p][inode->getOffset()];
+                double rA = (inode == root) ? mu[0][p] : rate[0][p][inode->getOffset()];
                 double r1 = rate[0][p][sons[0]->getOffset()];
                 double r2 = rate[0][p][sons[1]->getOffset()];
                 double y1 = std::log(r1 / rA) + (tA + t1) * s2 / 2.0;
@@ -496,7 +496,7 @@ double ParameterBranchRates::gbmLnP(void){
 
 double ParameterBranchRates::gbmContinuousLnP(void){
     double lnp = 0.0;
-    Node* crown = tree->getCrown();
+    Node* root = tree->getRoot();
     int B = (int)branchNodes.size();
     std::vector<double> terms((size_t)numLoci * B);
     ThreadPool::shared().parallelFor(OP_CLOCK, numLoci * B, [&](int lo, int hi){
@@ -506,7 +506,7 @@ double ParameterBranchRates::gbmContinuousLnP(void){
             Node* n = tree->getNodeByOffset(b);
             Node* anc = n->getAncestor();
             double rd = rate[0][p][b];
-            double ra = (anc == crown) ? mu[0][p] : rate[0][p][anc->getOffset()];
+            double ra = (anc == root) ? mu[0][p] : rate[0][p][anc->getOffset()];
             double s2 = sigma2[0][p];
             double dt = anc->getTime() - n->getTime();
             if(rd <= 0.0 || ra <= 0.0 || s2 <= 0.0 || dt <= 0.0){
@@ -559,7 +559,7 @@ std::vector<std::vector<double>> ParameterBranchRates::getAbsoluteRates(void){
             a[p][b] = rate[0][p][b];
     if(clockModel != ClockModel::GBMC)
         return a;
-    Node* crown = tree->getCrown();
+    Node* root = tree->getRoot();
     int B = (int)branchNodes.size();
     for(int p = 0; p < numLoci; p++){
         double u = std::sqrt(sigma2[0][p]);
@@ -569,7 +569,7 @@ std::vector<std::vector<double>> ParameterBranchRates::getAbsoluteRates(void){
                 Node* n = tree->getNodeByOffset(b);
                 Node* anc = n->getAncestor();
                 double rd = rate[0][p][b];
-                double ra = (anc == crown) ? mu[0][p] : rate[0][p][anc->getOffset()];
+                double ra = (anc == root) ? mu[0][p] : rate[0][p][anc->getOffset()];
                 double dt = anc->getTime() - n->getTime();
                 double mavg, vavg;
                 gbmBridgeMoments(dt, ra, rd, u, &mavg, &vavg);
@@ -584,14 +584,14 @@ std::vector<std::vector<BranchMGF>> ParameterBranchRates::getBranchMGF(void){
     if(clockModel != ClockModel::GBMC)
         return BranchRateModel::getBranchMGF();
     std::vector<std::vector<BranchMGF>> a(numLoci, std::vector<BranchMGF>(numNodes, BranchMGF{0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}));
-    Node* crown = tree->getCrown();
+    Node* root = tree->getRoot();
     for(int p = 0; p < numLoci; p++){
         double u = std::sqrt(sigma2[0][p]);
         for(int b : branchNodes){
             Node* n = tree->getNodeByOffset(b);
             Node* anc = n->getAncestor();
             double rd = rate[0][p][b];
-            double ra = (anc == crown) ? mu[0][p] : rate[0][p][anc->getOffset()];
+            double ra = (anc == root) ? mu[0][p] : rate[0][p][anc->getOffset()];
             double dt = anc->getTime() - n->getTime();
             double mavg, vavg;
             gbmBridgeMoments(dt, ra, rd, u, &mavg, &vavg);
@@ -688,7 +688,7 @@ double ParameterBranchRates::sigmaPncpMoveGBMC(int p){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastMove = 8;
     lastLocus = p;
-    Node* crown = tree->getCrown();
+    Node* root = tree->getRoot();
     double s2 = sigma2[0][p];
     double logm = std::log(mu[0][p]);
     std::vector<double> tauL, ellB;
@@ -696,7 +696,7 @@ double ParameterBranchRates::sigmaPncpMoveGBMC(int p){
     std::vector<double> x(numNodes);
     for(int b = 0; b < numNodes; b++)
         x[b] = std::log(rate[0][p][b]);
-    x[crown->getOffset()] = logm;
+    x[root->getOffset()] = logm;
     double mB = 0.95;
     double sB = std::sqrt(1.0 - mB * mB);
     double d = mB + Probability::Normal::rv(&rng) * sB;
@@ -710,7 +710,7 @@ double ParameterBranchRates::sigmaPncpMoveGBMC(int p){
     std::vector<Node*>& dp = tree->getDownPassSequence();
     for(int i = (int)dp.size() - 1; i >= 0; i--){
         Node* n = dp[i];
-        if(n == crown || n->getIsFossil())
+        if(n == root || n->getIsFossil())
             continue;
         Node* a = n->getAncestor();
         double dt = a->getTime() - n->getTime();
@@ -744,7 +744,7 @@ double ParameterBranchRates::sigmaPncpMoveGBM(int p){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastMove = 8;
     lastLocus = p;
-    Node* crown = tree->getCrown();
+    Node* root = tree->getRoot();
     double s2 = sigma2[0][p];
     double logm = std::log(mu[0][p]);
     std::vector<double> tauL, ellB;
@@ -752,7 +752,7 @@ double ParameterBranchRates::sigmaPncpMoveGBM(int p){
     std::vector<double> x(numNodes);
     for(int b = 0; b < numNodes; b++)
         x[b] = std::log(rate[0][p][b]);
-    x[crown->getOffset()] = logm;
+    x[root->getOffset()] = logm;
     double mB = 0.95;
     double sB = std::sqrt(1.0 - mB * mB);
     double d = mB + Probability::Normal::rv(&rng) * sB;
@@ -770,7 +770,7 @@ double ParameterBranchRates::sigmaPncpMoveGBM(int p){
         if(sons.size() != 2)
             continue;
         double tv = v->getTime();
-        double tA = (v == crown) ? 0.0 : (v->getAncestor()->getTime() - tv) / 2.0;
+        double tA = (v == root) ? 0.0 : (v->getAncestor()->getTime() - tv) / 2.0;
         int voff = v->getOffset();
         double xv = x[voff];
         double xvNew = xnew[voff];
@@ -899,7 +899,7 @@ ParameterBranchRatesCIR::ParameterBranchRatesCIR(double prob, PhylogeneticModel*
 
 double ParameterBranchRatesCIR::cirLnP(void){
     double lnp = 0.0;
-    double H = tree->getCrown()->getTime();
+    double H = tree->getRoot()->getTime();
     int B = (int)branchNodes.size();
     std::vector<double> terms(B);
     const double s2Floor = 1.0 / 500.0;
@@ -1000,13 +1000,13 @@ double ParameterBranchRatesCIR::lnProbability(void){
 
 std::vector<std::vector<double>> ParameterBranchRatesCIR::getAbsoluteRates(void){
     std::vector<std::vector<double>> a(numLoci, std::vector<double>(numNodes, 0.0));
-    Node* crown = tree->getCrown();
-    double H = crown->getTime();
+    Node* root = tree->getRoot();
+    double H = root->getTime();
     for(int p = 0; p < numLoci; p++){
         ThreadPool::shared().parallelFor(OP_CLOCK, numNodes, [&](int lo, int hi){
             for(int b = lo; b < hi; b++){
                 Node* n = tree->getNodeByOffset(b);
-                if(n != crown){
+                if(n != root){
                     double Ln = (n->getAncestor()->getTime() - n->getTime()) / H;
                     double sigmaPB = 2.0 * theta[0][p] * sigma2[0][p];
                     a[p][b] = mu[0][p] * getMeanTau(rate[0][p][b], rate[0][p][n->getAncestor()->getOffset()], Ln, sigmaPB, theta[0][p]) / Ln;
@@ -1021,14 +1021,14 @@ std::vector<std::vector<double>> ParameterBranchRatesCIR::getAbsoluteRates(void)
 
 std::vector<std::vector<BranchMGF>> ParameterBranchRatesCIR::getBranchMGF(void){
     std::vector<std::vector<BranchMGF>> a(numLoci, std::vector<BranchMGF>(numNodes, BranchMGF{0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}));
-    Node* crown = tree->getCrown();
-    double H = crown->getTime();
+    Node* root = tree->getRoot();
+    double H = root->getTime();
     for(int p = 0; p < numLoci; p++){
         double sigmaPB = 2.0 * theta[0][p] * sigma2[0][p];
         double muH = mu[0][p] * H;
         for(int b = 0; b < numNodes; b++){
             Node* n = tree->getNodeByOffset(b);
-            if(n != crown){
+            if(n != root){
                 double Ln = (n->getAncestor()->getTime() - n->getTime()) / H;
                 a[p][b] = BranchMGF{1, rate[0][p][b], rate[0][p][n->getAncestor()->getOffset()], Ln, sigmaPB, theta[0][p], muH, 0.0, 0.0};
             }
@@ -1041,8 +1041,8 @@ double ParameterBranchRatesCIR::sigmaPncpMoveCIR(int p){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastMove = 8;
     lastLocus = p;
-    Node* crown = tree->getCrown();
-    double H = crown->getTime();
+    Node* root = tree->getRoot();
+    double H = root->getTime();
     double th = theta[0][p];
     double s2 = sigma2[0][p];
     std::vector<double> ub(numNodes, 0.0), fOld(numNodes, 0.0);
@@ -1075,7 +1075,7 @@ double ParameterBranchRatesCIR::sigmaPncpMoveCIR(int p){
     std::vector<Node*>& dp = tree->getDownPassSequence();
     for(int i = (int)dp.size() - 1; i >= 0; i--){
         Node* n = dp[i];
-        if(n == crown || n->getIsFossil())
+        if(n == root || n->getIsFossil())
             continue;
         double L = (n->getAncestor()->getTime() - n->getTime()) / H;
         double decay = std::exp(-th * L);

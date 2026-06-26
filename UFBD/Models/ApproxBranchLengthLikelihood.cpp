@@ -19,7 +19,7 @@ ApproxBranchLengthLikelihood::ApproxBranchLengthLikelihood(const std::string& he
     partitionIndex(partitionIndex),
     cJc((nStates - 1.0) / nStates),
     rogueTaxa(rogue.begin(), rogue.end()),
-    cachedCrown(nullptr)
+    cachedRoot(nullptr)
 {
     if(nStates < 2)
         Msg::error("ApproxBranchLengthLikelihood: nStates must be >= 2");
@@ -330,7 +330,7 @@ Node* ApproxBranchLengthLikelihood::findNodeByBipartition(const std::set<std::st
     if(bp.size() == 1)
         return tree->getTaxonNode(*bp.begin());
     for(Node* n : tree->getDownPassSequence()){
-        if(n == tree->getCrown() || n->getIsTip()) continue;
+        if(n == tree->getRoot() || n->getIsTip()) continue;
         if(canonicalize(backboneTipsBelow(n, tree)) == bp)
             return n;
     }
@@ -338,25 +338,25 @@ Node* ApproxBranchLengthLikelihood::findNodeByBipartition(const std::set<std::st
 }
 
 double ApproxBranchLengthLikelihood::computeLnL(Tree* tree, const std::vector<std::vector<double>>& branchRates){
-    Node* curCrown = tree->getCrown();
-    if(curCrown != cachedCrown){
+    Node* curRoot = tree->getRoot();
+    if(curRoot != cachedRoot){
         branchNodeIdx.assign(nb, -1);
         for(int i = 0; i < nb; i++){
             if(i == crownBranchIdx) continue;
             Node* n = findNodeByBipartition(bipartitions[i], tree);
-            if(n == nullptr){ cachedCrown = nullptr; return -INFINITY; }
+            if(n == nullptr){ cachedRoot = nullptr; return -INFINITY; }
             branchNodeIdx[i] = n->getOffset();
         }
-        cachedCrown = curCrown;
+        cachedRoot = curRoot;
     }
 
-    Node* crown = tree->getCrown();
-    std::vector<Node*> crownChildren;
-    for(Node* c : crown->getNeighbors())
-        if(c != crown->getAncestor())
-            crownChildren.push_back(c);
+    Node* mrca = tree->getCrown();
+    std::vector<Node*> mrcaChildren;
+    for(Node* c : mrca->getNeighbors())
+        if(c != mrca->getAncestor())
+            mrcaChildren.push_back(c);
 
-    if(crownBranchIdx >= 0 && crownChildren.size() != 2)
+    if(crownBranchIdx >= 0 && mrcaChildren.size() != 2)
         return -INFINITY;
 
     const double ninf = -std::numeric_limits<double>::infinity();
@@ -369,9 +369,9 @@ double ApproxBranchLengthLikelihood::computeLnL(Tree* tree, const std::vector<st
             for(int i = 0; i < nb; i++){
                 double predBl;
                 if(i == crownBranchIdx){
-                    double d0 = crownChildren[0]->getAncestor()->getTime() - crownChildren[0]->getTime();
-                    double d1 = crownChildren[1]->getAncestor()->getTime() - crownChildren[1]->getTime();
-                    predBl = br[crownChildren[0]->getOffset()] * d0 + br[crownChildren[1]->getOffset()] * d1;
+                    double d0 = mrcaChildren[0]->getAncestor()->getTime() - mrcaChildren[0]->getTime();
+                    double d1 = mrcaChildren[1]->getAncestor()->getTime() - mrcaChildren[1]->getTime();
+                    predBl = br[mrcaChildren[0]->getOffset()] * d0 + br[mrcaChildren[1]->getOffset()] * d1;
                 }else{
                     Node* n = tree->getNodeByOffset(branchNodeIdx[i]);
                     double d = n->getAncestor()->getTime() - n->getTime();
