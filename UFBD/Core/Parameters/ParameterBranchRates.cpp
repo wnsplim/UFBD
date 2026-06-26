@@ -4,10 +4,51 @@
 #include "Node.hpp"
 #include "ParameterBranchRates.hpp"
 #include "ParameterUnresolvedFossils.hpp"
+#include "PhylogeneticModel.hpp"
 #include "Probability.hpp"
 #include "RandomVariable.hpp"
 #include "ThreadPool.hpp"
 #include "Tree.hpp"
+
+void AdaptiveMixSelector::init(int n){
+    nOps = n;
+    cumJ2.assign(n, 0.0);
+    cumCpu.assign(n, 0.0);
+    tries.assign(n, 0);
+}
+
+int AdaptiveMixSelector::pick(RandomVariable& rng){
+    const long warm = 50;
+    long mn = -1;
+    int mk = 0;
+    for(int k = 0; k < nOps; k++)
+        if(mn < 0 || tries[k] < mn){ mn = tries[k]; mk = k; }
+    if(mn < warm)
+        return mk;
+    double sum = 0.0;
+    std::vector<double> w(nOps);
+    for(int k = 0; k < nOps; k++){
+        w[k] = (cumCpu[k] > 0.0) ? cumJ2[k] / cumCpu[k] : 0.0;
+        sum += w[k];
+    }
+    const double fl = 0.05;
+    double x = rng.uniformRv();
+    double acc = 0.0;
+    for(int k = 0; k < nOps; k++){
+        double p = fl + (1.0 - nOps * fl) * ((sum > 0.0) ? w[k] / sum : 1.0 / nOps);
+        acc += p;
+        if(x < acc)
+            return k;
+    }
+    return nOps - 1;
+}
+
+void AdaptiveMixSelector::record(int op, double jump2, double cpu){
+    const double keep = 0.995;
+    cumJ2[op] = cumJ2[op] * keep + jump2;
+    cumCpu[op] = cumCpu[op] * keep + cpu;
+    tries[op]++;
+}
 
 BranchRateModel::BranchRateModel(double prob, PhylogeneticModel* m, Tree* t, int L, const double* rg, const double* s2) : Parameter(prob, m, "branchRates"){
     tree = t;
@@ -23,6 +64,9 @@ BranchRateModel::BranchRateModel(double prob, PhylogeneticModel* m, Tree* t, int
     ncStep = 0.5;
     ncAccW = 0;
     ncAttW = 0;
+    sigSel.init(2);
+    sigPreLog = 0.0;
+    sigRefresh = 0;
     for(int i = 0; i < 3; i++){
         rgeneParam[i] = rg[i];
         sigma2Param[i] = s2[i];
@@ -272,6 +316,10 @@ double BranchRateModel::rateAgeSubtreeMove(void){
 }
 
 void BranchRateModel::updateForAcceptance(void){
+    if(lastMove == 1 || lastMove == 8){
+        double j = std::log(sigma2[0][lastLocus]) - sigPreLog;
+        sigSel.record((lastMove == 1) ? 0 : 1, j * j, 1.0);
+    }
     if(lastMove == 8){
         ncAccW++;
         sigma2[1][lastLocus] = sigma2[0][lastLocus];
@@ -305,6 +353,9 @@ void BranchRateModel::updateForAcceptance(void){
 }
 
 void BranchRateModel::updateForRejection(void){
+    if(lastMove == 1 || lastMove == 8){
+        sigSel.record((lastMove == 1) ? 0 : 1, 0.0, 1.0);
+    }
     if(lastMove == 8){
         sigma2[0][lastLocus] = sigma2[1][lastLocus];
         for(int b : branchNodes)
@@ -518,18 +569,55 @@ std::vector<std::vector<BranchMGF>> ParameterBranchRates::getBranchMGF(void){
     return a;
 }
 
+void ParameterBranchRates::branchLikePrecision(int p, std::vector<double>& tauL, std::vector<double>& ellB){
+    const long K = 20;
+    if((int)sigTauL.size() != numLoci){
+        sigTauL.assign(numLoci, std::vector<double>());
+        sigEllB.assign(numLoci, std::vector<double>());
+    }
+    bool stale = sigTauL[p].empty() || (sigRefresh % K == 0);
+    sigRefresh++;
+    if(stale){
+        std::vector<double> tl(numNodes, 0.0), el(numNodes, 0.0);
+        const double eps = 1.0e-3;
+        double L0 = model->lnLikelihood();
+        for(int b : branchNodes){
+            double r0 = rate[0][p][b];
+            double lr = std::log(r0);
+            rate[0][p][b] = std::exp(lr + eps);
+            double Lp = model->lnLikelihood();
+            rate[0][p][b] = std::exp(lr - eps);
+            double Lm = model->lnLikelihood();
+            rate[0][p][b] = r0;
+            double g = (Lp - Lm) / (2.0 * eps);
+            double c = -(Lp - 2.0 * L0 + Lm) / (eps * eps);
+            if(c > 0.0 && std::isfinite(c)){ tl[b] = c; el[b] = lr + g / c; }
+        }
+        model->lnLikelihood();
+        sigTauL[p] = tl;
+        sigEllB[p] = el;
+    }
+    tauL = sigTauL[p];
+    ellB = sigEllB[p];
+}
+
 double ParameterBranchRates::sigmaNonCenteredMove(int p){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastMove = 8;
     lastLocus = p;
-    double m = mu[0][p];
     double s2 = sigma2[0][p];
-    double s = std::sqrt(s2);
-    double logm = std::log(m);
+    double logm = std::log(mu[0][p]);
     int B = (int)branchNodes.size();
-    std::vector<double> u(B);
-    for(int i = 0; i < B; i++)
-        u[i] = (std::log(rate[0][p][branchNodes[i]]) - (logm - 0.5 * s2)) / s;
+    std::vector<double> tauL, ellB;
+    branchLikePrecision(p, tauL, ellB);
+    std::vector<double> u(B), Vold(B);
+    for(int i = 0; i < B; i++){
+        int b = branchNodes[i];
+        double V = 1.0 / (1.0 / s2 + tauL[b]);
+        double mb = V * ((logm - 0.5 * s2) / s2 + ellB[b] * tauL[b]);
+        Vold[i] = V;
+        u[i] = (std::log(rate[0][p][b]) - mb) / std::sqrt(V);
+    }
     double mB = 0.95;
     double sB = std::sqrt(1.0 - mB * mB);
     double d = mB + Probability::Normal::rv(&rng) * sB;
@@ -537,13 +625,15 @@ double ParameterBranchRates::sigmaNonCenteredMove(int p){
         d = -d;
     double lnc = ncStep * d;
     double s2new = s2 * std::exp(lnc);
-    double snew = std::sqrt(s2new);
     sigma2[0][p] = s2new;
-    double lnH = lnc * (1.0 + 0.5 * B);
+    double lnH = lnc;
     for(int i = 0; i < B; i++){
-        double rNew = std::exp(logm - 0.5 * s2new + snew * u[i]);
-        lnH += std::log(rNew / rate[0][p][branchNodes[i]]);
-        rate[0][p][branchNodes[i]] = rNew;
+        int b = branchNodes[i];
+        double Vnew = 1.0 / (1.0 / s2new + tauL[b]);
+        double mbNew = Vnew * ((logm - 0.5 * s2new) / s2new + ellB[b] * tauL[b]);
+        double rNew = std::exp(mbNew + std::sqrt(Vnew) * u[i]);
+        lnH += std::log(rNew / rate[0][p][b]) + 0.5 * std::log(Vnew / Vold[i]);
+        rate[0][p][b] = rNew;
     }
     ncAttW++;
     if(ncAttW >= 200){
@@ -563,9 +653,9 @@ double ParameterBranchRates::sigmaNonCenteredMoveGBMC(int p){
     lastLocus = p;
     Node* crown = tree->getCrown();
     double s2 = sigma2[0][p];
-    double s = std::sqrt(s2);
     double logm = std::log(mu[0][p]);
-    int B = (int)branchNodes.size();
+    std::vector<double> tauL, ellB;
+    branchLikePrecision(p, tauL, ellB);
     std::vector<double> x(numNodes);
     for(int b = 0; b < numNodes; b++)
         x[b] = std::log(rate[0][p][b]);
@@ -577,10 +667,9 @@ double ParameterBranchRates::sigmaNonCenteredMoveGBMC(int p){
         d = -d;
     double lnc = ncStep * d;
     double s2new = s2 * std::exp(lnc);
-    double snew = std::sqrt(s2new);
     sigma2[0][p] = s2new;
     std::vector<double> xnew = x;
-    double lnH = lnc * (1.0 + 0.5 * (double)B);
+    double lnH = lnc;
     std::vector<Node*>& dp = tree->getDownPassSequence();
     for(int i = (int)dp.size() - 1; i >= 0; i--){
         Node* n = dp[i];
@@ -588,13 +677,18 @@ double ParameterBranchRates::sigmaNonCenteredMoveGBMC(int p){
             continue;
         Node* a = n->getAncestor();
         double dt = a->getTime() - n->getTime();
-        double sq = std::sqrt(dt);
         int off = n->getOffset();
         int aoff = a->getOffset();
-        double uinc = (x[off] - x[aoff] + 0.5 * s2 * dt) / (s * sq);
-        double xdNew = xnew[aoff] - 0.5 * s2new * dt + snew * sq * uinc;
+        double pvOld = s2 * dt;
+        double pvNew = s2new * dt;
+        double Vold = 1.0 / (1.0 / pvOld + tauL[off]);
+        double mOld = Vold * ((x[aoff] - 0.5 * pvOld) / pvOld + ellB[off] * tauL[off]);
+        double uoff = (x[off] - mOld) / std::sqrt(Vold);
+        double Vnew = 1.0 / (1.0 / pvNew + tauL[off]);
+        double mNew = Vnew * ((xnew[aoff] - 0.5 * pvNew) / pvNew + ellB[off] * tauL[off]);
+        double xdNew = mNew + std::sqrt(Vnew) * uoff;
         xnew[off] = xdNew;
-        lnH += xdNew - x[off];
+        lnH += (xdNew - x[off]) + 0.5 * std::log(Vnew / Vold);
         rate[0][p][off] = std::exp(xdNew);
     }
     ncAttW++;
@@ -615,8 +709,9 @@ double ParameterBranchRates::sigmaNonCenteredMoveGBM(int p){
     lastLocus = p;
     Node* crown = tree->getCrown();
     double s2 = sigma2[0][p];
-    double s = std::sqrt(s2);
     double logm = std::log(mu[0][p]);
+    std::vector<double> tauL, ellB;
+    branchLikePrecision(p, tauL, ellB);
     std::vector<double> x(numNodes);
     for(int b = 0; b < numNodes; b++)
         x[b] = std::log(rate[0][p][b]);
@@ -628,11 +723,9 @@ double ParameterBranchRates::sigmaNonCenteredMoveGBM(int p){
         d = -d;
     double lnc = ncStep * d;
     double s2new = s2 * std::exp(lnc);
-    double snew = std::sqrt(s2new);
     sigma2[0][p] = s2new;
     std::vector<double> xnew = x;
-    double sum = 0.0;
-    int rec = 0;
+    double lnH = lnc;
     std::vector<Node*>& dp = tree->getDownPassSequence();
     for(int i = (int)dp.size() - 1; i >= 0; i--){
         Node* v = dp[i];
@@ -649,15 +742,19 @@ double ParameterBranchRates::sigmaNonCenteredMoveGBM(int p){
                 continue;
             double eff = tA + (tv - b->getTime()) / 2.0;
             int off = b->getOffset();
-            double y = x[off] - xv + eff * s2 / 2.0;
-            double xbNew = xvNew - eff * s2new / 2.0 + (snew / s) * y;
+            double pvOld = eff * s2;
+            double pvNew = eff * s2new;
+            double Vold = 1.0 / (1.0 / pvOld + tauL[off]);
+            double mOld = Vold * ((xv - 0.5 * pvOld) / pvOld + ellB[off] * tauL[off]);
+            double uoff = (x[off] - mOld) / std::sqrt(Vold);
+            double Vnew = 1.0 / (1.0 / pvNew + tauL[off]);
+            double mNew = Vnew * ((xvNew - 0.5 * pvNew) / pvNew + ellB[off] * tauL[off]);
+            double xbNew = mNew + std::sqrt(Vnew) * uoff;
             xnew[off] = xbNew;
-            sum += xbNew - x[off];
+            lnH += (xbNew - x[off]) + 0.5 * std::log(Vnew / Vold);
             rate[0][p][off] = std::exp(xbNew);
-            rec++;
         }
     }
-    double lnH = lnc * (1.0 + 0.5 * (double)rec) + sum;
     ncAttW++;
     if(ncAttW >= 200){
         double ar = (double)ncAccW / ncAttW;
@@ -721,6 +818,7 @@ double ParameterBranchRates::sigmaNonCenteredMoveWN(int p){
 }
 
 double ParameterBranchRates::update(void){
+    static const double cFrac = [](){ const char* e = std::getenv("FBD_SIGMA_CFRAC"); return e != nullptr ? atof(e) : -1.0; }();
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastLocus = (int)(rng.uniformRv() * numLoci);
     double u = rng.uniformRv();
@@ -736,6 +834,12 @@ double ParameterBranchRates::update(void){
     if(u < 0.80){
         lastMove = 0;
         return scaleLocusRate(lastLocus);
+    }
+    sigPreLog = std::log(sigma2[0][lastLocus]);
+    int op = (cFrac >= 0.0) ? ((rng.uniformRv() < cFrac) ? 0 : 1) : sigSel.pick(rng);
+    if(op == 0){
+        lastMove = 1;
+        return scaleLocusSigma2(lastLocus);
     }
     if(clockModel == ClockModel::UCLN)
         return sigmaNonCenteredMove(lastLocus);

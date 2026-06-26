@@ -9,6 +9,19 @@
 
 class Tree;
 class ParameterUnresolvedFossils;
+class RandomVariable;
+
+class AdaptiveMixSelector {
+    public:
+        void init(int nOps);
+        int  pick(RandomVariable& rng);
+        void record(int op, double jump2, double cpu);
+    private:
+        std::vector<double> cumJ2;
+        std::vector<double> cumCpu;
+        std::vector<long>   tries;
+        int                 nOps;
+};
 
 enum class ClockModel { UCLN, WN, GBM, CIR, GBMC }; // CIR clock: halt — detached, not selectable
 
@@ -123,6 +136,11 @@ class BranchRateModel : public Parameter {
         double                      ncStep;
         long                        ncAccW;
         long                        ncAttW;
+        AdaptiveMixSelector         sigSel;
+        double                      sigPreLog;
+        std::vector<std::vector<double>> sigTauL;
+        std::vector<std::vector<double>> sigEllB;
+        long                        sigRefresh;
 };
 
 class ParameterBranchRates : public BranchRateModel {
@@ -144,6 +162,7 @@ class ParameterBranchRates : public BranchRateModel {
         double                      sigmaNonCenteredMoveGBMC(int p);
         double                      sigmaNonCenteredMoveGBM(int p);
         double                      sigmaNonCenteredMoveWN(int p);
+        void                        branchLikePrecision(int p, std::vector<double>& tauL, std::vector<double>& ellB);
         ClockModel                  clockModel;
 };
 

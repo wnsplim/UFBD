@@ -19,13 +19,13 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		CA3B05292F7AFD8900E5B457 /* FossilizedBirthDeathProcesses */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = FossilizedBirthDeathProcesses; sourceTree = BUILT_PRODUCTS_DIR; };
+		CA3B05292F7AFD8900E5B457 /* UFBD */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = UFBD; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		CA3B052B2F7AFD8900E5B457 /* FossilizedBirthDeathProcesses */ = {
+		CA3B052B2F7AFD8900E5B457 /* UFBD */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = FossilizedBirthDeathProcesses;
+			path = UFBD;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -44,7 +44,7 @@
 		CA3B05202F7AFD8900E5B457 = {
 			isa = PBXGroup;
 			children = (
-				CA3B052B2F7AFD8900E5B457 /* FossilizedBirthDeathProcesses */,
+				CA3B052B2F7AFD8900E5B457 /* UFBD */,
 				CA3B052A2F7AFD8900E5B457 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -52,7 +52,7 @@
 		CA3B052A2F7AFD8900E5B457 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				CA3B05292F7AFD8900E5B457 /* FossilizedBirthDeathProcesses */,
+				CA3B05292F7AFD8900E5B457 /* UFBD */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -60,9 +60,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		CA3B05282F7AFD8900E5B457 /* FossilizedBirthDeathProcesses */ = {
+		CA3B05282F7AFD8900E5B457 /* UFBD */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = CA3B05302F7AFD8900E5B457 /* Build configuration list for PBXNativeTarget "FossilizedBirthDeathProcesses" */;
+			buildConfigurationList = CA3B05302F7AFD8900E5B457 /* Build configuration list for PBXNativeTarget "UFBD" */;
 			buildPhases = (
 				CA3B05252F7AFD8900E5B457 /* Sources */,
 				CA3B05262F7AFD8900E5B457 /* Frameworks */,
@@ -73,13 +73,13 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				CA3B052B2F7AFD8900E5B457 /* FossilizedBirthDeathProcesses */,
+				CA3B052B2F7AFD8900E5B457 /* UFBD */,
 			);
-			name = FossilizedBirthDeathProcesses;
+			name = UFBD;
 			packageProductDependencies = (
 			);
-			productName = FossilizedBirthDeathProcesses;
-			productReference = CA3B05292F7AFD8900E5B457 /* FossilizedBirthDeathProcesses */;
+			productName = UFBD;
+			productReference = CA3B05292F7AFD8900E5B457 /* UFBD */;
 			productType = "com.apple.product-type.tool";
 		};
 /* End PBXNativeTarget section */
@@ -96,7 +96,7 @@
 					};
 				};
 			};
-			buildConfigurationList = CA3B05242F7AFD8900E5B457 /* Build configuration list for PBXProject "FossilizedBirthDeathProcesses" */;
+			buildConfigurationList = CA3B05242F7AFD8900E5B457 /* Build configuration list for PBXProject "UFBD" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -110,7 +110,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				CA3B05282F7AFD8900E5B457 /* FossilizedBirthDeathProcesses */,
+				CA3B05282F7AFD8900E5B457 /* UFBD */,
 			);
 		};
 /* End PBXProject section */
@@ -179,10 +179,10 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				HEADER_SEARCH_PATHS = (
-					"$(SRCROOT)/FossilizedBirthDeathProcesses",
-					"$(SRCROOT)/FossilizedBirthDeathProcesses/Models",
-					"$(SRCROOT)/FossilizedBirthDeathProcesses/Mcmc",
-					"$(SRCROOT)/FossilizedBirthDeathProcesses/Core/**",
+					"$(SRCROOT)/UFBD",
+					"$(SRCROOT)/UFBD/Models",
+					"$(SRCROOT)/UFBD/Mcmc",
+					"$(SRCROOT)/UFBD/Core/**",
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
@@ -240,10 +240,10 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				HEADER_SEARCH_PATHS = (
-					"$(SRCROOT)/FossilizedBirthDeathProcesses",
-					"$(SRCROOT)/FossilizedBirthDeathProcesses/Models",
-					"$(SRCROOT)/FossilizedBirthDeathProcesses/Mcmc",
-					"$(SRCROOT)/FossilizedBirthDeathProcesses/Core/**",
+					"$(SRCROOT)/UFBD",
+					"$(SRCROOT)/UFBD/Models",
+					"$(SRCROOT)/UFBD/Mcmc",
+					"$(SRCROOT)/UFBD/Core/**",
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
@@ -272,7 +272,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		CA3B05242F7AFD8900E5B457 /* Build configuration list for PBXProject "FossilizedBirthDeathProcesses" */ = {
+		CA3B05242F7AFD8900E5B457 /* Build configuration list for PBXProject "UFBD" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				CA3B052E2F7AFD8900E5B457 /* Debug */,
@@ -281,7 +281,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		CA3B05302F7AFD8900E5B457 /* Build configuration list for PBXNativeTarget "FossilizedBirthDeathProcesses" */ = {
+		CA3B05302F7AFD8900E5B457 /* Build configuration list for PBXNativeTarget "UFBD" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				CA3B05312F7AFD8900E5B457 /* Debug */,

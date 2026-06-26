@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(FossilizedBirthDeathProcesses CXX)
+project(UFBD CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -9,7 +9,7 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 endif()
 
-set(FBD_SRC ${CMAKE_SOURCE_DIR}/FossilizedBirthDeathProcesses)
+set(FBD_SRC ${CMAKE_SOURCE_DIR}/UFBD)
 
 file(GLOB_RECURSE FBD_SOURCES CONFIGURE_DEPENDS ${FBD_SRC}/*.cpp)
 list(FILTER FBD_SOURCES EXCLUDE REGEX "/Eigen/")
