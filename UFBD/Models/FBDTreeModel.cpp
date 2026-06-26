@@ -478,13 +478,13 @@ double FBDTreeModel::update(void){
     }
     else if(updatedParameter == parameterTree && isFBD){
         parameterTree->getTree()->setLastUpdateWasScale(false);
-        double wNE = 15.0;
+        double wNE = 10.0;
         double wWB = 10.0;
         double wWE = 10.0;
         double wTreeScale = 3.0;
-        double wSA = 15.0;
+        double wSA = 10.0;
         double wUpDown = 10.0;
-        double wAge = 40.0;
+        double wAge = 20.0;
         double uMove = rng.uniformRv() * (wNE + wWB + wWE + wTreeScale + wSA + wUpDown + wAge);
         if(uMove < wNE){
             double r = doNarrowExchange();
