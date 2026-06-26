@@ -30,6 +30,8 @@ class FBDTreeModel : public PhylogeneticModel {
         void                        updateForRejection(void);
         ParameterTree*              getParameterTree(void) { return parameterTree; }
         ParameterUnresolvedFossils* getUnresolvedFossils(void) { return unresolvedFossils; }
+        bool                        hasOrigin(void) { return originAge != nullptr; }
+        double                      getOriginAgeValue(void);
         void                        setupNodeAgeFloors(void);
     private:
         double                      calculateFBDProbability(void);

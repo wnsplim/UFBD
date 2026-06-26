@@ -102,7 +102,7 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     bool muSmooth  = (rateUs.getMuMode() == RateMode::SMOOTH);
     bool psiSmooth = (rateUs.getPsiMode() == RateMode::SMOOTH);
     if(lamSmooth && nB < 2){ Msg::warning("Smoothing (HSMRF) set for speciation rate (lambda) but only single rate interval."); lamSmooth = false; }
-    if(muSmooth && nB < 2){ Msg::warning("Smoothting (HSMRF) set for extinction rate (mu) but only single rate interval."); muSmooth = false; }
+    if(muSmooth && nB < 2){ Msg::warning("Smoothing (HSMRF) set for extinction rate (mu) but only single rate interval."); muSmooth = false; }
     if(psiSmooth && nB < 2){ Msg::warning("Smoothing (HSMRF) set for sampling rate (psi) but only single rate interval."); psiSmooth = false; }
     double nShifts = rateUs.getHsmrfShifts();
     double shiftSize = rateUs.getHsmrfShiftSize();
@@ -1276,6 +1276,8 @@ void FBDTreeModel::updateGammaCache(void){
 }
 
 void FBDTreeModel::computeAgeFloors(std::map<Node*,double>& floors){
+    if(isFBD)
+        return;
     int numFossils = unresolvedFossils->getNumFossils();
     for(int i = 0; i < numFossils; i++){
         if(unresolvedFossils->isSA(i))
@@ -1600,6 +1602,10 @@ double FBDTreeModel::doUpDownScale(void){
         if(n != t->getCrown() && n->getAncestor()->getTime() < n->getTime())
             return -INFINITY;
     return h;
+}
+
+double FBDTreeModel::getOriginAgeValue(void){
+    return originAge->getValue();
 }
 
 void FBDTreeModel::setupNodeAgeFloors(void){
