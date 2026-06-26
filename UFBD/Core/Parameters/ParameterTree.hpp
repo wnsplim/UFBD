@@ -24,7 +24,9 @@ class ParameterTree : public Parameter {
         double                      update(void);
         void                        updateForAcceptance(void);
         void                        updateForRejection(void);
-        
+        void                        writeState(std::ostream& os);
+        void                        readState(std::istream& is);
+
     protected:
         void                        tuneScale(bool accepted);
         //ordered by menmory footprint

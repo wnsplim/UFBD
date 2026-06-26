@@ -14,6 +14,10 @@ class ChainRunner {
         virtual void                            setOutputPaths(const std::string& po, const std::string& to) = 0;
         virtual const std::vector<std::vector<double>>& traceColumns(void) = 0;
         virtual const std::vector<std::string>& traceNames(void) = 0;
+        virtual void                            writeCheckpoint(void) {}
+        virtual bool                            loadCheckpoint(void) { return false; }
+        virtual void                            resumeOutputs(void) {}
+        virtual unsigned long                   currentGen(void) { return 0; }
 };
 
 #endif

@@ -6,6 +6,7 @@
 #include "PhylogeneticModel.hpp"
 #include "Probability.hpp"
 #include "RandomVariable.hpp"
+#include "Serialize.hpp"
 
 ParameterShrinkageField::ParameterShrinkageField(double prob, PhylogeneticModel* m, int nB, Probability::PriorSpec ap, double priorNShifts, double shiftSize) : Parameter(prob, m, "shrinkageField"){
     nBins = nB;
@@ -250,4 +251,31 @@ void ParameterShrinkageField::updateForRejection(void){
     delta[0] = delta[1];
     sigma[0] = sigma[1];
     rateVal[0] = rateVal[1];
+}
+
+void ParameterShrinkageField::writeState(std::ostream& os){
+    os << anchor[1] << ' ' << gamma[1] << '\n';
+    Serialize::writeVec(os, delta[1]);
+    Serialize::writeVec(os, sigma[1]);
+    Serialize::writeVec(os, rateVal[1]);
+    for(int k = 0; k < 4; k++) os << step[k] << ' ';
+    os << '\n';
+    for(int k = 0; k < 4; k++) os << acc[k] << ' ' << rej[k] << ' ';
+    os << '\n';
+    for(int k = 0; k < 4; k++) Serialize::writeBoolDeque(os, recentAR[k]);
+}
+
+void ParameterShrinkageField::readState(std::istream& is){
+    is >> anchor[1] >> gamma[1];
+    anchor[0] = anchor[1];
+    gamma[0] = gamma[1];
+    Serialize::readVec(is, delta[1]);
+    delta[0] = delta[1];
+    Serialize::readVec(is, sigma[1]);
+    sigma[0] = sigma[1];
+    Serialize::readVec(is, rateVal[1]);
+    rateVal[0] = rateVal[1];
+    for(int k = 0; k < 4; k++) is >> step[k];
+    for(int k = 0; k < 4; k++) is >> acc[k] >> rej[k];
+    for(int k = 0; k < 4; k++) Serialize::readBoolDeque(is, recentAR[k]);
 }

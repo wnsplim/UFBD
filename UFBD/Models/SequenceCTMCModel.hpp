@@ -1,6 +1,7 @@
 #ifndef SequenceCTMCModel_hpp
 #define SequenceCTMCModel_hpp
 
+#include <iosfwd>
 #include <string>
 #include <vector>
 
@@ -24,6 +25,8 @@ class SequenceCTMCModel {
         void                            updateForRejection(void);
         void                            appendParameterNames(std::vector<std::string>& names);
         void                            appendParameterValues(std::vector<double>& values);
+        void                            writeState(std::ostream& os);
+        void                            readState(std::istream& is);
         int                             getNumPartitions(void) const;
         bool                            hasMovableParams(void) const;
 

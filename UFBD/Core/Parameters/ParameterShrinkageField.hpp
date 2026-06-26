@@ -20,6 +20,8 @@ class ParameterShrinkageField : public Parameter {
         double                      update(void);
         void                        updateForAcceptance(void);
         void                        updateForRejection(void);
+        void                        writeState(std::ostream& os);
+        void                        readState(std::istream& is);
         static double               calibrateGlobalScale(int nBins, double priorNShifts, double shiftSize);
 
     private:

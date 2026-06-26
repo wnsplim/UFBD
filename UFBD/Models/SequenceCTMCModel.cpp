@@ -157,3 +157,21 @@ void SequenceCTMCModel::appendParameterValues(std::vector<double>& values){
         values.push_back(pinv[p]->getValue());
     }
 }
+
+void SequenceCTMCModel::writeState(std::ostream& os){
+    for(int p = 0; p < seqLik->getNumPartitions(); p++){
+        exch[p]->writeState(os);
+        freq[p]->writeState(os);
+        alpha[p]->writeState(os);
+        pinv[p]->writeState(os);
+    }
+}
+
+void SequenceCTMCModel::readState(std::istream& is){
+    for(int p = 0; p < seqLik->getNumPartitions(); p++){
+        exch[p]->readState(is);
+        freq[p]->readState(is);
+        alpha[p]->readState(is);
+        pinv[p]->readState(is);
+    }
+}

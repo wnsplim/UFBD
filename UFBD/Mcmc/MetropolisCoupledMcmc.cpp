@@ -3,15 +3,19 @@
 #include "PhylogeneticModel.hpp"
 #include "Probability.hpp"
 #include "RandomVariable.hpp"
+#include "Serialize.hpp"
 #include "ThreadPool.hpp"
 #include "Tree.hpp"
 #include "UserSettings.hpp"
 #include "WriteTSV.hpp"
 
 #include <algorithm>
+#include <cstdio>
+#include <fstream>
 #include <future>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 
 MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int pf, int sf, std::vector<PhylogeneticModel*> m, unsigned int masterSeed) : numCycles(ng), printFrequency(pf),
     sampleFrequency(sf),
@@ -200,6 +204,122 @@ void MetropolisCoupledMcmc::sample(unsigned long n) {
     tv.insert(tv.end(), parmStr.begin(), parmStr.end());
     for(size_t j = 0; j < traceCols.size() && j < tv.size(); j++)
         traceCols[j].push_back(tv[j]);
+
+    writeCheckpoint();
+}
+
+void MetropolisCoupledMcmc::writeCheckpoint(void) {
+    std::string path = paramOut + ".ckp";
+    std::string tmp = path + ".tmp";
+    std::ofstream os(tmp);
+    os << std::setprecision(17);
+    os << gen << ' ' << sampleFrequency << ' ' << deltaT << ' ' << numModels << '\n';
+    for(int i = 0; i < numModels; i++)
+        os << indices[i] << ' ';
+    os << '\n';
+    swapRng.writeState(os);
+    Serialize::writeBoolDeque(os, recentAcceptRej);
+    for(int i = 0; i < numModels; i++){
+        os << currLnL[i] << ' ' << currLnP[i] << '\n';
+        models[i]->getRng()->writeState(os);
+        models[i]->writeState(os);
+    }
+    os.flush();
+    os.close();
+    std::rename(tmp.c_str(), path.c_str());
+}
+
+bool MetropolisCoupledMcmc::loadCheckpoint(void) {
+    std::string path = paramOut + ".ckp";
+    std::ifstream is(path);
+    if(is.is_open() == false)
+        Msg::error("could not open checkpoint file for -resume: " + path);
+    int nm, storedSf;
+    is >> gen >> storedSf >> deltaT >> nm;
+    if(storedSf != sampleFrequency){
+        Msg::warning("-s " + std::to_string(sampleFrequency) + " differs from the pre-resume thinning " + std::to_string(storedSf) + "; forcing " + std::to_string(storedSf) + " to keep the log spacing uniform.");
+        sampleFrequency = storedSf;
+    }
+    indices.assign(nm, 0);
+    coldModelIdx = -1;
+    for(int i = 0; i < nm; i++){
+        is >> indices[i];
+        if(indices[i] == 0)
+            coldModelIdx = i;
+    }
+    swapRng.readState(is);
+    Serialize::readBoolDeque(is, recentAcceptRej);
+    currLnL.assign(nm, 0.0);
+    currLnP.assign(nm, 0.0);
+    for(int i = 0; i < nm; i++){
+        is >> currLnL[i] >> currLnP[i];
+        models[i]->getRng()->readState(is);
+        models[i]->readState(is);
+    }
+    if(is.fail())
+        Msg::error("checkpoint file is truncated or corrupt: " + path);
+    return true;
+}
+
+void MetropolisCoupledMcmc::resumeOutputs(void) {
+    RandomVariable::setActiveInstance(&swapRng);
+
+    std::vector<std::string> headStr = models[coldModelIdx]->getParameterNames();
+    traceNms.clear();
+    traceNms.push_back("posterior");
+    traceNms.push_back("likelihood");
+    traceNms.push_back("prior");
+    for(const std::string& s : headStr)
+        traceNms.push_back(s);
+    traceCols.assign(traceNms.size(), std::vector<double>());
+
+    std::ifstream pin(paramOut);
+    std::string header;
+    std::vector<std::string> keep;
+    if(pin.is_open()){
+        std::getline(pin, header);
+        std::string line;
+        while(std::getline(pin, line)){
+            if(line.empty())
+                continue;
+            std::stringstream ss(line);
+            double nval;
+            ss >> nval;
+            if((unsigned long)nval > gen)
+                break;
+            keep.push_back(line);
+        }
+        pin.close();
+    }
+
+    for(const std::string& line : keep){
+        std::stringstream ss(line);
+        double nval;
+        ss >> nval;
+        double v;
+        for(size_t j = 0; j < traceCols.size() && (ss >> v); j++)
+            traceCols[j].push_back(v);
+    }
+
+    std::ofstream pout(paramOut, std::ios::out | std::ios::trunc);
+    pout << header << '\n';
+    for(const std::string& line : keep)
+        pout << line << '\n';
+    pout.close();
+
+    std::ifstream tin(treeOut);
+    std::vector<std::string> tkeep;
+    std::string tline;
+    while(std::getline(tin, tline) && tkeep.size() < keep.size())
+        tkeep.push_back(tline);
+    tin.close();
+    std::ofstream tout(treeOut, std::ios::out | std::ios::trunc);
+    for(const std::string& l : tkeep)
+        tout << l << '\n';
+    tout.close();
+
+    params.addFilepath(paramOut, false);
+    trees.addFilepath(treeOut, false);
 }
 
 void MetropolisCoupledMcmc::updateDeltaT(void) {

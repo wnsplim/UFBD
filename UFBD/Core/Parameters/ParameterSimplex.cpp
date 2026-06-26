@@ -1,6 +1,7 @@
 #include "ParameterSimplex.hpp"
 #include "Probability.hpp"
 #include "RandomVariable.hpp"
+#include "Serialize.hpp"
 
 ParameterSimplex::ParameterSimplex(double prob, PhylogeneticModel* m, std::string n, int dimension, double concentration, double tuning) :
     Parameter(prob, m, n),
@@ -39,6 +40,17 @@ void ParameterSimplex::updateForAcceptance(void){
 void ParameterSimplex::updateForRejection(void){
     value[0] = value[1];
     numRejections++;
+}
+
+void ParameterSimplex::writeState(std::ostream& os){
+    Serialize::writeVec(os, value[1]);
+    os << numAcceptances << ' ' << numRejections << '\n';
+}
+
+void ParameterSimplex::readState(std::istream& is){
+    Serialize::readVec(is, value[1]);
+    value[0] = value[1];
+    is >> numAcceptances >> numRejections;
 }
 
 void ParameterSimplex::print(void){

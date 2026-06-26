@@ -2,6 +2,7 @@
 #define ParameterSimplex_hpp
 
 #include "Parameter.hpp"
+#include <iosfwd>
 #include <string>
 #include <vector>
 
@@ -18,6 +19,8 @@ class ParameterSimplex : public Parameter {
         double                      update(void);
         void                        updateForAcceptance(void);
         void                        updateForRejection(void);
+        void                        writeState(std::ostream& os);
+        void                        readState(std::istream& is);
 
     private:
         std::vector<std::vector<double>> value;

@@ -1,6 +1,7 @@
 #ifndef PhylogeneticModel_hpp
 #define PhylogeneticModel_hpp
 
+#include <iosfwd>
 #include <string>
 #include <vector>
 
@@ -25,6 +26,8 @@ class PhylogeneticModel {
         virtual double                          update(void) = 0;
         virtual void                            updateForAcceptance(void) = 0;
         virtual void                            updateForRejection(void) = 0;
+        virtual void                            writeState(std::ostream& os) {}
+        virtual void                            readState(std::istream& is) {}
         std::vector<Parameter*>                 parameters;
         Parameter*                              updatedParameter;
         RandomVariable                          rng;

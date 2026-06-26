@@ -5,6 +5,7 @@
 #include "FBDTreeModel.hpp"
 #include "PhylogeneticModel.hpp"
 #include "RandomVariable.hpp"
+#include "Serialize.hpp"
 #include "ThreadPool.hpp"
 #include "UserSettings.hpp"
 #include "Probability.hpp"
@@ -584,6 +585,23 @@ void FBDTreeModel::updateForRejection(void){
     }
     if(isFBD && originAge != nullptr)
         parameterTree->getTree()->getCrown()->setTime(originAge->getValue());
+}
+
+void FBDTreeModel::writeState(std::ostream& os){
+    for(Parameter* p : parameters)
+        p->writeState(os);
+    os << rateVecStep << ' ' << shrinkStep << ' ' << turnoverStep << ' ' << upDownStep << ' ' << upDownTotal << '\n';
+    os << rvAccW << ' ' << rvAttW << ' ' << seAccW << ' ' << seAttW << ' ' << frAccW << ' ' << frAttW << '\n';
+    Serialize::writeBoolDeque(os, upDownRecent);
+}
+
+void FBDTreeModel::readState(std::istream& is){
+    for(Parameter* p : parameters)
+        p->readState(is);
+    is >> rateVecStep >> shrinkStep >> turnoverStep >> upDownStep >> upDownTotal;
+    is >> rvAccW >> rvAttW >> seAccW >> seAttW >> frAccW >> frAttW;
+    Serialize::readBoolDeque(is, upDownRecent);
+    cacheInit = false;
 }
 
 double FBDTreeModel::calculateFBDProbability(void){

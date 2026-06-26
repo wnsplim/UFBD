@@ -2,6 +2,7 @@
 #include "ParameterDouble.hpp"
 #include "Probability.hpp"
 #include "RandomVariable.hpp"
+#include "Serialize.hpp"
 
 #include <cmath>
 #include <iomanip>
@@ -90,4 +91,15 @@ void ParameterDouble::updateForRejection(void) {
     recentAcceptRej.push_back(false);
     if(recentAcceptRej.size() > 1000)
             recentAcceptRej.pop_front();
+}
+
+void ParameterDouble::writeState(std::ostream& os) {
+    os << value[1] << ' ' << windowSize << ' ' << numAcceptances << ' ' << numAdaptive << ' ' << numRejections << '\n';
+    Serialize::writeBoolDeque(os, recentAcceptRej);
+}
+
+void ParameterDouble::readState(std::istream& is) {
+    is >> value[1] >> windowSize >> numAcceptances >> numAdaptive >> numRejections;
+    value[0] = value[1];
+    Serialize::readBoolDeque(is, recentAcceptRej);
 }

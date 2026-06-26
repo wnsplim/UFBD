@@ -3,6 +3,7 @@
 
 #include "Parameter.hpp"
 #include <deque>
+#include <iosfwd>
 #include <string>
 #include <vector>
 
@@ -26,6 +27,8 @@ class ParameterDouble : public Parameter {
         double                      update(void);
         void                        updateForAcceptance(void);
         void                        updateForRejection(void);
+        void                        writeState(std::ostream& os);
+        void                        readState(std::istream& is);
     private:
         double                      updateBactrianScale(void);
         std::vector<double>         value;

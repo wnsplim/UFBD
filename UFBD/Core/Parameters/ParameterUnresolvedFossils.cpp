@@ -7,6 +7,7 @@
 #include "ParameterUnresolvedFossils.hpp"
 #include "PhylogeneticModel.hpp"
 #include "RandomVariable.hpp"
+#include "Serialize.hpp"
 #include "Tree.hpp"
 
 ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, PhylogeneticModel* m, Tree* bb, std::vector<Clade>& clades, std::vector<Fossil>& fossils, ParameterDouble* oa) : Parameter(prob, m, "unresolvedFossils"){
@@ -285,6 +286,20 @@ void ParameterUnresolvedFossils::updateForRejection(void){
         y[0][lastFossil] = y[1][lastFossil];
         z[0][lastFossil] = z[1][lastFossil];
     }
+}
+
+void ParameterUnresolvedFossils::writeState(std::ostream& os){
+    Serialize::writeVec(os, y[1]);
+    Serialize::writeVec(os, z[1]);
+    os << spineIdx << ' ' << numAcceptances << ' ' << numRejections << '\n';
+}
+
+void ParameterUnresolvedFossils::readState(std::istream& is){
+    Serialize::readVec(is, y[1]);
+    Serialize::readVec(is, z[1]);
+    y[0] = y[1];
+    z[0] = z[1];
+    is >> spineIdx >> numAcceptances >> numRejections;
 }
 
 void ParameterUnresolvedFossils::print(void){

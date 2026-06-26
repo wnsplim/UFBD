@@ -1,6 +1,7 @@
 #ifndef Tree_hpp
 #define Tree_hpp
 
+#include <iosfwd>
 #include <map>
 #include <sstream>
 #include <string>
@@ -51,6 +52,8 @@ class Tree {
         void                                print(void);
         void                                print(std::string header);
         void                                reindexNodes(void);
+        void                                writeState(std::ostream& os);
+        void                                readState(std::istream& is);
         
     private:
         Node*                               addNode(void);

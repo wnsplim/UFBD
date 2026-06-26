@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <deque>
+#include <iosfwd>
 #include <vector>
 
 #include "Parameter.hpp"
@@ -16,6 +17,8 @@ class AdaptiveMixSelector {
         void init(int nOps);
         int  pick(RandomVariable& rng);
         void record(int op, double jump2, double cpu);
+        void writeState(std::ostream& os) const;
+        void readState(std::istream& is);
     private:
         std::vector<double> cumJ2;
         std::vector<double> cumCpu;
@@ -101,6 +104,8 @@ class BranchRateModel : public Parameter {
         void                        print(void) {}
         void                        updateForAcceptance(void);
         void                        updateForRejection(void);
+        void                        writeState(std::ostream& os);
+        void                        readState(std::istream& is);
         virtual std::vector<std::vector<double>> getAbsoluteRates(void) = 0;
         virtual std::vector<std::vector<BranchMGF>> getBranchMGF(void){ return std::vector<std::vector<BranchMGF>>(numLoci, std::vector<BranchMGF>(numNodes, BranchMGF{0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0})); }
 

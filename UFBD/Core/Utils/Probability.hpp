@@ -15,11 +15,6 @@ class RandomVariable;
 //    using MatrixXd = Matrix<double, -1, -1, 0, -1, -1>;
 //}
 
-thread_local static bool availableNormalRv = false;
-thread_local static double extraNormalRv = 0.0;
-
-
-
 namespace  Probability {
 
     enum class PriorFamily { IMPROPER, TRUNCATED_NORMAL, EXPONENTIAL, GAMMA, LOGNORMAL, UNIFORM, FIXED };

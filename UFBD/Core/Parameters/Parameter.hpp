@@ -1,6 +1,7 @@
 #ifndef Parameter_hpp
 #define Parameter_hpp
 
+#include <iosfwd>
 #include <string>
 class PhylogeneticModel;
 class MultivariateNormalPhylogeneticModel;
@@ -23,7 +24,9 @@ class Parameter {
         virtual double      update(void) = 0;
         virtual void        updateForAcceptance(void) = 0;
         virtual void        updateForRejection(void) = 0;
-        
+        virtual void        writeState(std::ostream& os) {}
+        virtual void        readState(std::istream& is) {}
+
     protected:
         std::string         parmName;
         PhylogeneticModel*  model;

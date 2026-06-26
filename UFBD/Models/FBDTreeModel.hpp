@@ -28,6 +28,8 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      update(void);
         void                        updateForAcceptance(void);
         void                        updateForRejection(void);
+        void                        writeState(std::ostream& os);
+        void                        readState(std::istream& is);
         ParameterTree*              getParameterTree(void) { return parameterTree; }
         ParameterUnresolvedFossils* getUnresolvedFossils(void) { return unresolvedFossils; }
         bool                        hasOrigin(void) { return originAge != nullptr; }

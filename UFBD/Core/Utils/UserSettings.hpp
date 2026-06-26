@@ -22,6 +22,7 @@ class UserSettings {
         unsigned long               getChainLength(void) { return chainLength; }
         int                         getNumCoupledChains(void) { return numCoupledChains; }
         int                         getNumRuns(void) { return numRuns; }
+        bool                        getResume(void) { return resume; }
         bool                        getAutoChainLength(void) { return autoChainLength; }
         double                      getBurninFraction(void) { return burninFraction; }
         double                      getRhatThreshold(void) { return rhatThreshold; }
@@ -108,6 +109,7 @@ class UserSettings {
         unsigned long               chainLength;
         int                         numCoupledChains;
         int                         numRuns;
+        bool                        resume;
         bool                        autoChainLength;
         double                      burninFraction;
         double                      rhatThreshold;

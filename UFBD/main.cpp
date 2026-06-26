@@ -63,6 +63,8 @@ int main(int argc, const char* argv[]) {
         return new FBDTreeModel(pt, input.getClades(), input.getFossils(), sd);
     };
 
+    bool resume = settings.getResume();
+
     if(numRuns == 1 && autoStop == false){
         if(numCoupledChains > 1){
             std::cout << "Running Metropolis-coupled MCMC with " << numCoupledChains << " coupled chains across " << settings.getNumThreads() << " threads\n";
@@ -71,12 +73,28 @@ int main(int argc, const char* argv[]) {
             for(int c = 0; c < numCoupledChains; c++)
                 models[c] = makeModel(masterSeed + (unsigned int)c);
             MetropolisCoupledMcmc mcmc(settings.getChainLength(), pf, sf, models, masterSeed);
-            mcmc.run();
+            if(resume){
+                mcmc.loadCheckpoint();
+                mcmc.resumeOutputs();
+                unsigned long g = mcmc.currentGen();
+                if(g < settings.getChainLength())
+                    mcmc.advance(settings.getChainLength() - g);
+                mcmc.finalize();
+            }else
+                mcmc.run();
         }else{
             std::cout << "Running standard MCMC\n";
             std::cout << "-----------------------------------------------------------------------" << std::endl;
             Mcmc mcmc((int)settings.getChainLength(), pf, sf, makeModel(masterSeed));
-            mcmc.run();
+            if(resume){
+                mcmc.loadCheckpoint();
+                mcmc.resumeOutputs();
+                unsigned long g = mcmc.currentGen();
+                if(g < settings.getChainLength())
+                    mcmc.advance(settings.getChainLength() - g);
+                mcmc.finalize();
+            }else
+                mcmc.run();
         }
     }else{
         unsigned long ncyc = autoStop ? settings.getMaxGen() : settings.getChainLength();

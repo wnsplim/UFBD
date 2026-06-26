@@ -39,6 +39,8 @@ class ParameterUnresolvedFossils : public Parameter {
         double                      scaleAttachAges(const std::vector<int>& indices, double m);
         void                        updateForAcceptance(void);
         void                        updateForRejection(void);
+        void                        writeState(std::ostream& os);
+        void                        readState(std::istream& is);
 
     private:
         double                      updateFossilAge(int i);

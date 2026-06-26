@@ -28,10 +28,23 @@ void ConvergenceRunner::run(void){
     long blockGens = (long)s.getCheckEverySamples() * (long)s.getSampleFrequency();
     if(blockGens < 1) blockGens = 1;
 
-    for(ChainRunner* c : replicates)
-        c->init();
-
     unsigned long gen = 0;
+    if(s.getResume()){
+        for(ChainRunner* c : replicates){
+            c->loadCheckpoint();
+            c->resumeOutputs();
+            gen = std::max(gen, c->currentGen());
+        }
+        for(ChainRunner* c : replicates){
+            unsigned long cg = c->currentGen();
+            if(cg < gen)
+                c->advance(gen - cg);
+        }
+    }else{
+        for(ChainRunner* c : replicates)
+            c->init();
+    }
+
     bool stoppedEarly = false;
     while(gen < maxGen){
         unsigned long step = (unsigned long)blockGens;

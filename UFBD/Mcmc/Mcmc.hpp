@@ -19,6 +19,10 @@ class Mcmc : public ChainRunner {
         void                    setOutputPaths(const std::string& po, const std::string& to) { paramOut = po; treeOut = to; }
         const std::vector<std::vector<double>>& traceColumns(void) { return traceCols; }
         const std::vector<std::string>&         traceNames(void) { return traceNms; }
+        void                    writeCheckpoint(void);
+        bool                    loadCheckpoint(void);
+        void                    resumeOutputs(void);
+        unsigned long           currentGen(void) { return gen; }
 
     private:
         void                    sample(unsigned long n, double lnL, double lnP);

@@ -609,3 +609,65 @@ void Tree::writeTree(Node* p, std::stringstream& strm) {
 
         }
 }
+
+void Tree::writeState(std::ostream& os) {
+
+    os << nodes.size() << ' ' << crown->getOffset() << ' ' << numTaxa << '\n';
+    for (Node* n : nodes)
+        {
+        os << (n->getIsTip() ? 1 : 0) << ' ' << (n->getIsFossil() ? 1 : 0) << ' ' << (n->getFlag() ? 1 : 0)
+           << ' ' << n->getIndex() << ' ' << n->getTime();
+        std::set<Node*>& nb = n->getNeighbors();
+        os << ' ' << nb.size();
+        for (Node* m : nb)
+            os << ' ' << m->getOffset();
+        const std::string& nm = n->getName();
+        os << ' ' << (nm.empty() ? "*" : nm) << '\n';
+        }
+}
+
+void Tree::readState(std::istream& is) {
+
+    size_t nn;
+    int crownOff;
+    is >> nn >> crownOff >> numTaxa;
+    if (nodes.size() != nn)
+        {
+        deleteNodes();
+        for (size_t i = 0; i < nn; i++)
+            addNode();
+        }
+    std::vector<std::vector<int>> nbrs(nn);
+    for (size_t i = 0; i < nn; i++)
+        {
+        int tip, foss, fl, idx;
+        double tm;
+        size_t nc;
+        is >> tip >> foss >> fl >> idx >> tm >> nc;
+        Node* p = nodes[i];
+        p->setIsTip(tip != 0);
+        p->setIsFossil(foss != 0);
+        p->setFlag(fl != 0);
+        p->setIndex(idx);
+        p->setTime(tm);
+        nbrs[i].resize(nc);
+        for (size_t k = 0; k < nc; k++)
+            is >> nbrs[i][k];
+        std::string nm;
+        is >> nm;
+        p->setName(nm == "*" ? "" : nm);
+        }
+    tips.clear();
+    for (size_t i = 0; i < nn; i++)
+        {
+        Node* p = nodes[i];
+        p->removeAllNeighbors();
+        for (int o : nbrs[i])
+            p->addNeighbor(nodes[o]);
+        if (p->getIsTip())
+            tips.push_back(p);
+        }
+    crown = nodes[crownOff];
+    initializeDownPassSequence();
+    treeHeight = crown->getTime();
+}

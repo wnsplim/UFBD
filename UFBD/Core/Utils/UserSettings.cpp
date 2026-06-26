@@ -34,6 +34,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     chainLength     = 100;
     numCoupledChains       = 1;
     numRuns         = 4;
+    resume          = false;
     autoChainLength = false;
     burninFraction  = 0.25;
     rhatThreshold   = 1.01;
@@ -79,7 +80,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-lambda-prior-mode", "-mu-prior-mode", "-psi-prior-mode", "-hsmrf-shifts", "-hsmrf-shift-size", "-cpu-time",
         "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma",
         "-seq", "-partition", "-ncat", "-datatype", "-model", "-inv", "-freq",
-        "-runs", "-burnin", "-rhat", "-min-ess", "-check-every", "-max-gen"
+        "-runs", "-burnin", "-rhat", "-min-ess", "-check-every", "-max-gen", "-resume"
     };
     std::set<std::string> valueFlags = {
         "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt", "-cores",
@@ -104,6 +105,11 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         if (arg == "-help" || arg == "-h") {
             printHelp();
             return;
+        }
+
+        if (arg == "-resume") {
+            resume = true;
+            continue;
         }
 
 

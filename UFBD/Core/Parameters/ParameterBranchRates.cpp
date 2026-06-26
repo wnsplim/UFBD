@@ -7,6 +7,7 @@
 #include "PhylogeneticModel.hpp"
 #include "Probability.hpp"
 #include "RandomVariable.hpp"
+#include "Serialize.hpp"
 #include "ThreadPool.hpp"
 #include "Tree.hpp"
 
@@ -48,6 +49,20 @@ void AdaptiveMixSelector::record(int op, double jump2, double cpu){
     cumJ2[op] = cumJ2[op] * keep + jump2;
     cumCpu[op] = cumCpu[op] * keep + cpu;
     tries[op]++;
+}
+
+void AdaptiveMixSelector::writeState(std::ostream& os) const {
+    os << nOps << '\n';
+    Serialize::writeVec(os, cumJ2);
+    Serialize::writeVec(os, cumCpu);
+    Serialize::writeLVec(os, tries);
+}
+
+void AdaptiveMixSelector::readState(std::istream& is){
+    is >> nOps;
+    Serialize::readVec(is, cumJ2);
+    Serialize::readVec(is, cumCpu);
+    Serialize::readLVec(is, tries);
 }
 
 BranchRateModel::BranchRateModel(double prob, PhylogeneticModel* m, Tree* t, int L, const double* rg, const double* s2) : Parameter(prob, m, "branchRates"){
@@ -186,6 +201,39 @@ void BranchRateModel::restoreAll(void){
         for(int b : branchNodes)
             rate[0][p][b] = rate[1][p][b];
     }
+}
+
+void BranchRateModel::writeState(std::ostream& os){
+    Serialize::writeVec(os, mu[1]);
+    Serialize::writeVec(os, sigma2[1]);
+    Serialize::write2D(os, rate[1]);
+    for(int k = 0; k < 4; k++) os << step[k] << ' ';
+    os << '\n';
+    for(int k = 0; k < 4; k++) os << acc[k] << ' ' << rej[k] << ' ';
+    os << '\n';
+    for(int k = 0; k < 4; k++) Serialize::writeBoolDeque(os, recentAR[k]);
+    os << cdStep << ' ' << cdAccW << ' ' << cdAttW << ' ' << ncStep << ' ' << ncAccW << ' ' << ncAttW << '\n';
+    os << sigPreLog << ' ' << sigRefresh << '\n';
+    sigSel.writeState(os);
+    Serialize::write2D(os, sigTauL);
+    Serialize::write2D(os, sigEllB);
+}
+
+void BranchRateModel::readState(std::istream& is){
+    Serialize::readVec(is, mu[1]);
+    mu[0] = mu[1];
+    Serialize::readVec(is, sigma2[1]);
+    sigma2[0] = sigma2[1];
+    Serialize::read2D(is, rate[1]);
+    rate[0] = rate[1];
+    for(int k = 0; k < 4; k++) is >> step[k];
+    for(int k = 0; k < 4; k++) is >> acc[k] >> rej[k];
+    for(int k = 0; k < 4; k++) Serialize::readBoolDeque(is, recentAR[k]);
+    is >> cdStep >> cdAccW >> cdAttW >> ncStep >> ncAccW >> ncAttW;
+    is >> sigPreLog >> sigRefresh;
+    sigSel.readState(is);
+    Serialize::read2D(is, sigTauL);
+    Serialize::read2D(is, sigEllB);
 }
 
 double BranchRateModel::constantDistanceMove(void){

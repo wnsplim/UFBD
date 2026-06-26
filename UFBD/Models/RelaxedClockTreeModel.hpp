@@ -30,6 +30,8 @@ class RelaxedClockTreeModel : public PhylogeneticModel {
         double                      update(void);
         void                        updateForAcceptance(void);
         void                        updateForRejection(void);
+        void                        writeState(std::ostream& os);
+        void                        readState(std::istream& is);
 
     private:
         void                        buildClock(ClockModel clockModel, const double* rgeneParam, const double* sigma2Param);

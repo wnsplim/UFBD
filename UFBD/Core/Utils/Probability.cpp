@@ -457,25 +457,15 @@ int Probability::Geometric::rv(RandomVariable* rng, double p) {
 
 double Probability::Normal::rv(RandomVariable* rng) {
 
-	if ( availableNormalRv == false )
+	double v1, v2, rsq;
+	do
 		{
-		double v1, v2, rsq;
-		do
-			{
-			v1 = 2.0 * rng->uniformRv() - 1.0;
-			v2 = 2.0 * rng->uniformRv() - 1.0;
-			rsq = v1 * v1 + v2 * v2;
-			} while ( rsq >= 1.0 || rsq == 0.0 );
-		double fac = sqrt(-2.0 * log(rsq)/rsq);
-		extraNormalRv = v1 * fac;
-		availableNormalRv = true;
-		return v2 * fac;
-		}
-	else
-		{
-		availableNormalRv = false;
-		return extraNormalRv;
-		}
+		v1 = 2.0 * rng->uniformRv() - 1.0;
+		v2 = 2.0 * rng->uniformRv() - 1.0;
+		rsq = v1 * v1 + v2 * v2;
+		} while ( rsq >= 1.0 || rsq == 0.0 );
+	double fac = sqrt(-2.0 * log(rsq)/rsq);
+	return v2 * fac;
 }
 
 double Probability::Normal::rv(RandomVariable* rng, double mu, double sigma) {

@@ -6,6 +6,7 @@
 #include "PhylogeneticModel.hpp"
 #include "Probability.hpp"
 #include "RandomVariable.hpp"
+#include "Serialize.hpp"
 #include "Tree.hpp"
 
 ParameterTree::ParameterTree(double prob, PhylogeneticModel* m) :
@@ -56,6 +57,20 @@ void ParameterTree::updateForRejection(void) {
         tuneScale(false);
     useCachedLnP = false;
     *(trees[0]) = *(trees[1]);
+}
+
+void ParameterTree::writeState(std::ostream& os) {
+    trees[1]->writeState(os);
+    os << scaleLambda << ' ' << numAcceptances << ' ' << numRejections << ' ' << numScaleMoves << '\n';
+    Serialize::writeBoolDeque(os, recentScaleAcceptRej);
+}
+
+void ParameterTree::readState(std::istream& is) {
+    trees[1]->readState(is);
+    *(trees[0]) = *(trees[1]);
+    is >> scaleLambda >> numAcceptances >> numRejections >> numScaleMoves;
+    Serialize::readBoolDeque(is, recentScaleAcceptRej);
+    useCachedLnP = false;
 }
 
 void ParameterTree::tuneScale(bool accepted) {

@@ -11,6 +11,7 @@
 #include "ParameterUnresolvedFossils.hpp"
 #include "Probability.hpp"
 #include "RandomVariable.hpp"
+#include "Serialize.hpp"
 #include "SequenceCTMCModel.hpp"
 #include "Tree.hpp"
 #include "UserSettings.hpp"
@@ -187,6 +188,26 @@ void RelaxedClockTreeModel::updateForRejection(void){
             fbd->getUnresolvedFossils()->updateForRejection();
     }else
         fbd->updateForRejection();
+}
+
+void RelaxedClockTreeModel::writeState(std::ostream& os){
+    fbd->getRng()->writeState(os);
+    fbd->writeState(os);
+    clock->writeState(os);
+    if(ctmc != nullptr)
+        ctmc->writeState(os);
+    os << ageScaleStep << ' ' << ageScaleAtt << ' ' << ageScaleAcc << '\n';
+    naSel.writeState(os);
+}
+
+void RelaxedClockTreeModel::readState(std::istream& is){
+    fbd->getRng()->readState(is);
+    fbd->readState(is);
+    clock->readState(is);
+    if(ctmc != nullptr)
+        ctmc->readState(is);
+    is >> ageScaleStep >> ageScaleAtt >> ageScaleAcc;
+    naSel.readState(is);
 }
 
 void RelaxedClockTreeModel::collectNodeAges(std::vector<std::string>* names, std::vector<double>* vals){
