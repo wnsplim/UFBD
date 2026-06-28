@@ -76,6 +76,12 @@ BranchRateModel::BranchRateModel(double prob, PhylogeneticModel* m, Tree* t, int
     cdStep = 1.0;
     cdAccW = 0;
     cdAttW = 0;
+    sdStep = 1.0;
+    sdAccW = 0;
+    sdAttW = 0;
+    spStep = 0.5;
+    spAccW = 0;
+    spAttW = 0;
     ncStep = 0.5;
     ncAccW = 0;
     ncAttW = 0;
@@ -209,6 +215,7 @@ void BranchRateModel::writeState(std::ostream& os){
     os << '\n';
     for(int k = 0; k < 4; k++) Serialize::writeBoolDeque(os, recentAR[k]);
     os << cdStep << ' ' << cdAccW << ' ' << cdAttW << ' ' << ncStep << ' ' << ncAccW << ' ' << ncAttW << '\n';
+    os << sdStep << ' ' << sdAccW << ' ' << sdAttW << ' ' << spStep << ' ' << spAccW << ' ' << spAttW << '\n';
     os << sigRefresh << '\n';
     Serialize::write2D(os, sigTauL);
     Serialize::write2D(os, sigEllB);
@@ -225,6 +232,7 @@ void BranchRateModel::readState(std::istream& is){
     for(int k = 0; k < 4; k++) is >> acc[k] >> rej[k];
     for(int k = 0; k < 4; k++) Serialize::readBoolDeque(is, recentAR[k]);
     is >> cdStep >> cdAccW >> cdAttW >> ncStep >> ncAccW >> ncAttW;
+    is >> sdStep >> sdAccW >> sdAttW >> spStep >> spAccW >> spAttW;
     is >> sigRefresh;
     Serialize::read2D(is, sigTauL);
     Serialize::read2D(is, sigEllB);
@@ -353,6 +361,97 @@ double BranchRateModel::rateAgeSubtreeMove(void){
     return lnH + zJac;
 }
 
+double BranchRateModel::simpleDistanceMove(void){
+    RandomVariable& rng = RandomVariable::randomVariableInstance();
+    lastMove = 6;
+    cdNodes.clear();
+    Node* root = tree->getBackboneRoot();
+    const std::vector<Node*>& ch = tree->getBackboneChildren(root);
+    if(ch.size() != 2)
+        return -INFINITY;
+    Node* L = ch[0];
+    Node* R = ch[1];
+    double tx = root->getTime();
+    double tj = L->getTime();
+    double tk = R->getTime();
+    double lower = (tj > tk) ? tj : tk;
+    double m = 0.95;
+    double dB = m + Probability::Normal::rv(&rng) * std::sqrt(1.0 - m * m);
+    if(rng.uniformRv() < 0.5) dB = -dB;
+    double txn = tx + sdStep * dB;
+    sdAttW++;
+    if(sdAttW >= 200){
+        double ar = (double)sdAccW / sdAttW;
+        sdStep *= std::exp(ar - 0.3);
+        if(sdStep < 1e-6) sdStep = 1e-6;
+        sdAccW = 0;
+        sdAttW = 0;
+    }
+    if(txn <= lower)
+        return -INFINITY;
+    root->setTime(txn);
+    double fj = (tx - tj) / (txn - tj);
+    double fk = (tx - tk) / (txn - tk);
+    cdNodes.push_back(L->getOffset());
+    cdNodes.push_back(R->getOffset());
+    for(int p = 0; p < numLoci; p++){
+        rate[0][p][L->getOffset()] *= fj;
+        rate[0][p][R->getOffset()] *= fk;
+    }
+    tree->setLastUpdateWasScale(false);
+    return numLoci * (std::log(fj) + std::log(fk));
+}
+
+double BranchRateModel::smallPulleyMove(void){
+    RandomVariable& rng = RandomVariable::randomVariableInstance();
+    lastMove = 7;
+    cdNodes.clear();
+    Node* root = tree->getBackboneRoot();
+    const std::vector<Node*>& ch = tree->getBackboneChildren(root);
+    if(ch.size() != 2)
+        return -INFINITY;
+    Node* L = ch[0];
+    Node* R = ch[1];
+    double tx = root->getTime();
+    double durL = tx - L->getTime();
+    double durR = tx - R->getTime();
+    spAttW++;
+    if(spAttW >= 200){
+        double ar = (double)spAccW / spAttW;
+        spStep *= std::exp(ar - 0.3);
+        if(spStep < 1e-4) spStep = 1e-4;
+        if(spStep > 0.99) spStep = 0.99;
+        spAccW = 0;
+        spAttW = 0;
+    }
+    cdNodes.push_back(L->getOffset());
+    cdNodes.push_back(R->getOffset());
+    for(int p = 0; p < numLoci; p++){
+        double d = rate[0][p][L->getOffset()] * durL;
+        double D = rate[0][p][R->getOffset()] * durR + d;
+        double m = 0.95;
+        double dB = m + Probability::Normal::rv(&rng) * std::sqrt(1.0 - m * m);
+        if(rng.uniformRv() < 0.5) dB = -dB;
+        double dn = d + spStep * D * dB;
+        if(dn > D){
+            double err = dn - D;
+            double n = std::floor(err / D);
+            double r = err - n * D;
+            dn = ((long)n % 2 == 0) ? (D - r) : r;
+        }else if(dn < 0.0){
+            double err = -dn;
+            double n = std::floor(err / D);
+            double r = err - n * D;
+            dn = ((long)n % 2 == 0) ? r : (D - r);
+        }
+        if(dn <= 0.0 || dn >= D)
+            return -INFINITY;
+        rate[0][p][L->getOffset()] = dn / durL;
+        rate[0][p][R->getOffset()] = (D - dn) / durR;
+    }
+    return 0.0;
+}
+
 void BranchRateModel::updateForAcceptance(void){
     if(lastMove == 8){
         ncAccW++;
@@ -363,6 +462,13 @@ void BranchRateModel::updateForAcceptance(void){
     }
     if(lastMove == 4){
         cdAccW++;
+        for(int k = 0; k < (int)cdNodes.size(); k++)
+            for(int p = 0; p < numLoci; p++)
+                rate[1][p][cdNodes[k]] = rate[0][p][cdNodes[k]];
+        return;
+    }
+    if(lastMove == 6 || lastMove == 7){
+        if(lastMove == 6) sdAccW++; else spAccW++;
         for(int k = 0; k < (int)cdNodes.size(); k++)
             for(int p = 0; p < numLoci; p++)
                 rate[1][p][cdNodes[k]] = rate[0][p][cdNodes[k]];
@@ -393,7 +499,7 @@ void BranchRateModel::updateForRejection(void){
             rate[0][lastLocus][b] = rate[1][lastLocus][b];
         return;
     }
-    if(lastMove == 4){
+    if(lastMove == 4 || lastMove == 6 || lastMove == 7){
         for(int k = 0; k < (int)cdNodes.size(); k++)
             for(int p = 0; p < numLoci; p++)
                 rate[0][p][cdNodes[k]] = rate[1][p][cdNodes[k]];

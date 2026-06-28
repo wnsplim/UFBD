@@ -100,6 +100,8 @@ class BranchRateModel : public Parameter {
         void                        restoreAll(void);
         double                      constantDistanceMove(void);
         double                      rateAgeSubtreeMove(void);
+        double                      simpleDistanceMove(void);
+        double                      smallPulleyMove(void);
         void                        setUnresolvedFossils(ParameterUnresolvedFossils* u) { uf = u; }
         void                        print(void) {}
         void                        updateForAcceptance(void);
@@ -138,6 +140,12 @@ class BranchRateModel : public Parameter {
         long                        cdAccW;
         long                        cdAttW;
         std::vector<int>            cdNodes;
+        double                      sdStep;
+        long                        sdAccW;
+        long                        sdAttW;
+        double                      spStep;
+        long                        spAccW;
+        long                        spAttW;
         double                      ncStep;
         long                        ncAccW;
         long                        ncAttW;
