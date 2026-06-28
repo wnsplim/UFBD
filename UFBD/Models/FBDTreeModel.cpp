@@ -710,6 +710,10 @@ double FBDTreeModel::calculateResolvedFBD(void){
     double rootAge = root->getTime();
     bool useOrigin = (UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN);
 
+    for(Node* n : tree->getDownPassSequence())
+        if(n != root && tree->isSATip(n) == false && n->getTime() >= n->getAncestor()->getTime())
+            return -INFINITY;
+
     double lnP;
     if(useOrigin){
         double x0 = originAge->getValue();
