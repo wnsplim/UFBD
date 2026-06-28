@@ -335,6 +335,77 @@ std::vector<Node*> Tree::getBackboneAgeNodes(void) {
     return out;
 }
 
+void Tree::buildBackboneCache(void){
+    int N = (int)nodes.size();
+    bbParentByOffset.assign(N, nullptr);
+    bbChildrenByOffset.assign(N, std::vector<Node*>());
+    bbRateNodes.clear();
+    bbRootNode = getRoot();
+    bbCacheValid = true;
+
+    std::set<Node*> keep;
+    std::map<Node*,std::string> minName;
+    markBackbone(bbRootNode, keep, minName);
+    if(keep.empty())
+        return;
+
+    std::vector<Node*> stack;
+    stack.push_back(bbRootNode);
+    while(stack.empty() == false){
+        Node* p = stack.back();
+        stack.pop_back();
+        std::vector<Node*> kc;
+        keptChildren(p, keep, minName, kc);
+        std::vector<Node*> bbch;
+        for(Node* c : kc){
+            Node* child = descendToBackbone(c, keep, minName);
+            bbch.push_back(child);
+            bbParentByOffset[child->getOffset()] = p;
+            stack.push_back(child);
+        }
+        std::sort(bbch.begin(), bbch.end(), [](Node* a, Node* b){ return a->getOffset() < b->getOffset(); });
+        bbChildrenByOffset[p->getOffset()] = bbch;
+    }
+    for(Node* n : downPassSequence)
+        if(n != bbRootNode && bbParentByOffset[n->getOffset()] != nullptr)
+            bbRateNodes.push_back(n);
+}
+
+void Tree::ensureBackboneCache(void){
+    if(bbCacheValid == false)
+        buildBackboneCache();
+}
+
+const std::vector<Node*>& Tree::getBackboneRateNodes(void){
+    if(bbCacheValid == false)
+        buildBackboneCache();
+    return bbRateNodes;
+}
+
+Node* Tree::getBackboneRoot(void){
+    if(bbCacheValid == false)
+        buildBackboneCache();
+    return bbRootNode;
+}
+
+Node* Tree::getBackboneParent(Node* n){
+    if(bbCacheValid == false)
+        buildBackboneCache();
+    return bbParentByOffset[n->getOffset()];
+}
+
+const std::vector<Node*>& Tree::getBackboneChildren(Node* n){
+    if(bbCacheValid == false)
+        buildBackboneCache();
+    return bbChildrenByOffset[n->getOffset()];
+}
+
+bool Tree::isBackboneNode(Node* n){
+    if(bbCacheValid == false)
+        buildBackboneCache();
+    return n == bbRootNode || bbParentByOffset[n->getOffset()] != nullptr;
+}
+
 int Tree::getNumBackbone(void){
     initializeDownPassSequence();
     int idx = 0;
@@ -426,6 +497,7 @@ Node* Tree::getMRCA(const std::vector<std::string>& taxonNames){
 void Tree::initializeDownPassSequence(void) {
     downPassSequence.clear();
     passDown(getRoot(), getRoot());
+    bbCacheValid = false;
 }
 
 void Tree::initializeTimes(void){

@@ -57,6 +57,7 @@ double SequenceLikelihood::computeLnL(Tree* tree,
                                       const std::vector<double>& proportionInvariant,
                                       const std::vector<std::vector<BranchMGF>>& branchMGF){
     mapTaxaToNodes(tree);
+    tree->ensureBackboneCache();
     int numNodes = tree->getNumNodes();
     if(cacheValid == false){
         conP.assign(numPartitions, std::vector<std::vector<double>>(numNodes));
@@ -119,9 +120,9 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
 
         std::vector<double> curBl(numNodes, 0.0);
         for(Node* node : downPass){
-            if(node == root) continue;
+            if(node == root || tree->isBackboneNode(node) == false) continue;
             int off = node->getOffset();
-            curBl[off] = branchRates[p][off] * (node->getAncestor()->getTime() - node->getTime());
+            curBl[off] = branchRates[p][off] * (tree->getBackboneParent(node)->getTime() - node->getTime());
             if(curBl[off] < 0.0)
                 return -std::numeric_limits<double>::infinity();
         }
@@ -131,6 +132,7 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
         std::vector<std::vector<Node*> > dirtyChildren;
         std::vector<std::vector<double> > Pcache(numNodes);
         for(Node* node : downPass){
+            if(node != root && tree->isBackboneNode(node) == false) continue;
             int off = node->getOffset();
             if(node->getIsTip()){
                 if(conP[p][off].empty()){
@@ -145,11 +147,7 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
                 }
                 continue;
             }
-            std::vector<Node*> children;
-            for(Node* nb : node->getNeighbors())
-                if(nb != node->getAncestor())
-                    children.push_back(nb);
-            std::sort(children.begin(), children.end(), [](Node* a, Node* b){ return a->getOffset() < b->getOffset(); });
+            const std::vector<Node*>& children = tree->getBackboneChildren(node);
             bool nd = substDirty;
             for(Node* c : children){
                 int coff = c->getOffset();

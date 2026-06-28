@@ -89,10 +89,8 @@ BranchRateModel::BranchRateModel(double prob, PhylogeneticModel* m, Tree* t, int
         acc[i] = 0;
         rej[i] = 0;
     }
-    Node* root = t->getRoot();
-    for(Node* n : t->getDownPassSequence())
-        if(n != root && n->getIsFossil() == false)
-            branchNodes.push_back(n->getOffset());
+    for(Node* n : t->getBackboneRateNodes())
+        branchNodes.push_back(n->getOffset());
     for(int s = 0; s < 2; s++){
         mu[s].assign(numLoci, 1.0);
         sigma2[s].assign(numLoci, 1.0);
@@ -235,20 +233,15 @@ void BranchRateModel::readState(std::istream& is){
 double BranchRateModel::constantDistanceMove(void){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     std::vector<Node*> internals;
-    for(Node* n : tree->getDownPassSequence())
-        if(n != tree->getRoot() && n->getIsTip() == false)
+    for(Node* n : tree->getBackboneRateNodes())
+        if(n->getIsTip() == false)
             internals.push_back(n);
     Node* node = internals[(int)(rng.uniformRv() * internals.size())];
-    Node* parent = node->getAncestor();
-    std::vector<Node*> children;
-    for(Node* c : node->getNeighbors())
-        if(c != parent)
-            children.push_back(c);
-    double parentAge = parent->getTime();
+    double parentAge = node->getAncestor()->getTime();
     double myAge = node->getTime();
     double maxChild = 0.0;
-    for(Node* c : children)
-        if(c->getTime() > maxChild)
+    for(Node* c : node->getNeighbors())
+        if(c != node->getAncestor() && c->getTime() > maxChild)
             maxChild = c->getTime();
     double yHi = std::log(parentAge);
     double yLo = (maxChild > 0.0) ? std::log(maxChild) : (yHi - 30.0);
@@ -265,11 +258,12 @@ double BranchRateModel::constantDistanceMove(void){
     node->setTime(newAge);
     cdNodes.clear();
     cdNodes.push_back(node->getOffset());
-    double lnNum = std::log(parentAge - myAge);
-    double lnDen = std::log(parentAge - newAge);
+    double bbParentAge = tree->getBackboneParent(node)->getTime();
+    double lnNum = std::log(bbParentAge - myAge);
+    double lnDen = std::log(bbParentAge - newAge);
     for(int p = 0; p < numLoci; p++)
-        rate[0][p][node->getOffset()] *= (parentAge - myAge) / (parentAge - newAge);
-    for(Node* c : children){
+        rate[0][p][node->getOffset()] *= (bbParentAge - myAge) / (bbParentAge - newAge);
+    for(Node* c : tree->getBackboneChildren(node)){
         double prevC = myAge - c->getTime();
         double newC = newAge - c->getTime();
         cdNodes.push_back(c->getOffset());
@@ -297,8 +291,8 @@ double BranchRateModel::rateAgeSubtreeMove(void){
     lastMove = 4;
     cdNodes.clear();
     std::vector<Node*> internals;
-    for(Node* n : tree->getDownPassSequence())
-        if(n != tree->getRoot() && n->getIsTip() == false)
+    for(Node* n : tree->getBackboneRateNodes())
+        if(n->getIsTip() == false)
             internals.push_back(n);
     if(internals.empty())
         return -INFINITY;
@@ -337,18 +331,18 @@ double BranchRateModel::rateAgeSubtreeMove(void){
     }
     std::vector<Node*> rateN;
     std::vector<double> oldDur;
-    if(node->getIsFossil() == false){ rateN.push_back(node); oldDur.push_back(parentAge - myAge); }
+    rateN.push_back(node); oldDur.push_back(tree->getBackboneParent(node)->getTime() - myAge);
     for(Node* d : desc){
-        if(d->getIsFossil())
+        if(tree->isBackboneNode(d) == false)
             continue;
         rateN.push_back(d);
-        oldDur.push_back(d->getAncestor()->getTime() - d->getTime());
+        oldDur.push_back(tree->getBackboneParent(d)->getTime() - d->getTime());
     }
     tree->scaleSubtreeAges(node, sf);
     double lnH = (nInternal > 1) ? std::log(sf) * (double)(nInternal - 1) : 0.0;
     for(size_t i = 0; i < rateN.size(); i++){
         Node* a = rateN[i];
-        double newD = a->getAncestor()->getTime() - a->getTime();
+        double newD = tree->getBackboneParent(a)->getTime() - a->getTime();
         double factor = oldDur[i] / newD;
         for(int p = 0; p < numLoci; p++)
             rate[0][p][a->getOffset()] *= factor;
@@ -456,7 +450,7 @@ double ParameterBranchRates::gbmLnP(void){
     int M = (int)dp.size();
     std::vector<std::vector<Node*> > sonsCache(M);
     for(int idx = 0; idx < M; idx++)
-        sonsCache[idx] = dp[idx]->getDescendants();
+        sonsCache[idx] = tree->getBackboneChildren(dp[idx]);
     std::vector<double> terms(M);
     for(int p = 0; p < numLoci; p++){
         double s2 = sigma2[0][p];
@@ -472,7 +466,7 @@ double ParameterBranchRates::gbmLnP(void){
                     continue;
                 }
                 double t = inode->getTime();
-                double tA = (inode == root) ? 0.0 : (inode->getAncestor()->getTime() - t) / 2.0;
+                double tA = (inode == root) ? 0.0 : (tree->getBackboneParent(inode)->getTime() - t) / 2.0;
                 double t1 = (t - sons[0]->getTime()) / 2.0;
                 double t2 = (t - sons[1]->getTime()) / 2.0;
                 double detT = t1 * t2 + tA * (t1 + t2);
@@ -504,7 +498,7 @@ double ParameterBranchRates::gbmContinuousLnP(void){
             int p = idx / B;
             int b = branchNodes[idx % B];
             Node* n = tree->getNodeByOffset(b);
-            Node* anc = n->getAncestor();
+            Node* anc = tree->getBackboneParent(n);
             double rd = rate[0][p][b];
             double ra = (anc == root) ? mu[0][p] : rate[0][p][anc->getOffset()];
             double s2 = sigma2[0][p];
@@ -527,6 +521,7 @@ double ParameterBranchRates::gbmContinuousLnP(void){
 }
 
 double ParameterBranchRates::lnProbability(void){
+    tree->ensureBackboneCache();
     double lnp = gammaDirichletLnP(mu[0], rgeneParam) + gammaDirichletLnP(sigma2[0], sigma2Param);
     if(clockModel == ClockModel::GBM)
         return lnp + gbmLnP();
@@ -541,7 +536,7 @@ double ParameterBranchRates::lnProbability(void){
             int b = branchNodes[idx % B];
             if(wn){
                 Node* n = tree->getNodeByOffset(b);
-                terms[idx] = whiteNoiseLnP(rate[0][p][b], sigma2[0][p], n->getAncestor()->getTime() - n->getTime(), mu[0][p]);
+                terms[idx] = whiteNoiseLnP(rate[0][p][b], sigma2[0][p], tree->getBackboneParent(n)->getTime() - n->getTime(), mu[0][p]);
             }else{
                 terms[idx] = lognormalLnP(rate[0][p][b], sigma2[0][p], mu[0][p]);
             }
@@ -553,6 +548,7 @@ double ParameterBranchRates::lnProbability(void){
 }
 
 std::vector<std::vector<double>> ParameterBranchRates::getAbsoluteRates(void){
+    tree->ensureBackboneCache();
     std::vector<std::vector<double>> a(numLoci, std::vector<double>(numNodes, 0.0));
     for(int p = 0; p < numLoci; p++)
         for(int b = 0; b < numNodes; b++)
@@ -567,7 +563,7 @@ std::vector<std::vector<double>> ParameterBranchRates::getAbsoluteRates(void){
             for(int idx = lo; idx < hi; idx++){
                 int b = branchNodes[idx];
                 Node* n = tree->getNodeByOffset(b);
-                Node* anc = n->getAncestor();
+                Node* anc = tree->getBackboneParent(n);
                 double rd = rate[0][p][b];
                 double ra = (anc == root) ? mu[0][p] : rate[0][p][anc->getOffset()];
                 double dt = anc->getTime() - n->getTime();
@@ -589,7 +585,7 @@ std::vector<std::vector<BranchMGF>> ParameterBranchRates::getBranchMGF(void){
         double u = std::sqrt(sigma2[0][p]);
         for(int b : branchNodes){
             Node* n = tree->getNodeByOffset(b);
-            Node* anc = n->getAncestor();
+            Node* anc = tree->getBackboneParent(n);
             double rd = rate[0][p][b];
             double ra = (anc == root) ? mu[0][p] : rate[0][p][anc->getOffset()];
             double dt = anc->getTime() - n->getTime();
@@ -710,9 +706,9 @@ double ParameterBranchRates::sigmaPncpMoveGBMC(int p){
     std::vector<Node*>& dp = tree->getDownPassSequence();
     for(int i = (int)dp.size() - 1; i >= 0; i--){
         Node* n = dp[i];
-        if(n == root || n->getIsFossil())
+        if(n == root || tree->isBackboneNode(n) == false)
             continue;
-        Node* a = n->getAncestor();
+        Node* a = tree->getBackboneParent(n);
         double dt = a->getTime() - n->getTime();
         int off = n->getOffset();
         int aoff = a->getOffset();
@@ -766,11 +762,11 @@ double ParameterBranchRates::sigmaPncpMoveGBM(int p){
     std::vector<Node*>& dp = tree->getDownPassSequence();
     for(int i = (int)dp.size() - 1; i >= 0; i--){
         Node* v = dp[i];
-        std::vector<Node*> sons = v->getDescendants();
+        std::vector<Node*> sons = tree->getBackboneChildren(v);
         if(sons.size() != 2)
             continue;
         double tv = v->getTime();
-        double tA = (v == root) ? 0.0 : (v->getAncestor()->getTime() - tv) / 2.0;
+        double tA = (v == root) ? 0.0 : (tree->getBackboneParent(v)->getTime() - tv) / 2.0;
         int voff = v->getOffset();
         double xv = x[voff];
         double xvNew = xnew[voff];
@@ -814,7 +810,7 @@ double ParameterBranchRates::sigmaPncpMoveWN(int p){
     std::vector<double> ub(B), tb(B);
     for(int i = 0; i < B; i++){
         Node* n = tree->getNodeByOffset(branchNodes[i]);
-        double t = n->getAncestor()->getTime() - n->getTime();
+        double t = tree->getBackboneParent(n)->getTime() - n->getTime();
         tb[i] = t;
         double a = m * m * t / s2;
         double b = m * t / s2;

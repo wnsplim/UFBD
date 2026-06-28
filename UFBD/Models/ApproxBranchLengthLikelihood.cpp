@@ -330,7 +330,7 @@ Node* ApproxBranchLengthLikelihood::findNodeByBipartition(const std::set<std::st
     if(bp.size() == 1)
         return tree->getTaxonNode(*bp.begin());
     for(Node* n : tree->getDownPassSequence()){
-        if(n == tree->getRoot() || n->getIsTip()) continue;
+        if(n == tree->getRoot() || n->getIsTip() || tree->isBackboneNode(n) == false) continue;
         if(canonicalize(backboneTipsBelow(n, tree)) == bp)
             return n;
     }
@@ -338,6 +338,7 @@ Node* ApproxBranchLengthLikelihood::findNodeByBipartition(const std::set<std::st
 }
 
 double ApproxBranchLengthLikelihood::computeLnL(Tree* tree, const std::vector<std::vector<double>>& branchRates){
+    tree->ensureBackboneCache();
     Node* curRoot = tree->getRoot();
     if(curRoot != cachedRoot){
         branchNodeIdx.assign(nb, -1);
@@ -351,10 +352,7 @@ double ApproxBranchLengthLikelihood::computeLnL(Tree* tree, const std::vector<st
     }
 
     Node* mrca = tree->getCrown();
-    std::vector<Node*> mrcaChildren;
-    for(Node* c : mrca->getNeighbors())
-        if(c != mrca->getAncestor())
-            mrcaChildren.push_back(c);
+    const std::vector<Node*>& mrcaChildren = tree->getBackboneChildren(mrca);
 
     if(crownBranchIdx >= 0 && mrcaChildren.size() != 2)
         return -INFINITY;
@@ -369,12 +367,12 @@ double ApproxBranchLengthLikelihood::computeLnL(Tree* tree, const std::vector<st
             for(int i = 0; i < nb; i++){
                 double predBl;
                 if(i == crownBranchIdx){
-                    double d0 = mrcaChildren[0]->getAncestor()->getTime() - mrcaChildren[0]->getTime();
-                    double d1 = mrcaChildren[1]->getAncestor()->getTime() - mrcaChildren[1]->getTime();
+                    double d0 = mrca->getTime() - mrcaChildren[0]->getTime();
+                    double d1 = mrca->getTime() - mrcaChildren[1]->getTime();
                     predBl = br[mrcaChildren[0]->getOffset()] * d0 + br[mrcaChildren[1]->getOffset()] * d1;
                 }else{
                     Node* n = tree->getNodeByOffset(branchNodeIdx[i]);
-                    double d = n->getAncestor()->getTime() - n->getTime();
+                    double d = tree->getBackboneParent(n)->getTime() - n->getTime();
                     predBl = br[branchNodeIdx[i]] * d;
                 }
                 if(predBl <= 0.0){ bad = true; break; }

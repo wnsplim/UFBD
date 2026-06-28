@@ -24,6 +24,12 @@ class Tree {
         std::string                         getNewickString(void);
         std::string                         getBackboneNewickString(void);
         std::vector<Node*>                  getBackboneAgeNodes(void);
+        const std::vector<Node*>&           getBackboneRateNodes(void);
+        void                                ensureBackboneCache(void);
+        Node*                               getBackboneRoot(void);
+        Node*                               getBackboneParent(Node* n);
+        const std::vector<Node*>&           getBackboneChildren(Node* n);
+        bool                                isBackboneNode(Node* n);
         int                                 getNumLineagesAtTime(double t);
         bool                                isSATip(Node* n);
         bool                                isFakeSplit(Node* n);
@@ -60,6 +66,7 @@ class Tree {
         
     private:
         Node*                               addNode(void);
+        void                                buildBackboneCache(void);
         void                                clone(const Tree& t);
         void                                deleteNodes(void);
         std::vector<std::string>            parseNewickString(std::string);
@@ -78,6 +85,11 @@ class Tree {
         int                                 numTaxa;
         int                                 numInternalNodes;
         bool                                lastUpdateWasScale = false;
+        bool                                bbCacheValid = false;
+        Node*                               bbRootNode = nullptr;
+        std::vector<Node*>                  bbRateNodes;
+        std::vector<Node*>                  bbParentByOffset;
+        std::vector<std::vector<Node*>>     bbChildrenByOffset;
 };
 
 #endif
