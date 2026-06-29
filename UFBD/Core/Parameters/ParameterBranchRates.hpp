@@ -167,6 +167,7 @@ class ParameterBranchRates : public BranchRateModel {
         std::vector<std::vector<BranchMGF>> getBranchMGF(void);
         double                      lnProbability(void);
         double                      update(void);
+        ClockModel                  getClockModel(void) { return clockModel; }
 
     private:
         double                      lognormalLnP(double r, double s2, double m);

@@ -213,6 +213,8 @@ void BranchRateModel::restoreAll(void){
 void BranchRateModel::print(void){
     double sdar = (sdAtt > 0) ? (double)sdAcc / sdAtt : 0.0;
     std::cout << "SimpleDist (A/R): " << sdar << " [" << sdAcc << "/" << sdAtt << "]\n";
+    if(spAtt > 0)
+        std::cout << "SmallPulley (A/R): " << (double)spAcc / spAtt << " [" << spAcc << "/" << spAtt << "]\n";
 }
 
 void BranchRateModel::writeState(std::ostream& os){
@@ -415,7 +417,6 @@ double BranchRateModel::simpleDistanceMove(void){
     return numLoci * (std::log(fj) + std::log(fk));
 }
 
-// Small Pulley deferred
 double BranchRateModel::smallPulleyMove(void){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastMove = 7;

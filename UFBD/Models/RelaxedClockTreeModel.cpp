@@ -114,6 +114,7 @@ double RelaxedClockTreeModel::update(void){
         if(nInternalAge == 0) nInternalAge = (int)fbd->getTree()->getBackboneAgeNodes().size();
         double pCrown = (nInternalAge > 0) ? 1.0 / nInternalAge : 0.0;
         if(r.uniformRv() < pCrown){ lastMoveType = 8; return clock->simpleDistanceMove(); }
+        if(static_cast<ParameterBranchRates*>(clock)->getClockModel() == ClockModel::UCLN && r.uniformRv() < pCrown){ lastMoveType = 10; return clock->smallPulleyMove(); }
         naSnap.clear();
         std::vector<Node*> nodes = fbd->getTree()->getInternalAgeNodes();
         for(Node* n : nodes)
@@ -170,6 +171,8 @@ void RelaxedClockTreeModel::updateForAcceptance(void){
     }else if(lastMoveType == 8){
         clock->updateForAcceptance();
         fbd->getParameterTree()->updateForAcceptance();
+    }else if(lastMoveType == 10){
+        clock->updateForAcceptance();
     }else
         fbd->updateForAcceptance();
 }
@@ -195,6 +198,8 @@ void RelaxedClockTreeModel::updateForRejection(void){
     }else if(lastMoveType == 8){
         clock->updateForRejection();
         fbd->getParameterTree()->updateForRejection();
+    }else if(lastMoveType == 10){
+        clock->updateForRejection();
     }else
         fbd->updateForRejection();
 }
