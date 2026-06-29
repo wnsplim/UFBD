@@ -103,7 +103,7 @@ class BranchRateModel : public Parameter {
         double                      simpleDistanceMove(void);
         double                      smallPulleyMove(void);
         void                        setUnresolvedFossils(ParameterUnresolvedFossils* u) { uf = u; }
-        void                        print(void) {}
+        void                        print(void);
         void                        updateForAcceptance(void);
         void                        updateForRejection(void);
         void                        writeState(std::ostream& os);
@@ -146,6 +146,10 @@ class BranchRateModel : public Parameter {
         double                      spStep;
         long                        spAccW;
         long                        spAttW;
+        long                        sdAcc;
+        long                        sdAtt;
+        long                        spAcc;
+        long                        spAtt;
         double                      ncStep;
         long                        ncAccW;
         long                        ncAttW;

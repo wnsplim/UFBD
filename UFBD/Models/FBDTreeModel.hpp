@@ -86,6 +86,9 @@ class FBDTreeModel : public PhylogeneticModel {
         ParameterShrinkageField*    muField;
         ParameterShrinkageField*    psiField;
         std::vector<double>           intervalStart;
+        std::vector<int>            lambdaIdx;
+        std::vector<int>            muIdx;
+        std::vector<int>            psiIdx;
         ParameterDouble*            originAge;
         ParameterTree*              parameterTree;
         ParameterUnresolvedFossils* unresolvedFossils;

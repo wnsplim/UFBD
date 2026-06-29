@@ -91,70 +91,70 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     if(originAge != nullptr)
         parameters.push_back(originAge);
     
-    intervalStart.push_back(0.0);
-    for(double t : UserSettings::userSettings().getSkylineTimes())
-        intervalStart.push_back(t);
-    Probability::PriorSpec lp = UserSettings::userSettings().getLambdaPrior();
-    Probability::PriorSpec mp = UserSettings::userSettings().getMuPrior();
-    Probability::PriorSpec pp = UserSettings::userSettings().getPsiPrior();
     UserSettings& rateUs = UserSettings::userSettings();
-    int nB = (int)intervalStart.size();
+    std::vector<double> lambdaTimes, muTimes, psiTimes;
+    lambdaTimes.push_back(0.0);
+    for(double t : rateUs.getLambdaSkylineTimes()) lambdaTimes.push_back(t);
+    muTimes.push_back(0.0);
+    for(double t : rateUs.getMuSkylineTimes())     muTimes.push_back(t);
+    psiTimes.push_back(0.0);
+    for(double t : rateUs.getPsiSkylineTimes())    psiTimes.push_back(t);
+    intervalStart.push_back(0.0);
+    for(double t : rateUs.getSkylineTimes())
+        intervalStart.push_back(t);
+    for(double s : intervalStart){
+        int li = 0, mi = 0, pi = 0;
+        for(int k = 0; k < (int)lambdaTimes.size(); k++) if(lambdaTimes[k] <= s) li = k;
+        for(int k = 0; k < (int)muTimes.size(); k++)     if(muTimes[k] <= s)     mi = k;
+        for(int k = 0; k < (int)psiTimes.size(); k++)    if(psiTimes[k] <= s)    pi = k;
+        lambdaIdx.push_back(li);
+        muIdx.push_back(mi);
+        psiIdx.push_back(pi);
+    }
+    Probability::PriorSpec lp = rateUs.getLambdaPrior();
+    Probability::PriorSpec mp = rateUs.getMuPrior();
+    Probability::PriorSpec pp = rateUs.getPsiPrior();
+    int nLambda = (int)lambdaTimes.size();
+    int nMu = (int)muTimes.size();
+    int nPsi = (int)psiTimes.size();
     bool lamSmooth = (rateUs.getLambdaMode() == RateMode::SMOOTH);
     bool muSmooth  = (rateUs.getMuMode() == RateMode::SMOOTH);
     bool psiSmooth = (rateUs.getPsiMode() == RateMode::SMOOTH);
-    if(lamSmooth && nB < 2){ Msg::warning("Smoothing (HSMRF) set for speciation rate (lambda) but only single rate interval."); lamSmooth = false; }
-    if(muSmooth && nB < 2){ Msg::warning("Smoothing (HSMRF) set for extinction rate (mu) but only single rate interval."); muSmooth = false; }
-    if(psiSmooth && nB < 2){ Msg::warning("Smoothing (HSMRF) set for sampling rate (psi) but only single rate interval."); psiSmooth = false; }
+    if(lamSmooth && nLambda < 2){ Msg::warning("Smoothing (HSMRF) set for speciation rate (lambda) but only single rate interval."); lamSmooth = false; }
+    if(muSmooth && nMu < 2){ Msg::warning("Smoothing (HSMRF) set for extinction rate (mu) but only single rate interval."); muSmooth = false; }
+    if(psiSmooth && nPsi < 2){ Msg::warning("Smoothing (HSMRF) set for sampling rate (psi) but only single rate interval."); psiSmooth = false; }
     double nShifts = rateUs.getHsmrfShifts();
     double shiftSize = rateUs.getHsmrfShiftSize();
-    if(lamSmooth || muSmooth || psiSmooth){
-        if(lamSmooth){
-            lambdaField = new ParameterShrinkageField(1.0, this, nB, lp, nShifts, shiftSize);
-            parameters.push_back(lambdaField);
-        }else{
-            for(int i = 0; i < nB; i++){
-                std::string suf = (nB > 1) ? std::to_string(i) : "";
-                ParameterDouble* l = new ParameterDouble(1.0, this, "lambda" + suf, 0.0, std::numeric_limits<double>::max());
-                if(lp.set) l->setPrior(lp.family, lp.p1, lp.p2);
-                lambda.push_back(l);
-                parameters.push_back(l);
-            }
-        }
-        if(muSmooth){
-            muField = new ParameterShrinkageField(1.0, this, nB, mp, nShifts, shiftSize);
-            parameters.push_back(muField);
-        }else{
-            for(int i = 0; i < nB; i++){
-                std::string suf = (nB > 1) ? std::to_string(i) : "";
-                ParameterDouble* m = new ParameterDouble(1.0, this, "mu" + suf, 0.0, std::numeric_limits<double>::max());
-                if(mp.set) m->setPrior(mp.family, mp.p1, mp.p2);
-                mu.push_back(m);
-                parameters.push_back(m);
-            }
-        }
-        if(psiSmooth){
-            psiField = new ParameterShrinkageField(1.0, this, nB, pp, nShifts, shiftSize);
-            parameters.push_back(psiField);
-        }else{
-            for(int i = 0; i < nB; i++){
-                std::string suf = (nB > 1) ? std::to_string(i) : "";
-                ParameterDouble* p = new ParameterDouble(1.0, this, "psi" + suf, 0.0, std::numeric_limits<double>::max());
-                if(pp.set) p->setPrior(pp.family, pp.p1, pp.p2);
-                psi.push_back(p);
-                parameters.push_back(p);
-            }
-        }
+    if(lamSmooth){
+        lambdaField = new ParameterShrinkageField(1.0, this, nLambda, lp, nShifts, shiftSize);
+        parameters.push_back(lambdaField);
     }else{
-        for(size_t i = 0; i < intervalStart.size(); i++){
-            std::string suf = (intervalStart.size() > 1) ? std::to_string(i) : "";
+        for(int i = 0; i < nLambda; i++){
+            std::string suf = (nLambda > 1) ? std::to_string(i) : "";
             ParameterDouble* l = new ParameterDouble(1.0, this, "lambda" + suf, 0.0, std::numeric_limits<double>::max());
-            ParameterDouble* m = new ParameterDouble(1.0, this, "mu" + suf, 0.0, std::numeric_limits<double>::max());
             if(lp.set) l->setPrior(lp.family, lp.p1, lp.p2);
-            if(mp.set) m->setPrior(mp.family, mp.p1, mp.p2);
             lambda.push_back(l);
-            mu.push_back(m);
             parameters.push_back(l);
+        }
+    }
+    if(muSmooth){
+        muField = new ParameterShrinkageField(1.0, this, nMu, mp, nShifts, shiftSize);
+        parameters.push_back(muField);
+    }else{
+        for(int i = 0; i < nMu; i++){
+            std::string suf = (nMu > 1) ? std::to_string(i) : "";
+            ParameterDouble* m = new ParameterDouble(1.0, this, "mu" + suf, 0.0, std::numeric_limits<double>::max());
+            if(mp.set) m->setPrior(mp.family, mp.p1, mp.p2);
+            mu.push_back(m);
             parameters.push_back(m);
+        }
+    }
+    if(psiSmooth){
+        psiField = new ParameterShrinkageField(1.0, this, nPsi, pp, nShifts, shiftSize);
+        parameters.push_back(psiField);
+    }else{
+        for(int i = 0; i < nPsi; i++){
+            std::string suf = (nPsi > 1) ? std::to_string(i) : "";
             ParameterDouble* p = new ParameterDouble(1.0, this, "psi" + suf, 0.0, std::numeric_limits<double>::max());
             if(pp.set) p->setPrior(pp.family, pp.p1, pp.p2);
             psi.push_back(p);
@@ -191,10 +191,10 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
         for(ParameterDouble* m : mu)     m->setProposalProbability(15.0);
         for(ParameterDouble* p : psi)    p->setProposalProbability(15.0);
     }
-    double fieldWeight = (isFBD ? 15.0 : 1.0) * (double)nB;
-    if(lambdaField) lambdaField->setProposalProbability(fieldWeight);
-    if(muField)     muField->setProposalProbability(fieldWeight);
-    if(psiField)    psiField->setProposalProbability(fieldWeight);
+    double fieldBase = (isFBD ? 15.0 : 1.0);
+    if(lambdaField) lambdaField->setProposalProbability(fieldBase * (double)nLambda);
+    if(muField)     muField->setProposalProbability(fieldBase * (double)nMu);
+    if(psiField)    psiField->setProposalProbability(fieldBase * (double)nPsi);
 
     double sum = 0.0;
     for(Parameter* p : parameters)
@@ -206,24 +206,24 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
 }
 
 double FBDTreeModel::lambdaAt(int i){
+    int j = lambdaIdx[i];
     if(lambdaField != nullptr)
-        return lambdaField->getRate(i);
-    ParameterDouble* d = lambda[i];
-    return d->getValue();
+        return lambdaField->getRate(j);
+    return lambda[j]->getValue();
 }
 
 double FBDTreeModel::muAt(int i){
+    int j = muIdx[i];
     if(muField != nullptr)
-        return muField->getRate(i);
-    ParameterDouble* d = mu[i];
-    return d->getValue();
+        return muField->getRate(j);
+    return mu[j]->getValue();
 }
 
 double FBDTreeModel::psiAt(int i){
+    int j = psiIdx[i];
     if(psiField != nullptr)
-        return psiField->getRate(i);
-    ParameterDouble* d = psi[i];
-    return d->getValue();
+        return psiField->getRate(j);
+    return psi[j]->getValue();
 }
 
 static bool nodeInSubtree(Node* node, Node* subtreeCrown){
@@ -397,9 +397,11 @@ double FBDTreeModel::doRateShrinkExpand(void){
 double FBDTreeModel::doTurnoverMove(void){
     lastWasFbdRate = true;
     double lnH = 0.0;
-    for(size_t i = 0; i < lambda.size(); i++){
+    for(size_t u = 0; u < intervalStart.size(); u++){
+        int i = lambdaIdx[u];
+        int j = muIdx[u];
         double lam = lambda[i]->getValue();
-        double muv = mu[i]->getValue();
+        double muv = mu[j]->getValue();
         double d = lam - muv;
         if(d <= 0.0)
             return -std::numeric_limits<double>::infinity();
@@ -412,7 +414,7 @@ double FBDTreeModel::doTurnoverMove(void){
         double lamNew = d / (1.0 - tNew);
         double muNew = tNew * lamNew;
         lambda[i]->scaleProposed(lamNew / lam);
-        mu[i]->scaleProposed(muNew / muv);
+        mu[j]->scaleProposed(muNew / muv);
         lnH += 2.0 * std::log(lamNew / lam);
     }
     frAttW++;

@@ -51,7 +51,10 @@ class UserSettings {
         double                      getHsmrfShifts(void) { return hsmrfShifts; }
         double                      getHsmrfShiftSize(void) { return hsmrfShiftSize; }
         bool                        getCpuTime(void) { return cpuTime; }
-        std::vector<double>         getSkylineTimes(void) { return skylineTimes; }
+        std::vector<double>         getSkylineTimes(void);
+        std::vector<double>         getLambdaSkylineTimes(void) { return lambdaSkylineTimes; }
+        std::vector<double>         getMuSkylineTimes(void)     { return muSkylineTimes; }
+        std::vector<double>         getPsiSkylineTimes(void)    { return psiSkylineTimes; }
         Model                       getModel(void) { return model; }
         double                      getRho(void) { return rho; }
         unsigned int                getSeed(void) { return seed; }
@@ -101,7 +104,9 @@ class UserSettings {
         double                      hsmrfShifts;
         double                      hsmrfShiftSize;
         bool                        cpuTime;
-        std::vector<double>         skylineTimes;
+        std::vector<double>         lambdaSkylineTimes;
+        std::vector<double>         muSkylineTimes;
+        std::vector<double>         psiSkylineTimes;
         Model                       model;
         double                      rho;
         unsigned int                seed;

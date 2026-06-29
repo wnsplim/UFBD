@@ -23,8 +23,6 @@ void RelaxedClockTreeModel::buildClock(ClockModel clockModel, const double* rgen
     clock = new ParameterBranchRates(1.0, this, fbd->getTree(), nLoci, clockModel, rgeneParam, sigma2Param);
     clock->setUnresolvedFossils(fbd->getUnresolvedFossils());
     naSel.init(2);
-    const char* cm = std::getenv("FBD_CROWNMOVE");
-    crownMoveMode = cm ? std::atoi(cm) : 0;
 }
 
 double RelaxedClockTreeModel::nodeAgeJump2(void){
@@ -113,12 +111,9 @@ double RelaxedClockTreeModel::update(void){
     double u = r.uniformRv();
     if(u < 0.25){ lastMoveType = 0; return clock->update(); }
     if(u < 0.65){
-        if(crownMoveMode > 0 && r.uniformRv() < 0.15){
-            int which = crownMoveMode;
-            if(which == 3) which = (r.uniformRv() < 0.5) ? 1 : 2;
-            if(which == 1){ lastMoveType = 8; return clock->simpleDistanceMove(); }
-            lastMoveType = 9; return clock->smallPulleyMove();
-        }
+        if(nInternalAge == 0) nInternalAge = (int)fbd->getTree()->getBackboneAgeNodes().size();
+        double pCrown = (nInternalAge > 0) ? 1.0 / nInternalAge : 0.0;
+        if(r.uniformRv() < pCrown){ lastMoveType = 8; return clock->simpleDistanceMove(); }
         naSnap.clear();
         std::vector<Node*> nodes = fbd->getTree()->getInternalAgeNodes();
         for(Node* n : nodes)
@@ -175,8 +170,6 @@ void RelaxedClockTreeModel::updateForAcceptance(void){
     }else if(lastMoveType == 8){
         clock->updateForAcceptance();
         fbd->getParameterTree()->updateForAcceptance();
-    }else if(lastMoveType == 9){
-        clock->updateForAcceptance();
     }else
         fbd->updateForAcceptance();
 }
@@ -202,8 +195,6 @@ void RelaxedClockTreeModel::updateForRejection(void){
     }else if(lastMoveType == 8){
         clock->updateForRejection();
         fbd->getParameterTree()->updateForRejection();
-    }else if(lastMoveType == 9){
-        clock->updateForRejection();
     }else
         fbd->updateForRejection();
 }

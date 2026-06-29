@@ -22,23 +22,23 @@ int main(int argc, const char* argv[]){
     rest.push_back(argv[0]);
     for(int i = 1; i < argc; i++){
         std::string a = argv[i];
-        if(a == "-sbc-mode" && i + 1 < argc)        mode = argv[++i];
-        else if(a == "-sbc-reps" && i + 1 < argc){  reps = std::stoi(argv[++i]); repsSet = true; }
-        else if(a == "-sbc-gen" && i + 1 < argc){   gen = std::stol(argv[++i]); genSet = true; }
-        else if(a == "-sbc-burnin" && i + 1 < argc){ burnin = std::stod(argv[++i]); burninSet = true; }
-        else if(a == "-sbc-thin" && i + 1 < argc){  thin = std::stoi(argv[++i]); thinSet = true; }
-        else if(a == "-sbc-bins" && i + 1 < argc){  bins = std::stoi(argv[++i]); binsSet = true; }
-        else if(a == "-sbc-bb" && i + 1 < argc)     bb = std::stod(argv[++i]);
-        else if(a == "-sbc-out" && i + 1 < argc)    out = argv[++i];
+        if(a == "-sbc_mode" && i + 1 < argc)        mode = argv[++i];
+        else if(a == "-sbc_reps" && i + 1 < argc){  reps = std::stoi(argv[++i]); repsSet = true; }
+        else if(a == "-sbc_gen" && i + 1 < argc){   gen = std::stol(argv[++i]); genSet = true; }
+        else if(a == "-sbc_burnin" && i + 1 < argc){ burnin = std::stod(argv[++i]); burninSet = true; }
+        else if(a == "-sbc_thin" && i + 1 < argc){  thin = std::stoi(argv[++i]); thinSet = true; }
+        else if(a == "-sbc_bins" && i + 1 < argc){  bins = std::stoi(argv[++i]); binsSet = true; }
+        else if(a == "-sbc_bb" && i + 1 < argc)     bb = std::stod(argv[++i]);
+        else if(a == "-sbc_out" && i + 1 < argc)    out = argv[++i];
         else                                        rest.push_back(argv[i]);
     }
 
     if(mode != "simulate" && mode != "infer" && mode != "emit")
-        Msg::error("SBC: -sbc-mode must be supplied as 'simulate', 'infer', or 'emit'.");
+        Msg::error("SBC: -sbc_mode must be supplied as 'simulate', 'infer', or 'emit'.");
     if(repsSet == false)
-        Msg::error("SBC: -sbc-reps is required.");
+        Msg::error("SBC: -sbc_reps is required.");
     if(mode == "emit" && out.empty())
-        Msg::error("SBC emit: -sbc-out (output file prefix) is required.");
+        Msg::error("SBC emit: -sbc_out (output file prefix) is required.");
 
     UserSettings& s = UserSettings::userSettings();
     s.initializeSettings((int)rest.size(), rest.data(), true);
@@ -69,10 +69,10 @@ int main(int argc, const char* argv[]){
     cfg.dumpPrefix = out;
 
     if(cfg.simulateOnly == false && cfg.emitFiles == false){
-        if(genSet == false)    Msg::error("SBC infer: -sbc-gen (MCMC generations per replicate) is required.");
-        if(burninSet == false) Msg::error("SBC infer: -sbc-burnin (burn-in fraction in [0,1)) is required.");
-        if(thinSet == false)   Msg::error("SBC infer: -sbc-thin (sample thinning interval) is required.");
-        if(binsSet == false)   Msg::error("SBC infer: -sbc-bins (rank-histogram bin count) is required.");
+        if(genSet == false)    Msg::error("SBC infer: -sbc_gen (MCMC generations per replicate) is required.");
+        if(burninSet == false) Msg::error("SBC infer: -sbc_burnin (burn-in fraction in [0,1)) is required.");
+        if(thinSet == false)   Msg::error("SBC infer: -sbc_thin (sample thinning interval) is required.");
+        if(binsSet == false)   Msg::error("SBC infer: -sbc_bins (rank-histogram bin count) is required.");
         cfg.mcmcGen = gen;
         cfg.burninFraction = burnin;
         cfg.mcmcThin = thin;

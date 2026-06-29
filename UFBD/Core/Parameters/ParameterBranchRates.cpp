@@ -1,5 +1,6 @@
 #include <cmath>
 #include <cstdlib>
+#include <iostream>
 
 #include "Node.hpp"
 #include "ParameterBranchRates.hpp"
@@ -82,6 +83,10 @@ BranchRateModel::BranchRateModel(double prob, PhylogeneticModel* m, Tree* t, int
     spStep = 0.5;
     spAccW = 0;
     spAttW = 0;
+    sdAcc = 0;
+    sdAtt = 0;
+    spAcc = 0;
+    spAtt = 0;
     ncStep = 0.5;
     ncAccW = 0;
     ncAttW = 0;
@@ -205,6 +210,11 @@ void BranchRateModel::restoreAll(void){
     }
 }
 
+void BranchRateModel::print(void){
+    double sdar = (sdAtt > 0) ? (double)sdAcc / sdAtt : 0.0;
+    std::cout << "SimpleDist (A/R): " << sdar << " [" << sdAcc << "/" << sdAtt << "]\n";
+}
+
 void BranchRateModel::writeState(std::ostream& os){
     Serialize::writeVec(os, mu[1]);
     Serialize::writeVec(os, sigma2[1]);
@@ -216,6 +226,7 @@ void BranchRateModel::writeState(std::ostream& os){
     for(int k = 0; k < 4; k++) Serialize::writeBoolDeque(os, recentAR[k]);
     os << cdStep << ' ' << cdAccW << ' ' << cdAttW << ' ' << ncStep << ' ' << ncAccW << ' ' << ncAttW << '\n';
     os << sdStep << ' ' << sdAccW << ' ' << sdAttW << ' ' << spStep << ' ' << spAccW << ' ' << spAttW << '\n';
+    os << sdAcc << ' ' << sdAtt << ' ' << spAcc << ' ' << spAtt << '\n';
     os << sigRefresh << '\n';
     Serialize::write2D(os, sigTauL);
     Serialize::write2D(os, sigEllB);
@@ -233,6 +244,7 @@ void BranchRateModel::readState(std::istream& is){
     for(int k = 0; k < 4; k++) Serialize::readBoolDeque(is, recentAR[k]);
     is >> cdStep >> cdAccW >> cdAttW >> ncStep >> ncAccW >> ncAttW;
     is >> sdStep >> sdAccW >> sdAttW >> spStep >> spAccW >> spAttW;
+    is >> sdAcc >> sdAtt >> spAcc >> spAtt;
     is >> sigRefresh;
     Serialize::read2D(is, sigTauL);
     Serialize::read2D(is, sigEllB);
@@ -379,6 +391,7 @@ double BranchRateModel::simpleDistanceMove(void){
     double dB = m + Probability::Normal::rv(&rng) * std::sqrt(1.0 - m * m);
     if(rng.uniformRv() < 0.5) dB = -dB;
     double txn = tx + sdStep * dB;
+    sdAtt++;
     sdAttW++;
     if(sdAttW >= 200){
         double ar = (double)sdAccW / sdAttW;
@@ -402,6 +415,7 @@ double BranchRateModel::simpleDistanceMove(void){
     return numLoci * (std::log(fj) + std::log(fk));
 }
 
+// Small Pulley deferred
 double BranchRateModel::smallPulleyMove(void){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastMove = 7;
@@ -415,6 +429,7 @@ double BranchRateModel::smallPulleyMove(void){
     double tx = root->getTime();
     double durL = tx - L->getTime();
     double durR = tx - R->getTime();
+    spAtt++;
     spAttW++;
     if(spAttW >= 200){
         double ar = (double)spAccW / spAttW;
@@ -468,7 +483,7 @@ void BranchRateModel::updateForAcceptance(void){
         return;
     }
     if(lastMove == 6 || lastMove == 7){
-        if(lastMove == 6) sdAccW++; else spAccW++;
+        if(lastMove == 6){ sdAccW++; sdAcc++; } else { spAccW++; spAcc++; }
         for(int k = 0; k < (int)cdNodes.size(); k++)
             for(int p = 0; p < numLoci; p++)
                 rate[1][p][cdNodes[k]] = rate[0][p][cdNodes[k]];

@@ -49,7 +49,7 @@ class RelaxedClockTreeModel : public PhylogeneticModel {
         AdaptiveMixSelector         naSel;
         std::vector<double>         naSnap;
         int                         naOp = 0;
-        int                         crownMoveMode = 0;
+        int                         nInternalAge = 0;
 };
 
 #endif
