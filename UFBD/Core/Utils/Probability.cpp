@@ -23,6 +23,7 @@ double Probability::priorLnPdf(PriorFamily family, double p1, double p2, double 
     return lnp;
 }
 
+
 double Probability::priorMean(PriorFamily family, double p1, double p2){
     switch(family){
         case PriorFamily::IMPROPER:         return 1.0;
@@ -1511,6 +1512,7 @@ double Probability::Helper::lnGamma(double a) {
             (((-0.000595238095238*z+0.000793650793651)*z-0.002777777777778)*z +
             0.083333333333333)/x);
 }
+
 
 double Probability::Helper::lnGammacor(double x) {
 

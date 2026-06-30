@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdlib>
 #include <limits>
 #include "ApproxBranchLengthLikelihood.hpp"
 #include "FBDTreeModel.hpp"
@@ -25,6 +24,16 @@ void RelaxedClockTreeModel::buildClock(ClockModel clockModel, const double* rgen
     naSel.init(2);
 }
 
+void RelaxedClockTreeModel::crownInitScale(Tree* t){
+    UserSettings& us = UserSettings::userSettings();
+    if(us.getConditioning() != Conditioning::CROWN || us.getConditionAgePriorSet() == false)
+        return;
+    double pm = Probability::priorMean(us.getConditionAgePrior(), us.getConditionAgePriorP1(), us.getConditionAgePriorP2());
+    double crownAge = t->getCrown()->getTime();
+    if(crownAge > 0.0 && std::isfinite(pm) && pm > crownAge)
+        t->scaleInternalAges(pm / crownAge);
+}
+
 double RelaxedClockTreeModel::nodeAgeJump2(void){
     std::vector<Node*> nodes = fbd->getTree()->getInternalAgeNodes();
     double s = 0.0;
@@ -39,6 +48,7 @@ RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades
     rng.setSeed(seed);
     RandomVariable* prevRng = RandomVariable::getActiveInstance();
     RandomVariable::setActiveInstance(&rng);
+    crownInitScale(t);
     fbd = new FBDTreeModel(t, clades, fossils, seed);
     ctmc = nullptr;
     std::vector<std::string> rogue;
@@ -55,6 +65,7 @@ RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades
     rng.setSeed(seed);
     RandomVariable* prevRng = RandomVariable::getActiveInstance();
     RandomVariable::setActiveInstance(&rng);
+    crownInitScale(t);
     fbd = new FBDTreeModel(t, clades, fossils, seed);
     lik = nullptr;
     ctmc = new SequenceCTMCModel(this, sequenceFile, partitionFile, nStates, numCats);
@@ -68,8 +79,9 @@ RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades
 }
 
 double RelaxedClockTreeModel::lnLikelihood(void){
-    if(ctmc == nullptr)
+    if(ctmc == nullptr){
         return lik->computeLnL(fbd->getTree(), clock->getAbsoluteRates());
+    }
     return ctmc->computeLnL(fbd->getTree(), clock->getAbsoluteRates(), clock->getBranchMGF());
 }
 

@@ -114,6 +114,10 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     Probability::PriorSpec lp = rateUs.getLambdaPrior();
     Probability::PriorSpec mp = rateUs.getMuPrior();
     Probability::PriorSpec pp = rateUs.getPsiPrior();
+    Probability::PriorSpec defRate{true, Probability::PriorFamily::EXPONENTIAL, 10.0, 1.0};
+    if(!lp.set) lp = defRate;
+    if(!mp.set) mp = defRate;
+    if(!pp.set) pp = defRate;
     int nLambda = (int)lambdaTimes.size();
     int nMu = (int)muTimes.size();
     int nPsi = (int)psiTimes.size();
@@ -129,10 +133,13 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
         lambdaField = new ParameterShrinkageField(1.0, this, nLambda, lp, nShifts, shiftSize);
         parameters.push_back(lambdaField);
     }else{
+        double lam0 = Probability::priorMean(lp.family, lp.p1, lp.p2);
+        if(!(lam0 > 0.0 && std::isfinite(lam0))) lam0 = 0.1;
         for(int i = 0; i < nLambda; i++){
             std::string suf = (nLambda > 1) ? std::to_string(i) : "";
             ParameterDouble* l = new ParameterDouble(1.0, this, "lambda" + suf, 0.0, std::numeric_limits<double>::max());
-            if(lp.set) l->setPrior(lp.family, lp.p1, lp.p2);
+            l->setPrior(lp.family, lp.p1, lp.p2);
+            l->setValue(lam0);
             lambda.push_back(l);
             parameters.push_back(l);
         }
@@ -141,10 +148,13 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
         muField = new ParameterShrinkageField(1.0, this, nMu, mp, nShifts, shiftSize);
         parameters.push_back(muField);
     }else{
+        double mu0 = Probability::priorMean(mp.family, mp.p1, mp.p2);
+        if(!(mu0 > 0.0 && std::isfinite(mu0))) mu0 = 0.1;
         for(int i = 0; i < nMu; i++){
             std::string suf = (nMu > 1) ? std::to_string(i) : "";
             ParameterDouble* m = new ParameterDouble(1.0, this, "mu" + suf, 0.0, std::numeric_limits<double>::max());
-            if(mp.set) m->setPrior(mp.family, mp.p1, mp.p2);
+            m->setPrior(mp.family, mp.p1, mp.p2);
+            m->setValue(mu0);
             mu.push_back(m);
             parameters.push_back(m);
         }
@@ -153,10 +163,13 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
         psiField = new ParameterShrinkageField(1.0, this, nPsi, pp, nShifts, shiftSize);
         parameters.push_back(psiField);
     }else{
+        double psi0 = Probability::priorMean(pp.family, pp.p1, pp.p2);
+        if(!(psi0 > 0.0 && std::isfinite(psi0))) psi0 = 0.1;
         for(int i = 0; i < nPsi; i++){
             std::string suf = (nPsi > 1) ? std::to_string(i) : "";
             ParameterDouble* p = new ParameterDouble(1.0, this, "psi" + suf, 0.0, std::numeric_limits<double>::max());
-            if(pp.set) p->setPrior(pp.family, pp.p1, pp.p2);
+            p->setPrior(pp.family, pp.p1, pp.p2);
+            p->setValue(psi0);
             psi.push_back(p);
             parameters.push_back(p);
         }
