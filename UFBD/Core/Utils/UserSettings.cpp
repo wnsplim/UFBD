@@ -60,7 +60,6 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     numCoupledChains       = 1;
     numRuns         = 4;
     resume          = false;
-    sigma2Pncp      = 0;
     autoChainLength = false;
     burninFraction  = 0.25;
     rhatThreshold   = 1.01;
@@ -104,7 +103,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-lambda_prior", "-mu_prior", "-psi_prior",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times",
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
-        "-hessian", "-clock", "-sigma2_pncp", "-nstates", "-rgene_gamma", "-sigma2_gamma",
+        "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma",
         "-seq", "-partition", "-ncat", "-datatype", "-model", "-inv", "-freq",
         "-runs", "-burnin", "-rhat", "-min_ess", "-check_every", "-max_gen", "-resume"
     };
@@ -113,7 +112,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-lambda_prior", "-mu_prior", "-psi_prior",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times",
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
-        "-hessian", "-clock", "-sigma2_pncp", "-nstates", "-rgene_gamma", "-sigma2_gamma",
+        "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma",
         "-seq", "-partition", "-ncat", "-datatype", "-model", "-inv", "-freq",
         "-runs", "-burnin", "-rhat", "-min_ess", "-check_every", "-max_gen"
     };
@@ -239,12 +238,6 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
             } else if (arg == "-clock") {
                 clockModelName = val;
                 for (char& ch : clockModelName) ch = std::tolower((unsigned char)ch);
-            } else if (arg == "-sigma2_pncp") {
-                std::string v = val;
-                for (char& ch : v) ch = std::tolower((unsigned char)ch);
-                if (v == "on")       sigma2Pncp = 1;
-                else if (v == "off") sigma2Pncp = 2;
-                else Msg::error("Flag \"-sigma2_pncp\" expects on or off, but got \"" + val + "\".");
             } else if (arg == "-rgene_gamma") {
                 std::stringstream ss(val); std::string tok; int k = 0;
                 while (std::getline(ss, tok, ',') && k < 3) if (tok.empty() == false) rgeneGamma[k++] = std::stod(tok);

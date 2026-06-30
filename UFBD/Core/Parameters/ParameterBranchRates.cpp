@@ -74,10 +74,10 @@ BranchRateModel::BranchRateModel(double prob, PhylogeneticModel* m, Tree* t, int
     lastLocus = -1;
     lastNode = -1;
     uf = nullptr;
-    pncpEnabled = true;
-    cdStep = 1.0;
-    cdAccW = 0;
-    cdAttW = 0;
+    cdStepNode.assign(numNodes, 1.0);
+    cdAccNode.assign(numNodes, 0);
+    cdAttNode.assign(numNodes, 0);
+    lastCdNode = -1;
     sdStep = 1.0;
     sdAccW = 0;
     sdAttW = 0;
@@ -227,7 +227,10 @@ void BranchRateModel::writeState(std::ostream& os){
     for(int k = 0; k < 4; k++) os << acc[k] << ' ' << rej[k] << ' ';
     os << '\n';
     for(int k = 0; k < 4; k++) Serialize::writeBoolDeque(os, recentAR[k]);
-    os << cdStep << ' ' << cdAccW << ' ' << cdAttW << ' ' << ncStep << ' ' << ncAccW << ' ' << ncAttW << '\n';
+    Serialize::writeVec(os, cdStepNode);
+    Serialize::writeLVec(os, cdAccNode);
+    Serialize::writeLVec(os, cdAttNode);
+    os << ncStep << ' ' << ncAccW << ' ' << ncAttW << '\n';
     os << sdStep << ' ' << sdAccW << ' ' << sdAttW << ' ' << spStep << ' ' << spAccW << ' ' << spAttW << '\n';
     os << sdAcc << ' ' << sdAtt << ' ' << spAcc << ' ' << spAtt << '\n';
     os << sigRefresh << '\n';
@@ -245,7 +248,10 @@ void BranchRateModel::readState(std::istream& is){
     for(int k = 0; k < 4; k++) is >> step[k];
     for(int k = 0; k < 4; k++) is >> acc[k] >> rej[k];
     for(int k = 0; k < 4; k++) Serialize::readBoolDeque(is, recentAR[k]);
-    is >> cdStep >> cdAccW >> cdAttW >> ncStep >> ncAccW >> ncAttW;
+    Serialize::readVec(is, cdStepNode);
+    Serialize::readLVec(is, cdAccNode);
+    Serialize::readLVec(is, cdAttNode);
+    is >> ncStep >> ncAccW >> ncAttW;
     is >> sdStep >> sdAccW >> sdAttW >> spStep >> spAccW >> spAttW;
     is >> sdAcc >> sdAtt >> spAcc >> spAtt;
     is >> sigRefresh;
@@ -260,6 +266,8 @@ double BranchRateModel::constantDistanceMove(void){
         if(n->getIsTip() == false)
             internals.push_back(n);
     Node* node = internals[(int)(rng.uniformRv() * internals.size())];
+    int cdIdx = node->getOffset();
+    lastCdNode = cdIdx;
     double parentAge = node->getAncestor()->getTime();
     double myAge = node->getTime();
     double maxChild = 0.0;
@@ -272,7 +280,7 @@ double BranchRateModel::constantDistanceMove(void){
     double mBact = 0.95;
     double dBact = mBact + Probability::Normal::rv(&rng) * std::sqrt(1.0 - mBact * mBact);
     if(rng.uniformRv() < 0.5) dBact = -dBact;
-    double ynew = y + cdStep * dBact;
+    double ynew = y + cdStepNode[cdIdx] * dBact;
     while(ynew < yLo || ynew > yHi){
         if(ynew < yLo) ynew = 2.0 * yLo - ynew;
         if(ynew > yHi) ynew = 2.0 * yHi - ynew;
@@ -296,14 +304,14 @@ double BranchRateModel::constantDistanceMove(void){
             rate[0][p][c->getOffset()] *= prevC / newC;
     }
     lastMove = 4;
-    cdAttW++;
-    if(cdAttW >= 200){
-        double ar = (double)cdAccW / cdAttW;
-        cdStep *= std::exp((ar - 0.3));
-        if(cdStep < 1e-3) cdStep = 1e-3;
-        if(cdStep > 10.0) cdStep = 10.0;
-        cdAccW = 0;
-        cdAttW = 0;
+    cdAttNode[cdIdx]++;
+    if(cdAttNode[cdIdx] >= 50){
+        double ar = (double)cdAccNode[cdIdx] / cdAttNode[cdIdx];
+        cdStepNode[cdIdx] *= std::exp(ar - 0.3);
+        if(cdStepNode[cdIdx] < 1e-3) cdStepNode[cdIdx] = 1e-3;
+        if(cdStepNode[cdIdx] > 10.0) cdStepNode[cdIdx] = 10.0;
+        cdAccNode[cdIdx] = 0;
+        cdAttNode[cdIdx] = 0;
     }
     tree->setLastUpdateWasScale(false);
     return numLoci * (lnNum - lnDen) + (ynew - y);
@@ -312,6 +320,7 @@ double BranchRateModel::constantDistanceMove(void){
 double BranchRateModel::rateAgeSubtreeMove(void){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastMove = 4;
+    lastCdNode = -1;
     cdNodes.clear();
     std::vector<Node*> internals;
     for(Node* n : tree->getBackboneRateNodes())
@@ -478,7 +487,7 @@ void BranchRateModel::updateForAcceptance(void){
         return;
     }
     if(lastMove == 4){
-        cdAccW++;
+        if(lastCdNode >= 0) cdAccNode[lastCdNode]++;
         for(int k = 0; k < (int)cdNodes.size(); k++)
             for(int p = 0; p < numLoci; p++)
                 rate[1][p][cdNodes[k]] = rate[0][p][cdNodes[k]];
@@ -990,7 +999,7 @@ double ParameterBranchRates::update(void){
         lastMove = 0;
         return scaleLocusRate(lastLocus);
     }
-    if(pncpEnabled == false){
+    if(clockModel == ClockModel::WN){           // gamma rates: (P)NCP n/a → centered σ² move (likelihood-neutral)
         lastMove = 1;
         return scaleLocusSigma2(lastLocus);
     }
@@ -998,9 +1007,7 @@ double ParameterBranchRates::update(void){
         return sigmaPncpMove(lastLocus);
     if(clockModel == ClockModel::GBMC)
         return sigmaPncpMoveGBMC(lastLocus);
-    if(clockModel == ClockModel::GBM)
-        return sigmaPncpMoveGBM(lastLocus);
-    return sigmaPncpMoveWN(lastLocus);
+    return sigmaPncpMoveGBM(lastLocus);
 }
 
 // CIR clock: halt — detached dead code (kept, never constructed)

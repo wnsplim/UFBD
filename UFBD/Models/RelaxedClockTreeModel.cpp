@@ -21,9 +21,7 @@ void RelaxedClockTreeModel::buildClock(ClockModel clockModel, const double* rgen
     // CIR clock: halt — construction detached (ParameterBranchRatesCIR kept but never built)
     clock = new ParameterBranchRates(1.0, this, fbd->getTree(), nLoci, clockModel, rgeneParam, sigma2Param);
     clock->setUnresolvedFossils(fbd->getUnresolvedFossils());
-    int sp = UserSettings::userSettings().getSigma2Pncp();
-    clock->setPncpEnabled(sp == 1 ? true : sp == 2 ? false : (lik == nullptr));
-    naSel.init(3);
+    naSel.init(2);
 }
 
 void RelaxedClockTreeModel::crownInitScale(Tree* t){
@@ -119,43 +117,6 @@ double RelaxedClockTreeModel::nodeAgeSweep(void){
     return std::numeric_limits<double>::infinity(); // each node already MH-accepted above; force outer accept
 }
 
-double RelaxedClockTreeModel::nodeAgeSlide(void){
-    RandomVariable& r = RandomVariable::randomVariableInstance();
-    Tree* t = fbd->getTree();
-    std::vector<Node*> nodes = t->getInternalAgeNodes();
-    if(nodes.empty())
-        return -std::numeric_limits<double>::infinity();
-    Node* node = nodes[(int)(r.uniformRv() * nodes.size())];
-    double parentAge = node->getAncestor()->getTime();
-    double maxChild = 0.0;
-    for(Node* c : node->getNeighbors())
-        if(c != node->getAncestor() && c->getTime() > maxChild)
-            maxChild = c->getTime();
-    double yHi = std::log(parentAge);
-    double yLo = (maxChild > 0.0) ? std::log(maxChild) : (yHi - 30.0);
-    double y = std::log(node->getTime());
-    double mBact = 0.95;
-    double dBact = mBact + Probability::Normal::rv(&r) * std::sqrt(1.0 - mBact * mBact);
-    if(r.uniformRv() < 0.5) dBact = -dBact;
-    double ynew = y + naSlideStep * dBact;
-    while(ynew < yLo || ynew > yHi){
-        if(ynew < yLo) ynew = 2.0 * yLo - ynew;
-        if(ynew > yHi) ynew = 2.0 * yHi - ynew;
-    }
-    node->setTime(std::exp(ynew));
-    t->setLastUpdateWasScale(false);
-    naSlideAttW++;
-    if(naSlideAttW >= 200){
-        double ar = (double)naSlideAccW / naSlideAttW;
-        naSlideStep *= std::exp(ar - 0.3);
-        if(naSlideStep < 1e-3) naSlideStep = 1e-3;
-        if(naSlideStep > 10.0)  naSlideStep = 10.0;
-        naSlideAccW = 0;
-        naSlideAttW = 0;
-    }
-    return ynew - y;
-}
-
 double RelaxedClockTreeModel::update(void){
     RandomVariable& r = RandomVariable::randomVariableInstance();
     if(ctmc != nullptr && r.uniformRv() < 0.25){ lastMoveType = 6; return ctmc->update(); }
@@ -172,10 +133,9 @@ double RelaxedClockTreeModel::update(void){
             naSnap.push_back(std::log(n->getTime()));
         naOp = naSel.pick(r);
         if(naOp == 0){ lastMoveType = 1; return clock->constantDistanceMove(); }
-        if(naOp == 1){ lastMoveType = 12; return nodeAgeSlide(); }
         lastMoveType = 7;
         double h = nodeAgeSweep();
-        naSel.record(2, nodeAgeJump2(), (double)naSnap.size());
+        naSel.record(1, nodeAgeJump2(), (double)naSnap.size());
         return h;
     }
     if(u < 0.72){
@@ -225,10 +185,6 @@ void RelaxedClockTreeModel::updateForAcceptance(void){
         fbd->getParameterTree()->updateForAcceptance();
     }else if(lastMoveType == 10){
         clock->updateForAcceptance();
-    }else if(lastMoveType == 12){
-        naSlideAccW++;
-        fbd->getParameterTree()->updateForAcceptance();
-        naSel.record(1, nodeAgeJump2(), 1.0);
     }else
         fbd->updateForAcceptance();
 }
@@ -256,9 +212,6 @@ void RelaxedClockTreeModel::updateForRejection(void){
         fbd->getParameterTree()->updateForRejection();
     }else if(lastMoveType == 10){
         clock->updateForRejection();
-    }else if(lastMoveType == 12){
-        fbd->getParameterTree()->updateForRejection();
-        naSel.record(1, 0.0, 1.0);
     }else
         fbd->updateForRejection();
 }
@@ -270,7 +223,6 @@ void RelaxedClockTreeModel::writeState(std::ostream& os){
     if(ctmc != nullptr)
         ctmc->writeState(os);
     os << ageScaleStep << ' ' << ageScaleAtt << ' ' << ageScaleAcc << '\n';
-    os << naSlideStep << ' ' << naSlideAttW << ' ' << naSlideAccW << '\n';
     naSel.writeState(os);
 }
 
@@ -281,7 +233,6 @@ void RelaxedClockTreeModel::readState(std::istream& is){
     if(ctmc != nullptr)
         ctmc->readState(is);
     is >> ageScaleStep >> ageScaleAtt >> ageScaleAcc;
-    is >> naSlideStep >> naSlideAttW >> naSlideAccW;
     naSel.readState(is);
 }
 

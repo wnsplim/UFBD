@@ -103,7 +103,6 @@ class BranchRateModel : public Parameter {
         double                      simpleDistanceMove(void);
         double                      smallPulleyMove(void);
         void                        setUnresolvedFossils(ParameterUnresolvedFossils* u) { uf = u; }
-        void                        setPncpEnabled(bool b) { pncpEnabled = b; }
         void                        print(void);
         void                        updateForAcceptance(void);
         void                        updateForRejection(void);
@@ -137,10 +136,10 @@ class BranchRateModel : public Parameter {
         int                         lastLocus;
         int                         lastNode;
         ParameterUnresolvedFossils* uf;
-        bool                        pncpEnabled;
-        double                      cdStep;
-        long                        cdAccW;
-        long                        cdAttW;
+        std::vector<double>         cdStepNode;
+        std::vector<long>           cdAccNode;
+        std::vector<long>           cdAttNode;
+        int                         lastCdNode;
         std::vector<int>            cdNodes;
         double                      sdStep;
         long                        sdAccW;
