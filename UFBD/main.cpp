@@ -50,7 +50,7 @@ int main(int argc, const char* argv[]) {
     std::string cn = settings.getClockModelName();
     if(cn == "wn")        cm = ClockModel::WN;
     else if(cn == "gbm")  cm = ClockModel::GBM;
-    else if(cn == "gbmc") cm = ClockModel::GBMC;
+    // GBMC clock: halt — detached, not selectable
 
     int numCoupledChains = settings.getNumCoupledChains();
     int numRuns = settings.getNumRuns();

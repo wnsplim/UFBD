@@ -26,7 +26,7 @@ class AdaptiveMixSelector {
         int                 nOps;
 };
 
-enum class ClockModel { UCLN, WN, GBM, CIR, GBMC }; // CIR clock: halt — detached, not selectable
+enum class ClockModel { UCLN, WN, GBM, CIR, GBMC }; // CIR + GBMC: halt — detached, not selectable
 
 struct BranchMGF {
     int    kind;

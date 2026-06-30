@@ -620,6 +620,7 @@ double ParameterBranchRates::gbmLnP(void){
     return lnp;
 }
 
+// GBMC clock: halt — detached dead code (kept, never constructed)
 double ParameterBranchRates::gbmContinuousLnP(void){
     double lnp = 0.0;
     Node* root = tree->getRoot();
@@ -812,6 +813,7 @@ double ParameterBranchRates::sigmaPncpMove(int p){
     return lnH;
 }
 
+// GBMC clock: halt — detached dead code (kept, never constructed)
 double ParameterBranchRates::sigmaPncpMoveGBMC(int p){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastMove = 8;
