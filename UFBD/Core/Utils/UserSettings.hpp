@@ -63,6 +63,7 @@ class UserSettings {
         int                         getSampleFrequency(void) { return sampleFrequency; }
         std::string                 getHessianFile(void) { return hessianFile; }
         std::string                 getClockModelName(void) { return clockModelName; }
+        int                         getSigma2Pncp(void) { return sigma2Pncp; }
         int                         getNStates(void) { return nStates; }
         int                         getModelNStates(void) { return datatypeProvided ? (seqDataType == "aa" ? 20 : 4) : nStates; }
         std::string                 getSequenceFile(void) { return sequenceFile; }
@@ -127,6 +128,7 @@ class UserSettings {
         int                         sampleFrequency;
         std::string                 hessianFile;
         std::string                 clockModelName;
+        int                         sigma2Pncp;
         int                         nStates;
         std::string                 sequenceFile;
         std::string                 partitionFile;

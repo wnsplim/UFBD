@@ -74,6 +74,7 @@ BranchRateModel::BranchRateModel(double prob, PhylogeneticModel* m, Tree* t, int
     lastLocus = -1;
     lastNode = -1;
     uf = nullptr;
+    pncpEnabled = true;
     cdStep = 1.0;
     cdAccW = 0;
     cdAttW = 0;
@@ -988,6 +989,10 @@ double ParameterBranchRates::update(void){
     if(u < 0.80){
         lastMove = 0;
         return scaleLocusRate(lastLocus);
+    }
+    if(pncpEnabled == false){
+        lastMove = 1;
+        return scaleLocusSigma2(lastLocus);
     }
     if(clockModel == ClockModel::UCLN)
         return sigmaPncpMove(lastLocus);
