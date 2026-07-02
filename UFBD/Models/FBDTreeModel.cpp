@@ -273,14 +273,7 @@ std::vector<std::string> FBDTreeModel::getParameterNames(void){
                 continue;
             }
             ParameterUnresolvedFossils* uf = dynamic_cast<ParameterUnresolvedFossils*>(p);
-            if(uf != nullptr){
-                names.push_back("nSA");
-                if(intervalStart.size() > 1)
-                    for(size_t k = 0; k < intervalStart.size(); k++)
-                        names.push_back("nSAbin" + std::to_string(k));
-            }
-            else
-                names.push_back(p->getName());
+            names.push_back(uf != nullptr ? "nSA" : p->getName());
         }
     if(isFBD)
         names.push_back("nSA");
@@ -314,21 +307,8 @@ std::vector<double> FBDTreeModel::getParameterString(void){
                 continue;
             }
             ParameterUnresolvedFossils* uf = dynamic_cast<ParameterUnresolvedFossils*>(p);
-            if(uf != nullptr){
+            if(uf != nullptr)
                 vals.push_back((double)uf->getNumSampledAncestors());
-                if(intervalStart.size() > 1){
-                    std::vector<int> cnt(intervalStart.size(), 0);
-                    for(int i = 0; i < uf->getNumFossils(); i++)
-                        if(uf->isSA(i)){
-                            double yy = uf->getFossilAge(i);
-                            int k = 0;
-                            for(size_t b = 1; b < intervalStart.size(); b++)
-                                if(yy >= intervalStart[b]) k = (int)b;
-                            cnt[k]++;
-                        }
-                    for(int c : cnt) vals.push_back((double)c);
-                }
-            }
         }
     if(isFBD)
         vals.push_back((double)countResolvedSA());
