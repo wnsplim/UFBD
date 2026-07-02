@@ -567,6 +567,7 @@ double ParameterBranchRates::lognormalLnP(double r, double s2, double m){
     return Probability::Normal::lnPdf(std::log(m) - 0.5 * s2, s2, logr) - logr;
 }
 
+// WN clock: halt — detached dead code (kept, never constructed)
 double ParameterBranchRates::whiteNoiseLnP(double r, double s2, double t, double m){
     if(r <= 0.0 || s2 <= 0.0 || t <= 0.0)
         return -INFINITY;
@@ -934,6 +935,7 @@ double ParameterBranchRates::sigmaPncpMoveGBM(int p){
     return lnH;
 }
 
+// WN clock: halt — detached dead code (kept, never constructed)
 double ParameterBranchRates::sigmaPncpMoveWN(int p){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastMove = 8;

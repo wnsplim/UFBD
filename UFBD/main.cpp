@@ -48,9 +48,8 @@ int main(int argc, const char* argv[]) {
         Msg::warning("No sequence of Hessian file supplied: running the FBD model without a molecular clock.");
     ClockModel cm = ClockModel::UCLN;
     std::string cn = settings.getClockModelName();
-    if(cn == "wn")        cm = ClockModel::WN;
-    else if(cn == "gbm")  cm = ClockModel::GBM;
-    // GBMC clock: halt — detached, not selectable
+    if(cn == "gbm")  cm = ClockModel::GBM;
+    // WN + GBMC clock: halt — detached, not selectable
 
     int numCoupledChains = settings.getNumCoupledChains();
     int numRuns = settings.getNumRuns();
