@@ -309,6 +309,11 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     if (conditioningSet == false)
         Msg::error("Flag \"-cond\" is required (crown or origin).");
 
+    if (conditioningEvent == ConditioningEvent::EXTINCT && rho != 1.0) {
+        Msg::warning("Extinct conditioning has no extant sampling; forcing rho = 1 (was " + std::to_string(rho) + ").");
+        rho = 1.0;
+    }
+
     int maxNumThreads = (int)std::thread::hardware_concurrency();
     if (maxNumThreads <= 0) {
         Msg::warning("Could not determine hardware thread count; using single thread.");
