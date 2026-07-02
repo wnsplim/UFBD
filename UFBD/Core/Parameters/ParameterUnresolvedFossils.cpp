@@ -1,4 +1,5 @@
 #include <cmath>
+#include <cstdlib>
 
 #include "FBDInput.hpp"
 #include "Msg.hpp"
@@ -115,10 +116,11 @@ double ParameterUnresolvedFossils::update(void){
     lastWasFlip = false;
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastFossil = (int)(rng.uniformRv() * numFossils);
+    static double saFrac = [](){ const char* e = getenv("FBD_SA_FRAC"); return e ? atof(e) : 1.0/3.0; }();
     double u = rng.uniformRv();
-    if(u < 1.0/3.0)
+    if(u < saFrac)
         return updateSampledAncestor(lastFossil);
-    if(u < 2.0/3.0)
+    if(u < saFrac + (1.0 - saFrac) * 0.5)
         return updateFossilAge(lastFossil);
     return updateAttachAge(lastFossil);
 }

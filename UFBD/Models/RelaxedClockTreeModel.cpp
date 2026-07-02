@@ -119,10 +119,10 @@ double RelaxedClockTreeModel::nodeAgeSweep(void){
 
 double RelaxedClockTreeModel::update(void){
     RandomVariable& r = RandomVariable::randomVariableInstance();
-    if(ctmc != nullptr && r.uniformRv() < 0.25){ lastMoveType = 6; return ctmc->update(); }
+    if(ctmc != nullptr && r.uniformRv() < 0.05){ lastMoveType = 6; return ctmc->update(); }
     double u = r.uniformRv();
-    if(u < 0.25){ lastMoveType = 0; return clock->update(); }
-    if(u < 0.65){
+    if(u < 0.20){ lastMoveType = 0; return clock->update(); }
+    if(u < 0.516){
         if(nInternalAge == 0) nInternalAge = (int)fbd->getTree()->getBackboneAgeNodes().size();
         double pCrown = (nInternalAge > 0) ? 1.0 / nInternalAge : 0.0;
         if(r.uniformRv() < pCrown){ lastMoveType = 8; return clock->simpleDistanceMove(); }
@@ -138,11 +138,11 @@ double RelaxedClockTreeModel::update(void){
         naSel.record(1, nodeAgeJump2(), (double)naSnap.size());
         return h;
     }
-    if(u < 0.72){
+    if(u < 0.572){
         lastMoveType = 4;
         return clock->rateAgeSubtreeMove();
     }
-    if(u < 0.82){
+    if(u < 0.651){
         lastMoveType = 3;
         ageScaleAtt++;
         if(ageScaleAtt % 50 == 0){
