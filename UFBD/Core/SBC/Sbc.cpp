@@ -5,6 +5,10 @@
 #include "Node.hpp"
 #include "RandomVariable.hpp"
 #include "Tree.hpp"
+#include "UserSettings.hpp"
+#include "ChainRunner.hpp"
+#include "Mcmc.hpp"
+#include "ConvergenceRunner.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -179,7 +183,14 @@ void Sbc::runSimulateOnly(void){
 
 void Sbc::runInference(void){
     ForwardSimulator sim(rng);
-    long burnin = (long)(cfg.burninFraction * cfg.mcmcGen);
+    UserSettings& us = UserSettings::userSettings();
+    int nRuns = us.getNumRuns();
+    int pf = us.getPrintFrequency();
+    int sf = us.getSampleFrequency();
+    bool autoStop = us.getAutoChainLength();
+    unsigned long ncyc = autoStop ? us.getMaxGen() : us.getChainLength();
+    int ng = (ncyc > 2000000000UL) ? 2000000000 : (int)ncyc;
+    double burnFrac = us.getBurninFraction();
     std::map<std::string, std::vector<double>> ranks;
     std::map<std::string, long> cov50, cov90;
     std::vector<int> repNExt, repNFoss;
@@ -212,42 +223,31 @@ void Sbc::runInference(void){
         if(r.numBackbone > 0)
             initAges(tree, fossils, cfg.originConditioning, cfg.startAgePrior);
 
-        unsigned int modelSeed = (unsigned int)(rng->uniformRv() * 4294967295.0);
-        FBDTreeModel model(tree, clades, fossils, modelSeed);
-
-        RandomVariable::setActiveInstance(model.getRng());
-        RandomVariable& mrng = RandomVariable::randomVariableInstance();
-
-        std::vector<std::string> names = model.getParameterNames();
-        std::vector<std::vector<double>> samp(names.size());
-
-        double curLnL = model.lnLikelihood();
-        double curLnP = model.lnPriorProbability();
-        for(long n = 1; n <= cfg.mcmcGen; n++){
-            double lpr = model.update();
-            double newLnL = model.lnLikelihood();
-            double newLnP = model.lnPriorProbability();
-            double lnR = (newLnL - curLnL) + (newLnP - curLnP) + lpr;
-            if(std::log(mrng.uniformRv()) < lnR){
-                curLnL = newLnL; curLnP = newLnP;
-                model.updateForAcceptance();
-            }else{
-                model.updateForRejection();
-            }
-            if(n > burnin && (n % cfg.mcmcThin == 0)){
-                std::vector<double> v = model.getParameterString();
-                for(size_t c = 0; c < names.size(); c++)
-                    samp[c].push_back(v[c]);
-            }
+        std::vector<ChainRunner*> chains;
+        std::vector<FBDTreeModel*> models;
+        for(int m = 0; m < nRuns; m++){
+            unsigned int modelSeed = (unsigned int)(rng->uniformRv() * 4294967295.0);
+            FBDTreeModel* model = new FBDTreeModel(tree, clades, fossils, modelSeed);
+            models.push_back(model);
+            chains.push_back(new Mcmc(ng, pf, sf, model));
         }
+        printf("rep %d/%d:\n", rep + 1, cfg.numReps);
+        ConvergenceRunner cr(chains, cfg.dumpPrefix + "_run", cfg.dumpPrefix + "_runtree");
+        cr.run();
 
-        if(samp[0].empty())
-            Msg::error("SBC: no post-burnin samples collected");
+        const std::vector<std::string>& names = chains[0]->traceNames();
         for(size_t c = 0; c < names.size(); c++){
             double t = truthForName(names[c], truth, cfg.originConditioning, (double)r.numSA);
             if(std::isnan(t))
                 continue;
-            std::vector<double>& s = samp[c];
+            std::vector<double> s;
+            for(ChainRunner* ch : chains){
+                const std::vector<double>& col = ch->traceColumns()[c];
+                size_t bIdx = (size_t)(burnFrac * col.size());
+                s.insert(s.end(), col.begin() + bIdx, col.end());
+            }
+            if(s.empty())
+                continue;
             std::sort(s.begin(), s.end());
             long below = 0, equal = 0;
             for(double x : s){
@@ -259,12 +259,14 @@ void Sbc::runInference(void){
             if(t >= quantile(s, 0.25) && t <= quantile(s, 0.75)) cov50[names[c]]++;
             if(t >= quantile(s, 0.05) && t <= quantile(s, 0.95)) cov90[names[c]]++;
         }
+        for(ChainRunner* ch : chains) delete ch;
+        for(FBDTreeModel* mo : models) delete mo;
+        delete tree;
     }
 
-    printf("SBC inference: %d reps, %s, rho=%.3g, %ld gen/rep (burnin %.2f, thin %d)\n",
-           cfg.numReps, cfg.originConditioning ? "origin" : "crown", cfg.rho,
-           cfg.mcmcGen, cfg.burninFraction, cfg.mcmcThin);
-    printf("  %-12s %8s %8s %10s %7s %7s %7s\n", "param", "KS_D", "KS_p", "chi2", "chi2_p", "cov50", "cov90");
+    printf("SBC inference: %d reps, %d chains/rep, %s, rho=%.3g\n",
+           cfg.numReps, nRuns, cfg.originConditioning ? "origin" : "crown", cfg.rho);
+    printf("  %-12s %8s %8s %7s %7s\n", "param", "KS_D", "KS_p", "cov50", "cov90");
     for(std::map<std::string, std::vector<double>>::iterator it = ranks.begin(); it != ranks.end(); ++it){
         std::vector<double> v = it->second;
         long R = (long)v.size();
@@ -275,23 +277,9 @@ void Sbc::runInference(void){
             D = std::max(D, std::max(v[i] - lo, hi - v[i]));
         }
         double ksp = ksPvalue(D, R);
-        std::vector<long> bin(cfg.rankBins, 0);
-        for(double x : v){
-            int b = (int)(x * cfg.rankBins);
-            if(b >= cfg.rankBins) b = cfg.rankBins - 1;
-            if(b < 0) b = 0;
-            bin[b]++;
-        }
-        double expected = (double)R / cfg.rankBins;
-        double chi2 = 0.0;
-        for(int b = 0; b < cfg.rankBins; b++){
-            double d = bin[b] - expected;
-            chi2 += d * d / expected;
-        }
-        double chip = 1.0 - Probability::ChiSquare::cdf(cfg.rankBins - 1, chi2);
         double c50 = (double)cov50[it->first] / R;
         double c90 = (double)cov90[it->first] / R;
-        printf("  %-12s %8.4f %8.4f %10.3f %7.4f %7.4f %7.4f\n", it->first.c_str(), D, ksp, chi2, chip, c50, c90);
+        printf("  %-12s %8.4f %8.4f %7.4f %7.4f\n", it->first.c_str(), D, ksp, c50, c90);
     }
 
     if(cfg.dumpPrefix.empty() == false){

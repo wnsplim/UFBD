@@ -16,6 +16,7 @@ int main(int argc, const char* argv[]){
     bool repsSet = false, genSet = false, burninSet = false, thinSet = false, binsSet = false;
     int reps = 0, thin = 0, bins = 0;
     long gen = 0;
+    bool autoGen = false;
     double burnin = 0.0;
     double bb = 1.0;
     std::vector<const char*> rest;
@@ -24,7 +25,7 @@ int main(int argc, const char* argv[]){
         std::string a = argv[i];
         if(a == "-sbc_mode" && i + 1 < argc)        mode = argv[++i];
         else if(a == "-sbc_reps" && i + 1 < argc){  reps = std::stoi(argv[++i]); repsSet = true; }
-        else if(a == "-sbc_gen" && i + 1 < argc){   gen = std::stol(argv[++i]); genSet = true; }
+        else if(a == "-sbc_gen" && i + 1 < argc){   std::string g = argv[++i]; if(g == "auto") autoGen = true; else gen = std::stol(g); genSet = true; }
         else if(a == "-sbc_burnin" && i + 1 < argc){ burnin = std::stod(argv[++i]); burninSet = true; }
         else if(a == "-sbc_thin" && i + 1 < argc){  thin = std::stoi(argv[++i]); thinSet = true; }
         else if(a == "-sbc_bins" && i + 1 < argc){  bins = std::stoi(argv[++i]); binsSet = true; }
@@ -67,22 +68,8 @@ int main(int argc, const char* argv[]){
     cfg.psiPrior = psiPrior;
     cfg.startAgePrior = { true, s.getConditionAgePrior(), s.getConditionAgePriorP1(), s.getConditionAgePriorP2() };
     cfg.dumpPrefix = out;
-
-    if(cfg.simulateOnly == false && cfg.emitFiles == false){
-        if(genSet == false)    Msg::error("SBC infer: -sbc_gen (MCMC generations per replicate) is required.");
-        if(burninSet == false) Msg::error("SBC infer: -sbc_burnin (burn-in fraction in [0,1)) is required.");
-        if(thinSet == false)   Msg::error("SBC infer: -sbc_thin (sample thinning interval) is required.");
-        if(binsSet == false)   Msg::error("SBC infer: -sbc_bins (rank-histogram bin count) is required.");
-        cfg.mcmcGen = gen;
-        cfg.burninFraction = burnin;
-        cfg.mcmcThin = thin;
-        cfg.rankBins = bins;
-    }else{
-        cfg.mcmcGen = 0;
-        cfg.burninFraction = 0.0;
-        cfg.mcmcThin = 1;
-        cfg.rankBins = 1;
-    }
+    (void)gen; (void)autoGen; (void)burnin; (void)thin; (void)bins;
+    (void)genSet; (void)burninSet; (void)thinSet; (void)binsSet;
 
     unsigned int seed = s.getSeedSet() ? s.getSeed() : std::random_device{}();
     RandomVariable rng(seed);

@@ -22,10 +22,6 @@ struct SbcConfig {
     Probability::PriorSpec  muPrior;
     Probability::PriorSpec  psiPrior;
     Probability::PriorSpec  startAgePrior;
-    long                    mcmcGen;
-    double                  burninFraction;
-    int                     mcmcThin;
-    int                     rankBins;
     std::string             dumpPrefix;
 };
 

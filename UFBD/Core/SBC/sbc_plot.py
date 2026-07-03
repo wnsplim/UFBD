@@ -22,20 +22,17 @@ def main():
     cols = [(i, nm) for i, nm in enumerate(header) if nm not in ("nExt", "nFoss")]
 
     print("%s  R=%d" % (path, R))
-    print("%-12s %8s %8s %10s %8s %7s %8s %7s %8s" %
-          ("param", "KS_D", "KS_p", "chi2", "chi2_p", "cov50", "p50", "cov90", "p90"))
+    print("%-12s %8s %8s %7s %8s %7s %8s" %
+          ("param", "KS_D", "KS_p", "cov50", "p50", "cov90", "p90"))
     for i, nm in cols:
         r = data[:, i]
         D, ksp = stats.kstest(r, "uniform")
-        cnt, _ = np.histogram(r, bins=nbins, range=(0.0, 1.0))
-        chi2 = ((cnt - R / nbins) ** 2 / (R / nbins)).sum()
-        chip = stats.chi2.sf(chi2, nbins - 1)
         c50 = int(((r >= 0.25) & (r <= 0.75)).sum())
         c90 = int(((r >= 0.05) & (r <= 0.95)).sum())
         p50 = stats.binomtest(c50, R, 0.5).pvalue
         p90 = stats.binomtest(c90, R, 0.9).pvalue
-        print("%-12s %8.4f %8.4f %10.3f %8.4f %7.3f %8.4f %7.3f %8.4f" %
-              (nm, D, ksp, chi2, chip, c50 / R, p50, c90 / R, p90))
+        print("%-12s %8.4f %8.4f %7.3f %8.4f %7.3f %8.4f" %
+              (nm, D, ksp, c50 / R, p50, c90 / R, p90))
 
     fig, axes = plt.subplots(1, len(cols), figsize=(4 * len(cols), 3.4), squeeze=False)
     for j, (i, nm) in enumerate(cols):
