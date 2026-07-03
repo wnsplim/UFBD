@@ -102,11 +102,19 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
         }
         Convergence::Diagnostic d = Convergence::diagnose(chains);
         if(multiChain && std::isnan(d.rhat) == false && d.rhat > worstRhat){ worstRhat = d.rhat; worstRhatName = names[p]; }
-        double e = std::fmin(d.bulkEss, d.tailEss);
-        if(std::isnan(e) == false && (minEss < 0.0 || e < minEss)){ minEss = e; minEssName = names[p]; }
-        bool ok = multiChain ? Convergence::meetsThresholds(d, rhatMax, essMin)
-                             : (std::isnan(e) || e >= essMin);
-        if(ok == false){
+        double worstChainEss = -1.0;
+        for(const std::vector<double>& ch : chains){
+            Convergence::Diagnostic dc = Convergence::diagnose(std::vector<std::vector<double>>(1, ch));
+            double ec = std::fmin(dc.bulkEss, dc.tailEss);
+            if(std::isnan(ec))
+                continue;
+            if(worstChainEss < 0.0 || ec < worstChainEss)
+                worstChainEss = ec;
+        }
+        if(worstChainEss >= 0.0 && (minEss < 0.0 || worstChainEss < minEss)){ minEss = worstChainEss; minEssName = names[p]; }
+        bool rhatOk = (multiChain == false) || std::isnan(d.rhat) || d.rhat <= rhatMax;
+        bool essOk = (worstChainEss < 0.0) || worstChainEss >= essMin;
+        if(rhatOk == false || essOk == false){
             nBelow++;
             if((int)bad.size() < 8) bad.push_back(names[p]);
         }
@@ -116,11 +124,11 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
     std::cout << "gen " << gen;
     if(multiChain)
         std::cout << "  max R-hat " << std::setprecision(4) << worstRhat << " (" << worstRhatName << ")";
-    std::cout << "  min ESS " << std::setprecision(0) << minEss << " (" << minEssName << ")\n";
+    std::cout << "  min per-chain ESS " << std::setprecision(0) << minEss << " (" << minEssName << ")\n";
 
     if(finalPass && nBelow > 0){
-        std::string crit = multiChain ? ("R-hat > " + std::to_string(rhatMax) + " or ESS < " + std::to_string((int)essMin))
-                                      : ("ESS < " + std::to_string((int)essMin));
+        std::string crit = multiChain ? ("R-hat > " + std::to_string(rhatMax) + " or per-chain ESS < " + std::to_string((int)essMin))
+                                      : ("per-chain ESS < " + std::to_string((int)essMin));
         std::string msg = std::to_string(nBelow) + " of " + std::to_string(nP) + " quantities have " + crit + " : ";
         for(size_t i = 0; i < bad.size(); i++){ msg += bad[i]; if(i + 1 < bad.size()) msg += ", "; }
         if((int)bad.size() < nBelow) msg += ", ...";
