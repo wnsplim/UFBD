@@ -96,12 +96,10 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     for (int i = 0; i < argc; i++)
         arguments.push_back(std::string(argv[i]));
 
-    executablePath = arguments[0];
-
     std::set<std::string> knownFlags = {
         "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt", "-cores", "-help", "-h",
         "-lambda_prior", "-mu_prior", "-psi_prior",
-        "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times",
+        "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_groups",
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
         "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma",
         "-seq", "-partition", "-ncat", "-datatype", "-model", "-inv", "-freq",
@@ -110,7 +108,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     std::set<std::string> valueFlags = {
         "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt", "-cores",
         "-lambda_prior", "-mu_prior", "-psi_prior",
-        "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times",
+        "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_groups",
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
         "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma",
         "-seq", "-partition", "-ncat", "-datatype", "-model", "-inv", "-freq",
@@ -178,10 +176,10 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
             } else if (arg == "-fbd_model") {
                 std::string v = val;
                 for (char& ch : v) ch = std::toupper((unsigned char)ch);
-                if (v == "FBD")         model = Model::FBD;
+                if (v == "RFBD")        model = Model::RFBD;
                 else if (v == "HEA14")  model = Model::HEA14;
                 else if (v == "UFBD")   model = Model::UFBD;
-                else Msg::error("Flag \"-fbd_model\" expects FBD, HEA14, or UFBD, but got \"" + val + "\".");
+                else Msg::error("Flag \"-fbd_model\" expects RFBD, HEA14, or UFBD, but got \"" + val + "\".");
             } else if (arg == "-rho") {
                 try {
                     rho = std::stod(val);
@@ -235,6 +233,21 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 sequenceFile = val;
             } else if (arg == "-partition") {
                 partitionFile = val;
+            } else if (arg == "-clock_groups") {
+                clockGroups.clear();
+                std::stringstream cgs(val);
+                std::string ct;
+                while (std::getline(cgs, ct, ',')) {
+                    try { clockGroups.push_back(std::stoi(ct)); }
+                    catch (...) { Msg::error("Flag \"-clock_groups\" expects comma-separated integers, but got \"" + val + "\"."); }
+                }
+                std::vector<int> seen;
+                for (int& g : clockGroups) {
+                    int idx = -1;
+                    for (size_t k = 0; k < seen.size(); k++) if (seen[k] == g) { idx = (int)k; break; }
+                    if (idx < 0) { idx = (int)seen.size(); seen.push_back(g); }
+                    g = idx;
+                }
             } else if (arg == "-clock") {
                 clockModelName = val;
                 for (char& ch : clockModelName) ch = std::tolower((unsigned char)ch);
@@ -450,7 +463,7 @@ void UserSettings::print(void) {
         case Probability::PriorFamily::IMPROPER:         std::cout << "improper"; break;
     }
     std::cout << std::endl;
-    std::cout << "Model:                                 " << (model == Model::FBD ? "FBD" : (model == Model::HEA14 ? "HEA14" : "UFBD")) << std::endl;
+    std::cout << "Model:                                 " << (model == Model::RFBD ? "RFBD" : (model == Model::HEA14 ? "HEA14" : "UFBD")) << std::endl;
     std::cout << "Tree output file name:                 " << treeOut << std::endl;
     std::cout << "Parameter output file name:            " << parametersOut << std::endl;
     std::cout << "Extant sampling fraction (rho):        " << rho << std::endl;

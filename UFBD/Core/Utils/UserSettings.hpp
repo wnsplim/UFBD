@@ -7,7 +7,7 @@
 
 enum class Conditioning { CROWN, ORIGIN };
 enum class ConditioningEvent { SURVIVAL, ANYSAMPLE, EXTINCT };
-enum class Model { FBD, HEA14, UFBD };
+enum class Model { RFBD, HEA14, UFBD };
 enum class RateMode { IID, SMOOTH };
 
 class UserSettings {
@@ -63,12 +63,11 @@ class UserSettings {
         int                         getSampleFrequency(void) { return sampleFrequency; }
         std::string                 getHessianFile(void) { return hessianFile; }
         std::string                 getClockModelName(void) { return clockModelName; }
-        int                         getNStates(void) { return nStates; }
+        const std::vector<int>&     getClockGroups(void) { return clockGroups; }
         int                         getModelNStates(void) { return datatypeProvided ? (seqDataType == "aa" ? 20 : 4) : nStates; }
         std::string                 getSequenceFile(void) { return sequenceFile; }
         std::string                 getPartitionFile(void) { return partitionFile; }
         int                         getNumCats(void) { return numCats; }
-        std::string                 getSeqDataType(void) { return seqDataType; }
         std::string                 getSubstModel(void) { return substModel; }
         std::string                 getFreqMode(void) { return freqMode; }
         bool                        getUseInvariant(void) { return useInvariant; }
@@ -82,7 +81,6 @@ class UserSettings {
                                     UserSettings(const UserSettings& u);
         UserSettings&               operator=(const UserSettings&);
         void                        parsePriorInto(const std::string& spec, Probability::PriorFamily& family, double& p1, double& p2);
-        std::string                 executablePath;
         std::string                 treeOut;
         std::string                 parametersOut;
         std::string                 treeFile;
@@ -127,6 +125,7 @@ class UserSettings {
         int                         sampleFrequency;
         std::string                 hessianFile;
         std::string                 clockModelName;
+        std::vector<int>            clockGroups;
         int                         nStates;
         std::string                 sequenceFile;
         std::string                 partitionFile;

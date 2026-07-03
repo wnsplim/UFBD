@@ -8,7 +8,7 @@
 #include "RandomVariable.hpp"
 #include "Serialize.hpp"
 
-ParameterShrinkageField::ParameterShrinkageField(double prob, PhylogeneticModel* m, int nB, Probability::PriorSpec ap, double priorNShifts, double shiftSize) : Parameter(prob, m, "shrinkageField"){
+ParameterShrinkageField::ParameterShrinkageField(double prob, PhylogeneticModel* m, int nB, Probability::PriorSpec ap, double priorNShifts, double shiftSize, double init0) : Parameter(prob, m, "shrinkageField"){
     nBins = nB;
     nDelta = nB - 1;
     anchorPrior = ap;
@@ -26,7 +26,7 @@ ParameterShrinkageField::ParameterShrinkageField(double prob, PhylogeneticModel*
     moveWeight[1] = 0.15;
     moveWeight[2] = 0.30;
     moveWeight[3] = 0.40;
-    double present0 = ap.set ? Probability::priorMean(ap.family, ap.p1, ap.p2) : 1.0;
+    double present0 = (init0 > 0.0) ? init0 : (ap.set ? Probability::priorMean(ap.family, ap.p1, ap.p2) : 1.0);
     if(present0 <= 0.0)
         present0 = 1.0;
     RandomVariable& rng = RandomVariable::randomVariableInstance();
@@ -150,12 +150,10 @@ double ParameterShrinkageField::gibbsScales(void){
     double g2 = gamma[0] * gamma[0];
     for(int k = 0; k < nDelta; k++){
         double s2 = sigma[0][k] * sigma[0][k];
-        double nuK = 1.0 / Probability::Gamma::rv(&rng, 1.0, 1.0 + 1.0 / s2);
-        double sigScale = 1.0 / nuK + delta[0][k] * delta[0][k] / (2.0 * g2);
+        double sigScale = Probability::Gamma::rv(&rng, 1.0, 1.0 + 1.0 / s2) + delta[0][k] * delta[0][k] / (2.0 * g2);
         sigma[0][k] = std::sqrt(1.0 / Probability::Gamma::rv(&rng, 1.0, sigScale));
     }
-    double xi = 1.0 / Probability::Gamma::rv(&rng, 1.0, 1.0 / (zeta * zeta) + 1.0 / g2);
-    double gamScale = 1.0 / xi;
+    double gamScale = Probability::Gamma::rv(&rng, 1.0, 1.0 / (zeta * zeta) + 1.0 / g2);
     for(int k = 0; k < nDelta; k++)
         gamScale += 0.5 * delta[0][k] * delta[0][k] / (sigma[0][k] * sigma[0][k]);
     gamma[0] = std::sqrt(1.0 / Probability::Gamma::rv(&rng, (nDelta + 1.0) / 2.0, gamScale));

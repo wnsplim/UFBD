@@ -13,7 +13,6 @@ ParameterTree::ParameterTree(double prob, PhylogeneticModel* m) :
     Parameter(prob, m,"Tree"),
     numRejections(0),
     numAcceptances(0),
-    useCachedLnP(false),
     scaleLambda(1.0),
     numScaleMoves(0){
     //constructor used in derived classes
@@ -39,7 +38,6 @@ void ParameterTree::setTree(Tree* t){
 
 double ParameterTree::update(void) {
     //By convention: Tree class is responsible for ALL topology and branch length moves; responsible for nodes
-    useCachedLnP = false;
     return trees[0]->update(scaleLambda);
 }
 
@@ -47,7 +45,6 @@ void ParameterTree::updateForAcceptance(void) {
     numAcceptances++;
     if(trees[0]->getLastUpdateWasScale())
         tuneScale(true);
-    useCachedLnP = false;
     *(trees[1]) = *(trees[0]);
 }
 
@@ -55,7 +52,6 @@ void ParameterTree::updateForRejection(void) {
     numRejections++;
     if(trees[0]->getLastUpdateWasScale())
         tuneScale(false);
-    useCachedLnP = false;
     *(trees[0]) = *(trees[1]);
 }
 
@@ -70,7 +66,6 @@ void ParameterTree::readState(std::istream& is) {
     *(trees[0]) = *(trees[1]);
     is >> scaleLambda >> numAcceptances >> numRejections >> numScaleMoves;
     Serialize::readBoolDeque(is, recentScaleAcceptRej);
-    useCachedLnP = false;
 }
 
 void ParameterTree::tuneScale(bool accepted) {

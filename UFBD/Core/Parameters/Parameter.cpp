@@ -5,8 +5,6 @@
 Parameter::Parameter(double prob, PhylogeneticModel* m, std::string n) :
     proposalProbability(prob),
     model(m),
-    parmName(n),
-    adaptiveProposalActive(false),
-    parmPrintsToConsole(true) {
+    parmName(n) {
 
 }

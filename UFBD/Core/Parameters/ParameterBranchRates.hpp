@@ -89,7 +89,7 @@ inline void gbmBridgeMoments(double T, double A, double B, double u, double* mea
 class BranchRateModel : public Parameter {
 
     public:
-                                    BranchRateModel(double prob, PhylogeneticModel* m, Tree* tree, int numLoci, const double* rgeneParam, const double* sigma2Param);
+                                    BranchRateModel(double prob, PhylogeneticModel* m, Tree* tree, int numPartitions, const std::vector<int>& partitionGroup, const double* rgeneParam, const double* sigma2Param);
         double                      getAcceptanceRatio(void);
         int                         getNumLoci(void) { return numLoci; }
         double                      getLocusRate(int p) { return mu[0][p]; }
@@ -109,7 +109,7 @@ class BranchRateModel : public Parameter {
         void                        writeState(std::ostream& os);
         void                        readState(std::istream& is);
         virtual std::vector<std::vector<double>> getAbsoluteRates(void) = 0;
-        virtual std::vector<std::vector<BranchMGF>> getBranchMGF(void){ return std::vector<std::vector<BranchMGF>>(numLoci, std::vector<BranchMGF>(numNodes, BranchMGF{0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0})); }
+        virtual std::vector<std::vector<BranchMGF>> getBranchMGF(void){ return std::vector<std::vector<BranchMGF>>(numPartitions, std::vector<BranchMGF>(numNodes, BranchMGF{0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0})); }
 
     protected:
         double                      scaleLocusRate(int p);
@@ -121,6 +121,8 @@ class BranchRateModel : public Parameter {
         double                      gammaLnPdf(double a, double b, double x);
         Tree*                       tree;
         int                         numLoci;
+        int                         numPartitions;
+        std::vector<int>            partitionGroup;
         int                         numNodes;
         std::vector<int>            branchNodes;
         double                      rgeneParam[3];
@@ -163,7 +165,7 @@ class ParameterBranchRates : public BranchRateModel {
 
     public:
                                     ParameterBranchRates(void) = delete;
-                                    ParameterBranchRates(double prob, PhylogeneticModel* m, Tree* tree, int numLoci, ClockModel clockModel, const double* rgeneParam, const double* sigma2Param);
+                                    ParameterBranchRates(double prob, PhylogeneticModel* m, Tree* tree, int numPartitions, const std::vector<int>& partitionGroup, ClockModel clockModel, const double* rgeneParam, const double* sigma2Param);
         std::vector<std::vector<double>> getAbsoluteRates(void);
         std::vector<std::vector<BranchMGF>> getBranchMGF(void);
         double                      lnProbability(void);
@@ -188,7 +190,7 @@ class ParameterBranchRatesCIR : public BranchRateModel {
 
     public:
                                     ParameterBranchRatesCIR(void) = delete;
-                                    ParameterBranchRatesCIR(double prob, PhylogeneticModel* m, Tree* tree, int numLoci, const double* rgeneParam, const double* sigma2Param);
+                                    ParameterBranchRatesCIR(double prob, PhylogeneticModel* m, Tree* tree, int numPartitions, const std::vector<int>& partitionGroup, const double* rgeneParam, const double* sigma2Param);
         std::vector<std::vector<double>> getAbsoluteRates(void);
         std::vector<std::vector<BranchMGF>> getBranchMGF(void);
         double                      lnProbability(void);

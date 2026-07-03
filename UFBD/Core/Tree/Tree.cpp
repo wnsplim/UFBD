@@ -64,7 +64,6 @@ Tree::Tree(std::string newick){
                 }
                 newNode->setName(token);
                 newNode->setIsTip(true);
-                tips.push_back(newNode);
                 numTaxa++;
                 p = newNode;
             }else{
@@ -523,7 +522,6 @@ void Tree::assignStartingAges(const std::map<Node*,double>& minAges, double unit
             age = it->second;
         n->setTime(age);
     }
-    treeHeight = getRoot()->getTime();
 }
 
 
@@ -818,18 +816,14 @@ void Tree::readState(std::istream& is) {
         is >> nm;
         p->setName(nm == "*" ? "" : nm);
         }
-    tips.clear();
     for (size_t i = 0; i < nn; i++)
         {
         Node* p = nodes[i];
         p->removeAllNeighbors();
         for (int o : nbrs[i])
             p->addNeighbor(nodes[o]);
-        if (p->getIsTip())
-            tips.push_back(p);
         }
     crown = nodes[crownOff];
     origin = (originOff >= 0) ? nodes[originOff] : nullptr;
     initializeDownPassSequence();
-    treeHeight = getRoot()->getTime();
 }

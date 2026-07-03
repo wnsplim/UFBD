@@ -16,7 +16,6 @@ class ParameterTree : public Parameter {
                                     ParameterTree(double prob, PhylogeneticModel* m);
         double                      getAcceptanceRatio(void) { return ((double) numAcceptances) /( (double)numAcceptances + (double)numRejections ) ;}
         double                      getScaleLambda(void) { return scaleLambda; }
-        virtual bool                getAdaptiveProposalActive(void) { return false; }
         Tree*                       getTree(void) { return trees[0]; }
         double                      lnProbability(void);
         void                        print(void);
@@ -31,8 +30,6 @@ class ParameterTree : public Parameter {
         void                        tuneScale(bool accepted);
         //ordered by menmory footprint
         Tree*                       trees[2];
-        double                      cachedLnP;
-        bool                        useCachedLnP;
         int                         numAcceptances;
         int                         numRejections;
         double                      scaleLambda;

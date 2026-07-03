@@ -15,6 +15,7 @@ class ApproxBranchLengthLikelihood {
                                     ApproxBranchLengthLikelihood(const std::string& hessianFile, const std::string& mlTreeFile, const std::vector<std::string>& rogueTaxa, int partitionIndex, int nStates);
         double                      computeLnL(Tree* tree, const std::vector<std::vector<double>>& branchRates);
         int                         getNumPartitions(void) { return nPartitions; }
+        std::vector<int>            getPartitionGroups(void) { return std::vector<int>(); }
 
     private:
         void                        readHessianFile(const std::string& fn);

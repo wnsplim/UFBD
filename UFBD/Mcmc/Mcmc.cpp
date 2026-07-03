@@ -30,8 +30,6 @@ void Mcmc::run(void) {
 }
 
 void Mcmc::init(void) {
-    if(numCycles >= std::numeric_limits<unsigned long>::max())
-        Msg::error("numCycles requested in greater than largest possible value");
     RandomVariable::setActiveInstance(model->getRng());
     curLnL = model->lnLikelihood();
     curLnP = model->lnPriorProbability();

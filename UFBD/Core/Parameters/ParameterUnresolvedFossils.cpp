@@ -41,8 +41,6 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
                 clade = &c;
                 break;
             }
-        if(clade == nullptr)
-            Msg::error("unresolved fossil '" + f.getTaxon() + "' references undefined clade '" + f.getClade() + "'");
         Node* cr = clade->getTaxa().empty() ? backbone->getCrown() : backbone->getMRCA(clade->getTaxa());
         crownNode[i]  = cr;
         originNode[i] = cr->getAncestor();

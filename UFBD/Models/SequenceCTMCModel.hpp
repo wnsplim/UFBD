@@ -28,11 +28,13 @@ class SequenceCTMCModel {
         void                            writeState(std::ostream& os);
         void                            readState(std::istream& is);
         int                             getNumPartitions(void) const;
+        std::vector<int>                getPartitionGroups(void) const { return partitionGroup; }
         bool                            hasMovableParams(void) const;
 
     private:
         PhylogeneticModel*              owner;
         SequenceLikelihood*             seqLik;
+        std::vector<int>                partitionGroup;
         std::vector<ParameterSimplex*>  exch;
         std::vector<ParameterSimplex*>  freq;
         std::vector<ParameterDouble*>   alpha;

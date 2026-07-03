@@ -205,6 +205,7 @@ void AlignmentReader::readPartitions(const std::string& file){
         std::string low = tok[i];
         for(char& c : low) c = std::tolower((unsigned char)c);
         if(low != "charset") continue;
+        std::string name = (i + 1 < tok.size()) ? tok[i + 1] : "";
         std::vector<int> sites;
         size_t j = i + 2;
         for(; j < tok.size(); j++){
@@ -215,11 +216,68 @@ void AlignmentReader::readPartitions(const std::string& file){
             if(tok[j].find_first_of("0123456789") != std::string::npos)
                 parseRange(tok[j], nsite, sites);
         }
+        partitionNames.push_back(name);
         partitionSites.push_back(sites);
         i = j - 1;
     }
     if(partitionSites.empty())
         Msg::error("no charset found in partition file: " + file);
+    parseClockPartition(tok);
+}
+
+void AlignmentReader::parseClockPartition(const std::vector<std::string>& tok){
+    int nPart = (int)partitionSites.size();
+    for(size_t i = 0; i + 1 < tok.size(); i++){
+        std::string low = tok[i];
+        for(char& c : low) c = std::tolower((unsigned char)c);
+        if(low != "charpartition") continue;
+        std::string scheme = tok[i + 1];
+        for(char& c : scheme) c = std::tolower((unsigned char)c);
+        if(scheme != "clock" && scheme != "clocks") continue;
+        partitionGroup.assign(nPart, -1);
+        std::map<std::string, int> labelToGroup;
+        int curGroup = -1;
+        for(size_t j = i + 2; j < tok.size(); j++){
+            std::string ll = tok[j];
+            for(char& c : ll) c = std::tolower((unsigned char)c);
+            if(ll == "charset" || ll == "charpartition" || ll == "end" || ll == "begin")
+                break;
+            std::string label, part;
+            size_t colon = tok[j].find(':');
+            if(colon != std::string::npos){
+                label = tok[j].substr(0, colon);
+                part  = tok[j].substr(colon + 1);
+            }else{
+                part = tok[j];
+            }
+            if(label.empty() == false){
+                if(labelToGroup.count(label) == 0)
+                    labelToGroup[label] = (int)labelToGroup.size();
+                curGroup = labelToGroup[label];
+            }
+            if(part.empty() == false){
+                int idx = -1;
+                for(int k = 0; k < nPart; k++)
+                    if(partitionNames[k] == part){ idx = k; break; }
+                if(idx < 0)
+                    Msg::error("charpartition clock references unknown partition '" + part + "'");
+                if(curGroup < 0)
+                    Msg::error("charpartition clock: partition '" + part + "' has no clock-group label");
+                partitionGroup[idx] = curGroup;
+            }
+        }
+        int nextGroup = (int)labelToGroup.size();
+        for(int k = 0; k < nPart; k++)
+            if(partitionGroup[k] < 0)
+                partitionGroup[k] = nextGroup++;
+        std::map<int, int> remap;
+        for(int k = 0; k < nPart; k++){
+            if(remap.count(partitionGroup[k]) == 0)
+                remap[partitionGroup[k]] = (int)remap.size();
+            partitionGroup[k] = remap[partitionGroup[k]];
+        }
+        break;
+    }
 }
 
 void AlignmentReader::compress(void){

@@ -70,6 +70,10 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      doRateVectorScale(void);
         double                      doRateShrinkExpand(void);
         double                      doTurnoverMove(void);
+        double                      jointRateFossilMove(void);
+        double                      jointRateFossilProposal(int i, bool doDraw, bool& saOut, double& zOut);
+        double                      backboneLineages(double z);
+        double                      slabAntideriv(double z, int k);
         std::vector<ParameterDouble*>* pickIidRateVector(void);
         void                        enumeratePrunableRoots(Tree* t, std::vector<Node*>& roots);
         void                        enumerateSubtreeHosts(Tree* t, std::vector<Node*>& crowns, std::vector<char>& isCrowns, std::vector<Node*>& origins, double rAge, double ceilingS, std::vector<Node*>& hosts, std::vector<double>& los, std::vector<double>& his);
@@ -108,7 +112,6 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      lambdaVal;
         double                      muVal;
         double                      rhoVal;
-        double                      psiVal;
         bool                        lastWasJointScale;
         bool                        lastWasUpDown;
         bool                        lastWasRateVec;
@@ -121,6 +124,9 @@ class FBDTreeModel : public PhylogeneticModel {
         long                        seAccW;
         long                        seAttW;
         bool                        lastWasFbdRate;
+        bool                        lastWasJointRate;
+        ParameterDouble*            jointRateParam;
+        double                      jointRateStep;
         double                      turnoverStep;
         long                        frAccW;
         long                        frAttW;
@@ -135,7 +141,7 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<double>         prevNodeAge;
         double                      prevX0;
         bool                        cacheInit;
-        bool                        isFBD;
+        bool                        isResolved;
         std::vector<int>            subPre;
         std::vector<int>            subSize;
         std::vector<Node*>          nodesByPre;

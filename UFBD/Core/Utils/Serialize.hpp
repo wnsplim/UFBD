@@ -13,6 +13,7 @@ inline void writeVec(std::ostream& os, const std::vector<double>& v) {
     for(double x : v) os << ' ' << x;
     os << '\n';
 }
+
 inline void readVec(std::istream& is, std::vector<double>& v) {
     size_t n; is >> n; v.resize(n);
     for(size_t i = 0; i < n; i++) is >> v[i];

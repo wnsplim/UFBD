@@ -22,7 +22,6 @@ MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int pf, int sf, s
     models(m),
     numModels(models.size()),
     coldModelIdx(-1),
-    numSwapsCold(0),
     deltaT(0.2),
     threadPool(1){
     swapRng.setSeed(masterSeed + numModels);
@@ -159,8 +158,6 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
             indices[chain1] = idx2;
             indices[chain2] = idx1;
             recentAcceptRej.push_back(true);
-            if(idx2 == 0 || idx1 == 0)
-                numSwapsCold++;
         }else{
             recentAcceptRej.push_back(false);
         }

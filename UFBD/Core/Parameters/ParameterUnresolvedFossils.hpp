@@ -20,7 +20,8 @@ class ParameterUnresolvedFossils : public Parameter {
         int                         getNumFossils(void) { return numFossils; }
         double                      getFossilAge(int i) { return y[0][i]; }
         double                      getAttachAge(int i) { return z[0][i]; }
-        void                        setAttachAge(int i, double zv) { z[0][i] = zv; z[1][i] = zv; }
+        void                        setProposedAttach(int i, double zv) { z[0][i] = zv; }
+        void                        beginBulkMove(void) { lastWasBulk = true; lastWasFlip = false; }
         bool                        isUE(int i) { return ue[i]; }
         bool                        isSA(int i) { return ue[i] == false && z[0][i] == y[0][i]; }
         int                         getNumSampledAncestors(void) { int n = 0; for(int i = 0; i < numFossils; i++) if(ue[i] == false && z[0][i] == y[0][i]) n++; return n; }

@@ -32,6 +32,7 @@ SequenceCTMCModel::SequenceCTMCModel(PhylogeneticModel* owner, const std::string
         else          for(double& c : cnt) c = 1.0 / nStates;
         observedFreq.push_back(cnt);
     }
+    partitionGroup = aln.getPartitionGroups();
 
     lastSubstParm = nullptr;
 }

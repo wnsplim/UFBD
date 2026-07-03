@@ -15,8 +15,7 @@ ParameterDouble::ParameterDouble(double prob, PhylogeneticModel* m, std::string 
     numRejections(0), numAcceptances(0),
     numAdaptive(10000),
     targetAr(0.3){
-    
-    adaptiveProposalActive = true;
+
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     
     double u = Probability::TruncatedNormal::rv(&rng, 0.0, 1.0, lowerBound, upperBound);

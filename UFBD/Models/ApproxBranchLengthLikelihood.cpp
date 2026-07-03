@@ -100,7 +100,6 @@ void ApproxBranchLengthLikelihood::readHessianFile(const std::string& fn){
         std::istringstream iss(s);
         std::string tok;
         while(iss >> tok){
-            if(tok == "Hessian" || tok == "HESSIAN" || tok == "hessian") continue;
             char* end = nullptr;
             double v = std::strtod(tok.c_str(), &end);
             if(end != tok.c_str() && *end == '\0')

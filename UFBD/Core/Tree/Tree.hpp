@@ -77,13 +77,9 @@ class Tree {
         std::map<Node*,double>              ageFloors;
         std::vector<Node*>                  downPassSequence;
         std::vector<Node*>                  nodes;
-        std::vector<Node*>                  tips;
-        Node*                               freeNode;
         Node*                               crown;
         Node*                               origin = nullptr;
-        double                              treeHeight;
         int                                 numTaxa;
-        int                                 numInternalNodes;
         bool                                lastUpdateWasScale = false;
         bool                                bbCacheValid = false;
         Node*                               bbRootNode = nullptr;

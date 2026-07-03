@@ -56,7 +56,6 @@ class MetropolisCoupledMcmc : public ChainRunner {
         double                              deltaT;
         int                                 coldModelIdx;
         int                                 numModels;
-        int                                 numSwapsCold;
         int                                 printFrequency;
         int                                 sampleFrequency;
         unsigned long                       gen;
