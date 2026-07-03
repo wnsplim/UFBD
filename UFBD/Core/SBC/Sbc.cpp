@@ -193,13 +193,14 @@ void Sbc::runInference(void){
     double burnFrac = us.getBurninFraction();
     std::map<std::string, std::vector<double>> ranks;
     std::map<std::string, long> cov50, cov90;
-    std::vector<int> repNExt, repNFoss;
+    std::vector<int> repNExt, repNFoss, repNBackbone;
 
     for(int rep = 0; rep < cfg.numReps; rep++){
         SimParams truth = drawParams();
         SimResult r = sim.simulate(truth);
         repNExt.push_back(r.numExtantSampled);
         repNFoss.push_back(r.numFossils);
+        repNBackbone.push_back(r.numBackbone);
 
         Tree* tree = new Tree(r.backboneNewick);
         std::vector<std::string> taxa;
@@ -287,12 +288,12 @@ void Sbc::runInference(void){
         std::vector<std::string> cols;
         for(std::map<std::string, std::vector<double>>::iterator it = ranks.begin(); it != ranks.end(); ++it)
             cols.push_back(it->first);
-        out << "nExt\tnFoss";
+        out << "nExt\tnFoss\tnBackbone";
         for(size_t c = 0; c < cols.size(); c++)
             out << "\t" << cols[c];
         out << "\n";
         for(int rep = 0; rep < cfg.numReps; rep++){
-            out << repNExt[rep] << "\t" << repNFoss[rep];
+            out << repNExt[rep] << "\t" << repNFoss[rep] << "\t" << repNBackbone[rep];
             for(size_t c = 0; c < cols.size(); c++)
                 out << "\t" << ranks[cols[c]][rep];
             out << "\n";

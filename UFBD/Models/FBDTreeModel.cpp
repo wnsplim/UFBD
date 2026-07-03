@@ -833,6 +833,10 @@ double FBDTreeModel::calculateFBDProbability(void){
                 termFoss[i] = std::log(psiAt(findIndex(unresolvedFossils->getFossilAge(i)))) + cachedGammaLn[i];
                 continue;
             }
+            if(i == spineIdx && unresolvedFossils->isUE(i)){
+                termFoss[i] = 0.0;
+                continue;
+            }
             if(unresolvedFossils->isUE(i)){
                 termFoss[i] = uePqLn(unresolvedFossils->getAttachAge(i)) + cachedGammaLn[i];
                 continue;
