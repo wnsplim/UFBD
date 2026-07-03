@@ -10,7 +10,7 @@ class ConvergenceRunner {
 
     public:
                             ConvergenceRunner(std::vector<ChainRunner*> reps, const std::string& paramOut, const std::string& treeOut);
-        void                run(void);
+        bool                run(void);
 
     private:
         bool                report(unsigned long gen, bool finalPass);

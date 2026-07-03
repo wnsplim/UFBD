@@ -21,7 +21,7 @@ ConvergenceRunner::ConvergenceRunner(std::vector<ChainRunner*> reps, const std::
     }
 }
 
-void ConvergenceRunner::run(void){
+bool ConvergenceRunner::run(void){
     UserSettings& s = UserSettings::userSettings();
     bool autoStop = s.getAutoChainLength();
     unsigned long maxGen = autoStop ? s.getMaxGen() : s.getChainLength();
@@ -72,6 +72,7 @@ void ConvergenceRunner::run(void){
     }else if(met == false){
         Msg::warning("at the requested -n (" + std::to_string(maxGen) + ") some quantities remain below the " + crit + " thresholds.");
     }
+    return met;
 }
 
 bool ConvergenceRunner::report(unsigned long gen, bool finalPass){

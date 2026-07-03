@@ -194,6 +194,7 @@ void Sbc::runInference(void){
     std::map<std::string, std::vector<double>> ranks;
     std::map<std::string, long> cov50, cov90;
     std::vector<int> repNExt, repNFoss, repNBackbone;
+    int nUnconverged = 0;
 
     for(int rep = 0; rep < cfg.numReps; rep++){
         SimParams truth = drawParams();
@@ -234,7 +235,8 @@ void Sbc::runInference(void){
         }
         printf("rep %d/%d:\n", rep + 1, cfg.numReps);
         ConvergenceRunner cr(chains, cfg.dumpPrefix + "_run", cfg.dumpPrefix + "_runtree");
-        cr.run();
+        if(cr.run() == false)
+            nUnconverged++;
 
         const std::vector<std::string>& names = chains[0]->traceNames();
         for(size_t c = 0; c < names.size(); c++){
@@ -267,6 +269,9 @@ void Sbc::runInference(void){
 
     printf("SBC inference: %d reps, %d chains/rep, %s, rho=%.3g\n",
            cfg.numReps, nRuns, cfg.originConditioning ? "origin" : "crown", cfg.rho);
+    if(nUnconverged > 0)
+        printf("  WARNING: %d of %d reps hit -max_gen without converging (R-hat/per-chain-ESS); their ranks are unreliable.\n",
+               nUnconverged, cfg.numReps);
     printf("  %-12s %8s %8s %7s %7s\n", "param", "KS_D", "KS_p", "cov50", "cov90");
     for(std::map<std::string, std::vector<double>>::iterator it = ranks.begin(); it != ranks.end(); ++it){
         std::vector<double> v = it->second;
