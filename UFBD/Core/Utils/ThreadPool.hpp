@@ -21,7 +21,10 @@ class ThreadPool {
     void                                parallelFor(int opId, int n, const std::function<void(int, int)>& body, int maxThreads = 1000000);
     void                                setChainCap(int c) { chainCap = (c < 1) ? 1 : c; }
     static ThreadPool&                  shared(void);
+    static ThreadPool&                  current(void);
+    static void                         setCurrent(ThreadPool* p) { tlsCurrent = p; }
     private:
+    static thread_local ThreadPool*     tlsCurrent;
     std::vector<std::thread>            threads;
     std::queue<std::function<void()>>   tasks;
     std::mutex                          queue_mutex;

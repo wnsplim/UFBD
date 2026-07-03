@@ -29,7 +29,6 @@ class UserSettings {
         double                      getEssThreshold(void) { return essThreshold; }
         int                         getCheckEverySamples(void) { return checkEverySamples; }
         unsigned long               getMaxGen(void) { return maxGen; }
-        int                         getNumThreads(void) { return numThreads; }
         int                         getNumCores(void) { return numCores; }
         std::string                 getTreeOutput(void) { return treeOut; }
         std::string                 getParamOutput(void) { return parametersOut; }
@@ -119,7 +118,6 @@ class UserSettings {
         double                      essThreshold;
         int                         checkEverySamples;
         unsigned long               maxGen;
-        int                         numThreads;
         int                         numCores;
         int                         printFrequency;
         int                         sampleFrequency;

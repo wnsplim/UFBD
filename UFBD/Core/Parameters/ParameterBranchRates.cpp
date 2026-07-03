@@ -594,7 +594,7 @@ double ParameterBranchRates::gbmLnP(void){
         if(s2 <= 0.0)
             return -INFINITY;
         lnp -= 0.5 * std::log(2.0 * PI) * (double)branchNodes.size();
-        ThreadPool::shared().parallelFor(OP_CLOCK, M, [&](int lo, int hi){
+        ThreadPool::current().parallelFor(OP_CLOCK, M, [&](int lo, int hi){
             for(int idx = lo; idx < hi; idx++){
                 Node* inode = dp[idx];
                 const std::vector<Node*>& sons = sonsCache[idx];
@@ -631,7 +631,7 @@ double ParameterBranchRates::gbmContinuousLnP(void){
     Node* root = tree->getRoot();
     int B = (int)branchNodes.size();
     std::vector<double> terms((size_t)numLoci * B);
-    ThreadPool::shared().parallelFor(OP_CLOCK, numLoci * B, [&](int lo, int hi){
+    ThreadPool::current().parallelFor(OP_CLOCK, numLoci * B, [&](int lo, int hi){
         for(int idx = lo; idx < hi; idx++){
             int p = idx / B;
             int b = branchNodes[idx % B];
@@ -668,7 +668,7 @@ double ParameterBranchRates::lnProbability(void){
     int B = (int)branchNodes.size();
     bool wn = (clockModel == ClockModel::WN);
     std::vector<double> terms((size_t)numLoci * B);
-    ThreadPool::shared().parallelFor(OP_CLOCK, numLoci * B, [&](int lo, int hi){
+    ThreadPool::current().parallelFor(OP_CLOCK, numLoci * B, [&](int lo, int hi){
         for(int idx = lo; idx < hi; idx++){
             int p = idx / B;
             int b = branchNodes[idx % B];
@@ -696,7 +696,7 @@ std::vector<std::vector<double>> ParameterBranchRates::getAbsoluteRates(void){
         int B = (int)branchNodes.size();
         for(int p = 0; p < numLoci; p++){
             double u = std::sqrt(sigma2[0][p]);
-            ThreadPool::shared().parallelFor(OP_CLOCK, B, [&](int lo, int hi){
+            ThreadPool::current().parallelFor(OP_CLOCK, B, [&](int lo, int hi){
                 for(int idx = lo; idx < hi; idx++){
                     int b = branchNodes[idx];
                     Node* n = tree->getNodeByOffset(b);
@@ -1053,7 +1053,7 @@ double ParameterBranchRatesCIR::cirLnP(void){
         if(s2 <= s2Floor || s2 >= 1.0 || th <= 0.0)
             return -INFINITY;
         std::atomic<bool> bad(false);
-        ThreadPool::shared().parallelFor(OP_CLOCK, B, [&](int lo, int hi){
+        ThreadPool::current().parallelFor(OP_CLOCK, B, [&](int lo, int hi){
             for(int idx = lo; idx < hi; idx++){
                 int b = branchNodes[idx];
                 Node* n = tree->getNodeByOffset(b);
@@ -1147,7 +1147,7 @@ std::vector<std::vector<double>> ParameterBranchRatesCIR::getAbsoluteRates(void)
     Node* root = tree->getRoot();
     double H = root->getTime();
     for(int p = 0; p < numLoci; p++){
-        ThreadPool::shared().parallelFor(OP_CLOCK, numNodes, [&](int lo, int hi){
+        ThreadPool::current().parallelFor(OP_CLOCK, numNodes, [&](int lo, int hi){
             for(int b = lo; b < hi; b++){
                 Node* n = tree->getNodeByOffset(b);
                 if(n != root){

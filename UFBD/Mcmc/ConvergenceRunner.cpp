@@ -2,12 +2,15 @@
 #include "ChainRunner.hpp"
 #include "Convergence.hpp"
 #include "Msg.hpp"
+#include "ThreadPool.hpp"
 #include "UserSettings.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <thread>
 
 ConvergenceRunner::ConvergenceRunner(std::vector<ChainRunner*> reps, const std::string& po, const std::string& to) : replicates(reps), paramBase(po), treeBase(to) {
     int M = (int)replicates.size();
@@ -45,12 +48,37 @@ bool ConvergenceRunner::run(void){
             c->init();
     }
 
+    int M = (int)replicates.size();
+    int nCores = UserSettings::userSettings().getNumCores();
+    bool parallelRuns = (M > 1 && UserSettings::userSettings().getNumCoupledChains() == 1);
+    int nWorkers = parallelRuns ? std::min(nCores, M) : 0;
+    std::vector<ThreadPool*> runPools;
+    for(int t = 0; t < nWorkers; t++){
+        int per = nCores / nWorkers + (t < nCores % nWorkers ? 1 : 0);
+        if(per < 1) per = 1;
+        runPools.push_back(new ThreadPool(per));
+    }
+
     bool stoppedEarly = false;
     while(gen < maxGen){
         unsigned long step = (unsigned long)blockGens;
         if(gen + step > maxGen) step = maxGen - gen;
-        for(ChainRunner* c : replicates)
-            c->advance(step);
+        if(parallelRuns){
+            std::vector<std::thread> workers;
+            for(int t = 0; t < nWorkers; t++){
+                workers.emplace_back([this, t, nWorkers, step, &runPools](){
+                    ThreadPool::setCurrent(runPools[t]);
+                    for(int r = t; r < (int)replicates.size(); r += nWorkers)
+                        replicates[r]->advance(step);
+                    ThreadPool::setCurrent(nullptr);
+                });
+            }
+            for(std::thread& w : workers)
+                w.join();
+        }else{
+            for(ChainRunner* c : replicates)
+                c->advance(step);
+        }
         gen += step;
         bool met = report(gen, false);
         if(autoStop && met){ stoppedEarly = true; break; }
@@ -58,6 +86,9 @@ bool ConvergenceRunner::run(void){
 
     for(ChainRunner* c : replicates)
         c->finalize();
+
+    for(ThreadPool* p : runPools)
+        delete p;
 
     std::cout << "-----------------------------------------------------------------------\n";
     bool met = report(gen, true);

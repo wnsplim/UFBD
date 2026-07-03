@@ -74,7 +74,7 @@ double SequenceLikelihood::computeLnL(Tree* tree,
         lnL = computePartitionLnL(0, tree, branchRates, exchangeability, frequency, alpha, proportionInvariant, branchMGF, true);
     }else{
         std::vector<double> partLnL(numPartitions, 0.0);
-        ThreadPool::shared().parallelFor(OP_CTMC, numPartitions, [&](int q0, int q1){
+        ThreadPool::current().parallelFor(OP_CTMC, numPartitions, [&](int q0, int q1){
             for(int q = q0; q < q1; q++)
                 partLnL[q] = computePartitionLnL(q, tree, branchRates, exchangeability, frequency, alpha, proportionInvariant, branchMGF, false);
         });
@@ -209,7 +209,7 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
             }
         };
         if(parallelPatterns)
-            ThreadPool::shared().parallelFor(OP_CTMC, npat, patBody);
+            ThreadPool::current().parallelFor(OP_CTMC, npat, patBody);
         else
             patBody(0, npat);
         double lnL = 0.0;

@@ -66,7 +66,6 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     essThreshold    = 200.0;
     checkEverySamples = 200;
     maxGen          = 1000000000;
-    numThreads      = 4;
     numCores        = 1;
     printFrequency  = 1000;
     sampleFrequency = 1000;
@@ -97,7 +96,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         arguments.push_back(std::string(argv[i]));
 
     std::set<std::string> knownFlags = {
-        "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt", "-cores", "-help", "-h",
+        "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-cores", "-help", "-h",
         "-lambda_prior", "-mu_prior", "-psi_prior",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_groups",
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
@@ -106,7 +105,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-runs", "-burnin", "-rhat", "-min_ess", "-check_every", "-max_gen", "-resume"
     };
     std::set<std::string> valueFlags = {
-        "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-nt", "-cores",
+        "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-cores",
         "-lambda_prior", "-mu_prior", "-psi_prior",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_groups",
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
@@ -307,7 +306,6 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 else if (arg == "-p")   printFrequency  = intVal;
                 else if (arg == "-s")   sampleFrequency = intVal;
                 else if (arg == "-nc")  numCoupledChains       = intVal;
-                else if (arg == "-nt")  numThreads      = intVal;
                 else if (arg == "-cores") { numCores = intVal; coresProvided = true; }
                 else if (arg == "-nstates") { nStates = intVal; nstatesProvided = true; }
                 else if (arg == "-ncat")    numCats     = intVal;
@@ -346,25 +344,6 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
 
     if (sampleFrequency < 1)
         Msg::error("Flag \"-s\" must be a positive integer.");
-
-    if (numThreads >= maxNumThreads) {
-        Msg::warning("Requested " + std::to_string(numThreads) +
-                     " threads, but only " + std::to_string(maxNumThreads) +
-                     " available; capping at " + std::to_string(maxNumThreads - 1) + ".");
-        numThreads = maxNumThreads - 1;
-    }
-
-    if (numCoupledChains > 1 && numThreads > numCoupledChains) {
-        Msg::warning("Threads (" + std::to_string(numThreads) +
-                     ") cannot exceed coupled chains (" + std::to_string(numCoupledChains) +
-                     "); reducing threads to match.");
-        numThreads = numCoupledChains;
-    }
-
-    if (numThreads < 1) {
-        Msg::warning("Threads must be >= 1; resetting to 1.");
-        numThreads = 1;
-    }
 
     if (coresProvided == false && numCoupledChains > 1)
         numCores = numCoupledChains;
@@ -473,7 +452,7 @@ void UserSettings::print(void) {
         std::cout << "Random number seed:                    (time-based)" << std::endl;
     std::cout << "Chain length:                          " << chainLength << std::endl;
     std::cout << "Coupled chains per run (MC3):          " << numCoupledChains << std::endl;
-    std::cout << "Number of threads:                     " << numThreads << std::endl;
+    std::cout << "Number of cores:                       " << numCores << std::endl;
     std::cout << "Print-to-screen frequency:             " << printFrequency << std::endl;
     std::cout << "Chain sampling frequency:              " << sampleFrequency << std::endl;
     std::cout << "-----------------------------------------------------------------------" << std::endl;

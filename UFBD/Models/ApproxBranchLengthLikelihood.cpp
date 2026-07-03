@@ -358,7 +358,7 @@ double ApproxBranchLengthLikelihood::computeLnL(Tree* tree, const std::vector<st
 
     const double ninf = -std::numeric_limits<double>::infinity();
     std::vector<double> partLnL(nPartitions, 0.0);
-    ThreadPool::shared().parallelFor(OP_CTMC, nPartitions, [&](int q0, int q1){
+    ThreadPool::current().parallelFor(OP_CTMC, nPartitions, [&](int q0, int q1){
         std::vector<double> z(nb);
         for(int p = q0; p < q1; p++){
             const std::vector<double>& br = branchRates[p];

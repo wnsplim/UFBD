@@ -69,7 +69,7 @@ int main(int argc, const char* argv[]) {
 
     if(numRuns == 1 && autoStop == false){
         if(numCoupledChains > 1){
-            std::cout << "Running Metropolis-coupled MCMC with " << numCoupledChains << " coupled chains across " << settings.getNumThreads() << " threads\n";
+            std::cout << "Running Metropolis-coupled MCMC with " << numCoupledChains << " coupled chains across " << settings.getNumCores() << " threads\n";
             std::cout << "-----------------------------------------------------------------------" << std::endl;
             std::vector<PhylogeneticModel*> models(numCoupledChains);
             for(int c = 0; c < numCoupledChains; c++)

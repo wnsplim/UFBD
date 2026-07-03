@@ -113,3 +113,9 @@ ThreadPool& ThreadPool::shared(void){
     static ThreadPool pool(UserSettings::userSettings().getNumCores());
     return pool;
 }
+
+thread_local ThreadPool* ThreadPool::tlsCurrent = nullptr;
+
+ThreadPool& ThreadPool::current(void){
+    return tlsCurrent ? *tlsCurrent : shared();
+}

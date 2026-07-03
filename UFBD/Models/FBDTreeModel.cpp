@@ -805,7 +805,7 @@ double FBDTreeModel::calculateFBDProbability(void){
     //term 2: main body
     int nDp = (int)dpseq.size();
     std::vector<double> termNode(nDp, 0.0);
-    ThreadPool::shared().parallelFor(OP_FBD, nDp, [&](int lo, int hi){
+    ThreadPool::current().parallelFor(OP_FBD, nDp, [&](int lo, int hi){
         for(int idx = lo; idx < hi; idx++){
             Node* n = dpseq[idx];
             if(n->getIsTip())
@@ -827,7 +827,7 @@ double FBDTreeModel::calculateFBDProbability(void){
     updateGammaCache();
     int spineIdx = unresolvedFossils->getSpineIdx();
     std::vector<double> termFoss(numFossils, 0.0);
-    ThreadPool::shared().parallelFor(OP_FBD, numFossils, [&](int lo, int hi){
+    ThreadPool::current().parallelFor(OP_FBD, numFossils, [&](int lo, int hi){
         for(int i = lo; i < hi; i++){
             if(unresolvedFossils->isSA(i)){
                 termFoss[i] = std::log(psiAt(findIndex(unresolvedFossils->getFossilAge(i)))) + cachedGammaLn[i];
@@ -1434,7 +1434,7 @@ void FBDTreeModel::updateGammaCache(void){
             staleIdx.push_back(i);
     if(eulerBuilt == false)
         buildEulerIndex();
-    ThreadPool::shared().parallelFor(OP_GAMMA, (int)staleIdx.size(), [&](int a, int b){
+    ThreadPool::current().parallelFor(OP_GAMMA, (int)staleIdx.size(), [&](int a, int b){
         for(int k = a; k < b; k++){
             int i = staleIdx[k];
             double g = computeGamma(unresolvedFossils->getAttachAge(i), i);
