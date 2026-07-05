@@ -448,6 +448,32 @@ double FBDTreeModel::doTurnoverMove(void){
     return lnH;
 }
 
+// straddle count: intervals (lo<hi) with lo<zq<hi = #{lo<zq} - #{hi<=zq}
+namespace {
+int countStraddling(const std::vector<double>& los, const std::vector<double>& his, double zq){
+    int below = (int)(std::lower_bound(los.begin(), los.end(), zq) - los.begin());
+    int above = (int)(std::upper_bound(his.begin(), his.end(), zq) - his.begin());
+    return below - above;
+}
+// pendants as (z_attach,y) sorted by z_attach; y passed separately (sorted)
+int countStraddling(const std::vector<double>& ySorted, const std::vector<std::pair<double,double>>& zy, double zq){
+    int below = (int)(std::lower_bound(ySorted.begin(), ySorted.end(), zq) - ySorted.begin());
+    int above = (int)(std::upper_bound(zy.begin(), zy.end(), zq,
+                     [](double v, const std::pair<double,double>& p){ return v < p.first; }) - zy.begin());
+    return below - above;
+}
+// straddlers with z_attach rootward of T (leave a crown/sub zone)
+double countAboveCrown(const std::vector<std::pair<double,double>>& zy, double T, double zq){
+    double s = 0.0;
+    for(std::vector<std::pair<double,double>>::const_iterator it = std::upper_bound(zy.begin(), zy.end(), std::pair<double,double>(T, INFINITY));
+             it != zy.end(); ++it)
+        if(it->second < zq && zq < it->first)
+            s += 1.0;
+    return s;
+}
+}
+
+// backbone lineages crossing z in fossil i's zone R_i
 double FBDTreeModel::cladeBackboneLineages(int i, double z){
     Tree* tree = parameterTree->getTree();
     if(eulerBuilt == false)
@@ -457,9 +483,7 @@ double FBDTreeModel::cladeBackboneLineages(int i, double z){
     bool total = (unresolvedFossils->getIsCrown(i) == false && stem == false);
     double count = 0.0;
     if(stem == false && crown == tree->getCrown()){
-        int younger = (int)(std::lower_bound(sortedYounger.begin(), sortedYounger.end(), z) - sortedYounger.begin());
-        int older   = (int)(std::upper_bound(sortedOlder.begin(), sortedOlder.end(), z) - sortedOlder.begin());
-        count += (double)(younger - older);
+        count += (double)countStraddling(sortedYounger, sortedOlder, z);   // all edges in-zone
     }else{
         int lo = subPre[crown->getOffset()];
         int hi = lo + subSize[crown->getOffset()];
@@ -471,22 +495,22 @@ double FBDTreeModel::cladeBackboneLineages(int i, double z){
             if(n->getTime() < z && z < anc->getTime()){
                 bool inZone;
                 if(stem){
-                    inZone = (n == crown);
+                    inZone = (n == crown);              // stem edge only
                 }else{
-                    inZone = inSub(anc, crown);
+                    inZone = inSub(anc, crown);         // crown group
                     if(inZone == false && total && n == crown)
-                        inZone = true;
+                        inZone = true;                  // total owns clade stem
                 }
                 if(inZone)
                     count++;
             }
         }
     }
-    if((total || stem) && crown == tree->getCrown() && originAge != nullptr){
+    if((total || stem) && crown == tree->getCrown() && originAge != nullptr){   // trunk crown->origin
         double x0 = originAge->getValue();
         if(tree->getNumBackbone() == 0){
             if(z >= x0)
-                count++;
+                count++;                                // empty backbone: origin spine
         }else{
             if(tree->getCrown()->getTime() < z && z < x0)
                 count++;
@@ -1104,8 +1128,8 @@ bool FBDTreeModel::inSub(Node* node, Node* subtreeCrown){
     return pc <= pn && pn < pc + subSize[subtreeCrown->getOffset()];
 }
 
+// gamma_i(z) = backbone lineages crossing z in R_i + sum_j w_ij [pendant j crosses z in R_i]
 double FBDTreeModel::computeGamma(double z, int i){
-    Tree* tree = parameterTree->getTree();
     if(eulerBuilt == false)
         buildEulerIndex();
     Node* crown = unresolvedFossils->getCrownNode(i);
@@ -1113,77 +1137,58 @@ double FBDTreeModel::computeGamma(double z, int i){
     bool total = (unresolvedFossils->getIsCrown(i) == false && stem == false);
     double count = cladeBackboneLineages(i, z);
 
-    bool SymmetryCorrection = (UserSettings::userSettings().getModel() == Model::UFBD);
+    bool halfFix = (UserSettings::userSettings().getModel() == Model::UFBD);   // w=1/2 on reciprocal pairs
     bool focalIsTip = (unresolvedFossils->isSA(i) == false);
     int numFossils = unresolvedFossils->getNumFossils();
-    if(wholeTreeTotalFast == 1){
-        int cY = (int)(std::lower_bound(sortedFossilY.begin(), sortedFossilY.end(), z) - sortedFossilY.begin());
-        double C;
+
+    if(wholeTreeTotalFast == 1){                       // one clade, all TOTAL or all CROWN, no stem
         if(total){
-            int cZ = (int)(std::upper_bound(sortedFossilZ.begin(), sortedFossilZ.end(), z) - sortedFossilZ.begin());
-            C = (double)(cY - cZ);
-            if(SymmetryCorrection && focalIsTip){
-                double Sp = 0.0;
+            double crossing = (double)countStraddling(sortedFossilY, sortedFossilZ, z);   // focal self-cancels
+            if(halfFix && focalIsTip){
+                double spineCrosses = 0.0;             // spine keeps full weight (owns x0)
                 int sp = unresolvedFossils->getSpineIdx();
                 if(i != sp && sp >= 0 && unresolvedFossils->isSA(sp) == false){
                     double ys = unresolvedFossils->getFossilAge(sp), zs = unresolvedFossils->getAttachAge(sp);
                     if(ys < z && z < zs)
-                        Sp = 1.0;
+                        spineCrosses = 1.0;
                 }
-                count += 0.5 * C + 0.5 * Sp;
+                count += 0.5 * crossing + 0.5 * spineCrosses;
             }else{
-                count += C;
+                count += crossing;
             }
         }else{
-            int cZ = (int)(std::upper_bound(sortedZY.begin(), sortedZY.end(), z,
-                          [](double v, const std::pair<double,double>& p){ return v < p.first; }) - sortedZY.begin());
-            C = (double)(cY - cZ);
-            double cT = crown->getTime();
-            for(std::vector<std::pair<double,double>>::iterator it = std::upper_bound(sortedZY.begin(), sortedZY.end(), std::pair<double,double>(cT, INFINITY));
-                     it != sortedZY.end(); ++it)
-                if(it->second < z && z < it->first)
-                    C -= 1.0;
-            if(SymmetryCorrection && focalIsTip)
-                count += 0.5 * C;
+            double crossing = (double)countStraddling(sortedFossilY, sortedZY, z);
+            crossing -= countAboveCrown(sortedZY, crown->getTime(), z);        // crown-cap
+            if(halfFix && focalIsTip)
+                count += 0.5 * crossing;
             else
-                count += C;
+                count += crossing;
         }
         return count;
     }
-    if(multiCladeFast == 1){
+    if(multiCladeFast == 1){                            // mixed CROWN/TOTAL over clades, no stem
         const CladeGammaIndex& g = cladeGamma.find(crown)->second;
         double T = crown->getTime();
-        auto stab = [](const std::vector<double>& Y, const std::vector<std::pair<double,double>>& ZY, double zz)->double{
-            int a = (int)(std::lower_bound(Y.begin(), Y.end(), zz) - Y.begin());
-            int b = (int)(std::upper_bound(ZY.begin(), ZY.end(), zz, [](double v, const std::pair<double,double>& p){ return v < p.first; }) - ZY.begin());
-            return (double)(a - b);
-        };
-        auto stalk = [](const std::vector<std::pair<double,double>>& ZY, double Tt, double zz)->double{
-            double s = 0.0;
-            for(std::vector<std::pair<double,double>>::const_iterator it = std::upper_bound(ZY.begin(), ZY.end(), std::pair<double,double>(Tt, INFINITY)); it != ZY.end(); ++it)
-                if(it->second < zz && zz < it->first)
-                    s += 1.0;
-            return s;
-        };
-        double A = stab(g.subY, g.subZY, z);
+        double nested = (double)countStraddling(g.subY, g.subZY, z);
         if(total == false)
-            A -= stalk(g.subZY, T, z);
-        if(SymmetryCorrection && focalIsTip){
-            double B;
+            nested -= countAboveCrown(g.subZY, T, z);   // crown-cap
+        if(halfFix && focalIsTip){
+            double reciprocal;                          // pendants owned as TOTAL/CROWN of this clade
             if(total == false)
-                B = stab(g.totY, g.totZY, z) + stab(g.crY, g.crZY, z) - stalk(g.totZY, T, z) - stalk(g.crZY, T, z);
+                reciprocal = (double)countStraddling(g.totY, g.totZY, z) + (double)countStraddling(g.crY, g.crZY, z)
+                             - countAboveCrown(g.totZY, T, z) - countAboveCrown(g.crZY, T, z);
             else{
-                B = stab(g.totY, g.totZY, z);
+                reciprocal = (double)countStraddling(g.totY, g.totZY, z);
                 if(z <= T)
-                    B += stab(g.crY, g.crZY, z);
+                    reciprocal += (double)countStraddling(g.crY, g.crZY, z);
             }
-            count += A - 0.5 * B;
+            count += nested - 0.5 * reciprocal;
         }else{
-            count += A;
+            count += nested;
         }
         return count;
     }
-    for(int j = 0; j < numFossils; j++){
+    for(int j = 0; j < numFossils; j++){               // general reference: zone host law per fossil
         if(j == i)
             continue;
         if(unresolvedFossils->isSA(j))
@@ -1191,21 +1196,21 @@ double FBDTreeModel::computeGamma(double z, int i){
         double yj = unresolvedFossils->getFossilAge(j);
         double zj = unresolvedFossils->getAttachAge(j);
         if(yj >= z || z >= zj)
-            continue;
-        bool reciprocal;
+            continue;                                   // j must straddle z
+        bool reciprocal;                                // both orientations admissible -> 1/2 eligible
         if(stem){
             if(unresolvedFossils->getCrownNode(j) != crown)
                 continue;
             bool jStem = unresolvedFossils->getIsStem(j);
             bool jTotalOnStem = (unresolvedFossils->getIsCrown(j) == false) && (jStem == false) && (zj >= crown->getTime());
             if(jStem == false && jTotalOnStem == false)
-                continue;
+                continue;                               // stem-i reaches only same-clade stem
             reciprocal = true;
         }else{
             if(inSub(unresolvedFossils->getCrownNode(j), crown) == false)
                 continue;
             if(total == false && zj > crown->getTime())
-                continue;
+                continue;                               // crown-cap
             Node* crownJ = unresolvedFossils->getCrownNode(j);
             bool jStem = unresolvedFossils->getIsStem(j);
             bool jTotal = (unresolvedFossils->getIsCrown(j) == false) && (jStem == false);
@@ -1215,7 +1220,7 @@ double FBDTreeModel::computeGamma(double z, int i){
             reciprocal = inSub(crown, crownJ) && iPendReachesRj;
         }
         double w = 1.0;
-        if(SymmetryCorrection && focalIsTip && j != unresolvedFossils->getSpineIdx() && reciprocal)
+        if(halfFix && focalIsTip && j != unresolvedFossils->getSpineIdx() && reciprocal)
             w = 0.5;
         count += w;
     }
