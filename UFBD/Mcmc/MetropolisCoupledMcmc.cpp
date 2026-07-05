@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <fstream>
+#include <chrono>
 #include <future>
 #include <iomanip>
 #include <iostream>
@@ -23,7 +24,7 @@ MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int pf, int sf, s
     numModels(models.size()),
     coldModelIdx(-1),
     deltaT(0.2),
-    threadPool(1){
+    threadPool(std::max(1, std::min((int)m.size(), UserSettings::userSettings().getNumCores()))){
     swapRng.setSeed(masterSeed + numModels);
     currLnL.reserve(numModels); //needs to be reserve for pushback
     newLnL.resize(numModels);
@@ -41,7 +42,22 @@ MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int pf, int sf, s
     writeTrees = (models[0]->getTree()->getNumBackbone() > 0);
     gen = 0;
 
-    ThreadPool::shared().setChainCap(std::max(1, settings.getNumCores() / threadPool.size()));
+    int N = settings.getNumCores();
+    for(int i = 0; i < numModels; i++){
+        int per = N / numModels + (i < N % numModels ? 1 : 0);
+        if(per < 1) per = 1;
+        chainPools.push_back(new ThreadPool(per));
+    }
+    ThreadPool::shared().setChainCap(std::max(1, N / std::max(1, numModels)));
+    chainCalibGen = 0;
+    chainSeqT = 0.0;
+    chainParT = 0.0;
+    chainDecision = -1;
+}
+
+MetropolisCoupledMcmc::~MetropolisCoupledMcmc(void){
+    for(ThreadPool* p : chainPools)
+        delete p;
 }
 
 double MetropolisCoupledMcmc::calcHeating(int idx){
@@ -86,27 +102,64 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
         if(n < 10000 && n % 50 == 0)
             updateDeltaT();
         
-        for(int i = 0; i < numModels; i++){
-            RandomVariable::setActiveInstance(models[i]->getRng());
-            lnProposalRatio[i] = models[i]->update();
-
-            if(lnProposalRatio[i] == -INFINITY){
-                newLnL[i] = currLnL[i];
-                newLnP[i] = currLnP[i];
-                lnAcceptanceProbabilities[i] = -INFINITY;
-                continue;
+        bool canParallel = (numModels > 1 && threadPool.size() > 1);
+        bool parallelChains = canParallel && (chainDecision < 0 ? chainCalibGen >= 100 : chainDecision == 1);
+        std::chrono::steady_clock::time_point cwT0 = std::chrono::steady_clock::now();
+        if(parallelChains){
+            std::vector<std::function<void()>> tasks;
+            tasks.reserve(numModels);
+            for(int i = 0; i < numModels; i++){
+                tasks.push_back([this, i](){
+                    RandomVariable::setActiveInstance(models[i]->getRng());
+                    ThreadPool::setCurrent(chainPools[i]);
+                    lnProposalRatio[i] = models[i]->update();
+                    if(lnProposalRatio[i] == -INFINITY){
+                        newLnL[i] = currLnL[i];
+                        newLnP[i] = currLnP[i];
+                        lnAcceptanceProbabilities[i] = -INFINITY;
+                    }else{
+                        newLnL[i] = models[i]->lnLikelihood();
+                        newLnP[i] = models[i]->lnPriorProbability();
+                        lnLikelihoodRatio[i] = newLnL[i] - currLnL[i];
+                        lnPriorRatio[i]      = newLnP[i] - currLnP[i];
+                        int    chainIdx = indices[i];
+                        double heat     = (chainIdx == 0) ? 1.0 : calcHeating(chainIdx);
+                        lnAcceptanceProbabilities[i] = heat * (lnLikelihoodRatio[i] + lnPriorRatio[i])
+                                                       + lnProposalRatio[i];
+                    }
+                    ThreadPool::setCurrent(nullptr);
+                });
             }
+            threadPool.parallelTasks(tasks);
+        }else{
+            for(int i = 0; i < numModels; i++){
+                RandomVariable::setActiveInstance(models[i]->getRng());
+                lnProposalRatio[i] = models[i]->update();
 
-            newLnL[i]          = models[i]->lnLikelihood();
-            newLnP[i]          = models[i]->lnPriorProbability();
+                if(lnProposalRatio[i] == -INFINITY){
+                    newLnL[i] = currLnL[i];
+                    newLnP[i] = currLnP[i];
+                    lnAcceptanceProbabilities[i] = -INFINITY;
+                    continue;
+                }
 
-            lnLikelihoodRatio[i] = newLnL[i] - currLnL[i];
-            lnPriorRatio[i]      = newLnP[i] - currLnP[i];
+                newLnL[i]          = models[i]->lnLikelihood();
+                newLnP[i]          = models[i]->lnPriorProbability();
 
-            int    chainIdx = indices[i];
-            double heat     = (chainIdx == 0) ? 1.0 : calcHeating(chainIdx);
-            lnAcceptanceProbabilities[i] = heat * (lnLikelihoodRatio[i] + lnPriorRatio[i])
-                                           + lnProposalRatio[i];
+                lnLikelihoodRatio[i] = newLnL[i] - currLnL[i];
+                lnPriorRatio[i]      = newLnP[i] - currLnP[i];
+
+                int    chainIdx = indices[i];
+                double heat     = (chainIdx == 0) ? 1.0 : calcHeating(chainIdx);
+                lnAcceptanceProbabilities[i] = heat * (lnLikelihoodRatio[i] + lnPriorRatio[i])
+                                               + lnProposalRatio[i];
+            }
+        }
+        if(canParallel && chainDecision < 0){
+            double dt = std::chrono::duration<double>(std::chrono::steady_clock::now() - cwT0).count();
+            if(parallelChains) chainParT += dt; else chainSeqT += dt;
+            if(++chainCalibGen >= 200)
+                chainDecision = (chainParT < chainSeqT) ? 1 : 0;
         }
 
 

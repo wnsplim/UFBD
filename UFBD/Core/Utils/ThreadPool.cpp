@@ -109,6 +109,30 @@ void ThreadPool::parallelFor(int opId, int n, const std::function<void(int, int)
     doneCv.wait(lk, [&remaining]{ return remaining == 0; });
 }
 
+void ThreadPool::parallelTasks(const std::vector<std::function<void()>>& tasks){
+    int n = (int)tasks.size();
+    if(n <= 0)
+        return;
+    if((int)threads.size() <= 1){
+        for(int k = 0; k < n; k++)
+            tasks[k]();
+        return;
+    }
+    int remaining = n;
+    std::mutex m;
+    std::condition_variable doneCv;
+    for(int k = 0; k < n; k++){
+        enqueue([&tasks, k, &remaining, &m, &doneCv](){
+            tasks[k]();
+            std::lock_guard<std::mutex> lk(m);
+            if(--remaining == 0)
+                doneCv.notify_one();
+        });
+    }
+    std::unique_lock<std::mutex> lk(m);
+    doneCv.wait(lk, [&remaining]{ return remaining == 0; });
+}
+
 ThreadPool& ThreadPool::shared(void){
     static ThreadPool pool(UserSettings::userSettings().getNumCores());
     return pool;

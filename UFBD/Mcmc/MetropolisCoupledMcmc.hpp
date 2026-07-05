@@ -16,6 +16,7 @@ class MetropolisCoupledMcmc : public ChainRunner {
     public:
                                             MetropolisCoupledMcmc(void) = delete;
                                             MetropolisCoupledMcmc(unsigned long ng, int pf, int sf, std::vector<PhylogeneticModel*> m, unsigned int masterSeed);
+                                            ~MetropolisCoupledMcmc(void);
         void                                run(void);
         void                                init(void);
         void                                advance(unsigned long nGens);
@@ -46,6 +47,11 @@ class MetropolisCoupledMcmc : public ChainRunner {
         std::vector<double>                 lnAcceptanceProbabilities;
         std::vector<int>                    indices;
         ThreadPool                          threadPool;
+        std::vector<ThreadPool*>            chainPools;
+        long                                chainCalibGen;
+        double                              chainSeqT;
+        double                              chainParT;
+        int                                 chainDecision;
         RandomVariable                      swapRng;
         WriteTSV                            params;
         WriteTSV                            trees;
