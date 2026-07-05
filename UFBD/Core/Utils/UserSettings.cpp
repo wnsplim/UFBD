@@ -96,22 +96,22 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         arguments.push_back(std::string(argv[i]));
 
     std::set<std::string> knownFlags = {
-        "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-cores", "-help", "-h",
+        "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-thinning", "-nc", "-cores", "-help", "-h",
         "-lambda_prior", "-mu_prior", "-psi_prior",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_groups",
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
         "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma",
         "-seq", "-partition", "-ncat", "-datatype", "-model", "-inv", "-freq",
-        "-runs", "-burnin", "-rhat", "-min_ess", "-check_every", "-max_gen", "-resume"
+        "-runs", "-burnin", "-rhat", "-min_ess", "-max_gen", "-resume"
     };
     std::set<std::string> valueFlags = {
-        "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-p", "-s", "-nc", "-cores",
+        "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-thinning", "-nc", "-cores",
         "-lambda_prior", "-mu_prior", "-psi_prior",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_groups",
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
         "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma",
         "-seq", "-partition", "-ncat", "-datatype", "-model", "-inv", "-freq",
-        "-runs", "-burnin", "-rhat", "-min_ess", "-check_every", "-max_gen"
+        "-runs", "-burnin", "-rhat", "-min_ess", "-max_gen"
     };
 
     for (int i = 1; i < (int)arguments.size(); i++) {
@@ -303,14 +303,12 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 int intVal = std::stoi(val);
 
                 if (arg == "-n")        chainLength     = intVal;
-                else if (arg == "-p")   printFrequency  = intVal;
-                else if (arg == "-s")   sampleFrequency = intVal;
+                else if (arg == "-thinning") sampleFrequency = intVal;
                 else if (arg == "-nc")  numCoupledChains       = intVal;
                 else if (arg == "-cores") { numCores = intVal; coresProvided = true; }
                 else if (arg == "-nstates") { nStates = intVal; nstatesProvided = true; }
                 else if (arg == "-ncat")    numCats     = intVal;
                 else if (arg == "-runs")    numRuns     = intVal;
-                else if (arg == "-check_every") checkEverySamples = intVal;
             }
         }
     }
@@ -339,11 +337,9 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     if (chainLength < 1)
         Msg::error("Flag \"-n\" must be a positive integer (or \"auto\").");
 
-    if (printFrequency < 1)
-        Msg::error("Flag \"-p\" must be a positive integer.");
-
     if (sampleFrequency < 1)
-        Msg::error("Flag \"-s\" must be a positive integer.");
+        Msg::error("Flag \"-thinning\" must be a positive integer.");
+    printFrequency = sampleFrequency;
 
     if (coresProvided == false && numCoupledChains > 1)
         numCores = numCoupledChains;
@@ -453,8 +449,7 @@ void UserSettings::print(void) {
     std::cout << "Chain length:                          " << chainLength << std::endl;
     std::cout << "Coupled chains per run (MC3):          " << numCoupledChains << std::endl;
     std::cout << "Number of cores:                       " << numCores << std::endl;
-    std::cout << "Print-to-screen frequency:             " << printFrequency << std::endl;
-    std::cout << "Chain sampling frequency:              " << sampleFrequency << std::endl;
+    std::cout << "Thinning:       " << sampleFrequency << std::endl;
     std::cout << "-----------------------------------------------------------------------" << std::endl;
 
 }

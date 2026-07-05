@@ -145,7 +145,7 @@ bool Mcmc::loadCheckpoint(void) {
     int storedSf;
     is >> gen >> storedSf;
     if(storedSf != sampleFrequency){
-        Msg::warning("-s " + std::to_string(sampleFrequency) + " differs from the pre-resume thinning " + std::to_string(storedSf) + "; forcing " + std::to_string(storedSf));
+        Msg::warning("-thinning " + std::to_string(sampleFrequency) + " differs from the pre-resume thinning " + std::to_string(storedSf) + "; forcing " + std::to_string(storedSf));
         sampleFrequency = storedSf;
     }
     is >> curLnL >> curLnP;

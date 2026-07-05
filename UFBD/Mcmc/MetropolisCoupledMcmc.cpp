@@ -237,7 +237,7 @@ bool MetropolisCoupledMcmc::loadCheckpoint(void) {
     int nm, storedSf;
     is >> gen >> storedSf >> deltaT >> nm;
     if(storedSf != sampleFrequency){
-        Msg::warning("-s " + std::to_string(sampleFrequency) + " differs from the pre-resume thinning " + std::to_string(storedSf) + "; forcing " + std::to_string(storedSf) + " to keep the log spacing uniform.");
+        Msg::warning("-thinning " + std::to_string(sampleFrequency) + " differs from the pre-resume thinning " + std::to_string(storedSf) + "; forcing " + std::to_string(storedSf));
         sampleFrequency = storedSf;
     }
     indices.assign(nm, 0);
