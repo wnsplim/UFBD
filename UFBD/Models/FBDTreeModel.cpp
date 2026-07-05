@@ -837,8 +837,6 @@ double FBDTreeModel::calculateFBDProbability(void){
     double crownAge = tree->getCrown()->getTime();
     std::vector<Node*> dpseq = tree->getDownPassSequence();
     
-    lambdaVal = lambdaAt(0);
-    muVal = muAt(0);
     rhoVal = rho;
 
     prepareIntervals();
@@ -980,18 +978,24 @@ double FBDTreeModel::uePqLn(double z){
 }
 
 double FBDTreeModel::calculateLnSurvival(double t){
-    if(intervalStart.size() == 1){
-        double a = lambdaVal - muVal;
-        double B = lambdaVal * (1.0 - rhoVal) - muVal;
-        double lnAbsNum = std::log(std::abs(rhoVal * a));
-        double lnAbsDenom;
-        if(-a * t > 0.0)
-            lnAbsDenom = (-a * t) + std::log(std::abs(lambdaVal * rhoVal * std::exp(a * t) + B));
-        else
-            lnAbsDenom = std::log(std::abs(lambdaVal * rhoVal + B * std::exp(-a * t)));
-        return lnAbsNum - lnAbsDenom;
-    }
-    return std::log(1.0 - calculateP0Hat(t));
+    int k = findIndex(t);
+    double lam = lambdaAt(k), mu = muAt(k), c1 = c1HatVec[k], c2 = c2HatVec[k];
+    double E = std::exp(-c1 * (t - intervalStart[k]));
+    double N  = E * (1.0 - c2) * ((lam - mu) - c1) + (1.0 + c2) * ((lam - mu) + c1);
+    double Dp = E * (1.0 - c2) + (1.0 + c2);
+    return std::log(N) - std::log(2.0 * lam) - std::log(Dp);
+}
+
+double FBDTreeModel::calculateLnAnySample(double t){
+    int k = findIndex(t);
+    double lam = lambdaAt(k), mu = muAt(k), psi = psiAt(k), c1 = c1Vec[k], c2 = c2Vec[k];
+    double beta = lam - mu - psi, bpc, bmc;
+    if(beta >= 0.0){ bpc = beta + c1; bmc = -4.0*lam*psi/bpc; }
+    else           { bmc = beta - c1; bpc = -4.0*lam*psi/bmc; }
+    double E = std::exp(-c1 * (t - intervalStart[k]));
+    double N  = E * (1.0 - c2) * bmc + (1.0 + c2) * bpc;
+    double Dp = E * (1.0 - c2) + (1.0 + c2);
+    return std::log(N) - std::log(2.0 * lam) - std::log(Dp);
 }
 
 double FBDTreeModel::calculateLnConditioning(double t){
@@ -999,10 +1003,9 @@ double FBDTreeModel::calculateLnConditioning(double t){
         case ConditioningEvent::SURVIVAL:
             return calculateLnSurvival(t);
         case ConditioningEvent::ANYSAMPLE:
-            return std::log(1.0 - calculateP0(t));
+            return calculateLnAnySample(t);
         case ConditioningEvent::EXTINCT: {
-            double pHat = 1.0 - std::exp(calculateLnSurvival(t));
-            double d = pHat - calculateP0(t);
+            double d = std::exp(calculateLnAnySample(t)) - std::exp(calculateLnSurvival(t));
             return (d > 0.0) ? std::log(d) : -INFINITY;
         }
     }
@@ -1031,21 +1034,19 @@ void FBDTreeModel::prepareIntervals(void){
             c2Vec[i] = ((1.0 - 2.0 * ePrev[i]) * li + mi + pi) / c1Vec[i];
         }
     }
-    if(n > 1){
-        c1HatVec.assign(n, 0.0);
-        c2HatVec.assign(n, 0.0);
-        ePrevHat.assign(n, 0.0);
-        for(size_t i = 0; i < n; i++){
-            double li = lambdaAt(i);
-            double mi = muAt(i);
-            c1HatVec[i] = std::abs(li - mi);
-            if(i == 0){
-                ePrevHat[0] = 1.0;
-                c2HatVec[0] = (-li + mi + 2*li * rhoVal) / c1HatVec[0];
-            }else{
-                ePrevHat[i] = calculateP0HatAt((int)i - 1, intervalStart[i]);
-                c2HatVec[i] = ((1.0 - 2.0 * ePrevHat[i]) * li + mi) / c1HatVec[i];
-            }
+    c1HatVec.assign(n, 0.0);
+    c2HatVec.assign(n, 0.0);
+    ePrevHat.assign(n, 0.0);
+    for(size_t i = 0; i < n; i++){
+        double li = lambdaAt(i);
+        double mi = muAt(i);
+        c1HatVec[i] = std::abs(li - mi);
+        if(i == 0){
+            ePrevHat[0] = 1.0;
+            c2HatVec[0] = (-li + mi + 2*li * rhoVal) / c1HatVec[0];
+        }else{
+            ePrevHat[i] = calculateP0HatAt((int)i - 1, intervalStart[i]);
+            c2HatVec[i] = ((1.0 - 2.0 * ePrevHat[i]) * li + mi) / c1HatVec[i];
         }
     }
 }

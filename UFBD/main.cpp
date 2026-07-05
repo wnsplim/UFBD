@@ -54,8 +54,7 @@ int main(int argc, const char* argv[]) {
     int numCoupledChains = settings.getNumCoupledChains();
     int numRuns = settings.getNumRuns();
     bool autoStop = settings.getAutoChainLength();
-    int pf = settings.getPrintFrequency();
-    int sf = settings.getSampleFrequency();
+    int thin = settings.getThinning();
 
     auto makeModel = [&](unsigned int sd) -> PhylogeneticModel* {
         if(seq)
@@ -74,7 +73,7 @@ int main(int argc, const char* argv[]) {
             std::vector<PhylogeneticModel*> models(numCoupledChains);
             for(int c = 0; c < numCoupledChains; c++)
                 models[c] = makeModel(masterSeed + (unsigned int)c);
-            MetropolisCoupledMcmc mcmc(settings.getChainLength(), pf, sf, models, masterSeed);
+            MetropolisCoupledMcmc mcmc(settings.getChainLength(), thin, models, masterSeed);
             if(resume){
                 mcmc.loadCheckpoint();
                 mcmc.resumeOutputs();
@@ -87,7 +86,7 @@ int main(int argc, const char* argv[]) {
         }else{
             std::cout << "Running standard MCMC\n";
             std::cout << "-----------------------------------------------------------------------" << std::endl;
-            Mcmc mcmc((int)settings.getChainLength(), pf, sf, makeModel(masterSeed));
+            Mcmc mcmc((int)settings.getChainLength(), thin, makeModel(masterSeed));
             if(resume){
                 mcmc.loadCheckpoint();
                 mcmc.resumeOutputs();
@@ -111,10 +110,10 @@ int main(int argc, const char* argv[]) {
                 std::vector<PhylogeneticModel*> models(numCoupledChains);
                 for(int c = 0; c < numCoupledChains; c++)
                     models[c] = makeModel(base + (unsigned int)c);
-                reps.push_back(new MetropolisCoupledMcmc(ncyc, pf, sf, models, base));
+                reps.push_back(new MetropolisCoupledMcmc(ncyc, thin, models, base));
             }else{
                 int ng = (ncyc > 2000000000UL) ? 2000000000 : (int)ncyc;
-                reps.push_back(new Mcmc(ng, pf, sf, makeModel(base)));
+                reps.push_back(new Mcmc(ng, thin, makeModel(base)));
             }
         }
         ConvergenceRunner cr(reps, settings.getParamOutput(), settings.getTreeOutput());

@@ -185,8 +185,7 @@ void Sbc::runInference(void){
     ForwardSimulator sim(rng);
     UserSettings& us = UserSettings::userSettings();
     int nRuns = us.getNumRuns();
-    int pf = us.getPrintFrequency();
-    int sf = us.getSampleFrequency();
+    int thin = us.getThinning();
     bool autoStop = us.getAutoChainLength();
     unsigned long ncyc = autoStop ? us.getMaxGen() : us.getChainLength();
     int ng = (ncyc > 2000000000UL) ? 2000000000 : (int)ncyc;
@@ -231,7 +230,7 @@ void Sbc::runInference(void){
             unsigned int modelSeed = (unsigned int)(rng->uniformRv() * 4294967295.0);
             FBDTreeModel* model = new FBDTreeModel(tree, clades, fossils, modelSeed);
             models.push_back(model);
-            chains.push_back(new Mcmc(ng, pf, sf, model));
+            chains.push_back(new Mcmc(ng, thin, model));
         }
         printf("rep %d/%d:\n", rep + 1, cfg.numReps);
         ConvergenceRunner cr(chains, cfg.dumpPrefix + "_run", cfg.dumpPrefix + "_runtree");

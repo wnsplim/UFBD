@@ -28,7 +28,7 @@ bool ConvergenceRunner::run(void){
     UserSettings& s = UserSettings::userSettings();
     bool autoStop = s.getAutoChainLength();
     unsigned long maxGen = autoStop ? s.getMaxGen() : s.getChainLength();
-    long blockGens = (long)s.getCheckEverySamples() * (long)s.getSampleFrequency();
+    long blockGens = (long)s.getEssThreshold() * (long)s.getThinning();
     if(blockGens < 1) blockGens = 1;
 
     unsigned long gen = 0;
@@ -116,6 +116,18 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
     if(names.empty())
         return false;
     int nP = (int)names.size();
+
+    size_t minPost = (size_t)-1;
+    for(ChainRunner* c : replicates){
+        const std::vector<std::vector<double>>& cols = c->traceColumns();
+        size_t n = cols.empty() ? 0 : cols[0].size();
+        size_t post = n - (size_t)(n * burn);
+        if(post < minPost) minPost = post;
+    }
+    if(minPost < (size_t)essMin){
+        std::cout << "gen " << gen << "  (accumulating: " << minPost << "/" << (int)essMin << " post-burnin samples)\n";
+        return false;
+    }
 
     bool multiChain = replicates.size() >= 2;
     double worstRhat = 1.0;

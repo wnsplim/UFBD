@@ -43,6 +43,7 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      fossilPqLn(double y, double z);
         double                      uePqLn(double z);
         double                      calculateLnSurvival(double t);
+        double                      calculateLnAnySample(double t);
         double                      calculateLnConditioning(double t);
         void                        prepareIntervals(void);
         int                         findIndex(double t);
@@ -109,8 +110,6 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<double>         c1HatVec;
         std::vector<double>         c2HatVec;
         std::vector<double>         ePrevHat;
-        double                      lambdaVal;
-        double                      muVal;
         double                      rhoVal;
         bool                        lastWasJointScale;
         bool                        lastWasUpDown;

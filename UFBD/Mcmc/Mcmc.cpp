@@ -16,7 +16,7 @@
 #include <sstream>
 
 
-Mcmc::Mcmc(int ng, int pf, int sf, PhylogeneticModel* m) : model(m), numCycles(ng), printFrequency(pf), sampleFrequency(sf), gen(0), curLnL(0.0), curLnP(0.0) {
+Mcmc::Mcmc(int ng, int thin, PhylogeneticModel* m) : model(m), numCycles(ng), thinning(thin), gen(0), curLnL(0.0), curLnP(0.0) {
     UserSettings& settings = UserSettings::userSettings();
     treeOut = settings.getTreeOutput();
     paramOut = settings.getParamOutput();
@@ -54,7 +54,7 @@ void Mcmc::advance(unsigned long nGens) {
 
         bool acceptMove = (std::log(rng.uniformRv()) < lnR);
 
-        if (n % printFrequency == 0)
+        if (n % thinning == 0)
             {
             std::cout << std::fixed << std::setprecision(2);
             std::cout << n << " -- " << curLnL << " -> " << newLnL << "\n";
@@ -72,7 +72,7 @@ void Mcmc::advance(unsigned long nGens) {
             model->updateForRejection();
             }
 
-        if (n == 1 || n == (unsigned long)numCycles || n % sampleFrequency == 0)
+        if (n == 1 || n == (unsigned long)numCycles || n % thinning == 0)
             sample(n, curLnL, curLnP);
     }
 }
@@ -128,7 +128,7 @@ void Mcmc::writeCheckpoint(void) {
     std::string tmp = path + ".tmp";
     std::ofstream os(tmp);
     os << std::setprecision(17);
-    os << gen << ' ' << sampleFrequency << '\n';
+    os << gen << ' ' << thinning << '\n';
     os << curLnL << ' ' << curLnP << '\n';
     model->getRng()->writeState(os);
     model->writeState(os);
@@ -144,9 +144,9 @@ bool Mcmc::loadCheckpoint(void) {
         Msg::error("could not open checkpoint file for -resume: " + path);
     int storedSf;
     is >> gen >> storedSf;
-    if(storedSf != sampleFrequency){
-        Msg::warning("-thinning " + std::to_string(sampleFrequency) + " differs from the pre-resume thinning " + std::to_string(storedSf) + "; forcing " + std::to_string(storedSf));
-        sampleFrequency = storedSf;
+    if(storedSf != thinning){
+        Msg::warning("-thinning " + std::to_string(thinning) + " differs from the pre-resume thinning " + std::to_string(storedSf) + "; forcing " + std::to_string(storedSf));
+        thinning = storedSf;
     }
     is >> curLnL >> curLnP;
     model->getRng()->readState(is);

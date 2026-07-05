@@ -56,7 +56,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     rho             = 1.0;
     seed            = 0;
     seedSet         = false;
-    chainLength     = 100;
+    chainLength     = 1000000;
     numCoupledChains       = 1;
     numRuns         = 4;
     resume          = false;
@@ -64,11 +64,9 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     burninFraction  = 0.25;
     rhatThreshold   = 1.01;
     essThreshold    = 200.0;
-    checkEverySamples = 200;
     maxGen          = 1000000000;
     numCores        = 1;
-    printFrequency  = 1000;
-    sampleFrequency = 1000;
+    thinning        = 1000;
     hessianFile     = "";
     clockModelName  = "ucln";
     nStates         = 4;
@@ -303,7 +301,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 int intVal = std::stoi(val);
 
                 if (arg == "-n")        chainLength     = intVal;
-                else if (arg == "-thinning") sampleFrequency = intVal;
+                else if (arg == "-thinning") thinning = intVal;
                 else if (arg == "-nc")  numCoupledChains       = intVal;
                 else if (arg == "-cores") { numCores = intVal; coresProvided = true; }
                 else if (arg == "-nstates") { nStates = intVal; nstatesProvided = true; }
@@ -337,9 +335,8 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     if (chainLength < 1)
         Msg::error("Flag \"-n\" must be a positive integer (or \"auto\").");
 
-    if (sampleFrequency < 1)
+    if (thinning < 1)
         Msg::error("Flag \"-thinning\" must be a positive integer.");
-    printFrequency = sampleFrequency;
 
     if (coresProvided == false && numCoupledChains > 1)
         numCores = numCoupledChains;
@@ -449,7 +446,7 @@ void UserSettings::print(void) {
     std::cout << "Chain length:                          " << chainLength << std::endl;
     std::cout << "Coupled chains per run (MC3):          " << numCoupledChains << std::endl;
     std::cout << "Number of cores:                       " << numCores << std::endl;
-    std::cout << "Thinning:       " << sampleFrequency << std::endl;
+    std::cout << "Thinning:       " << thinning << std::endl;
     std::cout << "-----------------------------------------------------------------------" << std::endl;
 
 }

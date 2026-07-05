@@ -27,7 +27,6 @@ class UserSettings {
         double                      getBurninFraction(void) { return burninFraction; }
         double                      getRhatThreshold(void) { return rhatThreshold; }
         double                      getEssThreshold(void) { return essThreshold; }
-        int                         getCheckEverySamples(void) { return checkEverySamples; }
         unsigned long               getMaxGen(void) { return maxGen; }
         int                         getNumCores(void) { return numCores; }
         std::string                 getTreeOutput(void) { return treeOut; }
@@ -58,8 +57,7 @@ class UserSettings {
         double                      getRho(void) { return rho; }
         unsigned int                getSeed(void) { return seed; }
         bool                        getSeedSet(void) { return seedSet; }
-        int                         getPrintFrequency(void) { return printFrequency; }
-        int                         getSampleFrequency(void) { return sampleFrequency; }
+        int                         getThinning(void) { return thinning; }
         std::string                 getHessianFile(void) { return hessianFile; }
         std::string                 getClockModelName(void) { return clockModelName; }
         const std::vector<int>&     getClockGroups(void) { return clockGroups; }
@@ -116,11 +114,9 @@ class UserSettings {
         double                      burninFraction;
         double                      rhatThreshold;
         double                      essThreshold;
-        int                         checkEverySamples;
         unsigned long               maxGen;
         int                         numCores;
-        int                         printFrequency;
-        int                         sampleFrequency;
+        int                         thinning;
         std::string                 hessianFile;
         std::string                 clockModelName;
         std::vector<int>            clockGroups;

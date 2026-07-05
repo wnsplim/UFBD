@@ -18,8 +18,7 @@
 #include <iostream>
 #include <sstream>
 
-MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int pf, int sf, std::vector<PhylogeneticModel*> m, unsigned int masterSeed) : numCycles(ng), printFrequency(pf),
-    sampleFrequency(sf),
+MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int thin, std::vector<PhylogeneticModel*> m, unsigned int masterSeed) : numCycles(ng), thinning(thin),
     models(m),
     numModels(models.size()),
     coldModelIdx(-1),
@@ -176,7 +175,7 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
             }
         }
         
-        if (n % printFrequency == 0){
+        if (n % thinning == 0){
             std::cout << std::fixed << std::setprecision(2);
             const size_t numAccepted = std::count(recentAcceptRej.begin(), recentAcceptRej.end(), true);
             const double acceptanceRate = static_cast<double>(numAccepted) / recentAcceptRej.size();
@@ -218,7 +217,7 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
         if (recentAcceptRej.size() > 10000)
             recentAcceptRej.pop_front();
         
-        if (n == 1 || n == numCycles || n % sampleFrequency == 0 )
+        if (n == 1 || n == numCycles || n % thinning == 0 )
             sample(n);
     }
 }
@@ -266,7 +265,7 @@ void MetropolisCoupledMcmc::writeCheckpoint(void) {
     std::string tmp = path + ".tmp";
     std::ofstream os(tmp);
     os << std::setprecision(17);
-    os << gen << ' ' << sampleFrequency << ' ' << deltaT << ' ' << numModels << '\n';
+    os << gen << ' ' << thinning << ' ' << deltaT << ' ' << numModels << '\n';
     for(int i = 0; i < numModels; i++)
         os << indices[i] << ' ';
     os << '\n';
@@ -289,9 +288,9 @@ bool MetropolisCoupledMcmc::loadCheckpoint(void) {
         Msg::error("could not open checkpoint file for -resume: " + path);
     int nm, storedSf;
     is >> gen >> storedSf >> deltaT >> nm;
-    if(storedSf != sampleFrequency){
-        Msg::warning("-thinning " + std::to_string(sampleFrequency) + " differs from the pre-resume thinning " + std::to_string(storedSf) + "; forcing " + std::to_string(storedSf));
-        sampleFrequency = storedSf;
+    if(storedSf != thinning){
+        Msg::warning("-thinning " + std::to_string(thinning) + " differs from the pre-resume thinning " + std::to_string(storedSf) + "; forcing " + std::to_string(storedSf));
+        thinning = storedSf;
     }
     indices.assign(nm, 0);
     coldModelIdx = -1;

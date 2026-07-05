@@ -15,7 +15,7 @@ class PhylogeneticModel;
 class MetropolisCoupledMcmc : public ChainRunner {
     public:
                                             MetropolisCoupledMcmc(void) = delete;
-                                            MetropolisCoupledMcmc(unsigned long ng, int pf, int sf, std::vector<PhylogeneticModel*> m, unsigned int masterSeed);
+                                            MetropolisCoupledMcmc(unsigned long ng, int thin, std::vector<PhylogeneticModel*> m, unsigned int masterSeed);
                                             ~MetropolisCoupledMcmc(void);
         void                                run(void);
         void                                init(void);
@@ -62,8 +62,7 @@ class MetropolisCoupledMcmc : public ChainRunner {
         double                              deltaT;
         int                                 coldModelIdx;
         int                                 numModels;
-        int                                 printFrequency;
-        int                                 sampleFrequency;
+        int                                 thinning;
         unsigned long                       gen;
         std::vector<std::vector<double>>    traceCols;
         std::vector<std::string>            traceNms;

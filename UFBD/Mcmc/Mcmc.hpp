@@ -11,7 +11,7 @@ class PhylogeneticModel;
 class Mcmc : public ChainRunner {
     public:
                                 Mcmc(void) = delete;
-                                Mcmc(int ng, int pf, int sf, PhylogeneticModel* m);
+                                Mcmc(int ng, int thin, PhylogeneticModel* m);
         void                    run(void);
         void                    init(void);
         void                    advance(unsigned long nGens);
@@ -33,8 +33,7 @@ class Mcmc : public ChainRunner {
         std::string             paramOut;
         bool                    writeTrees;
         int                     numCycles;
-        int                     printFrequency;
-        int                     sampleFrequency;
+        int                     thinning;
         unsigned long           gen;
         double                  curLnL;
         double                  curLnP;
