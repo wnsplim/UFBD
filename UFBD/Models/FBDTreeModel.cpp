@@ -446,20 +446,51 @@ double FBDTreeModel::doTurnoverMove(void){
     return lnH;
 }
 
-double FBDTreeModel::backboneLineages(double z){
-    int younger = (int)(std::lower_bound(sortedYounger.begin(), sortedYounger.end(), z) - sortedYounger.begin());
-    int older   = (int)(std::upper_bound(sortedOlder.begin(), sortedOlder.end(), z) - sortedOlder.begin());
-    double c = (double)(younger - older);
-    if(originAge != nullptr){
-        Tree* t = parameterTree->getTree();
-        double x0 = originAge->getValue();
-        if(t->getNumBackbone() == 0){
-            if(z >= x0) c += 1.0;
-        }else if(t->getCrown()->getTime() < z && z < x0){
-            c += 1.0;
+double FBDTreeModel::cladeBackboneLineages(int i, double z){
+    Tree* tree = parameterTree->getTree();
+    if(eulerBuilt == false)
+        buildEulerIndex();
+    Node* crown = unresolvedFossils->getCrownNode(i);
+    bool stem = unresolvedFossils->getIsStem(i);
+    bool total = (unresolvedFossils->getIsCrown(i) == false && stem == false);
+    double count = 0.0;
+    if(stem == false && crown == tree->getCrown()){
+        int younger = (int)(std::lower_bound(sortedYounger.begin(), sortedYounger.end(), z) - sortedYounger.begin());
+        int older   = (int)(std::upper_bound(sortedOlder.begin(), sortedOlder.end(), z) - sortedOlder.begin());
+        count += (double)(younger - older);
+    }else{
+        int lo = subPre[crown->getOffset()];
+        int hi = lo + subSize[crown->getOffset()];
+        for(int k = lo; k < hi; k++){
+            Node* n = nodesByPre[k];
+            if(n == tree->getRoot())
+                continue;
+            Node* anc = n->getAncestor();
+            if(n->getTime() < z && z < anc->getTime()){
+                bool inZone;
+                if(stem){
+                    inZone = (n == crown);
+                }else{
+                    inZone = inSub(anc, crown);
+                    if(inZone == false && total && n == crown)
+                        inZone = true;
+                }
+                if(inZone)
+                    count++;
+            }
         }
     }
-    return (c < 1.0) ? 1.0 : c;
+    if((total || stem) && crown == tree->getCrown() && originAge != nullptr){
+        double x0 = originAge->getValue();
+        if(tree->getNumBackbone() == 0){
+            if(z >= x0)
+                count++;
+        }else{
+            if(tree->getCrown()->getTime() < z && z < x0)
+                count++;
+        }
+    }
+    return count;
 }
 
 double FBDTreeModel::slabAntideriv(double z, int k){
@@ -487,13 +518,13 @@ double FBDTreeModel::jointRateFossilProposal(int i, bool doDraw, bool& saOut, do
         double a = bpts[j], b = bpts[j+1];
         if(b - a <= 0.0) continue;
         int k = findIndex(0.5*(a+b));
-        double g = backboneLineages(0.5*(a+b));
+        double g = cladeBackboneLineages(i, 0.5*(a+b));
         double m = g * (slabAntideriv(b,k) - slabAntideriv(a,k));
         if(m < 0.0) m = 0.0;
         mass.push_back(m); pa.push_back(a); pb.push_back(b); pk.push_back(k);
         sumMass += m;
     }
-    double atom = (unresolvedFossils->isUE(i) || lo > y) ? 0.0 : backboneLineages(y);
+    double atom = (unresolvedFossils->isUE(i) || lo > y) ? 0.0 : cladeBackboneLineages(i, y);
     double slab = pfac * sumMass;
     double tot = atom + slab;
 
@@ -501,7 +532,7 @@ double FBDTreeModel::jointRateFossilProposal(int i, bool doDraw, bool& saOut, do
         if(unresolvedFossils->isSA(i))
             return std::log(atom / tot);
         double z = unresolvedFossils->getAttachAge(i);
-        double dens = pfac * 2.0 * lambdaAt(findIndex(z)) * std::exp(lnD(z)) * backboneLineages(z);
+        double dens = pfac * 2.0 * lambdaAt(findIndex(z)) * std::exp(lnD(z)) * cladeBackboneLineages(i, z);
         return std::log(dens / tot);
     }
     if(rng.uniformRv() < atom / tot){
@@ -521,7 +552,7 @@ double FBDTreeModel::jointRateFossilProposal(int i, bool doDraw, bool& saOut, do
     if(z <= pa[sel]) z = pa[sel] + 1e-9;
     if(z >= pb[sel]) z = pb[sel] - 1e-9;
     saOut = false; zOut = z;
-    double dens = pfac * 2.0 * lambdaAt(findIndex(z)) * std::exp(lnD(z)) * backboneLineages(z);
+    double dens = pfac * 2.0 * lambdaAt(findIndex(z)) * std::exp(lnD(z)) * cladeBackboneLineages(i, z);
     return std::log(dens / tot);
 }
 
@@ -1065,43 +1096,8 @@ double FBDTreeModel::computeGamma(double z, int i){
     Node* crown = unresolvedFossils->getCrownNode(i);
     bool stem = unresolvedFossils->getIsStem(i);
     bool total = (unresolvedFossils->getIsCrown(i) == false && stem == false);
-    double count = 0.0;
-    if(stem == false && crown == tree->getCrown()){
-        int younger = (int)(std::lower_bound(sortedYounger.begin(), sortedYounger.end(), z) - sortedYounger.begin());
-        int older   = (int)(std::upper_bound(sortedOlder.begin(), sortedOlder.end(), z) - sortedOlder.begin());
-        count += (double)(younger - older);
-    }else{
-        int lo = subPre[crown->getOffset()];
-        int hi = lo + subSize[crown->getOffset()];
-        for(int k = lo; k < hi; k++){
-            Node* n = nodesByPre[k];
-            if(n == tree->getRoot())
-                continue;
-            Node* anc = n->getAncestor();
-            if(n->getTime() < z && z < anc->getTime()){
-                bool inZone;
-                if(stem){
-                    inZone = (n == crown);
-                }else{
-                    inZone = inSub(anc, crown);
-                    if(inZone == false && total && n == crown)
-                        inZone = true;
-                }
-                if(inZone)
-                    count++;
-            }
-        }
-    }
-    if((total || stem) && crown == tree->getCrown() && originAge != nullptr){
-        double x0 = originAge->getValue();
-        if(tree->getNumBackbone() == 0){
-            if(z >= x0)
-                count++;
-        }else{
-            if(tree->getCrown()->getTime() < z && z < x0)
-                count++;
-        }
-    }
+    double count = cladeBackboneLineages(i, z);
+
     bool SymmetryCorrection = (UserSettings::userSettings().getModel() == Model::UFBD);
     bool focalIsTip = (unresolvedFossils->isSA(i) == false);
     int numFossils = unresolvedFossils->getNumFossils();

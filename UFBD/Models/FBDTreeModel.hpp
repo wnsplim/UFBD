@@ -72,7 +72,7 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      doTurnoverMove(void);
         double                      jointRateFossilMove(void);
         double                      jointRateFossilProposal(int i, bool doDraw, bool& saOut, double& zOut);
-        double                      backboneLineages(double z);
+        double                      cladeBackboneLineages(int i, double z);
         double                      slabAntideriv(double z, int k);
         std::vector<ParameterDouble*>* pickIidRateVector(void);
         void                        enumeratePrunableRoots(Tree* t, std::vector<Node*>& roots);
