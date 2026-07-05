@@ -32,6 +32,8 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     lastWasJointRate = false;
     jointRateParam = nullptr;
     jointRateStep = 0.5;
+    jrAttW = 0;
+    jrAccW = 0;
     turnoverStep = 0.1;
     frAccW = frAttW = 0;
     upDownStep = 0.1;
@@ -556,6 +558,17 @@ double FBDTreeModel::jointRateFossilProposal(int i, bool doDraw, bool& saOut, do
     return std::log(dens / tot);
 }
 
+void FBDTreeModel::adaptJointRate(void){
+    if(jrAttW < 200)
+        return;
+    double ar = (double)jrAccW / (double)jrAttW;
+    jointRateStep *= std::exp(ar - 0.3);
+    if(jointRateStep < 1e-3) jointRateStep = 1e-3;
+    if(jointRateStep > 10.0) jointRateStep = 10.0;
+    jrAccW = 0;
+    jrAttW = 0;
+}
+
 double FBDTreeModel::jointRateFossilMove(void){
     std::vector<ParameterDouble*> allr;
     for(ParameterDouble* p : lambda) allr.push_back(p);
@@ -600,7 +613,7 @@ double FBDTreeModel::update(void){
                 || (muField == nullptr && mu.size() >= 2)
                 || (psiField == nullptr && psi.size() >= 2);
     static int jointRateGate = [](){ const char* e = getenv("FBD_JOINT_RATE"); return e ? atoi(e) : 0; }();
-    if(jointRateGate && haveIid && unresolvedFossils != nullptr && rng.uniformRv() < 0.30){
+    if(jointRateGate && haveIid && unresolvedFossils != nullptr && rng.uniformRv() < 0.05 + 0.25 * std::min(jointRateStep / 0.3, 1.0)){
         double r = jointRateFossilMove();
         RandomVariable::setActiveInstance(prevRng);
         return r;
@@ -701,6 +714,7 @@ void FBDTreeModel::updateForAcceptance(void){
     if(lastWasJointRate){
         jointRateParam->commitProposed();
         unresolvedFossils->updateForAcceptance();
+        jrAccW++; jrAttW++; adaptJointRate();
         return;
     }
     if(lastWasFbdRate){
@@ -739,6 +753,7 @@ void FBDTreeModel::updateForRejection(void){
     if(lastWasJointRate){
         jointRateParam->restoreProposed();
         unresolvedFossils->updateForRejection();
+        jrAttW++; adaptJointRate();
         return;
     }
     if(lastWasFbdRate){

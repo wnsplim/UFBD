@@ -127,6 +127,9 @@ class FBDTreeModel : public PhylogeneticModel {
         bool                        lastWasJointRate;
         ParameterDouble*            jointRateParam;
         double                      jointRateStep;
+        long                        jrAttW;
+        long                        jrAccW;
+        void                        adaptJointRate(void);
         double                      turnoverStep;
         long                        frAccW;
         long                        frAttW;

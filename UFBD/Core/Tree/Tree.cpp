@@ -406,7 +406,6 @@ bool Tree::isBackboneNode(Node* n){
 }
 
 int Tree::getNumBackbone(void){
-    initializeDownPassSequence();
     int idx = 0;
     for(Node* n : downPassSequence)
         if(n->getIsTip() == true)
@@ -778,8 +777,12 @@ void Tree::writeState(std::ostream& os) {
            << ' ' << n->getIndex() << ' ' << n->getTime();
         std::set<Node*>& nb = n->getNeighbors();
         os << ' ' << nb.size();
+        std::vector<int> nbOff;
         for (Node* m : nb)
-            os << ' ' << m->getOffset();
+            nbOff.push_back(m->getOffset());
+        std::sort(nbOff.begin(), nbOff.end());
+        for (int off : nbOff)
+            os << ' ' << off;
         const std::string& nm = n->getName();
         os << ' ' << (nm.empty() ? "*" : nm) << '\n';
         }
