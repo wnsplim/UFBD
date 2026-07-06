@@ -2,6 +2,7 @@
 #define FBDTreeModel_hpp
 
 #include "Parameter.hpp"
+#include "ParameterBranchRates.hpp"
 #include "ParameterTree.hpp"
 #include "ParameterUnresolvedFossils.hpp"
 #include "PhylogeneticModel.hpp"
@@ -71,7 +72,7 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      doRateVectorScale(void);
         double                      doRateShrinkExpand(void);
         double                      doTurnoverMove(void);
-        double                      jointRateFossilMove(void);
+        double                      jointRateFossilMove(ParameterDouble* p);
         double                      jointRateFossilProposal(int i, bool doDraw, bool& saOut, double& zOut);
         double                      cladeBackboneLineages(int i, double z);
         double                      slabAntideriv(double z, int k);
@@ -129,6 +130,11 @@ class FBDTreeModel : public PhylogeneticModel {
         long                        jrAttW;
         long                        jrAccW;
         void                        adaptJointRate(void);
+        AdaptiveMixSelector         jrSel;
+        int                         jrOp;
+        double                      jrLogC;
+        ParameterDouble*            jrRateParam;
+        double                      jrRateOld;
         double                      turnoverStep;
         long                        frAccW;
         long                        frAttW;

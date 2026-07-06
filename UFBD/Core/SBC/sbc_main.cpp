@@ -60,6 +60,8 @@ int main(int argc, const char* argv[]){
     cfg.condEvent = s.getConditioningEvent();
     cfg.rho = s.getRho();
     cfg.bb = bb;
+    if(cfg.originConditioning == false && cfg.bb < 1.0)
+        Msg::error("SBC: crown conditioning requires bb=1. Use origin conditioning for bb<1.");
     cfg.intervalStart.push_back(0.0);
     for(double t : s.getSkylineTimes())
         cfg.intervalStart.push_back(t);

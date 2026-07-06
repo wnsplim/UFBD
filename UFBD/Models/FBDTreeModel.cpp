@@ -34,6 +34,10 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     jointRateStep = 0.5;
     jrAttW = 0;
     jrAccW = 0;
+    jrSel.init(2);
+    jrOp = -1;
+    jrRateParam = nullptr;
+    jrRateOld = 0.0;
     turnoverStep = 0.1;
     frAccW = frAttW = 0;
     upDownStep = 0.1;
@@ -582,6 +586,7 @@ double FBDTreeModel::jointRateFossilProposal(int i, bool doDraw, bool& saOut, do
     return std::log(dens / tot);
 }
 
+
 void FBDTreeModel::adaptJointRate(void){
     if(jrAttW < 200)
         return;
@@ -593,13 +598,7 @@ void FBDTreeModel::adaptJointRate(void){
     jrAttW = 0;
 }
 
-double FBDTreeModel::jointRateFossilMove(void){
-    std::vector<ParameterDouble*> allr;
-    for(ParameterDouble* p : lambda) allr.push_back(p);
-    for(ParameterDouble* p : mu)     allr.push_back(p);
-    for(ParameterDouble* p : psi)    allr.push_back(p);
-    if(allr.empty())
-        return -std::numeric_limits<double>::infinity();
+double FBDTreeModel::jointRateFossilMove(ParameterDouble* p){
     prepareIntervals();
     updateGammaCache();
     int nf = unresolvedFossils->getNumFossils();
@@ -609,9 +608,9 @@ double FBDTreeModel::jointRateFossilMove(void){
     for(int i = 0; i < nf; i++)
         if(i != spine)
             logqOld += jointRateFossilProposal(i, false, s, z);
-    ParameterDouble* p = allr[(int)(rng.uniformRv() * allr.size())];
     double c = std::exp(jointRateStep * (rng.uniformRv() - 0.5));
     p->scaleProposed(c);
+    jrLogC = std::log(c);
     prepareIntervals();
     unresolvedFossils->beginBulkMove();
     double logqNew = 0.0;
@@ -637,11 +636,8 @@ double FBDTreeModel::update(void){
                 || (muField == nullptr && mu.size() >= 2)
                 || (psiField == nullptr && psi.size() >= 2);
     static int jointRateGate = [](){ const char* e = getenv("FBD_JOINT_RATE"); return e ? atoi(e) : 0; }();
-    if(jointRateGate && haveIid && unresolvedFossils != nullptr && rng.uniformRv() < 0.05 + 0.25 * std::min(jointRateStep / 0.3, 1.0)){
-        double r = jointRateFossilMove();
-        RandomVariable::setActiveInstance(prevRng);
-        return r;
-    }
+    static int jointAdaptFreq = [](){ const char* e = getenv("FBD_JOINT_ADAPT"); return e ? atoi(e) : 1; }();
+    jrOp = -1;
     if(haveIid && rng.uniformRv() < 0.20){
         double r = (rng.uniformRv() < 0.5) ? doRateVectorScale() : doRateShrinkExpand();
         RandomVariable::setActiveInstance(prevRng);
@@ -728,6 +724,23 @@ double FBDTreeModel::update(void){
             return r;
         }
     }
+    if(jointRateGate && unresolvedFossils != nullptr && unresolvedFossils->getNumFossils() > 0){
+        bool isRate = false;
+        for(ParameterDouble* q : lambda) if(q == updatedParameter){ isRate = true; break; }
+        if(!isRate) for(ParameterDouble* q : mu)  if(q == updatedParameter){ isRate = true; break; }
+        if(!isRate) for(ParameterDouble* q : psi) if(q == updatedParameter){ isRate = true; break; }
+        if(isRate){
+            ParameterDouble* rp = static_cast<ParameterDouble*>(updatedParameter);
+            bool doJoint = jointAdaptFreq ? ((jrOp = jrSel.pick(rng)) == 1) : true;
+            if(doJoint){
+                double r = jointRateFossilMove(rp);
+                RandomVariable::setActiveInstance(prevRng);
+                return r;
+            }
+            jrRateParam = rp;
+            jrRateOld = std::log(rp->getValue());
+        }
+    }
     double ratio = updatedParameter->update();
 
     RandomVariable::setActiveInstance(prevRng);
@@ -739,6 +752,8 @@ void FBDTreeModel::updateForAcceptance(void){
         jointRateParam->commitProposed();
         unresolvedFossils->updateForAcceptance();
         jrAccW++; jrAttW++; adaptJointRate();
+        if(jrOp == 1)
+            jrSel.record(1, jrLogC * jrLogC, (double)std::max(1, unresolvedFossils->getNumFossils()));
         return;
     }
     if(lastWasFbdRate){
@@ -769,6 +784,10 @@ void FBDTreeModel::updateForAcceptance(void){
     }else{
         updatedParameter->updateForAcceptance();
     }
+    if(jrOp == 0){
+        double d = std::log(jrRateParam->getValue()) - jrRateOld;
+        jrSel.record(0, d * d, 1.0);
+    }
     if(isResolved && originAge != nullptr)
         parameterTree->getTree()->getRoot()->setTime(originAge->getValue());
 }
@@ -778,6 +797,8 @@ void FBDTreeModel::updateForRejection(void){
         jointRateParam->restoreProposed();
         unresolvedFossils->updateForRejection();
         jrAttW++; adaptJointRate();
+        if(jrOp == 1)
+            jrSel.record(1, 0.0, (double)std::max(1, unresolvedFossils->getNumFossils()));
         return;
     }
     if(lastWasFbdRate){
@@ -806,6 +827,8 @@ void FBDTreeModel::updateForRejection(void){
     }else{
         updatedParameter->updateForRejection();
     }
+    if(jrOp == 0)
+        jrSel.record(0, 0.0, 1.0);
     if(isResolved && originAge != nullptr)
         parameterTree->getTree()->getRoot()->setTime(originAge->getValue());
 }
@@ -815,6 +838,8 @@ void FBDTreeModel::writeState(std::ostream& os){
         p->writeState(os);
     os << rateVecStep << ' ' << shrinkStep << ' ' << turnoverStep << ' ' << upDownStep << ' ' << upDownTotal << '\n';
     os << rvAccW << ' ' << rvAttW << ' ' << seAccW << ' ' << seAttW << ' ' << frAccW << ' ' << frAttW << '\n';
+    os << jointRateStep << ' ' << jrAccW << ' ' << jrAttW << '\n';
+    jrSel.writeState(os);
     Serialize::writeBoolDeque(os, upDownRecent);
 }
 
@@ -823,6 +848,8 @@ void FBDTreeModel::readState(std::istream& is){
         p->readState(is);
     is >> rateVecStep >> shrinkStep >> turnoverStep >> upDownStep >> upDownTotal;
     is >> rvAccW >> rvAttW >> seAccW >> seAttW >> frAccW >> frAttW;
+    is >> jointRateStep >> jrAccW >> jrAttW;
+    jrSel.readState(is);
     Serialize::readBoolDeque(is, upDownRecent);
     cacheInit = false;
 }

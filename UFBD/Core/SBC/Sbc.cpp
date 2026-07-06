@@ -192,15 +192,14 @@ void Sbc::runInference(void){
     double burnFrac = us.getBurninFraction();
     std::map<std::string, std::vector<double>> ranks;
     std::map<std::string, long> cov50, cov90;
-    std::vector<int> repNExt, repNFoss, repNBackbone;
     int nUnconverged = 0;
+    std::ofstream rankOut;
+    std::vector<std::string> outCols;
+    bool liveHeader = false;
 
     for(int rep = 0; rep < cfg.numReps; rep++){
         SimParams truth = drawParams();
         SimResult r = sim.simulate(truth);
-        repNExt.push_back(r.numExtantSampled);
-        repNFoss.push_back(r.numFossils);
-        repNBackbone.push_back(r.numBackbone);
 
         Tree* tree = new Tree(r.backboneNewick);
         std::vector<std::string> taxa;
@@ -238,6 +237,7 @@ void Sbc::runInference(void){
             nUnconverged++;
 
         const std::vector<std::string>& names = chains[0]->traceNames();
+        std::map<std::string, double> thisRep;
         for(size_t c = 0; c < names.size(); c++){
             double t = truthForName(names[c], truth, cfg.originConditioning, (double)r.numSA);
             if(std::isnan(t))
@@ -258,8 +258,26 @@ void Sbc::runInference(void){
             }
             double rank = ((double)below + rng->uniformRv() * (double)equal) / (double)s.size();
             ranks[names[c]].push_back(rank);
+            thisRep[names[c]] = rank;
             if(t >= quantile(s, 0.25) && t <= quantile(s, 0.75)) cov50[names[c]]++;
             if(t >= quantile(s, 0.05) && t <= quantile(s, 0.95)) cov90[names[c]]++;
+        }
+        if(cfg.dumpPrefix.empty() == false){
+            if(liveHeader == false){
+                for(size_t c = 0; c < names.size(); c++)
+                    if(thisRep.count(names[c])) outCols.push_back(names[c]);
+                rankOut.open(cfg.dumpPrefix + "_ranks.tsv");
+                for(size_t c = 0; c < outCols.size(); c++)
+                    rankOut << (c ? "\t" : "") << outCols[c];
+                rankOut << "\n";
+                liveHeader = true;
+            }
+            for(size_t c = 0; c < outCols.size(); c++){
+                std::map<std::string, double>::iterator f = thisRep.find(outCols[c]);
+                rankOut << (c ? "\t" : "") << (f != thisRep.end() ? f->second : std::numeric_limits<double>::quiet_NaN());
+            }
+            rankOut << "\n";
+            rankOut.flush();
         }
         for(ChainRunner* ch : chains) delete ch;
         for(FBDTreeModel* mo : models) delete mo;
@@ -287,21 +305,6 @@ void Sbc::runInference(void){
         printf("  %-12s %8.4f %8.4f %7.4f %7.4f\n", it->first.c_str(), D, ksp, c50, c90);
     }
 
-    if(cfg.dumpPrefix.empty() == false){
-        std::ofstream out(cfg.dumpPrefix + "_ranks.tsv");
-        std::vector<std::string> cols;
-        for(std::map<std::string, std::vector<double>>::iterator it = ranks.begin(); it != ranks.end(); ++it)
-            cols.push_back(it->first);
-        out << "nExt\tnFoss\tnBackbone";
-        for(size_t c = 0; c < cols.size(); c++)
-            out << "\t" << cols[c];
-        out << "\n";
-        for(int rep = 0; rep < cfg.numReps; rep++){
-            out << repNExt[rep] << "\t" << repNFoss[rep] << "\t" << repNBackbone[rep];
-            for(size_t c = 0; c < cols.size(); c++)
-                out << "\t" << ranks[cols[c]][rep];
-            out << "\n";
-        }
-        printf("  wrote ranks to %s_ranks.tsv\n", cfg.dumpPrefix.c_str());
-    }
+    if(cfg.dumpPrefix.empty() == false && liveHeader)
+        printf("  ranks streamed to %s_ranks.tsv\n", cfg.dumpPrefix.c_str());
 }
