@@ -134,6 +134,7 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
     std::string worstRhatName;
     double minEss = -1.0;
     std::string minEssName;
+    double minBulkEss = -1.0;
     int nBelow = 0;
     std::vector<std::string> bad;
 
@@ -146,6 +147,7 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
         }
         Convergence::Diagnostic d = Convergence::diagnose(chains);
         if(multiChain && std::isnan(d.rhat) == false && d.rhat > worstRhat){ worstRhat = d.rhat; worstRhatName = names[p]; }
+        if(std::isnan(d.bulkEss) == false && (minBulkEss < 0.0 || d.bulkEss < minBulkEss)) minBulkEss = d.bulkEss;
         double worstChainEss = -1.0;
         for(const std::vector<double>& ch : chains){
             Convergence::Diagnostic dc = Convergence::diagnose(std::vector<std::vector<double>>(1, ch));
@@ -163,6 +165,8 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
             if((int)bad.size() < 8) bad.push_back(names[p]);
         }
     }
+
+    lastMaxRhat = worstRhat; lastMinChainEss = minEss; lastMinBulkEss = minBulkEss;
 
     std::cout << std::fixed;
     std::cout << "gen " << gen;

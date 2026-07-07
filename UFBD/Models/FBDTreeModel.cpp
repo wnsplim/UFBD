@@ -53,11 +53,11 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     Conditioning condPoint = UserSettings::userSettings().getConditioning();
     ConditioningEvent condEvent = UserSettings::userSettings().getConditioningEvent();
     if(condPoint == Conditioning::CROWN && numBackbone < 2)
-        Msg::error("crown conditioning requires at least 2 backbone tips, but the backbone tree has " + std::to_string(numBackbone) + ".");
+        Msg::error("Crown conditioning requires at least 2 backbone tips, but the backbone tree has " + std::to_string(numBackbone) + ".");
     if(condEvent == ConditioningEvent::SURVIVAL && (numBackbone + numUE) < 1)
-        Msg::error("survival conditioning requires at least 1 extant taxon.");
+        Msg::error("Survival conditioning requires at least 1 extant taxon.");
     if(condEvent == ConditioningEvent::EXTINCT && (numBackbone + numUE) > 0)
-        Msg::error("extinct conditioning requires 0 extant taxa, but the data has " + std::to_string(numBackbone + numUE) + ".");
+        Msg::error("Extinct conditioning requires 0 extant taxa, but the data has " + std::to_string(numBackbone + numUE) + ".");
 
     originAge = nullptr;
     if(UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN){

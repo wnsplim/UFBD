@@ -235,6 +235,7 @@ void Sbc::runInference(void){
         ConvergenceRunner cr(chains, cfg.dumpPrefix + "_run", cfg.dumpPrefix + "_runtree");
         if(cr.run() == false)
             nUnconverged++;
+        double repMaxRhat = cr.getMaxRhat(), repMinChainEss = cr.getMinChainEss(), repBulkEss = cr.getMinBulkEss();
 
         const std::vector<std::string>& names = chains[0]->traceNames();
         std::map<std::string, double> thisRep;
@@ -269,14 +270,14 @@ void Sbc::runInference(void){
                 rankOut.open(cfg.dumpPrefix + "_ranks.tsv");
                 for(size_t c = 0; c < outCols.size(); c++)
                     rankOut << (c ? "\t" : "") << outCols[c];
-                rankOut << "\n";
+                rankOut << "\tminChainESS\tbulkESS\tmaxRhat\n";
                 liveHeader = true;
             }
             for(size_t c = 0; c < outCols.size(); c++){
                 std::map<std::string, double>::iterator f = thisRep.find(outCols[c]);
                 rankOut << (c ? "\t" : "") << (f != thisRep.end() ? f->second : std::numeric_limits<double>::quiet_NaN());
             }
-            rankOut << "\n";
+            rankOut << "\t" << repMinChainEss << "\t" << repBulkEss << "\t" << repMaxRhat << "\n";
             rankOut.flush();
         }
         for(ChainRunner* ch : chains) delete ch;
