@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <complex>
 #include <utility>
 
 namespace {
@@ -82,11 +83,44 @@ double rhatOf(const Chains& chains){
     return std::sqrt(varPlus / W);
 }
 
-double autocov(const std::vector<double>& x, double mean, int t){
+void fft(std::vector<std::complex<double>>& a, bool invert){
+    int n = (int)a.size();
+    for(int i = 1, j = 0; i < n; i++){
+        int bit = n >> 1;
+        for(; j & bit; bit >>= 1) j ^= bit;
+        j ^= bit;
+        if(i < j) std::swap(a[i], a[j]);
+    }
+    for(int len = 2; len <= n; len <<= 1){
+        double ang = 2.0 * std::acos(-1.0) / len * (invert ? 1.0 : -1.0);
+        std::complex<double> wlen(std::cos(ang), std::sin(ang));
+        for(int i = 0; i < n; i += len){
+            std::complex<double> w(1.0, 0.0);
+            for(int k = 0; k < len / 2; k++){
+                std::complex<double> u = a[i + k];
+                std::complex<double> v = a[i + k + len / 2] * w;
+                a[i + k] = u + v;
+                a[i + k + len / 2] = u - v;
+                w *= wlen;
+            }
+        }
+    }
+    if(invert)
+        for(std::complex<double>& x : a) x /= (double)n;
+}
+
+std::vector<double> autocovSeq(const std::vector<double>& x, double mean){
     int n = (int)x.size();
-    double s = 0.0;
-    for(int i = 0; i + t < n; i++) s += (x[i] - mean) * (x[i+t] - mean);
-    return s / n;
+    int L = 1;
+    while(L < 2 * n) L <<= 1;
+    std::vector<std::complex<double>> f(L, std::complex<double>(0.0, 0.0));
+    for(int i = 0; i < n; i++) f[i] = std::complex<double>(x[i] - mean, 0.0);
+    fft(f, false);
+    for(int i = 0; i < L; i++) f[i] = std::complex<double>(std::norm(f[i]), 0.0);
+    fft(f, true);
+    std::vector<double> c(n);
+    for(int t = 0; t < n; t++) c[t] = f[t].real() / (double)n;
+    return c;
 }
 
 double multiChainEss(const Chains& chains){
@@ -95,13 +129,13 @@ double multiChainEss(const Chains& chains){
     int n = (int)chains[0].size();
     if(n < 4) return (double)(m * n);
     std::vector<double> means(m), vars(m);
+    std::vector<std::vector<double>> acov(m);
     for(int j = 0; j < m; j++){
         double s = 0.0;
         for(double v : chains[j]) s += v;
         means[j] = s / n;
-        double s2 = 0.0;
-        for(double v : chains[j]) s2 += (v - means[j]) * (v - means[j]);
-        vars[j] = s2 / (n - 1);
+        acov[j] = autocovSeq(chains[j], means[j]);
+        vars[j] = acov[j][0] * (double)n / (n - 1);
     }
     double grand = 0.0;
     for(double mu : means) grand += mu;
@@ -117,7 +151,7 @@ double multiChainEss(const Chains& chains){
 
     auto rhoHat = [&](int t) -> double {
         double meanAcov = 0.0;
-        for(int j = 0; j < m; j++) meanAcov += autocov(chains[j], means[j], t);
+        for(int j = 0; j < m; j++) meanAcov += acov[j][t];
         meanAcov /= m;
         return 1.0 - (W - meanAcov) / varPlus;
     };

@@ -201,6 +201,27 @@ void Sbc::runInference(void){
         SimParams truth = drawParams();
         SimResult r = sim.simulate(truth);
 
+        std::string repBase = cfg.dumpPrefix + "_rep" + std::to_string(rep);
+        if(cfg.dumpPrefix.empty() == false){
+            const char* asg = cfg.originConditioning ? "TOTAL" : "CROWN";
+            std::ofstream tf(repBase + ".tree");   tf << r.backboneNewick << "\n"; tf.close();
+            std::ofstream cf(repBase + ".clades"); cf << "whole\t";
+            for(int i = 1; i <= r.numBackbone; i++) cf << (i > 1 ? "," : "") << "T" << i;
+            cf << "\n"; cf.close();
+            std::ofstream ff(repBase + ".fossils");
+            for(size_t i = 0; i < r.fossilAges.size(); i++)
+                ff << "F" << (i + 1) << '\t' << r.fossilAges[i] << '\t' << r.fossilAges[i] << "\twhole\t" << asg << '\n';
+            for(int i = 0; i < r.numUE; i++)
+                ff << "U" << (i + 1) << "\t0\t0\twhole\t" << asg << '\n';
+            ff.close();
+            std::ofstream xf(repBase + ".truth");
+            for(size_t i = 0; i < truth.lambda.size(); i++) xf << "lambda" << i << "\t" << truth.lambda[i] << "\n";
+            for(size_t i = 0; i < truth.mu.size(); i++)     xf << "mu" << i << "\t" << truth.mu[i] << "\n";
+            for(size_t i = 0; i < truth.psi.size(); i++)    xf << "psi" << i << "\t" << truth.psi[i] << "\n";
+            xf << "x\t" << truth.startAge << "\nnSA\t" << r.numSA << "\n";
+            xf.close();
+        }
+
         Tree* tree = new Tree(r.backboneNewick);
         std::vector<std::string> taxa;
         for(int i = 1; i <= r.numBackbone; i++)
@@ -232,7 +253,7 @@ void Sbc::runInference(void){
             chains.push_back(new Mcmc(ng, thin, model));
         }
         printf("rep %d/%d:\n", rep + 1, cfg.numReps);
-        ConvergenceRunner cr(chains, cfg.dumpPrefix + "_run", cfg.dumpPrefix + "_runtree");
+        ConvergenceRunner cr(chains, repBase + "_run", repBase + "_runtree");
         if(cr.run() == false)
             nUnconverged++;
         double repMaxRhat = cr.getMaxRhat(), repMinChainEss = cr.getMinChainEss(), repBulkEss = cr.getMinBulkEss();
