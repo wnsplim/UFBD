@@ -60,6 +60,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     numCoupledChains       = 1;
     numRuns         = 4;
     resume          = false;
+    arLog           = false;
     autoChainLength = false;
     burninFraction  = 0.25;
     rhatThreshold   = 1.01;
@@ -100,7 +101,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
         "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma",
         "-seq", "-partition", "-ncat", "-datatype", "-model", "-inv", "-freq",
-        "-runs", "-burnin", "-rhat", "-min_ess", "-max_gen", "-resume"
+        "-runs", "-burnin", "-rhat", "-min_ess", "-max_gen", "-resume", "-ar_log"
     };
     std::set<std::string> valueFlags = {
         "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-thinning", "-nc", "-cores",
@@ -130,6 +131,11 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
 
         if (arg == "-resume") {
             resume = true;
+            continue;
+        }
+
+        if (arg == "-ar_log") {
+            arLog = true;
             continue;
         }
 

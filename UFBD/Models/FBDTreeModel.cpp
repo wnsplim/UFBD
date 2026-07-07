@@ -29,15 +29,8 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     shrinkStep = 0.2;
     rvAccW = rvAttW = seAccW = seAttW = 0;
     lastWasFbdRate = false;
-    lastWasJointRate = false;
-    jointRateParam = nullptr;
-    jointRateStep = 0.5;
-    jrAttW = 0;
-    jrAccW = 0;
-    jrSel.init(2);
-    jrOp = -1;
-    jrRateParam = nullptr;
-    jrRateOld = 0.0;
+    lastTreeMove = TM_NONE;
+    for(int i = 0; i < TM_COUNT; i++) tmAcc[i] = tmAtt[i] = 0;
     turnoverStep = 0.1;
     frAccW = frAttW = 0;
     upDownStep = 0.1;
@@ -351,11 +344,18 @@ double FBDTreeModel::lnPriorProbability(void){
 }
 
 void FBDTreeModel::print(void){
+    if(UserSettings::userSettings().getArLog() == false)
+        return;
     for(Parameter* p : parameters){
         if(p != parameterTree)
             std::cout << p->getName() << " (A/R): " << p->getAcceptanceRatio() << "\t";
     }
-    std::cout << "tree (A/R): " << parameterTree->getAcceptanceRatio() << "\tscaleLambda: " << parameterTree->getScaleLambda() << "\n";
+    static const char* tmName[TM_COUNT] = {"NE","WB","WE","treeScale","SARJ","upDown","jointScale","subtree","nodeAge","crown"};
+    std::cout << "tree[";
+    for(int i = 0; i < TM_COUNT; i++)
+        if(tmAtt[i] > 0)
+            std::cout << tmName[i] << ":" << (double)tmAcc[i] / (double)tmAtt[i] << " ";
+    std::cout << "] treeScaleStep: " << parameterTree->getScaleLambda() << "\n";
 }
 
 std::vector<ParameterDouble*>* FBDTreeModel::pickIidRateVector(void){
@@ -523,107 +523,6 @@ double FBDTreeModel::cladeBackboneLineages(int i, double z){
     return count;
 }
 
-double FBDTreeModel::slabAntideriv(double z, int k){
-    double w = (1.0 + c2Vec[k]) * std::exp(c1Vec[k]*(z - intervalStart[k])) + (1.0 - c2Vec[k]);
-    return -8.0 * lambdaAt(k) * std::exp(lnDPrev[k]) / (c1Vec[k]*(1.0 + c2Vec[k])) * (1.0/w);
-}
-
-double FBDTreeModel::jointRateFossilProposal(int i, bool doDraw, bool& saOut, double& zOut){
-    double y = unresolvedFossils->getFossilAge(i);
-    double lo = unresolvedFossils->getMinAttachAge(i);
-    double hi = unresolvedFossils->getMaxAttachAge(i);
-    std::vector<double> bpts;
-    bpts.push_back(lo); bpts.push_back(hi);
-    for(double a : sortedYounger) if(a > lo && a < hi) bpts.push_back(a);
-    for(double a : sortedOlder)   if(a > lo && a < hi) bpts.push_back(a);
-    for(double s : intervalStart) if(s > lo && s < hi) bpts.push_back(s);
-    std::sort(bpts.begin(), bpts.end());
-    bpts.erase(std::unique(bpts.begin(), bpts.end()), bpts.end());
-
-    double pfac = unresolvedFossils->isUE(i) ? 1.0 : calculateP0(y) / std::exp(lnD(y));
-    std::vector<double> mass, pa, pb;
-    std::vector<int> pk;
-    double sumMass = 0.0;
-    for(size_t j = 0; j + 1 < bpts.size(); j++){
-        double a = bpts[j], b = bpts[j+1];
-        if(b - a <= 0.0) continue;
-        int k = findIndex(0.5*(a+b));
-        double g = cladeBackboneLineages(i, 0.5*(a+b));
-        double m = g * (slabAntideriv(b,k) - slabAntideriv(a,k));
-        if(m < 0.0) m = 0.0;
-        mass.push_back(m); pa.push_back(a); pb.push_back(b); pk.push_back(k);
-        sumMass += m;
-    }
-    double atom = (unresolvedFossils->isUE(i) || lo > y) ? 0.0 : cladeBackboneLineages(i, y);
-    double slab = pfac * sumMass;
-    double tot = atom + slab;
-
-    if(doDraw == false){
-        if(unresolvedFossils->isSA(i))
-            return std::log(atom / tot);
-        double z = unresolvedFossils->getAttachAge(i);
-        double dens = pfac * 2.0 * lambdaAt(findIndex(z)) * std::exp(lnD(z)) * cladeBackboneLineages(i, z);
-        return std::log(dens / tot);
-    }
-    if(rng.uniformRv() < atom / tot){
-        saOut = true; zOut = y;
-        return std::log(atom / tot);
-    }
-    double u = rng.uniformRv() * sumMass;
-    double acc = 0.0;
-    int sel = (int)mass.size() - 1;
-    for(size_t j = 0; j < mass.size(); j++){ acc += mass[j]; if(u <= acc){ sel = (int)j; break; } }
-    int k = pk[sel];
-    double Fa = slabAntideriv(pa[sel], k), Fb = slabAntideriv(pb[sel], k);
-    double Ft = Fa + rng.uniformRv() * (Fb - Fa);
-    double C = 8.0 * lambdaAt(k) * std::exp(lnDPrev[k]) / (c1Vec[k]*(1.0 + c2Vec[k]));
-    double w = -C / Ft;
-    double z = intervalStart[k] + std::log((w - (1.0 - c2Vec[k]))/(1.0 + c2Vec[k])) / c1Vec[k];
-    if(z <= pa[sel]) z = pa[sel] + 1e-9;
-    if(z >= pb[sel]) z = pb[sel] - 1e-9;
-    saOut = false; zOut = z;
-    double dens = pfac * 2.0 * lambdaAt(findIndex(z)) * std::exp(lnD(z)) * cladeBackboneLineages(i, z);
-    return std::log(dens / tot);
-}
-
-
-void FBDTreeModel::adaptJointRate(void){
-    if(jrAttW < 200)
-        return;
-    double ar = (double)jrAccW / (double)jrAttW;
-    jointRateStep *= std::exp(ar - 0.3);
-    if(jointRateStep < 1e-3) jointRateStep = 1e-3;
-    if(jointRateStep > 10.0) jointRateStep = 10.0;
-    jrAccW = 0;
-    jrAttW = 0;
-}
-
-double FBDTreeModel::jointRateFossilMove(ParameterDouble* p){
-    prepareIntervals();
-    updateGammaCache();
-    int nf = unresolvedFossils->getNumFossils();
-    bool s; double z;
-    int spine = unresolvedFossils->getSpineIdx();
-    double logqOld = 0.0;
-    for(int i = 0; i < nf; i++)
-        if(i != spine)
-            logqOld += jointRateFossilProposal(i, false, s, z);
-    double c = std::exp(jointRateStep * (rng.uniformRv() - 0.5));
-    p->scaleProposed(c);
-    jrLogC = std::log(c);
-    prepareIntervals();
-    unresolvedFossils->beginBulkMove();
-    double logqNew = 0.0;
-    for(int i = 0; i < nf; i++){
-        if(i == spine) continue;
-        logqNew += jointRateFossilProposal(i, true, s, z);
-        unresolvedFossils->setProposedAttach(i, s ? unresolvedFossils->getFossilAge(i) : z);
-    }
-    lastWasJointRate = true;
-    jointRateParam = p;
-    return std::log(c) + (logqOld - logqNew);
-}
-
 double FBDTreeModel::update(void){
     RandomVariable* prevRng = RandomVariable::getActiveInstance();
     RandomVariable::setActiveInstance(&rng);
@@ -631,13 +530,10 @@ double FBDTreeModel::update(void){
     lastWasJointScale = false;
     lastWasUpDown = false;
     lastWasRateVec = false;
-    lastWasJointRate = false;
     bool haveIid = (lambdaField == nullptr && lambda.size() >= 2)
                 || (muField == nullptr && mu.size() >= 2)
                 || (psiField == nullptr && psi.size() >= 2);
-    static int jointRateGate = [](){ const char* e = getenv("FBD_JOINT_RATE"); return e ? atoi(e) : 0; }();
-    static int jointAdaptFreq = [](){ const char* e = getenv("FBD_JOINT_ADAPT"); return e ? atoi(e) : 1; }();
-    jrOp = -1;
+    lastTreeMove = TM_NONE;
     if(haveIid && rng.uniformRv() < 0.20){
         double r = (rng.uniformRv() < 0.5) ? doRateVectorScale() : doRateShrinkExpand();
         RandomVariable::setActiveInstance(prevRng);
@@ -666,16 +562,21 @@ double FBDTreeModel::update(void){
             if(n != t->getRoot() && n->getIsTip() == false)
                 numSlideable++;
         double fixedWeight = 3.0;
+        double blockUnit = 0.1 * numSlideable;
+        if(blockUnit < fixedWeight) blockUnit = fixedWeight;
         double slideAndCrown = numSlideable + fixedWeight;
-        double uMove = rng.uniformRv() * (slideAndCrown + 3.0 * fixedWeight);
-        if(uMove >= slideAndCrown + 2.0 * fixedWeight){
+        double uMove = rng.uniformRv() * (slideAndCrown + 3.0 * blockUnit);
+        if(uMove >= slideAndCrown + 2.0 * blockUnit){
+            lastTreeMove = TM_UPDOWN;
             double r = doUpDownScale();
             RandomVariable::setActiveInstance(prevRng);
             return r;
         }
         if(uMove >= slideAndCrown){
             lastWasJointScale = true;
-            double r = (uMove < slideAndCrown + fixedWeight) ? doJointScale() : doSubtreeScale();
+            double r;
+            if(uMove < slideAndCrown + blockUnit){ lastTreeMove = TM_JOINTSCALE; r = doJointScale(); }
+            else { lastTreeMove = TM_SUBTREE; r = doSubtreeScale(); }
             RandomVariable::setActiveInstance(prevRng);
             return r;
         }
@@ -694,68 +595,52 @@ double FBDTreeModel::update(void){
         double wAge = 20.0;
         double uMove = rng.uniformRv() * (wNE + wWB + wWE + wTreeScale + wSA + wUpDown + wAge);
         if(uMove < wNE){
+            lastTreeMove = TM_NE;
             double r = doNarrowExchange();
             RandomVariable::setActiveInstance(prevRng);
             return r;
         }
         if(uMove < wNE + wWB){
+            lastTreeMove = TM_WB;
             double r = doWilsonBalding();
             RandomVariable::setActiveInstance(prevRng);
             return r;
         }
         if(uMove < wNE + wWB + wWE){
+            lastTreeMove = TM_WE;
             double r = doWideExchange();
             RandomVariable::setActiveInstance(prevRng);
             return r;
         }
         if(uMove < wNE + wWB + wWE + wTreeScale){
+            lastTreeMove = TM_TREESCALE;
             double r = doTreeScale();
             RandomVariable::setActiveInstance(prevRng);
             return r;
         }
         if(uMove < wNE + wWB + wWE + wTreeScale + wSA){
+            lastTreeMove = TM_SARJ;
             double r = doSARJMCMC();
             RandomVariable::setActiveInstance(prevRng);
             return r;
         }
         if(uMove < wNE + wWB + wWE + wTreeScale + wSA + wUpDown){
+            lastTreeMove = TM_UPDOWN;
             double r = doUpDownScale();
             RandomVariable::setActiveInstance(prevRng);
             return r;
         }
     }
-    if(jointRateGate && unresolvedFossils != nullptr && unresolvedFossils->getNumFossils() > 0){
-        bool isRate = false;
-        for(ParameterDouble* q : lambda) if(q == updatedParameter){ isRate = true; break; }
-        if(!isRate) for(ParameterDouble* q : mu)  if(q == updatedParameter){ isRate = true; break; }
-        if(!isRate) for(ParameterDouble* q : psi) if(q == updatedParameter){ isRate = true; break; }
-        if(isRate){
-            ParameterDouble* rp = static_cast<ParameterDouble*>(updatedParameter);
-            bool doJoint = jointAdaptFreq ? ((jrOp = jrSel.pick(rng)) == 1) : true;
-            if(doJoint){
-                double r = jointRateFossilMove(rp);
-                RandomVariable::setActiveInstance(prevRng);
-                return r;
-            }
-            jrRateParam = rp;
-            jrRateOld = std::log(rp->getValue());
-        }
-    }
     double ratio = updatedParameter->update();
+    if(updatedParameter == parameterTree)
+        lastTreeMove = parameterTree->getTree()->getLastUpdateWasScale() ? TM_CROWN : TM_NODEAGE;
 
     RandomVariable::setActiveInstance(prevRng);
     return ratio;
 }
 
 void FBDTreeModel::updateForAcceptance(void){
-    if(lastWasJointRate){
-        jointRateParam->commitProposed();
-        unresolvedFossils->updateForAcceptance();
-        jrAccW++; jrAttW++; adaptJointRate();
-        if(jrOp == 1)
-            jrSel.record(1, jrLogC * jrLogC, (double)std::max(1, unresolvedFossils->getNumFossils()));
-        return;
-    }
+    if(lastTreeMove != TM_NONE){ tmAtt[lastTreeMove]++; tmAcc[lastTreeMove]++; }
     if(lastWasFbdRate){
         for(ParameterDouble* l : lambda) l->commitProposed();
         for(ParameterDouble* m : mu) m->commitProposed();
@@ -784,23 +669,12 @@ void FBDTreeModel::updateForAcceptance(void){
     }else{
         updatedParameter->updateForAcceptance();
     }
-    if(jrOp == 0){
-        double d = std::log(jrRateParam->getValue()) - jrRateOld;
-        jrSel.record(0, d * d, 1.0);
-    }
     if(isResolved && originAge != nullptr)
         parameterTree->getTree()->getRoot()->setTime(originAge->getValue());
 }
 
 void FBDTreeModel::updateForRejection(void){
-    if(lastWasJointRate){
-        jointRateParam->restoreProposed();
-        unresolvedFossils->updateForRejection();
-        jrAttW++; adaptJointRate();
-        if(jrOp == 1)
-            jrSel.record(1, 0.0, (double)std::max(1, unresolvedFossils->getNumFossils()));
-        return;
-    }
+    if(lastTreeMove != TM_NONE) tmAtt[lastTreeMove]++;
     if(lastWasFbdRate){
         for(ParameterDouble* l : lambda) l->restoreProposed();
         for(ParameterDouble* m : mu) m->restoreProposed();
@@ -827,8 +701,6 @@ void FBDTreeModel::updateForRejection(void){
     }else{
         updatedParameter->updateForRejection();
     }
-    if(jrOp == 0)
-        jrSel.record(0, 0.0, 1.0);
     if(isResolved && originAge != nullptr)
         parameterTree->getTree()->getRoot()->setTime(originAge->getValue());
 }
@@ -838,9 +710,9 @@ void FBDTreeModel::writeState(std::ostream& os){
         p->writeState(os);
     os << rateVecStep << ' ' << shrinkStep << ' ' << turnoverStep << ' ' << upDownStep << ' ' << upDownTotal << '\n';
     os << rvAccW << ' ' << rvAttW << ' ' << seAccW << ' ' << seAttW << ' ' << frAccW << ' ' << frAttW << '\n';
-    os << jointRateStep << ' ' << jrAccW << ' ' << jrAttW << '\n';
-    jrSel.writeState(os);
     Serialize::writeBoolDeque(os, upDownRecent);
+    for(int i = 0; i < TM_COUNT; i++) os << tmAcc[i] << ' ' << tmAtt[i] << ' ';
+    os << '\n';
 }
 
 void FBDTreeModel::readState(std::istream& is){
@@ -848,9 +720,8 @@ void FBDTreeModel::readState(std::istream& is){
         p->readState(is);
     is >> rateVecStep >> shrinkStep >> turnoverStep >> upDownStep >> upDownTotal;
     is >> rvAccW >> rvAttW >> seAccW >> seAttW >> frAccW >> frAttW;
-    is >> jointRateStep >> jrAccW >> jrAttW;
-    jrSel.readState(is);
     Serialize::readBoolDeque(is, upDownRecent);
+    for(int i = 0; i < TM_COUNT; i++) is >> tmAcc[i] >> tmAtt[i];
     cacheInit = false;
 }
 

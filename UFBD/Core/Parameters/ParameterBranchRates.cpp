@@ -33,11 +33,15 @@ int AdaptiveMixSelector::pick(RandomVariable& rng){
         w[k] = (cumCpu[k] > 0.0) ? cumJ2[k] / cumCpu[k] : 0.0;
         sum += w[k];
     }
-    const double fl = 0.05;
+    std::vector<double> fl(nOps);
+    for(int k = 0; k < nOps; k++)
+        fl[k] = 0.05;
+    double flsum = 0.0;
+    for(int k = 0; k < nOps; k++) flsum += fl[k];
     double x = rng.uniformRv();
     double acc = 0.0;
     for(int k = 0; k < nOps; k++){
-        double p = fl + (1.0 - nOps * fl) * ((sum > 0.0) ? w[k] / sum : 1.0 / nOps);
+        double p = fl[k] + (1.0 - flsum) * ((sum > 0.0) ? w[k] / sum : 1.0 / nOps);
         acc += p;
         if(x < acc)
             return k;
