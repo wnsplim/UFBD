@@ -201,6 +201,8 @@ void Sbc::runInference(void){
     std::map<std::string, std::vector<double>> ranks;
     std::map<std::string, long> cov50, cov90;
     int nUnconverged = 0;
+    int progStep = (cfg.numReps + 9) / 10;
+    if(progStep < 1) progStep = 1;
     std::ofstream rankOut;
     std::vector<std::string> outCols;
     bool liveHeader = false;
@@ -241,11 +243,14 @@ void Sbc::runInference(void){
             models.push_back(model);
             chains.push_back(new Mcmc(ng, thin, model));
         }
-        printf("rep %d/%d:\n", rep + 1, cfg.numReps);
         ConvergenceRunner cr(chains, repBase + ".log", repBase + ".trees");
         if(cr.run() == false)
             nUnconverged++;
         double repMaxRhat = cr.getMaxRhat(), repMinChainEss = cr.getMinChainEss(), repBulkEss = cr.getMinBulkEss();
+        if((rep + 1) % progStep == 0 || rep + 1 == cfg.numReps){
+            printf("rep %d/%d\n", rep + 1, cfg.numReps);
+            fflush(stdout);
+        }
 
         const std::vector<std::string>& names = chains[0]->traceNames();
         std::map<std::string, double> thisRep;
@@ -295,10 +300,10 @@ void Sbc::runInference(void){
         delete tree;
     }
 
-    printf("SBC inference: %d reps, %d chains/rep, %s, rho=%.3g\n",
-           cfg.numReps, nRuns, cfg.originConditioning ? "origin" : "crown", cfg.rho);
+    printf("SBC inference: %d reps, %d chains/rep, conditioning=%s, rho=%.3g, bb=%.3g\n",
+           cfg.numReps, nRuns, cfg.originConditioning ? "origin" : "crown", cfg.rho, cfg.bb);
     if(nUnconverged > 0)
-        printf("  WARNING: %d of %d reps hit -max_gen without converging.\n",
+        printf("  WARNING: %d of %d reps did not reach the R-hat/ESS thresholds.\n",
                nUnconverged, cfg.numReps);
     printf("  %-12s %8s %8s %7s %7s\n", "param", "KS_D", "KS_p", "cov50", "cov90");
     for(std::map<std::string, std::vector<double>>::iterator it = ranks.begin(); it != ranks.end(); ++it){
@@ -317,5 +322,5 @@ void Sbc::runInference(void){
     }
 
     if(cfg.dumpPrefix.empty() == false && liveHeader)
-        printf("  ranks streamed to %s_ranks.tsv\n", cfg.dumpPrefix.c_str());
+        printf("  ranks saved in %s_ranks.tsv\n", cfg.dumpPrefix.c_str());
 }

@@ -345,7 +345,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     if (chainLength < 1)
         Msg::error("Flag \"-n\" must be a positive integer (or \"auto\").");
 
-    if (autoChainLength == false && (essThresholdSet || rhatThresholdSet))
+    if (sbcMode == false && autoChainLength == false && (essThresholdSet || rhatThresholdSet))
         Msg::warning("-min_ess / -rhat apply only under -n auto; ignored for a fixed chain length.");
 
     if (thinning < 1)

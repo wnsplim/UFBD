@@ -6,11 +6,21 @@
 #include "Sbc.hpp"
 #include "UserSettings.hpp"
 
+#include <cstdio>
 #include <random>
 #include <string>
 #include <vector>
 
 int main(int argc, const char* argv[]){
+
+    std::string invocation;
+    for(int i = 0; i < argc; i++){
+        std::string a = argv[i];
+        bool q = a.find_first_of(" (),") != std::string::npos;
+        invocation += (i ? " " : "");
+        invocation += q ? "\"" + a + "\"" : a;
+    }
+    printf("%s\n", invocation.c_str());
 
     std::string mode, out;
     bool repsSet = false, genSet = false, burninSet = false, thinSet = false, binsSet = false;

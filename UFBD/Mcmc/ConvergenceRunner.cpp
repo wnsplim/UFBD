@@ -105,8 +105,9 @@ bool ConvergenceRunner::run(void){
     for(ThreadPool* p : runPools)
         delete p;
 
-    std::cout << "-----------------------------------------------------------------------\n";
-    report(gen, true);
+    if(verbose)
+        std::cout << "-----------------------------------------------------------------------\n";
+    bool met = report(gen, true);
     writeMerged();
 
     if(emitSummary && replicates.empty() == false && replicates[0]->getTree() != nullptr){
@@ -127,14 +128,14 @@ bool ConvergenceRunner::run(void){
         writeSummaryTree(replicates[0]->getTree(), names, pooled, 0.0, base + ".tree");
     }
 
-    if(autoStop){
+    if(verbose && autoStop){
         std::string crit = (replicates.size() >= 2) ? "R-hat/ESS" : "ESS";
         if(stoppedEarly)
             std::cout << "Auto-stop at generation " << gen << ": " << crit << " stopping thresholds reached for all logged quantities.\n";
         else
             Msg::warning("reached the -max-gen limit (" + std::to_string(maxGen) + ") with quantities still below the " + crit + " thresholds.");
     }
-    return stoppedEarly;
+    return met;
 }
 
 bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
@@ -198,7 +199,7 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
 
     lastMaxRhat = worstRhat; lastMinChainEss = minEss; lastMinBulkEss = minBulkEss;
 
-    if((long)gen != lastReportedGen){
+    if(verbose && (long)gen != lastReportedGen){
         std::cout << std::fixed;
         std::cout << "gen " << gen;
         if(multiChain)
@@ -207,7 +208,7 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
         lastReportedGen = (long)gen;
     }
 
-    if(finalPass && nBelow > 0 && s.getAutoChainLength()){
+    if(verbose && finalPass && nBelow > 0 && s.getAutoChainLength()){
         std::string crit = multiChain ? ("R-hat > " + std::to_string(rhatMax) + " or per-chain ESS < " + std::to_string((int)essMin))
                                       : ("per-chain ESS < " + std::to_string((int)essMin));
         std::string msg = std::to_string(nBelow) + " of " + std::to_string(nP) + " quantities have " + crit + " : ";
