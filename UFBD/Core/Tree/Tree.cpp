@@ -179,6 +179,7 @@ void Tree::clone(const Tree& t) {
         p->setFlag(q->getFlag());
         p->setTime(q->getTime());
         p->setIsFossil(q->getIsFossil());
+        p->setFossilAgeRange(q->getFossilYMin(), q->getFossilYMax());
         if (q->getAncestor() != nullptr)
             p->setAncestor( this->nodes[q->getAncestor()->getOffset()] );
         else
@@ -240,15 +241,15 @@ std::string Tree::getNewickString(void) {
     return strm.str();
 }
 
-static bool markBackbone(Node* n, std::set<Node*>& keep, std::map<Node*,std::string>& minName){
+static bool markBackbone(Node* n, std::set<Node*>& keep, std::map<Node*,std::string>& minName, bool keepFossilTips = false){
     if(n->getIsTip()){
-        if(n->getIsFossil() == false){ keep.insert(n); minName[n] = n->getName(); return true; }
+        if(keepFossilTips || n->getIsFossil() == false){ keep.insert(n); minName[n] = n->getName(); return true; }
         return false;
     }
     bool any = false;
     std::string mn;
     for(Node* c : n->getNeighbors())
-        if(c != n->getAncestor() && markBackbone(c, keep, minName)){
+        if(c != n->getAncestor() && markBackbone(c, keep, minName, keepFossilTips)){
             any = true;
             const std::string& cm = minName[c];
             if(mn.empty() || cm < mn) mn = cm;
@@ -288,6 +289,11 @@ static void writeBackbone(Node* p, std::set<Node*>& keep, std::map<Node*,std::st
         std::string nm = p->getName();
         std::replace(nm.begin(), nm.end(), ' ', '_');
         strm << nm;
+        if(p->getIsFossil()){
+            char buf[64];
+            std::snprintf(buf, sizeof(buf), "[&age=%.17g]", p->getTime());
+            strm << buf;
+        }
         return;
     }
     std::vector<Node*> kc;
@@ -305,11 +311,11 @@ static void writeBackbone(Node* p, std::set<Node*>& keep, std::map<Node*,std::st
         strm << "x" << it->second;
 }
 
-std::string Tree::getBackboneNewickString(void) {
+std::string Tree::getBackboneNewickString(bool keepFossils) {
 
     std::set<Node*> keep;
     std::map<Node*,std::string> minName;
-    markBackbone(getRoot(), keep, minName);
+    markBackbone(getRoot(), keep, minName, keepFossils);
     if(keep.empty())
         return "";
     Node* bbRoot = descendToBackbone(getRoot(), keep, minName);
@@ -337,6 +343,18 @@ std::vector<Node*> Tree::getBackboneAgeNodes(void) {
     return out;
 }
 
+std::vector<Node*> Tree::getAllAgeNodes(void) {
+
+    std::set<Node*> keep;
+    std::map<Node*,std::string> minName;
+    markBackbone(getRoot(), keep, minName, true);
+    std::vector<Node*> out;
+    if(keep.empty())
+        return out;
+    collectBbNodes(descendToBackbone(getRoot(), keep, minName), keep, minName, out);
+    return out;
+}
+
 static double ageOf(Node* n, const std::map<Node*,double>& age){
     std::map<Node*,double>::const_iterator it = age.find(n);
     return it != age.end() ? it->second : n->getTime();
@@ -357,11 +375,22 @@ static std::pair<double,double> hpd95(std::vector<double> s){
     return std::make_pair(s[bi], s[bi + m - 1]);
 }
 
-static void writeBackboneSummary(Node* p, std::set<Node*>& keep, std::map<Node*,std::string>& minName, std::map<Node*,int>& xidx, const std::map<Node*,double>& age, const std::map<Node*,std::pair<double,double>>& hpd, std::stringstream& strm){
+static void writeHpdAnnotation(const std::map<Node*,std::pair<double,double>>& hpd, Node* p, double y0, std::stringstream& strm){
+    std::map<Node*,std::pair<double,double>>::const_iterator h = hpd.find(p);
+    if(h == hpd.end())
+        return;
+    double lo = h->second.first, hi = h->second.second;
+    char buf[192];
+    std::snprintf(buf, sizeof(buf), "[&height_95%%_HPD={%.6g,%.6g},age_95%%_HPD={%.6g,%.6g}]", lo - y0, hi - y0, lo, hi);
+    strm << buf;
+}
+
+static void writeBackboneSummary(Node* p, std::set<Node*>& keep, std::map<Node*,std::string>& minName, std::map<Node*,int>& xidx, const std::map<Node*,double>& age, const std::map<Node*,std::pair<double,double>>& hpd, double y0, std::stringstream& strm){
     if(p->getIsTip()){
         std::string nm = p->getName();
         std::replace(nm.begin(), nm.end(), ' ', '_');
         strm << nm;
+        writeHpdAnnotation(hpd, p, y0, strm);
         return;
     }
     std::vector<Node*> kc;
@@ -370,25 +399,20 @@ static void writeBackboneSummary(Node* p, std::set<Node*>& keep, std::map<Node*,
     for(size_t i = 0; i < kc.size(); i++){
         Node* t = descendToBackbone(kc[i], keep, minName);
         if(i > 0) strm << ",";
-        writeBackboneSummary(t, keep, minName, xidx, age, hpd, strm);
+        writeBackboneSummary(t, keep, minName, xidx, age, hpd, y0, strm);
         strm << ":" << std::fabs(ageOf(p, age) - ageOf(t, age));
     }
     strm << ")";
     std::map<Node*,int>::iterator it = xidx.find(p);
     if(it != xidx.end())
         strm << "x" << it->second;
-    std::map<Node*,std::pair<double,double>>::const_iterator h = hpd.find(p);
-    if(h != hpd.end()){
-        char buf[96];
-        std::snprintf(buf, sizeof(buf), "[&95%%HPD={%.6g, %.6g}]", h->second.first, h->second.second);
-        strm << buf;
-    }
+    writeHpdAnnotation(hpd, p, y0, strm);
 }
 
-std::string Tree::getSummaryNewickString(const std::map<Node*,double>& age, const std::map<Node*,std::pair<double,double>>& hpd){
+std::string Tree::getSummaryNewickString(const std::map<Node*,double>& age, const std::map<Node*,std::pair<double,double>>& hpd, bool keepFossils, double y0){
     std::set<Node*> keep;
     std::map<Node*,std::string> minName;
-    markBackbone(getRoot(), keep, minName);
+    markBackbone(getRoot(), keep, minName, keepFossils);
     if(keep.empty())
         return "";
     Node* bbRoot = descendToBackbone(getRoot(), keep, minName);
@@ -399,13 +423,13 @@ std::string Tree::getSummaryNewickString(const std::map<Node*,double>& age, cons
         xidx[bb[i]] = (int)(i + 1);
     std::stringstream strm;
     strm << std::setprecision(17);
-    writeBackboneSummary(bbRoot, keep, minName, xidx, age, hpd, strm);
+    writeBackboneSummary(bbRoot, keep, minName, xidx, age, hpd, y0, strm);
     strm << ";";
     return strm.str();
 }
 
-bool writeSummaryTree(Tree* tree, const std::vector<std::string>& names, const std::vector<std::vector<double>>& cols, double burninFrac, const std::string& path){
-    std::vector<Node*> bb = tree->getBackboneAgeNodes();
+bool writeSummaryTree(Tree* tree, const std::vector<std::string>& names, const std::vector<std::vector<double>>& cols, const std::vector<std::string>& latentNames, const std::vector<std::vector<double>>& latentCols, double burninFrac, const std::string& path, bool keepFossils){
+    std::vector<Node*> bb = keepFossils ? tree->getAllAgeNodes() : tree->getBackboneAgeNodes();
     if(bb.empty())
         return false;
     std::map<std::string,int> colOf;
@@ -427,11 +451,37 @@ bool writeSummaryTree(Tree* tree, const std::vector<std::string>& names, const s
         age[bb[i]] = sum / (double)s.size();
         hpd[bb[i]] = hpd95(s);
     }
-    std::string nwk = tree->getSummaryNewickString(age, hpd);
+    if(keepFossils){
+        for(size_t j = 0; j < latentNames.size() && j < latentCols.size(); j++){
+            if(latentNames[j].rfind("y_", 0) != 0)
+                continue;
+            Node* tip = tree->getTaxonNode(latentNames[j].substr(2));
+            if(tip == nullptr || tip->getIsFossil() == false)
+                continue;
+            const std::vector<double>& col = latentCols[j];
+            size_t bl = (size_t)(burninFrac * col.size());
+            std::vector<double> s(col.begin() + bl, col.end());
+            if(s.empty())
+                continue;
+            double sum = 0.0;
+            for(double v : s) sum += v;
+            age[tip] = sum / (double)s.size();
+            hpd[tip] = hpd95(s);
+        }
+    }
+    double y0 = std::numeric_limits<double>::infinity();
+    for(Node* n : tree->getDownPassSequence()){
+        if(n->getIsTip() == false) continue;
+        std::map<Node*,double>::iterator it = age.find(n);
+        double ta = (it != age.end()) ? it->second : n->getTime();
+        if(ta < y0) y0 = ta;
+    }
+    if(std::isinf(y0)) y0 = 0.0;
+    std::string nwk = tree->getSummaryNewickString(age, hpd, keepFossils, y0);
     if(nwk.empty())
         return false;
     std::ofstream os(path);
-    os << nwk << "\n";
+    os << "#NEXUS\nBEGIN TREES;\n\tTREE tree_1 = [&R] " << nwk << "\nEND;\n";
     return true;
 }
 
@@ -510,6 +560,14 @@ int Tree::getNumBackbone(void){
     int idx = 0;
     for(Node* n : downPassSequence)
         if(n->getIsTip() == true)
+            idx++;
+    return idx;
+}
+
+int Tree::getNumExtant(void){
+    int idx = 0;
+    for(Node* n : downPassSequence)
+        if(n->getIsTip() && n->getIsFossil() == false)
             idx++;
     return idx;
 }
@@ -608,8 +666,8 @@ void Tree::initializeTimes(void){
 void Tree::assignStartingAges(const std::map<Node*,double>& minAges, double unit){
     for(Node* n : downPassSequence){
         if(n->getIsTip()){
-            n->setTime(0.0);
-            n->setIsFossil(false);
+            if(n->getIsFossil() == false)
+                n->setTime(0.0);
             continue;
         }
         double maxChild = 0.0;
@@ -622,6 +680,24 @@ void Tree::assignStartingAges(const std::map<Node*,double>& minAges, double unit
             age = it->second;
         n->setTime(age);
     }
+}
+
+static double liftAgeRec(Node* n){
+    if(n->getIsTip())
+        return n->getTime();
+    double mc = 0.0;
+    for(Node* c : n->getNeighbors())
+        if(c != n->getAncestor()){
+            double ca = liftAgeRec(c);
+            if(ca > mc) mc = ca;
+        }
+    if(n->getTime() <= mc)
+        n->setTime(mc * 1.05 + 1e-9);
+    return n->getTime();
+}
+
+void Tree::liftInternalAgesAboveChildren(void){
+    liftAgeRec(getRoot());
 }
 
 
@@ -738,11 +814,19 @@ double Tree::update(double scaleLambda){
     for(Node* n : downPassSequence)
         if(n != getRoot() && n->getIsTip() == false)
             numSlideable++;
+    std::vector<Node*> fossilTips = getFossilTipAgeNodes();
+    int total = numSlideable + (int)fossilTips.size();
     double crownWeight = 3.0;
-    if(rng.uniformRv() * (numSlideable + crownWeight) >= numSlideable)
+    if(rng.uniformRv() * (total + crownWeight) >= total)
         return updateCrownAge(scaleLambda);
     lastUpdateWasScale = false;
-    return updateNodeAge();
+    if(fossilTips.empty())
+        return updateNodeAge();
+    std::vector<Node*> internal = getInternalAgeNodes();
+    int pick = (int)(rng.uniformRv() * (internal.size() + fossilTips.size()));
+    if(pick < (int)internal.size())
+        return updateNodeAgeOnNode(internal[pick]);
+    return updateFossilTipAge(fossilTips[pick - (int)internal.size()]);
 }
 
 bool Tree::isSATip(Node* n){
@@ -813,6 +897,23 @@ double Tree::updateNodeAge(void){
         return 0.0;
     Node* n = candidates[(int)(rng.uniformRv() * candidates.size())];
     return updateNodeAgeOnNode(n);
+}
+
+std::vector<Node*> Tree::getFossilTipAgeNodes(void){
+    std::vector<Node*> out;
+    for(Node* n : downPassSequence)
+        if(n->getIsTip() && n->getIsFossil() && n->getFossilYMax() > n->getFossilYMin())
+            out.push_back(n);
+    return out;
+}
+
+double Tree::updateFossilTipAge(Node* n){
+    RandomVariable& rng = RandomVariable::randomVariableInstance();
+    double parentAge = n->getAncestor()->getTime();
+    double lo = n->getFossilYMin();
+    double hi = std::min(n->getFossilYMax(), parentAge);
+    n->setTime(lo + rng.uniformRv() * (hi - lo));
+    return 0.0;
 }
 
 double Tree::updateCrownAge(double scaleLambda){

@@ -4,8 +4,8 @@
 #include <algorithm>
 
 
-Node::Node(void) : ancestor(nullptr), index(0), offset(0), isTip(false), name(""), flag(false), fossil(false), time(0.0){
-    
+Node::Node(void) : ancestor(nullptr), index(0), offset(0), isTip(false), name(""), flag(false), fossil(false), time(0.0), fossilYMin(-1.0), fossilYMax(-1.0){
+
 }
 
 

@@ -22,6 +22,9 @@ class ChainRunner {
         virtual void                            setOutputPaths(const std::string& po, const std::string& to) = 0;
         virtual const std::vector<std::vector<double>>& traceColumns(void) = 0;
         virtual const std::vector<std::string>& traceNames(void) = 0;
+        virtual const std::vector<std::vector<double>>& latentColumns(void) { static std::vector<std::vector<double>> e; return e; }
+        virtual const std::vector<std::string>& latentNames(void) { static std::vector<std::string> e; return e; }
+        virtual bool                            treeHasFossils(void) { return false; }
         virtual void                            writeCheckpoint(void) {}
         virtual bool                            loadCheckpoint(void) { return false; }
         virtual void                            resumeOutputs(void) {}

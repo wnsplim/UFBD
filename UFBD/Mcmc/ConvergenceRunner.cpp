@@ -47,6 +47,13 @@ bool ConvergenceRunner::run(void){
     long blockGens = (long)s.getEssThreshold() * (long)s.getThinning();
     if(blockGens < 1) blockGens = 1;
 
+    if(verbose && autoStop){
+        std::cout << "Auto-stop targets: ";
+        if(replicates.size() >= 2)
+            std::cout << "max R-hat <= " << std::fixed << std::setprecision(2) << s.getRhatThreshold() << " and ";
+        std::cout << "min per-chain ESS >= " << (int)s.getEssThreshold() << ".\n";
+    }
+
     unsigned long gen = 0;
     if(s.getResume()){
         for(ChainRunner* c : replicates){
@@ -121,11 +128,20 @@ bool ConvergenceRunner::run(void){
                 pooled[j].insert(pooled[j].end(), cols[j].begin() + b, cols[j].end());
             }
         }
+        const std::vector<std::string>& latNames = replicates[0]->latentNames();
+        std::vector<std::vector<double>> pooledLat(latNames.size());
+        for(ChainRunner* c : replicates){
+            const std::vector<std::vector<double>>& lcols = c->latentColumns();
+            for(size_t j = 0; j < lcols.size() && j < pooledLat.size(); j++){
+                size_t b = (size_t)(lcols[j].size() * burn);
+                pooledLat[j].insert(pooledLat[j].end(), lcols[j].begin() + b, lcols[j].end());
+            }
+        }
         std::string base = paramBase;
         size_t dp = base.rfind(".log");
         if(dp != std::string::npos) base = base.substr(0, dp);
         if(base.empty()) base = "out";
-        writeSummaryTree(replicates[0]->getTree(), names, pooled, 0.0, base + ".tree");
+        writeSummaryTree(replicates[0]->getTree(), names, pooled, latNames, pooledLat, 0.0, base + ".tree", replicates[0]->treeHasFossils());
     }
 
     if(verbose && autoStop){
@@ -258,16 +274,25 @@ void ConvergenceRunner::writeMerged(void){
         return;
 
     std::ofstream mt(bulkPath(treeBase));
+    mt << "#NEXUS\nBEGIN TREES;\n";
+    long gt = 0;
     for(const std::string& fn : repTreeFiles){
         std::ifstream in(fn);
         if(in.is_open() == false) continue;
-        std::vector<std::string> lines;
+        std::vector<std::string> treeLines;
         std::string line;
-        while(std::getline(in, line)) lines.push_back(line);
+        while(std::getline(in, line))
+            if(line.find("TREE STATE_") != std::string::npos)
+                treeLines.push_back(line);
         in.close();
-        int b = (int)(lines.size() * burn);
-        for(int i = b; i < (int)lines.size(); i++)
-            mt << lines[i] << "\n";
+        int b = (int)(treeLines.size() * burn);
+        for(int i = b; i < (int)treeLines.size(); i++){
+            gt += thin;
+            size_t eq = treeLines[i].find(" = ");
+            std::string rest = (eq == std::string::npos) ? treeLines[i] : treeLines[i].substr(eq);
+            mt << "\tTREE STATE_" << gt << rest << "\n";
+        }
     }
+    mt << "END;\n";
     mt.close();
 }

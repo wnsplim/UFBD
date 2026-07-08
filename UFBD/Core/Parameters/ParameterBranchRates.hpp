@@ -95,6 +95,7 @@ class BranchRateModel : public Parameter {
         double                      getLocusRate(int p) { return mu[0][p]; }
         double                      getLocusSigma2(int p) { return sigma2[0][p]; }
         int                         getNumBranchNodes(void) { return (int)branchNodes.size(); }
+        int                         getBranchNodeOffset(int i) { return branchNodes[i]; }
         void                        scaleAll(double sf);
         void                        commitAll(void);
         void                        restoreAll(void);

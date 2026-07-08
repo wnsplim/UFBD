@@ -24,6 +24,7 @@ Mcmc::Mcmc(int ng, int thin, PhylogeneticModel* m) : model(m), numCycles(ng), th
 }
 
 Tree* Mcmc::getTree(void) { return model->getTree(); }
+bool Mcmc::treeHasFossils(void) { return model->treeIncludesFossils(); }
 
 void Mcmc::run(void) {
     init();
@@ -80,7 +81,11 @@ void Mcmc::advance(unsigned long nGens) {
 
 void Mcmc::finalize(void) {
     params.closeTSV();
+    if(writeTrees)
+        trees.appendDataTSV("END;");
     trees.closeTSV();
+    if(writeLatent)
+        latent.closeTSV();
 }
 
 void Mcmc::sample(unsigned long n, double lnL, double lnP) {
@@ -94,8 +99,25 @@ void Mcmc::sample(unsigned long n, double lnL, double lnP) {
             cn.push_back("cpu_s");
         params.addColumnNamesTSV(cn);
 
-        if(writeTrees)
-            trees.addFilepath(treeOut, true); // no CN for tree file
+        std::vector<std::string> latNames = model->getLatentNames();
+        if(latNames.empty() == false){
+            latentOut = paramOut;
+            size_t dp = latentOut.rfind(".log");
+            latentOut.insert(dp != std::string::npos ? dp : latentOut.size(), "_latent");
+            latent.addFilepath(latentOut, true);
+            std::vector<std::string> lcn = {"n"};
+            lcn.insert(lcn.end(), latNames.begin(), latNames.end());
+            latent.addColumnNamesTSV(lcn);
+            writeLatent = true;
+            latentNms = latNames;
+            latentCols.assign(latNames.size(), std::vector<double>());
+        }
+
+        if(writeTrees){
+            trees.addFilepath(treeOut, true);
+            trees.appendDataTSV("#NEXUS");
+            trees.appendDataTSV("BEGIN TREES;");
+        }
 
         traceNms.clear();
         traceNms.push_back("posterior");
@@ -113,8 +135,17 @@ void Mcmc::sample(unsigned long n, double lnL, double lnP) {
         dat.push_back((double)std::clock() / CLOCKS_PER_SEC);
     params.appendDataTSV(dat);
 
+    if(writeLatent){
+        std::vector<double> ls = model->getLatentString();
+        std::vector<double> ldat = {(double)n};
+        ldat.insert(ldat.end(), ls.begin(), ls.end());
+        latent.appendDataTSV(ldat);
+        for(size_t j = 0; j < latentCols.size() && j < ls.size(); j++)
+            latentCols[j].push_back(ls[j]);
+    }
+
     if(writeTrees)
-        trees.appendDataTSV(model->getTree()->getBackboneNewickString());
+        trees.appendDataTSV("\tTREE STATE_" + std::to_string(n) + " = [&R] " + model->getTree()->getBackboneNewickString(model->treeIncludesFossils()));
 
     std::vector<double> tv = {lnL + lnP, lnL, lnP};
     tv.insert(tv.end(), parmStr.begin(), parmStr.end());
@@ -208,8 +239,15 @@ void Mcmc::resumeOutputs(void) {
         std::ifstream tin(treeOut);
         std::vector<std::string> tkeep;
         std::string tline;
-        while(std::getline(tin, tline) && tkeep.size() < keep.size())
-            tkeep.push_back(tline);
+        size_t nTree = 0;
+        while(std::getline(tin, tline)){
+            bool isTreeLine = (tline.find("TREE STATE_") != std::string::npos);
+            if(isTreeLine){
+                if(nTree < keep.size()){ tkeep.push_back(tline); nTree++; }
+            }else if(tline != "END;"){
+                tkeep.push_back(tline);
+            }
+        }
         tin.close();
         std::ofstream tout(treeOut, std::ios::out | std::ios::trunc);
         for(const std::string& l : tkeep)

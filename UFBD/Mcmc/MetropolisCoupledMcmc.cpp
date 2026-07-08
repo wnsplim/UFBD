@@ -64,6 +64,11 @@ Tree* MetropolisCoupledMcmc::getTree(void){
     return models[i]->getTree();
 }
 
+bool MetropolisCoupledMcmc::treeHasFossils(void){
+    int i = (coldModelIdx >= 0) ? coldModelIdx : 0;
+    return models[i]->treeIncludesFossils();
+}
+
 double MetropolisCoupledMcmc::calcHeating(int idx){
     if(idx == 0)
         return 1.0;
@@ -92,7 +97,11 @@ void MetropolisCoupledMcmc::init(void) {
 
 void MetropolisCoupledMcmc::finalize(void) {
     params.closeTSV();
+    if(writeTrees)
+        trees.appendDataTSV("END;");
     trees.closeTSV();
+    if(writeLatent)
+        latent.closeTSV();
 }
 
 void MetropolisCoupledMcmc::advance(unsigned long nGens) {
@@ -235,8 +244,25 @@ void MetropolisCoupledMcmc::sample(unsigned long n) {
         cn.insert( cn.end(), headStr.begin(), headStr.end() );
         params.addColumnNamesTSV(cn);
 
-        if(writeTrees)
-            trees.addFilepath(treeOut, true); // no CN for tree file
+        std::vector<std::string> latNames = models[coldModelIdx]->getLatentNames();
+        if(latNames.empty() == false){
+            latentOut = paramOut;
+            size_t dp = latentOut.rfind(".log");
+            latentOut.insert(dp != std::string::npos ? dp : latentOut.size(), "_latent");
+            latent.addFilepath(latentOut, true);
+            std::vector<std::string> lcn = {"n"};
+            lcn.insert(lcn.end(), latNames.begin(), latNames.end());
+            latent.addColumnNamesTSV(lcn);
+            writeLatent = true;
+            latentNms = latNames;
+            latentCols.assign(latNames.size(), std::vector<double>());
+        }
+
+        if(writeTrees){
+            trees.addFilepath(treeOut, true);
+            trees.appendDataTSV("#NEXUS");
+            trees.appendDataTSV("BEGIN TREES;");
+        }
 
         traceNms.clear();
         traceNms.push_back("posterior");
@@ -254,8 +280,17 @@ void MetropolisCoupledMcmc::sample(unsigned long n) {
     dat.insert( dat.end(), parmStr.begin(), parmStr.end() );
     params.appendDataTSV(dat);
 
+    if(writeLatent){
+        std::vector<double> ls = models[coldModelIdx]->getLatentString();
+        std::vector<double> ldat = {(double)n};
+        ldat.insert(ldat.end(), ls.begin(), ls.end());
+        latent.appendDataTSV(ldat);
+        for(size_t j = 0; j < latentCols.size() && j < ls.size(); j++)
+            latentCols[j].push_back(ls[j]);
+    }
+
     if(writeTrees)
-        trees.appendDataTSV(models[coldModelIdx]->getTree()->getBackboneNewickString());
+        trees.appendDataTSV("\tTREE STATE_" + std::to_string(n) + " = [&R] " + models[coldModelIdx]->getTree()->getBackboneNewickString(models[coldModelIdx]->treeIncludesFossils()));
 
     std::vector<double> tv = {cl + cp, cl, cp};
     tv.insert(tv.end(), parmStr.begin(), parmStr.end());
@@ -369,8 +404,15 @@ void MetropolisCoupledMcmc::resumeOutputs(void) {
         std::ifstream tin(treeOut);
         std::vector<std::string> tkeep;
         std::string tline;
-        while(std::getline(tin, tline) && tkeep.size() < keep.size())
-            tkeep.push_back(tline);
+        size_t nTree = 0;
+        while(std::getline(tin, tline)){
+            bool isTreeLine = (tline.find("TREE STATE_") != std::string::npos);
+            if(isTreeLine){
+                if(nTree < keep.size()){ tkeep.push_back(tline); nTree++; }
+            }else if(tline != "END;"){
+                tkeep.push_back(tline);
+            }
+        }
         tin.close();
         std::ofstream tout(treeOut, std::ios::out | std::ios::trunc);
         for(const std::string& l : tkeep)

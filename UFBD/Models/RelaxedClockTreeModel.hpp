@@ -24,6 +24,9 @@ class RelaxedClockTreeModel : public PhylogeneticModel {
                                     RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, const std::string& sequenceFile, const std::string& partitionFile, int nStates, int numCats, ClockModel clockModel, const double* rgeneParam, const double* sigma2Param, unsigned int seed);
         std::vector<std::string>    getParameterNames(void);
         std::vector<double>         getParameterString(void);
+        std::vector<std::string>    getLatentNames(void);
+        std::vector<double>         getLatentString(void);
+        bool                        treeIncludesFossils(void);
         double                      lnLikelihood(void);
         double                      lnPriorProbability(void);
         void                        print(void);

@@ -23,9 +23,10 @@ class Tree {
         double                              getBranchLength(Node* e1, Node* e2);
         std::vector<Node*>&                 getDownPassSequence(void) { return downPassSequence; }
         std::string                         getNewickString(void);
-        std::string                         getBackboneNewickString(void);
+        std::string                         getBackboneNewickString(bool keepFossils = false);
         std::vector<Node*>                  getBackboneAgeNodes(void);
-        std::string                         getSummaryNewickString(const std::map<Node*,double>& age, const std::map<Node*,std::pair<double,double>>& hpd);
+        std::vector<Node*>                  getAllAgeNodes(void);
+        std::string                         getSummaryNewickString(const std::map<Node*,double>& age, const std::map<Node*,std::pair<double,double>>& hpd, bool keepFossils = false, double y0 = 0.0);
         const std::vector<Node*>&           getBackboneRateNodes(void);
         void                                ensureBackboneCache(void);
         Node*                               getBackboneRoot(void);
@@ -38,6 +39,8 @@ class Tree {
         int                                 getNumNodes(void) { return (int)nodes.size(); }
         Node*                               getNodeByOffset(int o) { return nodes[o]; }
         int                                 getNumBackbone(void);
+        int                                 getNumExtant(void);
+        void                                liftInternalAgesAboveChildren(void);
         Node*                               getCrown(void) { return crown; }
         Node*                               getRoot(void) { return origin != nullptr ? origin : crown; }
         Node*                               getOrigin(void) { return origin; }
@@ -56,6 +59,8 @@ class Tree {
         double                              updateNodeAge(void);
         double                              updateNodeAgeOnNode(Node* n);
         std::vector<Node*>                  getInternalAgeNodes(void);
+        std::vector<Node*>                  getFossilTipAgeNodes(void);
+        double                              updateFossilTipAge(Node* n);
         void                                setLastUpdateWasScale(bool b) { lastUpdateWasScale = b; }
         void                                assignStartingAges(const std::map<Node*,double>& minAges, double unit);
         Node*                               insertFossilTip(Node* hostChild, std::string name, double y, double z);
@@ -90,6 +95,6 @@ class Tree {
         std::vector<std::vector<Node*>>     bbChildrenByOffset;
 };
 
-bool writeSummaryTree(Tree* tree, const std::vector<std::string>& names, const std::vector<std::vector<double>>& cols, double burninFrac, const std::string& path);
+bool writeSummaryTree(Tree* tree, const std::vector<std::string>& names, const std::vector<std::vector<double>>& cols, const std::vector<std::string>& latentNames, const std::vector<std::vector<double>>& latentCols, double burninFrac, const std::string& path, bool keepFossils = false);
 
 #endif

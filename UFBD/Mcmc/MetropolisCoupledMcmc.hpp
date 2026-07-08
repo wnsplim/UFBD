@@ -24,6 +24,9 @@ class MetropolisCoupledMcmc : public ChainRunner {
         void                                setOutputPaths(const std::string& po, const std::string& to) { paramOut = po; treeOut = to; }
         const std::vector<std::vector<double>>& traceColumns(void) { return traceCols; }
         const std::vector<std::string>&     traceNames(void) { return traceNms; }
+        const std::vector<std::vector<double>>& latentColumns(void) { return latentCols; }
+        const std::vector<std::string>&     latentNames(void) { return latentNms; }
+        bool                                treeHasFossils(void);
         void                                writeCheckpoint(void);
         bool                                loadCheckpoint(void);
         void                                resumeOutputs(void);
@@ -58,9 +61,12 @@ class MetropolisCoupledMcmc : public ChainRunner {
         RandomVariable                      swapRng;
         WriteTSV                            params;
         WriteTSV                            trees;
+        WriteTSV                            latent;
         std::string                         treeOut;
         std::string                         paramOut;
+        std::string                         latentOut;
         bool                                writeTrees;
+        bool                                writeLatent = false;
         bool                                verbose = false;
         int                                 runLabel = 0;
         unsigned long                       numCycles;
@@ -71,6 +77,8 @@ class MetropolisCoupledMcmc : public ChainRunner {
         unsigned long                       gen;
         std::vector<std::vector<double>>    traceCols;
         std::vector<std::string>            traceNms;
+        std::vector<std::vector<double>>    latentCols;
+        std::vector<std::string>            latentNms;
 };
 
 #endif

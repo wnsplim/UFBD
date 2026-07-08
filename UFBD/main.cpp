@@ -95,7 +95,7 @@ int main(int argc, const char* argv[]) {
         size_t sdp = sbase.rfind(".log"); if(sdp != std::string::npos) sbase = sbase.substr(0, sdp);
         if(sbase.empty()) sbase = "out";
         if(mcmc->getTree() != nullptr)
-            writeSummaryTree(mcmc->getTree(), mcmc->traceNames(), mcmc->traceColumns(), settings.getBurninFraction(), sbase + ".tree");
+            writeSummaryTree(mcmc->getTree(), mcmc->traceNames(), mcmc->traceColumns(), mcmc->latentNames(), mcmc->latentColumns(), settings.getBurninFraction(), sbase + ".tree", mcmc->treeHasFossils());
         delete mcmc;
     }else{
         unsigned long ncyc = autoStop ? settings.getMaxGen() : settings.getChainLength();

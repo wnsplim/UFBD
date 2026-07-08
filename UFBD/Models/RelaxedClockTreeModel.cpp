@@ -128,7 +128,7 @@ double RelaxedClockTreeModel::update(void){
     double u = r.uniformRv();
     if(u < 0.20){ lastMoveType = 0; return clock->update(); }
     if(u < 0.516){
-        if(nInternalAge == 0) nInternalAge = (int)fbd->getTree()->getBackboneAgeNodes().size();
+        if(nInternalAge == 0) nInternalAge = (int)fbd->getAgeLogNodes().size();
         double pCrown = (nInternalAge > 0) ? 1.0 / nInternalAge : 0.0;
         if(r.uniformRv() < pCrown){ lastMoveType = 8; return clock->simpleDistanceMove(); }
         if(static_cast<ParameterBranchRates*>(clock)->getClockModel() == ClockModel::UCLN && r.uniformRv() < pCrown){ lastMoveType = 10; return clock->smallPulleyMove(); }
@@ -246,7 +246,7 @@ void RelaxedClockTreeModel::collectNodeAges(std::vector<std::string>* names, std
         if(names) names->push_back("x0");
         if(vals)  vals->push_back(fbd->getOriginAgeValue());
     }
-    std::vector<Node*> bb = fbd->getTree()->getBackboneAgeNodes();
+    std::vector<Node*> bb = fbd->getAgeLogNodes();
     for(size_t i = 0; i < bb.size(); i++){
         if(names) names->push_back("x" + std::to_string(i + 1));
         if(vals)  vals->push_back(bb[i]->getTime());
@@ -287,6 +287,35 @@ std::vector<double> RelaxedClockTreeModel::getParameterString(void){
     }
     if(ctmc != nullptr)
         ctmc->appendParameterValues(v);
+    return v;
+}
+
+bool RelaxedClockTreeModel::treeIncludesFossils(void){ return fbd->treeIncludesFossils(); }
+
+std::vector<std::string> RelaxedClockTreeModel::getLatentNames(void){
+    std::vector<std::string> n = fbd->getLatentNames();
+    Tree* tr = fbd->getTree();
+    std::map<int,std::string> lab;
+    std::vector<Node*> bb = fbd->getAgeLogNodes();
+    for(size_t i = 0; i < bb.size(); i++)
+        lab[bb[i]->getOffset()] = "x" + std::to_string(i + 1);
+    for(int p = 0; p < clock->getNumLoci(); p++){
+        std::string psuf = (clock->getNumLoci() > 1) ? ("_p" + std::to_string(p)) : "";
+        for(int i = 0; i < clock->getNumBranchNodes(); i++){
+            int off = clock->getBranchNodeOffset(i);
+            std::map<int,std::string>::iterator it = lab.find(off);
+            n.push_back("rate_" + (it != lab.end() ? it->second : tr->getNodeByOffset(off)->getName()) + psuf);
+        }
+    }
+    return n;
+}
+
+std::vector<double> RelaxedClockTreeModel::getLatentString(void){
+    std::vector<double> v = fbd->getLatentString();
+    std::vector<std::vector<double>> ar = clock->getAbsoluteRates();
+    for(int p = 0; p < clock->getNumLoci(); p++)
+        for(int i = 0; i < clock->getNumBranchNodes(); i++)
+            v.push_back(ar[p][clock->getBranchNodeOffset(i)]);
     return v;
 }
 

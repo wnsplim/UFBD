@@ -22,6 +22,9 @@ class Node {
         std::set<Node*>&    getNeighbors(void) { return neighbors; }
         int                 getOffset(void) { return offset; }
         double              getTime(void) { return time; }
+        double              getFossilYMin(void) { return fossilYMin; }
+        double              getFossilYMax(void) { return fossilYMax; }
+        void                setFossilAgeRange(double lo, double hi) { fossilYMin = lo; fossilYMax = hi; }
         void                removeNeighbor(Node* p);
         void                removeAllNeighbors(void) { neighbors.clear(); }
         void                setAncestor(Node* p) { ancestor = p; }
@@ -39,6 +42,8 @@ class Node {
         Node*               ancestor;
         std::string         name;
         double              time;
+        double              fossilYMin;
+        double              fossilYMax;
         bool                isTip;
         bool                flag;
         bool                fossil;

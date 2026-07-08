@@ -23,6 +23,10 @@ class FBDTreeModel : public PhylogeneticModel {
                                     FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, unsigned int seed);
         std::vector<std::string>    getParameterNames(void);
         std::vector<double>         getParameterString(void);
+        std::vector<std::string>    getLatentNames(void);
+        std::vector<double>         getLatentString(void);
+        bool                        treeIncludesFossils(void) { return isResolved == false && backboneFossils.empty() == false; }
+        std::vector<Node*>          getAgeLogNodes(void) { return isResolved ? parameterTree->getTree()->getBackboneAgeNodes() : parameterTree->getTree()->getAllAgeNodes(); }
         double                      lnLikelihood(void);
         double                      lnPriorProbability(void);
         void                        print(void);
@@ -90,8 +94,12 @@ class FBDTreeModel : public PhylogeneticModel {
         ParameterShrinkageField*    muField;
         std::vector<ParameterShrinkageField*> psiField;
         int                         numPsiTypes;
+        int                         numExtantTips;
         std::vector<int>            fossilType;
         std::map<std::string,int>   fossilTypeByName;
+        struct BackboneFossil { Node* tip; double yMin; double yMax; int type; };
+        std::vector<BackboneFossil> backboneFossils;
+        std::vector<std::string>    unrFossilName;
         std::vector<double>           intervalStart;
         std::vector<int>            lambdaIdx;
         std::vector<int>            muIdx;

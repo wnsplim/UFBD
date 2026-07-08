@@ -17,6 +17,9 @@ class PhylogeneticModel {
                                                ~PhylogeneticModel(void);
         virtual std::vector<std::string>        getParameterNames(void) = 0;
         virtual std::vector<double>             getParameterString(void) = 0;
+        virtual std::vector<std::string>        getLatentNames(void) { return {}; }
+        virtual std::vector<double>             getLatentString(void) { return {}; }
+        virtual bool                            treeIncludesFossils(void) { return false; }
         Tree*                                   getTree(void);
         RandomVariable*                         getRng(void) { return &rng; }
         const Parameter*                        getUpdatedParameter(void) { return updatedParameter; };

@@ -46,18 +46,77 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     parameterTree = new ParameterTree(1.0, this);
     isResolved = (UserSettings::userSettings().getModel() == Model::RFBD);
 
-    int numBackbone = t->getNumBackbone();
+    const std::vector<std::string>& psiTypeNames = UserSettings::userSettings().getPsiTypeNames();
+    std::map<std::string,int> typeIdx;
+    for(size_t k = 0; k < psiTypeNames.size(); k++) typeIdx[psiTypeNames[k]] = (int)k;
+    auto resolveType = [&](Fossil& f) -> int {
+        if(psiTypeNames.empty() || f.getMaxAge() <= 0.0) return 0;
+        if(f.getType().empty())
+            Msg::error("fossil '" + f.getTaxon() + "' has no preservation type, but -psi_types declares multiple types.");
+        std::map<std::string,int>::const_iterator it = typeIdx.find(f.getType());
+        if(it == typeIdx.end())
+            Msg::error("fossil '" + f.getTaxon() + "' has preservation type '" + f.getType() + "' not listed in -psi_types.");
+        return it->second;
+    };
+
+    std::vector<Fossil> unrFossils;
+    std::vector<std::string> bbClade;
+    std::vector<Assignment> bbAsg;
+    if(isResolved == false){
+        for(Fossil& f : fossils){
+            Node* tip = t->getTaxonNode(f.getTaxon());
+            if(tip == nullptr || tip->getIsTip() == false){ unrFossils.push_back(f); continue; }
+            tip->setIsFossil(true);
+            tip->setTime(0.5 * (f.getMinAge() + f.getMaxAge()));
+            tip->setFossilAgeRange(f.getMinAge(), f.getMaxAge());
+            backboneFossils.push_back({tip, f.getMinAge(), f.getMaxAge(), resolveType(f)});
+            bbClade.push_back(f.getClade());
+            bbAsg.push_back(f.getAssignment());
+        }
+        if(backboneFossils.empty() == false){
+            t->liftInternalAgesAboveChildren();
+            static bool warnedNotYoungest = false;
+            if(warnedNotYoungest == false){
+                warnedNotYoungest = true;
+                std::map<std::string, std::set<std::string>> cladeTaxa;
+                for(Clade& c : clades)
+                    cladeTaxa[c.getName()] = std::set<std::string>(c.getTaxa().begin(), c.getTaxa().end());
+                for(size_t k = 0; k < backboneFossils.size(); k++){
+                    std::string fTaxon = backboneFossils[k].tip->getName();
+                    double minCompat = std::numeric_limits<double>::infinity();
+                    for(Fossil& g : fossils){
+                        if(g.getTaxon() == fTaxon) continue;
+                        std::map<std::string, std::set<std::string>>::iterator ci = cladeTaxa.find(g.getClade());
+                        if(ci == cladeTaxa.end()) continue;
+                        if(ci->second.empty() == false && ci->second.count(fTaxon) == 0) continue;
+                        if(g.getClade() == bbClade[k] &&
+                           ((bbAsg[k] == Assignment::CROWN && g.getAssignment() == Assignment::STEM) ||
+                            (bbAsg[k] == Assignment::STEM  && g.getAssignment() == Assignment::CROWN)))
+                            continue;
+                        if(g.getMinAge() < minCompat) minCompat = g.getMinAge();
+                    }
+                    if(backboneFossils[k].yMax >= minCompat)
+                        Msg::warning("backbone fossil '" + fTaxon + "' is not the absolute youngest among clade-compatible fossils; it is blocked from being a sampled ancestor.");
+                }
+            }
+        }
+    }else{
+        unrFossils = fossils;
+    }
+
     int numUE = 0;
     for(Fossil& f : fossils)
         if(f.getMaxAge() == 0.0) numUE++;
+    numExtantTips = t->getNumExtant();
+    int numExtant = numExtantTips;
     Conditioning condPoint = UserSettings::userSettings().getConditioning();
     ConditioningEvent condEvent = UserSettings::userSettings().getConditioningEvent();
-    if(condPoint == Conditioning::CROWN && numBackbone < 2)
-        Msg::error("Crown conditioning requires at least 2 backbone tips, but the backbone tree has " + std::to_string(numBackbone) + ".");
-    if(condEvent == ConditioningEvent::SURVIVAL && (numBackbone + numUE) < 1)
-        Msg::error("Survival conditioning requires at least 1 extant taxon.");
-    if(condEvent == ConditioningEvent::EXTINCT && (numBackbone + numUE) > 0)
-        Msg::error("Extinct conditioning requires 0 extant taxa, but the data has " + std::to_string(numBackbone + numUE) + ".");
+    if(condPoint == Conditioning::CROWN && t->getNumBackbone() < 2)
+        Msg::error("crown conditioning requires at least 2 backbone tips, but the backbone tree has " + std::to_string(t->getNumBackbone()) + ".");
+    if(condEvent == ConditioningEvent::SURVIVAL && (numExtant + numUE) < 1)
+        Msg::error("survival conditioning requires at least 1 extant taxon.");
+    if(condEvent == ConditioningEvent::EXTINCT && (numExtant + numUE) > 0)
+        Msg::error("extinct conditioning requires 0 extant taxa, but the data has " + std::to_string(numExtant + numUE) + ".");
 
     originAge = nullptr;
     if(UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN){
@@ -88,6 +147,25 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
         delete working;
     }else{
         parameterTree->setTree(t);
+    }
+    for(BackboneFossil& bf : backboneFossils)
+        bf.tip = parameterTree->getTree()->getNodeByOffset(bf.tip->getOffset());
+    if(isResolved == false && backboneFossils.empty() == false){
+        Tree* wt = parameterTree->getTree();
+        for(Clade& c : clades){
+            if(c.getTaxa().empty()) continue;
+            Node* mrca = wt->getMRCA(c.getTaxa());
+            int tipsUnder = 0;
+            for(Node* n : wt->getDownPassSequence()){
+                if(n->getIsTip() == false) continue;
+                for(Node* p = n; ; p = p->getAncestor()){
+                    if(p == mrca){ tipsUnder++; break; }
+                    if(p->getAncestor() == p) break;
+                }
+            }
+            if(tipsUnder != (int)c.getTaxa().size())
+                Msg::error("clade '" + c.getName() + "' does not match the backbone: its MRCA subtends " + std::to_string(tipsUnder) + " backbone tips but the clade lists " + std::to_string(c.getTaxa().size()) + " (a clade used with backbone fossils must be the exact monophyletic group).");
+        }
     }
     parameters.push_back(parameterTree);
     if(originAge != nullptr)
@@ -129,8 +207,8 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     int nMu = (int)muTimes.size();
     bool lamSmooth = (rateUs.getLambdaMode() == RateMode::SMOOTH);
     bool muSmooth  = (rateUs.getMuMode() == RateMode::SMOOTH);
-    if(lamSmooth && nLambda < 2){ Msg::warning("Smoothing (HSMRF) set for speciation rate (lambda) but only single rate interval."); lamSmooth = false; }
-    if(muSmooth && nMu < 2){ Msg::warning("Smoothing (HSMRF) set for extinction rate (mu) but only single rate interval."); muSmooth = false; }
+    if(lamSmooth && nLambda < 2){ Msg::warning("smoothing (HSMRF) set for speciation rate (lambda) but only single rate interval."); lamSmooth = false; }
+    if(muSmooth && nMu < 2){ Msg::warning("smoothing (HSMRF) set for extinction rate (mu) but only single rate interval."); muSmooth = false; }
     double nShifts = rateUs.getHsmrfShifts();
     double shiftSize = rateUs.getHsmrfShiftSize();
     double lam0 = Probability::priorMean(lp.family, lp.p1, lp.p2);
@@ -174,7 +252,7 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
         if(psi0 == lam0) psi0 = 0.5 * lam0;
         int nPsi = (int)psiTimes[tp].size();
         bool tpSmooth = (rateUs.getPsiMode(tp) == RateMode::SMOOTH);
-        if(tpSmooth && nPsi < 2){ Msg::warning("Smoothing (HSMRF) set for sampling rate (psi) but only single rate interval."); tpSmooth = false; }
+        if(tpSmooth && nPsi < 2){ Msg::warning("smoothing (HSMRF) set for sampling rate " + ((numPsiTypes > 1) ? ("psi type '" + rateUs.getPsiTypeNames()[tp] + "'") : std::string("(psi)")) + " but only single rate interval."); tpSmooth = false; }
         if(tpSmooth){
             psiField[tp] = new ParameterShrinkageField(1.0, this, nPsi, pp, nShifts, shiftSize, psi0);
             parameters.push_back(psiField[tp]);
@@ -194,29 +272,17 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     for(size_t i = 1; i < mu.size(); i++)     mu[i]->setValue(mu[0]->getValue());
     for(auto& pv : psi) for(size_t i = 1; i < pv.size(); i++) pv[i]->setValue(pv[0]->getValue());
     rho = UserSettings::userSettings().getRho();
-    fossilType.assign((int)fossils.size(), 0);
-    const std::vector<std::string>& psiTypeNames = UserSettings::userSettings().getPsiTypeNames();
-    std::map<std::string,int> typeIdx;
-    for(size_t k = 0; k < psiTypeNames.size(); k++) typeIdx[psiTypeNames[k]] = (int)k;
-    for(size_t i = 0; i < fossils.size(); i++){
-        int ft = 0;
-        if(psiTypeNames.empty() == false && fossils[i].getMaxAge() > 0.0){
-            std::string ty = fossils[i].getType();
-            if(ty.empty())
-                Msg::error("fossil '" + fossils[i].getTaxon() + "' has no preservation type, but -psi_types declares multiple types.");
-            std::map<std::string,int>::iterator it = typeIdx.find(ty);
-            if(it == typeIdx.end())
-                Msg::error("fossil '" + fossils[i].getTaxon() + "' has preservation type '" + ty + "' not listed in -psi_types.");
-            ft = it->second;
-        }
-        fossilType[i] = ft;
-        fossilTypeByName[fossils[i].getTaxon()] = ft;
+    fossilType.assign((int)unrFossils.size(), 0);
+    for(size_t i = 0; i < unrFossils.size(); i++){
+        fossilType[i] = resolveType(unrFossils[i]);
+        fossilTypeByName[unrFossils[i].getTaxon()] = fossilType[i];
+        unrFossilName.push_back(unrFossils[i].getTaxon());
     }
 
     unresolvedFossils = nullptr;
     if(isResolved){
         Tree* wt = parameterTree->getTree();
-        for(Fossil& f : fossils){
+        for(Fossil& f : unrFossils){
             Clade* clade = nullptr;
             for(Clade& c : clades)
                 if(c.getName() == f.getClade()){
@@ -228,7 +294,7 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
             fossilOrigin.push_back(originCond ? wt->getRoot() : wt->getNodeByOffset(clade->getOrigin()->getOffset()));
         }
     }else{
-        unresolvedFossils = new ParameterUnresolvedFossils(1.0, this, parameterTree->getTree(), clades, fossils, originAge);
+        unresolvedFossils = new ParameterUnresolvedFossils(1.0, this, parameterTree->getTree(), clades, unrFossils, originAge);
         parameters.push_back(unresolvedFossils);
     }
 
@@ -321,7 +387,7 @@ std::vector<std::string> FBDTreeModel::getParameterNames(void){
         names.push_back("nSA");
     if(originAge != nullptr)
         names.push_back("originAge");
-    for(size_t i = 0; i < parameterTree->getTree()->getBackboneAgeNodes().size(); i++)
+    for(size_t i = 0; i < getAgeLogNodes().size(); i++)
         names.push_back("x" + std::to_string(i + 1));
     return names;
 }
@@ -357,8 +423,39 @@ std::vector<double> FBDTreeModel::getParameterString(void){
         vals.push_back((double)countResolvedSA());
     if(originAge != nullptr)
         vals.push_back(originAge->getValue());
-    for(Node* n : parameterTree->getTree()->getBackboneAgeNodes())
+    for(Node* n : getAgeLogNodes())
         vals.push_back(n->getTime());
+    return vals;
+}
+
+std::vector<std::string> FBDTreeModel::getLatentNames(void){
+    std::vector<std::string> names;
+    if(unresolvedFossils != nullptr){
+        for(int i = 0; i < unresolvedFossils->getNumFossils(); i++){
+            std::string nm = (i < (int)unrFossilName.size()) ? unrFossilName[i] : std::to_string(i);
+            if(unresolvedFossils->isUE(i) == false && unresolvedFossils->getYMin(i) < unresolvedFossils->getYMax(i))
+                names.push_back("y_" + nm);
+            names.push_back("z_" + nm);
+        }
+    }
+    for(const BackboneFossil& bf : backboneFossils)
+        if(bf.yMin < bf.yMax)
+            names.push_back("y_" + bf.tip->getName());
+    return names;
+}
+
+std::vector<double> FBDTreeModel::getLatentString(void){
+    std::vector<double> vals;
+    if(unresolvedFossils != nullptr){
+        for(int i = 0; i < unresolvedFossils->getNumFossils(); i++){
+            if(unresolvedFossils->isUE(i) == false && unresolvedFossils->getYMin(i) < unresolvedFossils->getYMax(i))
+                vals.push_back(unresolvedFossils->getFossilAge(i));
+            vals.push_back(unresolvedFossils->getAttachAge(i));
+        }
+    }
+    for(const BackboneFossil& bf : backboneFossils)
+        if(bf.yMin < bf.yMax)
+            vals.push_back(bf.tip->getTime());
     return vals;
 }
 
@@ -802,12 +899,12 @@ double FBDTreeModel::calculateFBDProbability(void){
         double lx0 = lambdaAt(findIndex(x0));
         fbdProb -= std::log(lx0);
         fbdProb -= calculateLnConditioning(x0);
-        fbdProb += std::log(4 * lx0 * rhoVal);
+        fbdProb += std::log(4 * lx0);
         fbdProb += lnD(x0) - std::log(4.0);
     }else{
         double lr = lambdaAt(findIndex(crownAge));
         fbdProb -= 2 * (std::log(lr) + calculateLnSurvival(crownAge));
-        fbdProb += std::log(4 * lr * rhoVal);
+        fbdProb += std::log(4 * lr);
         fbdProb += lnD(crownAge) - std::log(4.0);
     }
 
@@ -823,11 +920,12 @@ double FBDTreeModel::calculateFBDProbability(void){
             for(Node* c : n->getNeighbors())
                 if(c != n->getAncestor()){ hasChild = true; break; }
             if(hasChild)
-                termNode[idx] = std::log(lambdaAt(findIndex(n->getTime())) * rhoVal) + lnD(n->getTime());
+                termNode[idx] = std::log(lambdaAt(findIndex(n->getTime()))) + lnD(n->getTime());
         }
     });
     for(int idx = 0; idx < nDp; idx++)
         fbdProb += termNode[idx];
+    fbdProb += numExtantTips * std::log(rhoVal);
 
     //term 3: fossil attachment
     int numFossils = unresolvedFossils->getNumFossils();
@@ -860,6 +958,10 @@ double FBDTreeModel::calculateFBDProbability(void){
     });
     for(int i = 0; i < numFossils; i++)
         fbdProb += termFoss[i];
+    for(const BackboneFossil& bf : backboneFossils){
+        double y = bf.tip->getTime();
+        fbdProb += std::log(psiOfTypeAt(bf.type, findIndex(y))) + std::log(calculateP0(y)) - lnD(y);
+    }
     return fbdProb;
 }
 
@@ -1753,12 +1855,16 @@ void FBDTreeModel::setupNodeAgeFloors(void){
 }
 
 double FBDTreeModel::doJointScale(void){
+    Tree* tree = parameterTree->getTree();
     double m = std::exp(parameterTree->getScaleLambda() * (rng.uniformRv() - 0.5));
-    parameterTree->getTree()->setLastUpdateWasScale(true);
+    tree->setLastUpdateWasScale(true);
     double zJac = unresolvedFossils->scaleAllAttachAges(m);
     if(zJac == -INFINITY)
         return -INFINITY;
-    int numScaled = parameterTree->getTree()->scaleInternalAges(m);
+    int numScaled = tree->scaleInternalAges(m);
+    for(Node* n : tree->getDownPassSequence())
+        if(n != tree->getRoot() && tree->isSATip(n) == false && n->getTime() >= n->getAncestor()->getTime())
+            return -INFINITY;
     return numScaled * std::log(m) + zJac;
 }
 
@@ -1797,6 +1903,9 @@ double FBDTreeModel::doSubtreeScale(void){
     if(zJac == -INFINITY)
         return -INFINITY;
     int numScaled = tree->scaleSubtreeAges(node, sf);
+    for(Node* n : tree->getDownPassSequence())
+        if(n != tree->getRoot() && tree->isSATip(n) == false && n->getTime() >= n->getAncestor()->getTime())
+            return -INFINITY;
     return (numScaled - 1) * std::log(sf) + zJac;
 }
 
