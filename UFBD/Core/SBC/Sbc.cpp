@@ -35,18 +35,21 @@ double drawPrior(const Probability::PriorSpec& s, RandomVariable* rng){
     return 0.0;
 }
 
-double truthForName(const std::string& name, const SimParams& p, bool origin, double trueNSA){
+double truthForName(const std::string& name, const SimParams& p, bool origin, double trueNSA, const std::vector<std::string>& psiTypeNames){
     auto idxOf = [](const std::string& rest) -> int { return rest.empty() ? 0 : std::stoi(rest); };
     if(name == "nSA")                 return trueNSA;
     if(name.rfind("lambda", 0) == 0)  return p.lambda[idxOf(name.substr(6))];
     if(name.rfind("mu", 0) == 0)      return p.mu[idxOf(name.substr(2))];
-    if(name.rfind("psi", 0) == 0){
-        std::string rest = name.substr(3);
-        size_t us = rest.find('_');
-        if(us != std::string::npos)
-            return p.psi[std::stoi(rest.substr(0, us))][std::stoi(rest.substr(us + 1))];
-        return p.psi[0][idxOf(rest)];
+    if(name.rfind("psi_", 0) == 0){
+        std::string rest = name.substr(4);
+        for(size_t ti = 0; ti < psiTypeNames.size(); ti++){
+            const std::string& tn = psiTypeNames[ti];
+            if(rest == tn)                       return p.psi[ti][0];
+            if(rest.rfind(tn + "_", 0) == 0)     return p.psi[ti][std::stoi(rest.substr(tn.size() + 1))];
+        }
+        return std::numeric_limits<double>::quiet_NaN();
     }
+    if(name.rfind("psi", 0) == 0)     return p.psi[0][idxOf(name.substr(3))];
     if(name == "originAge" && origin) return p.startAge;
     return std::numeric_limits<double>::quiet_NaN();
 }
@@ -166,8 +169,12 @@ void Sbc::runEmit(void){
         std::ofstream xf(base + ".truth");
         xf << "lambda0\t" << truth.lambda[0] << "\nmu0\t" << truth.mu[0];
         for(int t = 0; t < cfg.numPsiTypes; t++)
-            for(size_t b = 0; b < truth.psi[t].size(); b++)
-                xf << "\npsi" << t << "_" << b << "\t" << truth.psi[t][b];
+            for(size_t b = 0; b < truth.psi[t].size(); b++){
+                std::string lab = (cfg.numPsiTypes > 1)
+                    ? ("psi_" + cfg.psiTypeNames[t] + (truth.psi[t].size() > 1 ? "_" + std::to_string(b) : ""))
+                    : ("psi" + std::to_string(b));
+                xf << "\n" << lab << "\t" << truth.psi[t][b];
+            }
         xf << "\nx\t" << truth.startAge << "\nnSA\t" << r.numSA << '\n';
         xf.close();
 
@@ -276,7 +283,7 @@ void Sbc::runInference(void){
         const std::vector<std::string>& names = chains[0]->traceNames();
         std::map<std::string, double> thisRep;
         for(size_t c = 0; c < names.size(); c++){
-            double t = truthForName(names[c], truth, cfg.originConditioning, (double)r.numSA);
+            double t = truthForName(names[c], truth, cfg.originConditioning, (double)r.numSA, cfg.psiTypeNames);
             if(std::isnan(t))
                 continue;
             std::vector<double> s;
@@ -299,10 +306,11 @@ void Sbc::runInference(void){
             if(t >= quantile(s, 0.25) && t <= quantile(s, 0.75)) cov50[names[c]]++;
             if(t >= quantile(s, 0.05) && t <= quantile(s, 0.95)) cov90[names[c]]++;
         }
+        if(outCols.empty())
+            for(size_t c = 0; c < names.size(); c++)
+                if(thisRep.count(names[c])) outCols.push_back(names[c]);
         if(cfg.dumpPrefix.empty() == false){
             if(liveHeader == false){
-                for(size_t c = 0; c < names.size(); c++)
-                    if(thisRep.count(names[c])) outCols.push_back(names[c]);
                 rankOut.open(cfg.dumpPrefix + "_ranks.tsv");
                 for(size_t c = 0; c < outCols.size(); c++)
                     rankOut << (c ? "\t" : "") << outCols[c];
@@ -327,9 +335,10 @@ void Sbc::runInference(void){
         printf("  WARNING: %d of %d reps did not reach the R-hat/ESS thresholds.\n",
                nUnconverged, cfg.numReps);
     printf("  %-12s %8s %8s %7s %7s\n", "param", "KS_D", "KS_p", "cov50", "cov90");
-    for(std::map<std::string, std::vector<double>>::iterator it = ranks.begin(); it != ranks.end(); ++it){
-        std::vector<double> v = it->second;
+    for(const std::string& nm : outCols){
+        std::vector<double> v = ranks[nm];
         long R = (long)v.size();
+        if(R == 0) continue;
         std::sort(v.begin(), v.end());
         double D = 0.0;
         for(long i = 0; i < R; i++){
@@ -337,9 +346,9 @@ void Sbc::runInference(void){
             D = std::max(D, std::max(v[i] - lo, hi - v[i]));
         }
         double ksp = ksPvalue(D, R);
-        double c50 = (double)cov50[it->first] / R;
-        double c90 = (double)cov90[it->first] / R;
-        printf("  %-12s %8.4f %8.4f %7.4f %7.4f\n", it->first.c_str(), D, ksp, c50, c90);
+        double c50 = (double)cov50[nm] / R;
+        double c90 = (double)cov90[nm] / R;
+        printf("  %-12s %8.4f %8.4f %7.4f %7.4f\n", nm.c_str(), D, ksp, c50, c90);
     }
 
     if(cfg.dumpPrefix.empty() == false && liveHeader)

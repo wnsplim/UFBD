@@ -180,7 +180,7 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
             parameters.push_back(psiField[tp]);
         }else{
             for(int i = 0; i < nPsi; i++){
-                std::string nm = (numPsiTypes > 1) ? ("psi" + std::to_string(tp) + "_" + std::to_string(i))
+                std::string nm = (numPsiTypes > 1) ? ("psi_" + rateUs.getPsiTypeNames()[tp] + (nPsi > 1 ? "_" + std::to_string(i) : ""))
                                                    : ("psi" + ((nPsi > 1) ? std::to_string(i) : ""));
                 ParameterDouble* p = new ParameterDouble(1.0, this, nm, 0.0, std::numeric_limits<double>::max());
                 p->setPrior(pp.family, pp.p1, pp.p2);
@@ -300,24 +300,29 @@ static bool nodeOnStalk(Node* n, Node* crown, Node* origin){
 }
 
 std::vector<std::string> FBDTreeModel::getParameterNames(void){
+    const std::vector<std::string>& typeNames = UserSettings::userSettings().getPsiTypeNames();
     std::vector<std::string> names;
-    std::vector<Node*> bbNodes = parameterTree->getTree()->getBackboneAgeNodes();
-    for(size_t i = 0; i < bbNodes.size(); i++)
-        names.push_back("x" + std::to_string(i + 1));
-    for(Parameter* p : parameters)
-        if( p != parameterTree){ //by convention, exclude parameter tree from these getters
-            ParameterShrinkageField* sf = dynamic_cast<ParameterShrinkageField*>(p);
-            if(sf != nullptr){
-                std::string base = (p == lambdaField) ? "lambda" : (p == muField ? "mu" : "psi");
-                for(int i = 0; i < sf->getNumBins(); i++)
-                    names.push_back(base + std::to_string(i));
-                continue;
-            }
-            ParameterUnresolvedFossils* uf = dynamic_cast<ParameterUnresolvedFossils*>(p);
-            names.push_back(uf != nullptr ? "nSA" : p->getName());
-        }
-    if(isResolved)
+    if(lambdaField != nullptr)
+        for(int i = 0; i < lambdaField->getNumBins(); i++) names.push_back("lambda" + std::to_string(i));
+    else
+        for(ParameterDouble* p : lambda) names.push_back(p->getName());
+    if(muField != nullptr)
+        for(int i = 0; i < muField->getNumBins(); i++) names.push_back("mu" + std::to_string(i));
+    else
+        for(ParameterDouble* p : mu) names.push_back(p->getName());
+    for(int tp = 0; tp < numPsiTypes; tp++){
+        if(psiField[tp] != nullptr)
+            for(int i = 0; i < psiField[tp]->getNumBins(); i++)
+                names.push_back((numPsiTypes > 1) ? ("psi_" + typeNames[tp] + "_" + std::to_string(i)) : ("psi" + std::to_string(i)));
+        else
+            for(ParameterDouble* p : psi[tp]) names.push_back(p->getName());
+    }
+    if(unresolvedFossils != nullptr || isResolved)
         names.push_back("nSA");
+    if(originAge != nullptr)
+        names.push_back("originAge");
+    for(size_t i = 0; i < parameterTree->getTree()->getBackboneAgeNodes().size(); i++)
+        names.push_back("x" + std::to_string(i + 1));
     return names;
 }
 
@@ -332,28 +337,28 @@ int FBDTreeModel::countResolvedSA(void){
 
 std::vector<double> FBDTreeModel::getParameterString(void){
     std::vector<double> vals;
+    if(lambdaField != nullptr)
+        for(int i = 0; i < lambdaField->getNumBins(); i++) vals.push_back(lambdaField->getRate(i));
+    else
+        for(ParameterDouble* p : lambda) vals.push_back(p->getValue());
+    if(muField != nullptr)
+        for(int i = 0; i < muField->getNumBins(); i++) vals.push_back(muField->getRate(i));
+    else
+        for(ParameterDouble* p : mu) vals.push_back(p->getValue());
+    for(int tp = 0; tp < numPsiTypes; tp++){
+        if(psiField[tp] != nullptr)
+            for(int i = 0; i < psiField[tp]->getNumBins(); i++) vals.push_back(psiField[tp]->getRate(i));
+        else
+            for(ParameterDouble* p : psi[tp]) vals.push_back(p->getValue());
+    }
+    if(unresolvedFossils != nullptr)
+        vals.push_back((double)unresolvedFossils->getNumSampledAncestors());
+    else if(isResolved)
+        vals.push_back((double)countResolvedSA());
+    if(originAge != nullptr)
+        vals.push_back(originAge->getValue());
     for(Node* n : parameterTree->getTree()->getBackboneAgeNodes())
         vals.push_back(n->getTime());
-    for(Parameter* p : parameters)
-        if( p != parameterTree){ //by convention, exclude parameter tree from these getters
-            ParameterShrinkageField* sf = dynamic_cast<ParameterShrinkageField*>(p);
-            if(sf != nullptr){
-                for(int i = 0; i < sf->getNumBins(); i++)
-                    vals.push_back(sf->getRate(i));
-                continue;
-            }
-            ParameterDouble* pd = dynamic_cast<ParameterDouble*>(p);
-            if(pd != nullptr){
-                vals.push_back(pd->getValue());
-                continue;
-            }
-            ParameterUnresolvedFossils* uf = dynamic_cast<ParameterUnresolvedFossils*>(p);
-            if(uf != nullptr)
-                vals.push_back((double)uf->getNumSampledAncestors());
-        }
-    if(isResolved)
-        vals.push_back((double)countResolvedSA());
-
     return vals;
 }
 
