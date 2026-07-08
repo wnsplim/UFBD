@@ -17,7 +17,6 @@ class MetropolisCoupledMcmc : public ChainRunner {
                                             MetropolisCoupledMcmc(void) = delete;
                                             MetropolisCoupledMcmc(unsigned long ng, int thin, std::vector<PhylogeneticModel*> m, unsigned int masterSeed);
                                             ~MetropolisCoupledMcmc(void);
-        void                                run(void);
         void                                init(void);
         void                                advance(unsigned long nGens);
         void                                finalize(void);

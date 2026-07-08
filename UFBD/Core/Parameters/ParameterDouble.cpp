@@ -13,7 +13,6 @@ ParameterDouble::ParameterDouble(double prob, PhylogeneticModel* m, std::string 
     lowerBound(lb),
     upperBound(ub),
     numRejections(0), numAcceptances(0),
-    numAdaptive(10000),
     targetAr(0.3){
 
     RandomVariable& rng = RandomVariable::randomVariableInstance();
@@ -28,10 +27,6 @@ ParameterDouble::ParameterDouble(double prob, PhylogeneticModel* m, std::string 
     priorP2 = 1.0;
 }
 
-double ParameterDouble::lnProbability(void){
-    return Probability::priorLnPdf(priorFamily, priorP1, priorP2, value[0], lowerBound, upperBound);
-}
-
 void ParameterDouble::setPrior(Probability::PriorFamily f, double p1, double p2){
     priorFamily = f;
     priorP1 = p1;
@@ -41,6 +36,10 @@ void ParameterDouble::setPrior(Probability::PriorFamily f, double p1, double p2)
         setProposalProbability(0.0);
     } else if(f == Probability::PriorFamily::UNIFORM && (value[0] < p1 || value[0] > p2))
         setValue(0.5 * (p1 + p2));
+}
+
+double ParameterDouble::lnProbability(void){
+    return Probability::priorLnPdf(priorFamily, priorP1, priorP2, value[0], lowerBound, upperBound);
 }
 
 void ParameterDouble::print(void){
@@ -93,12 +92,12 @@ void ParameterDouble::updateForRejection(void) {
 }
 
 void ParameterDouble::writeState(std::ostream& os) {
-    os << value[1] << ' ' << windowSize << ' ' << numAcceptances << ' ' << numAdaptive << ' ' << numRejections << '\n';
+    os << value[1] << ' ' << windowSize << ' ' << numAcceptances << ' ' << numRejections << '\n';
     Serialize::writeBoolDeque(os, recentAcceptRej);
 }
 
 void ParameterDouble::readState(std::istream& is) {
-    is >> value[1] >> windowSize >> numAcceptances >> numAdaptive >> numRejections;
+    is >> value[1] >> windowSize >> numAcceptances >> numRejections;
     value[0] = value[1];
     Serialize::readBoolDeque(is, recentAcceptRej);
 }

@@ -29,7 +29,6 @@ class SequenceCTMCModel {
         void                            readState(std::istream& is);
         int                             getNumPartitions(void) const;
         std::vector<int>                getPartitionGroups(void) const { return partitionGroup; }
-        bool                            hasMovableParams(void) const;
 
     private:
         PhylogeneticModel*              owner;

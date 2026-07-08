@@ -234,14 +234,4 @@ Diagnostic diagnose(const std::vector<std::vector<double>>& raw){
     return d;
 }
 
-bool meetsThresholds(const Diagnostic& d, double rhatMax, double essMin){
-    if(std::isnan(d.rhat))
-        return true;
-    if(d.rhat > rhatMax)
-        return false;
-    if(d.bulkEss < essMin || d.tailEss < essMin)
-        return false;
-    return true;
-}
-
 }

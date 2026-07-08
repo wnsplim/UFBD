@@ -43,7 +43,6 @@ class Tree {
         void                                liftInternalAgesAboveChildren(void);
         Node*                               getCrown(void) { return crown; }
         Node*                               getRoot(void) { return origin != nullptr ? origin : crown; }
-        Node*                               getOrigin(void) { return origin; }
         Node*                               addOriginNode(double x0);
         bool                                getLastUpdateWasScale(void) { return lastUpdateWasScale; }
         bool                                isBinary(void);

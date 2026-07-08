@@ -15,7 +15,6 @@ class SequenceLikelihood {
     public:
                             SequenceLikelihood(int numStates, int numCats);
         void                addPartition(const std::vector<std::string>& taxa, const std::vector<std::vector<int>>& patterns, const std::vector<int>& weight);
-        int                 getNumStates(void) const { return numStates; }
         int                 getNumPartitions(void) const { return numPartitions; }
         double              computeLnL(Tree* tree,
                                        const std::vector<std::vector<double>>& branchRates,

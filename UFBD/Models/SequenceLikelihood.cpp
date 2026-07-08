@@ -70,7 +70,6 @@ double SequenceLikelihood::computeLnL(Tree* tree,
 
     double lnL = 0.0;
     const double ninf = -std::numeric_limits<double>::infinity();
-    tree->ensureBackboneCache();
     if(numPartitions <= 1){
         lnL = computePartitionLnL(0, tree, branchRates, exchangeability, frequency, alpha, proportionInvariant, branchMGF, true);
     }else{

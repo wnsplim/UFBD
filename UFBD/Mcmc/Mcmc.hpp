@@ -13,7 +13,6 @@ class Mcmc : public ChainRunner {
     public:
                                 Mcmc(void) = delete;
                                 Mcmc(int ng, int thin, PhylogeneticModel* m);
-        void                    run(void);
         void                    init(void);
         void                    advance(unsigned long nGens);
         void                    finalize(void);

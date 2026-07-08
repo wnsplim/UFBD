@@ -8,7 +8,7 @@
 WriteTSV::WriteTSV(void){
 }
 
-WriteTSV::WriteTSV(std::string filepath, bool overwrite) : filepath(filepath), numRows(0), numCols(0){
+WriteTSV::WriteTSV(std::string filepath, bool overwrite) : filepath(filepath), numRows(0){
     if(overwrite == true)
         std::remove(filepath.c_str());
     fout.open(filepath, std::ios::out | std::ios::app);
@@ -29,7 +29,7 @@ void WriteTSV::addColumnNamesTSV(std::vector<std::string> cn){
         fout << "\n";
         numRows++;
     }else{
-        Msg::error("adding column names after data has alread been entered");
+        Msg::error("adding column names after data has already been entered");
     }
     fout.flush();
 }
@@ -43,7 +43,6 @@ void WriteTSV::addFilepath(std::string fp, bool overwrite){
         std::remove(filepath.c_str());
     fout.open(filepath, std::ios::out | std::ios::app);
     numRows = 0;
-    numCols = 0;
     if (!fout.is_open())
         Msg::error("File stream is not open: " + filepath);
 }

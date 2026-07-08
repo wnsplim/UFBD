@@ -26,12 +26,6 @@ Mcmc::Mcmc(int ng, int thin, PhylogeneticModel* m) : model(m), numCycles(ng), th
 Tree* Mcmc::getTree(void) { return model->getTree(); }
 bool Mcmc::treeHasFossils(void) { return model->treeIncludesFossils(); }
 
-void Mcmc::run(void) {
-    init();
-    advance((unsigned long)numCycles);
-    finalize();
-}
-
 void Mcmc::init(void) {
     RandomVariable::setActiveInstance(model->getRng());
     curLnL = model->lnLikelihood();

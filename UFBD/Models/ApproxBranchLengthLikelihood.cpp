@@ -12,11 +12,10 @@
 #include <limits>
 #include <sstream>
 
-ApproxBranchLengthLikelihood::ApproxBranchLengthLikelihood(const std::string& hessianFile, const std::string& mlTreeFile, const std::vector<std::string>& rogue, int partitionIndex, int nStates) :
+ApproxBranchLengthLikelihood::ApproxBranchLengthLikelihood(const std::string& hessianFile, const std::string& mlTreeFile, const std::vector<std::string>& rogue, int nStates) :
     nb(0),
     nPartitions(0),
     crownBranchIdx(-1),
-    partitionIndex(partitionIndex),
     cJc((nStates - 1.0) / nStates),
     rogueTaxa(rogue.begin(), rogue.end()),
     cachedRoot(nullptr)
@@ -174,15 +173,6 @@ void ApproxBranchLengthLikelihood::readHessianFile(const std::string& fn){
         }
     }
 
-    if(partitionIndex > 0){
-        int p = partitionIndex - 1;
-        if(p >= nPartitions)
-            Msg::error("ApproxBranchLengthLikelihood: partition index out of range");
-        blMle = { blMle[p] };
-        gradient = { gradient[p] };
-        hessian = { hessian[p] };
-        nPartitions = 1;
-    }
 }
 
 void ApproxBranchLengthLikelihood::applyArcsinTransform(int p){

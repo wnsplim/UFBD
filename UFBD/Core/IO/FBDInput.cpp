@@ -105,7 +105,6 @@ void FBDInput::readFossils(std::string path){
         if(clade == nullptr)
             Msg::error("fossil '" + taxon + "' references undefined clade '" + cladeName + "'");
 
-        for(char& ch : assignStr) ch = std::toupper((unsigned char)ch);
         if(assignStr != "CROWN" && assignStr != "TOTAL" && assignStr != "STEM")
             Msg::error("fossil '" + taxon + "' has unknown assignment '" + assignStr + "'");
         Assignment assignment = (assignStr == "CROWN") ? Assignment::CROWN

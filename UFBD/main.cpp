@@ -47,7 +47,7 @@ int main(int argc, const char* argv[]) {
     if(seq && hessian)
         Msg::error("-seq and -hessian are mutually exclusive.");
     if(settings.clockOrCtmcConfigured() && seq == false && hessian == false)
-        Msg::warning("ㅜo -seq or -hessian provided, running pure FBD model.");
+        Msg::warning("No -seq or -hessian provided, running pure FBD model.");
     ClockModel cm = ClockModel::UCLN;
     std::string cn = settings.getClockModelName();
     if(cn == "gbm")  cm = ClockModel::GBM;

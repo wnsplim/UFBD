@@ -17,6 +17,9 @@ double ParameterSimplex::lnProbability(void){
     return Probability::Dirichlet::lnPdf(priorAlpha, value[0]);
 }
 
+void ParameterSimplex::print(void){
+}
+
 double ParameterSimplex::update(void){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     int k = (int)value[0].size();
@@ -51,7 +54,4 @@ void ParameterSimplex::readState(std::istream& is){
     Serialize::readVec(is, value[1]);
     value[0] = value[1];
     is >> numAcceptances >> numRejections;
-}
-
-void ParameterSimplex::print(void){
 }

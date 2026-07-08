@@ -36,7 +36,6 @@ class RandomVariable {
         static void             setActiveInstance(RandomVariable* r) { activeInstance = r; }
         static RandomVariable*  getActiveInstance(void) { return activeInstance; }
                                 RandomVariable(void);
-                                RandomVariable(RandomVariable& r);
                                 RandomVariable(uint32_t seed);
         void                    setSeed(uint32_t seed) { initialize(seed); }
         void                    writeState(std::ostream& os);

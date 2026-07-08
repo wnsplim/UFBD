@@ -59,7 +59,7 @@ RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades
     std::vector<std::string> rogue;
     for(Fossil& f : fossils)
         rogue.push_back(f.getTaxon());
-    lik = new ApproxBranchLengthLikelihood(hessianFile, mlTreeFile, rogue, 0, nStates);
+    lik = new ApproxBranchLengthLikelihood(hessianFile, mlTreeFile, rogue, nStates);
     buildClock(clockModel, rgeneParam, sigma2Param);
     parameters.push_back(fbd->getParameterTree());
     lastMoveType = 2;

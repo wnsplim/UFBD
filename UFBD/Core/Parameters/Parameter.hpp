@@ -5,7 +5,6 @@
 #include <string>
 class PhylogeneticModel;
 
-
 class Parameter {
 
     public:

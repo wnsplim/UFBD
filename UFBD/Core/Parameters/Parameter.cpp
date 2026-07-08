@@ -1,7 +1,5 @@
 #include "Parameter.hpp"
 
-
-
 Parameter::Parameter(double prob, PhylogeneticModel* m, std::string n) :
     proposalProbability(prob),
     model(m),

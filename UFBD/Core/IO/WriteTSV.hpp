@@ -18,7 +18,6 @@ class WriteTSV{
 
     private:
         std::fstream                fout;
-        int                         numCols;
         int                         numRows;
         std::string                 filepath;
 };

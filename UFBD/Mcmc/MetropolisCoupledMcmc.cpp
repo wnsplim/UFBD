@@ -75,15 +75,9 @@ double MetropolisCoupledMcmc::calcHeating(int idx){
     return (1 / (1 + deltaT * idx));
 }
 
-void MetropolisCoupledMcmc::run(void) {
-    init();
-    advance(numCycles);
-    finalize();
-}
-
 void MetropolisCoupledMcmc::init(void) {
     if(numCycles >= std::numeric_limits<unsigned long>::max())
-        Msg::error("Numer of cycles requested is greater than largest possible value");
+        Msg::error("Number of cycles requested is greater than largest possible value");
     RandomVariable::setActiveInstance(&swapRng);
     int idx = 0;
     for(PhylogeneticModel* m : models){

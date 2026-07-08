@@ -249,15 +249,12 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
         int next = 1;
         assignLabels(mrca, next);
         res.numBackbone = next - 1;
-        res.originAge = p.originConditioning ? p.startAge : mrca->age;
         if(res.numBackbone > 0){
-            res.crownAge = mrca->age;
             std::stringstream s;
             writeNewick(mrca, s);
             s << ";";
             res.backboneNewick = s.str();
         }else{
-            res.crownAge = 0.0;
             res.backboneNewick = "";
         }
     }

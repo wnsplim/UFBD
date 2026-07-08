@@ -108,10 +108,6 @@ double SequenceCTMCModel::lnPrior(void){
     return lnp;
 }
 
-bool SequenceCTMCModel::hasMovableParams(void) const {
-    return (empirical == false) || freqEstimated || useGammaHet || useInvariant;
-}
-
 double SequenceCTMCModel::update(void){
     RandomVariable& r = RandomVariable::randomVariableInstance();
     int p = (int)(r.uniformRv() * (int)exch.size());

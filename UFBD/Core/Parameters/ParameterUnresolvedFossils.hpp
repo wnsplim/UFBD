@@ -22,8 +22,6 @@ class ParameterUnresolvedFossils : public Parameter {
         double                      getAttachAge(int i) { return z[0][i]; }
         double                      getYMin(int i) { return yMin[i]; }
         double                      getYMax(int i) { return yMax[i]; }
-        void                        setProposedAttach(int i, double zv) { z[0][i] = zv; }
-        void                        beginBulkMove(void) { lastWasBulk = true; lastWasFlip = false; }
         bool                        isUE(int i) { return ue[i]; }
         bool                        isSA(int i) { return ue[i] == false && z[0][i] == y[0][i]; }
         int                         getNumSampledAncestors(void) { int n = 0; for(int i = 0; i < numFossils; i++) if(ue[i] == false && z[0][i] == y[0][i]) n++; return n; }

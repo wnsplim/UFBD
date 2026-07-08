@@ -45,17 +45,14 @@ class UserSettings {
         bool                        getConditionAgePriorSet(void) { return conditionAgePriorSet; }
         Probability::PriorSpec      getLambdaPrior(void) { return lambdaPrior; }
         Probability::PriorSpec      getMuPrior(void) { return muPrior; }
-        Probability::PriorSpec      getPsiPrior(void) { return psiPrior; }
         RateMode                    getLambdaMode(void) { return lambdaMode; }
         RateMode                    getMuMode(void) { return muMode; }
-        RateMode                    getPsiMode(void) { return psiMode; }
         double                      getHsmrfShifts(void) { return hsmrfShifts; }
         double                      getHsmrfShiftSize(void) { return hsmrfShiftSize; }
         bool                        getCpuTime(void) { return cpuTime; }
         std::vector<double>         getSkylineTimes(void);
         std::vector<double>         getLambdaSkylineTimes(void) { return lambdaSkylineTimes; }
         std::vector<double>         getMuSkylineTimes(void)     { return muSkylineTimes; }
-        std::vector<double>         getPsiSkylineTimes(void)    { return psiSkylineTimes; }
         int                         getNumPsiTypes(void) { return psiTypeNames.empty() ? 1 : (int)psiTypeNames.size(); }
         const std::vector<std::string>& getPsiTypeNames(void) { return psiTypeNames; }
         Probability::PriorSpec      getPsiPrior(int t);
@@ -70,7 +67,6 @@ class UserSettings {
         Model                       getModel(void) { return model; }
         double                      getRho(void) { return rho; }
         unsigned int                getSeed(void) { return seed; }
-        bool                        getSeedSet(void) { return seedSet; }
         int                         getThinning(void) { return thinning; }
         std::string                 getHessianFile(void) { return hessianFile; }
         std::string                 getClockModelName(void) { return clockModelName; }

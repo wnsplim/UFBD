@@ -58,7 +58,6 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      calculateP0At(int i, double t);
         double                      calculateP0(double t);
         double                      calculateP0HatAt(int i, double t);
-        double                      calculateP0Hat(double t);
         double                      computeGamma(double z, int i);
         void                        buildEulerIndex(void);
         bool                        inSub(Node* node, Node* subtreeCrown);
@@ -118,7 +117,6 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<Node*>          fossilCrown;
         std::vector<Node*>          fossilOrigin;
         std::vector<bool>           fossilIsCrown;
-        std::vector<double>         fossilY;
         double                      rho;
         std::vector<double>         c1Vec;
         std::vector<double>         c2Vec;

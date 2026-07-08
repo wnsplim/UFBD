@@ -40,7 +40,6 @@ class ParameterDouble : public Parameter {
         double                      targetAr;
         double                      windowSize;
         int                         numAcceptances;
-        int                         numAdaptive;
         int                         numRejections;
 };
 

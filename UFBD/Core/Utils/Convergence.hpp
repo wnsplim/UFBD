@@ -12,8 +12,6 @@ namespace Convergence {
     };
 
     Diagnostic diagnose(const std::vector<std::vector<double>>& chains);
-
-    bool meetsThresholds(const Diagnostic& d, double rhatMax, double essMin);
 }
 
 #endif

@@ -162,7 +162,6 @@ double ParameterUnresolvedFossils::updateFossilAge(int i){
         }else{
             y[0][i] = yiNew;
         }
-        lastFossil = i;
         return 0.0;
     }
     bool SnewWasSA = (z[0][Snew] == y[0][Snew]);

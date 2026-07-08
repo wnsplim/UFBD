@@ -1173,10 +1173,6 @@ double FBDTreeModel::calculateP0HatAt(int i, double t){
     return 1 + tmp;
 }
 
-double FBDTreeModel::calculateP0Hat(double t){
-    return calculateP0HatAt(findIndex(t), t);
-}
-
 void FBDTreeModel::buildEulerIndex(void){
     Tree* tree = parameterTree->getTree();
     int n = tree->getNumNodes();
@@ -1596,7 +1592,6 @@ void FBDTreeModel::resolveFossils(Tree* t, std::vector<Clade>& clades, std::vect
 
         fossilName.push_back(f.getTaxon());
         fossilIsCrown.push_back(isCrown);
-        fossilY.push_back(y);
     }
 }
 
