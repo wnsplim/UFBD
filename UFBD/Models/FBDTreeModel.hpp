@@ -41,7 +41,7 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      calculateResolvedFBD(void);
         int                         countResolvedSA(void);
         double                      lnD(double t);
-        double                      fossilPqLn(double y, double z);
+        double                      fossilPqLn(double y, double z, int type);
         double                      uePqLn(double z);
         double                      calculateLnSurvival(double t);
         double                      calculateLnAnySample(double t);
@@ -80,18 +80,22 @@ class FBDTreeModel : public PhylogeneticModel {
         bool                        subtreeAllFossil(Node* n);
         double                      lambdaAt(int i);
         double                      muAt(int i);
-        double                      psiAt(int i);
+        double                      psiTotalAt(int i);
+        double                      psiOfTypeAt(int type, int i);
         //ordered by memory footprint
         std::vector<ParameterDouble*> lambda;
         std::vector<ParameterDouble*> mu;
-        std::vector<ParameterDouble*> psi;
+        std::vector<std::vector<ParameterDouble*>> psi;
         ParameterShrinkageField*    lambdaField;
         ParameterShrinkageField*    muField;
-        ParameterShrinkageField*    psiField;
+        std::vector<ParameterShrinkageField*> psiField;
+        int                         numPsiTypes;
+        std::vector<int>            fossilType;
+        std::map<std::string,int>   fossilTypeByName;
         std::vector<double>           intervalStart;
         std::vector<int>            lambdaIdx;
         std::vector<int>            muIdx;
-        std::vector<int>            psiIdx;
+        std::vector<std::vector<int>> psiIdx;
         ParameterDouble*            originAge;
         ParameterTree*              parameterTree;
         ParameterUnresolvedFossils* unresolvedFossils;

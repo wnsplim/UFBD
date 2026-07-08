@@ -132,7 +132,8 @@ void FBDInput::readFossils(std::string path){
             assignment = Assignment::CROWN;
         }
 
-        fossils.push_back(Fossil(taxon, minAge, maxAge, cladeName, assignment));
+        std::string typeName = (row.size() >= 6) ? row[5] : "";
+        fossils.push_back(Fossil(taxon, minAge, maxAge, cladeName, assignment, typeName));
     }
 }
 

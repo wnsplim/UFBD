@@ -17,6 +17,7 @@ struct SimNode {
     bool      inBackbone;
     bool      keep;
     int       label;
+    int       type;
 };
 
 SimNode* newNode(double age, std::vector<SimNode*>& all){
@@ -30,6 +31,7 @@ SimNode* newNode(double age, std::vector<SimNode*>& all){
     n->inBackbone = false;
     n->keep = false;
     n->label = 0;
+    n->type = 0;
     all.push_back(n);
     return n;
 }
@@ -146,11 +148,13 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
         while(ii > 0 && p.intervalStart[ii] > p.startAge)
             ii--;
 
+        int numTypes = (int)p.psi.size();
         double curAge = p.startAge;
         while(curAge > 0.0 && active.empty() == false){
             double lam = p.lambda[p.lambdaIdx[ii]];
             double m   = p.mu[p.muIdx[ii]];
-            double ps  = p.psi[p.psiIdx[ii]];
+            double ps  = 0.0;
+            for(int t = 0; t < numTypes; t++) ps += p.psi[t][p.psiIdx[t][ii]];
             double sum = lam + m + ps;
             int N = (int)active.size();
             double younger = p.intervalStart[ii];
@@ -176,7 +180,13 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
                 active[k] = active.back();
                 active.pop_back();
             }else{
-                SimNode* f = newNode(nextAge, allNodes); f->parent = n; f->isFossil = true; n->left = f;
+                int ftype = 0;
+                if(numTypes > 1){
+                    double uu = rng->uniformRv() * ps;
+                    double acc = 0.0;
+                    for(int t = 0; t < numTypes; t++){ acc += p.psi[t][p.psiIdx[t][ii]]; if(uu < acc){ ftype = t; break; } }
+                }
+                SimNode* f = newNode(nextAge, allNodes); f->parent = n; f->isFossil = true; f->type = ftype; n->left = f;
                 SimNode* c = newNode(-1.0, allNodes); c->parent = n; n->right = c;
                 active[k] = c;
             }
@@ -224,6 +234,7 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
         for(SimNode* n : allNodes){
             if(n->isFossil){
                 res.fossilAges.push_back(n->age);
+                res.fossilTypes.push_back(n->type);
                 res.numFossils++;
             }
         }

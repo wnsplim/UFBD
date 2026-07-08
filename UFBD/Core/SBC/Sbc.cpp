@@ -39,8 +39,14 @@ double truthForName(const std::string& name, const SimParams& p, bool origin, do
     auto idxOf = [](const std::string& rest) -> int { return rest.empty() ? 0 : std::stoi(rest); };
     if(name == "nSA")                 return trueNSA;
     if(name.rfind("lambda", 0) == 0)  return p.lambda[idxOf(name.substr(6))];
-    if(name.rfind("psi", 0) == 0)     return p.psi[idxOf(name.substr(3))];
     if(name.rfind("mu", 0) == 0)      return p.mu[idxOf(name.substr(2))];
+    if(name.rfind("psi", 0) == 0){
+        std::string rest = name.substr(3);
+        size_t us = rest.find('_');
+        if(us != std::string::npos)
+            return p.psi[std::stoi(rest.substr(0, us))][std::stoi(rest.substr(us + 1))];
+        return p.psi[0][idxOf(rest)];
+    }
     if(name == "originAge" && origin) return p.startAge;
     return std::numeric_limits<double>::quiet_NaN();
 }
@@ -96,18 +102,25 @@ SimParams Sbc::drawParams(void){
     p.originConditioning = cfg.originConditioning;
     p.condEvent = cfg.condEvent;
     p.startAge = drawPrior(cfg.startAgePrior, rng);
-    int lPrev = -1, mPrev = -1, pPrev = -1;
+    int nT = cfg.numPsiTypes;
+    p.psi.assign(nT, std::vector<double>());
+    p.psiIdx.assign(nT, std::vector<int>());
+    int lPrev = -1, mPrev = -1;
+    std::vector<int> pPrev(nT, -1);
     for(double s : cfg.intervalStart){
-        int li = 0, mi = 0, pi = 0;
+        int li = 0, mi = 0;
         for(int k = 0; k < (int)cfg.lambdaTimes.size(); k++) if(cfg.lambdaTimes[k] <= s) li = k;
         for(int k = 0; k < (int)cfg.muTimes.size(); k++)     if(cfg.muTimes[k] <= s)     mi = k;
-        for(int k = 0; k < (int)cfg.psiTimes.size(); k++)    if(cfg.psiTimes[k] <= s)    pi = k;
         if(li > lPrev){ p.lambda.push_back(drawPrior(cfg.lambdaPrior, rng)); lPrev = li; }
         if(mi > mPrev){ p.mu.push_back(drawPrior(cfg.muPrior, rng));         mPrev = mi; }
-        if(pi > pPrev){ p.psi.push_back(drawPrior(cfg.psiPrior, rng));       pPrev = pi; }
         p.lambdaIdx.push_back(li);
         p.muIdx.push_back(mi);
-        p.psiIdx.push_back(pi);
+        for(int t = 0; t < nT; t++){
+            int pi = 0;
+            for(int k = 0; k < (int)cfg.psiTimes[t].size(); k++) if(cfg.psiTimes[t][k] <= s) pi = k;
+            if(pi > pPrev[t]){ p.psi[t].push_back(drawPrior(cfg.psiPriors[t], rng)); pPrev[t] = pi; }
+            p.psiIdx[t].push_back(pi);
+        }
     }
     return p;
 }
@@ -141,15 +154,21 @@ void Sbc::runEmit(void){
         cf.close();
 
         std::ofstream ff(base + ".fossils");
-        for(size_t i = 0; i < r.fossilAges.size(); i++)
-            ff << "F" << (i + 1) << '\t' << r.fossilAges[i] << '\t' << r.fossilAges[i] << "\twhole\t" << asg << '\n';
+        for(size_t i = 0; i < r.fossilAges.size(); i++){
+            ff << "F" << (i + 1) << '\t' << r.fossilAges[i] << '\t' << r.fossilAges[i] << "\twhole\t" << asg;
+            if(cfg.numPsiTypes > 1) ff << '\t' << cfg.psiTypeNames[r.fossilTypes[i]];
+            ff << '\n';
+        }
         for(int i = 0; i < r.numUE; i++)
             ff << "U" << (i + 1) << "\t0\t0\twhole\t" << asg << '\n';
         ff.close();
 
         std::ofstream xf(base + ".truth");
-        xf << "lambda0\t" << truth.lambda[0] << "\nmu0\t" << truth.mu[0] << "\npsi0\t" << truth.psi[0]
-           << "\nx\t" << truth.startAge << "\nnSA\t" << r.numSA << '\n';
+        xf << "lambda0\t" << truth.lambda[0] << "\nmu0\t" << truth.mu[0];
+        for(int t = 0; t < cfg.numPsiTypes; t++)
+            for(size_t b = 0; b < truth.psi[t].size(); b++)
+                xf << "\npsi" << t << "_" << b << "\t" << truth.psi[t][b];
+        xf << "\nx\t" << truth.startAge << "\nnSA\t" << r.numSA << '\n';
         xf.close();
 
         printf("emit rep %d: %d backbone, %zu fossil, %d UE -> %s.{tree,clades,fossils,truth}\n",
@@ -168,7 +187,7 @@ void Sbc::runSimulateOnly(void){
         SimParams p = drawParams();
         SimResult r = sim.simulate(p);
         sExt += r.numExtantSampled; sFoss += r.numFossils; sBB += r.numBackbone; sUE += r.numUE;
-        sLam += p.lambda[0]; sMu += p.mu[0]; sPsi += p.psi[0]; sX += p.startAge;
+        sLam += p.lambda[0]; sMu += p.mu[0]; sPsi += p.psi[0][0]; sX += p.startAge;
         if(r.numBackbone < minB) minB = r.numBackbone;
         if(r.numBackbone > maxB) maxB = r.numBackbone;
         if(r.numExtantSampled < minE) minE = r.numExtantSampled;
@@ -228,8 +247,10 @@ void Sbc::runInference(void){
         clades.push_back(Clade("whole", taxa, crown, crown->getAncestor()));
         Assignment asg = cfg.originConditioning ? Assignment::TOTAL : Assignment::CROWN;
         std::vector<Fossil> fossils;
-        for(size_t i = 0; i < r.fossilAges.size(); i++)
-            fossils.push_back(Fossil("F" + std::to_string(i + 1), r.fossilAges[i], r.fossilAges[i], "whole", asg));
+        for(size_t i = 0; i < r.fossilAges.size(); i++){
+            std::string ty = (cfg.numPsiTypes > 1) ? cfg.psiTypeNames[r.fossilTypes[i]] : "";
+            fossils.push_back(Fossil("F" + std::to_string(i + 1), r.fossilAges[i], r.fossilAges[i], "whole", asg, ty));
+        }
         for(int i = 0; i < r.numUE; i++)
             fossils.push_back(Fossil("U" + std::to_string(i + 1), 0.0, 0.0, "whole", asg));
         if(r.numBackbone > 0)

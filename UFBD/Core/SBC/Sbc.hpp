@@ -20,10 +20,12 @@ struct SbcConfig {
     std::vector<double>     intervalStart;
     std::vector<double>     lambdaTimes;
     std::vector<double>     muTimes;
-    std::vector<double>     psiTimes;
+    int                     numPsiTypes;
+    std::vector<std::string>            psiTypeNames;
+    std::vector<std::vector<double>>    psiTimes;
+    std::vector<Probability::PriorSpec> psiPriors;
     Probability::PriorSpec  lambdaPrior;
     Probability::PriorSpec  muPrior;
-    Probability::PriorSpec  psiPrior;
     Probability::PriorSpec  startAgePrior;
     std::string             dumpPrefix;
 };

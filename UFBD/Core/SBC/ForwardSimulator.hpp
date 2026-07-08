@@ -12,10 +12,10 @@ struct SimParams {
     std::vector<double> intervalStart;
     std::vector<int>    lambdaIdx;
     std::vector<int>    muIdx;
-    std::vector<int>    psiIdx;
+    std::vector<std::vector<int>> psiIdx;
     std::vector<double> lambda;
     std::vector<double> mu;
-    std::vector<double> psi;
+    std::vector<std::vector<double>> psi;
     double              rho = 1.0;
     double              bb = 1.0;
     double              startAge = 0.0;
@@ -26,6 +26,7 @@ struct SimParams {
 struct SimResult {
     std::string         backboneNewick;
     std::vector<double> fossilAges;
+    std::vector<int>    fossilTypes;
     int                 numExtantSampled = 0;
     int                 numBackbone = 0;
     int                 numUE = 0;

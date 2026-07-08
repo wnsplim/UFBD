@@ -28,12 +28,13 @@ class Clade {
 class Fossil {
 
     public:
-                                            Fossil(std::string t, double mn, double mx, std::string c, Assignment a) : taxon(t), minAge(mn), maxAge(mx), clade(c), assignment(a) {}
+                                            Fossil(std::string t, double mn, double mx, std::string c, Assignment a, std::string ty = "") : taxon(t), minAge(mn), maxAge(mx), clade(c), assignment(a), type(ty) {}
         std::string                         getTaxon(void) { return taxon; }
         double                              getMinAge(void) { return minAge; }
         double                              getMaxAge(void) { return maxAge; }
         std::string                         getClade(void) { return clade; }
         Assignment                          getAssignment(void) { return assignment; }
+        std::string                         getType(void) { return type; }
 
     private:
         std::string                         taxon;
@@ -41,6 +42,7 @@ class Fossil {
         double                              maxAge;
         std::string                         clade;
         Assignment                          assignment;
+        std::string                         type;
 };
 
 class FBDInput {

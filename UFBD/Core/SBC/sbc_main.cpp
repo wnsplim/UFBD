@@ -56,9 +56,11 @@ int main(int argc, const char* argv[]){
 
     Probability::PriorSpec lambdaPrior = s.getLambdaPrior();
     Probability::PriorSpec muPrior     = s.getMuPrior();
-    Probability::PriorSpec psiPrior    = s.getPsiPrior();
-    if(lambdaPrior.set == false || muPrior.set == false || psiPrior.set == false)
+    if(lambdaPrior.set == false || muPrior.set == false)
         Msg::error("SBC: -lambda-prior, -mu-prior and -psi-prior are all required.");
+    for(int t = 0; t < s.getNumPsiTypes(); t++)
+        if(s.getPsiPrior(t).set == false)
+            Msg::error("SBC: -lambda-prior, -mu-prior and -psi-prior are all required.");
     if(s.getConditionAgePriorSet() == false)
         Msg::error("SBC: -cond must supply a distribution to draw the origin age from.");
 
@@ -79,11 +81,17 @@ int main(int argc, const char* argv[]){
     for(double t : s.getLambdaSkylineTimes()) cfg.lambdaTimes.push_back(t);
     cfg.muTimes.push_back(0.0);
     for(double t : s.getMuSkylineTimes())     cfg.muTimes.push_back(t);
-    cfg.psiTimes.push_back(0.0);
-    for(double t : s.getPsiSkylineTimes())    cfg.psiTimes.push_back(t);
+    cfg.numPsiTypes = s.getNumPsiTypes();
+    cfg.psiTypeNames = s.getPsiTypeNames();
+    for(int t = 0; t < cfg.numPsiTypes; t++){
+        std::vector<double> times;
+        times.push_back(0.0);
+        for(double tv : s.getPsiSkylineTimes(t)) times.push_back(tv);
+        cfg.psiTimes.push_back(times);
+        cfg.psiPriors.push_back(s.getPsiPrior(t));
+    }
     cfg.lambdaPrior = lambdaPrior;
     cfg.muPrior = muPrior;
-    cfg.psiPrior = psiPrior;
     cfg.startAgePrior = { true, s.getConditionAgePrior(), s.getConditionAgePriorP1(), s.getConditionAgePriorP2() };
     cfg.dumpPrefix = out;
     (void)gen; (void)autoGen; (void)burnin; (void)thin; (void)bins;

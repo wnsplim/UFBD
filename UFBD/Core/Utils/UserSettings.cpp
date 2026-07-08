@@ -37,7 +37,35 @@ std::vector<double> UserSettings::getSkylineTimes(void){
     for(double t : lambdaSkylineTimes) u.insert(t);
     for(double t : muSkylineTimes)     u.insert(t);
     for(double t : psiSkylineTimes)    u.insert(t);
+    for(std::map<std::string, std::vector<double>>::iterator it = psiTimesByName.begin(); it != psiTimesByName.end(); ++it)
+        for(double t : it->second) u.insert(t);
     return std::vector<double>(u.begin(), u.end());
+}
+
+Probability::PriorSpec UserSettings::getPsiPrior(int t){
+    if(psiTypeNames.empty() == false){
+        std::map<std::string, Probability::PriorSpec>::iterator it = psiPriorByName.find(psiTypeNames[t]);
+        if(it != psiPriorByName.end()) return it->second;
+    }
+    return psiPrior;
+}
+
+std::vector<double> UserSettings::getPsiSkylineTimes(int t){
+    if(psiTypeNames.empty() == false){
+        std::map<std::string, std::vector<double>>::iterator it = psiTimesByName.find(psiTypeNames[t]);
+        if(it != psiTimesByName.end()) return it->second;
+        return std::vector<double>();
+    }
+    return psiSkylineTimes;
+}
+
+RateMode UserSettings::getPsiMode(int t){
+    if(psiTypeNames.empty() == false){
+        std::map<std::string, RateMode>::iterator it = psiModeByName.find(psiTypeNames[t]);
+        if(it != psiModeByName.end()) return it->second;
+        return RateMode::IID;
+    }
+    return psiMode;
 }
 
 void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode) {
@@ -96,8 +124,8 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         arguments.push_back(std::string(argv[i]));
 
     std::set<std::string> knownFlags = {
-        "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-thinning", "-nc", "-cores", "-help", "-h",
-        "-lambda_prior", "-mu_prior", "-psi_prior",
+        "-to", "-po", "-t", "-c", "-f", "-cond", "-rho", "-seed", "-n", "-thinning", "-nc", "-cores", "-help", "-h",
+        "-lambda_prior", "-mu_prior", "-psi_prior", "-psi_types",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_groups",
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
         "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma",
@@ -105,14 +133,18 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-runs", "-burnin", "-rhat", "-min_ess", "-max_gen", "-resume", "-ar_log"
     };
     std::set<std::string> valueFlags = {
-        "-to", "-po", "-t", "-c", "-f", "-cond", "-fbd_model", "-rho", "-seed", "-n", "-thinning", "-nc", "-cores",
-        "-lambda_prior", "-mu_prior", "-psi_prior",
+        "-to", "-po", "-t", "-c", "-f", "-cond", "-rho", "-seed", "-n", "-thinning", "-nc", "-cores",
+        "-lambda_prior", "-mu_prior", "-psi_prior", "-psi_types",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_groups",
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
         "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma",
         "-seq", "-partition", "-ncat", "-datatype", "-model", "-inv", "-freq",
         "-runs", "-burnin", "-rhat", "-min_ess", "-max_gen"
     };
+    if (sbcMode) {
+        knownFlags.insert("-fbd_model");
+        valueFlags.insert("-fbd_model");
+    }
 
     for (int i = 1; i < (int)arguments.size(); i++) {
         std::string arg = arguments[i];
@@ -202,8 +234,13 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
             } else if (arg == "-mu_prior") {
                 parsePriorInto(val, muPrior.family, muPrior.p1, muPrior.p2); muPrior.set = true;
             } else if (arg == "-psi_prior") {
-                parsePriorInto(val, psiPrior.family, psiPrior.p1, psiPrior.p2); psiPrior.set = true;
-            } else if (arg == "-lambda_prior_mode" || arg == "-mu_prior_mode" || arg == "-psi_prior_mode") {
+                size_t c = val.find(':');
+                if (c == std::string::npos) { parsePriorInto(val, psiPrior.family, psiPrior.p1, psiPrior.p2); psiPrior.set = true; }
+                else { Probability::PriorSpec ps; parsePriorInto(val.substr(c + 1), ps.family, ps.p1, ps.p2); ps.set = true; psiPriorByName[val.substr(0, c)] = ps; }
+            } else if (arg == "-psi_types") {
+                std::stringstream ss(val); std::string tok;
+                while (std::getline(ss, tok, ',')) if (tok.empty() == false) psiTypeNames.push_back(tok);
+            } else if (arg == "-lambda_prior_mode" || arg == "-mu_prior_mode") {
                 std::string v = val;
                 for (char& ch : v) ch = std::tolower((unsigned char)ch);
                 RateMode rm = RateMode::IID;
@@ -211,8 +248,17 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 else if (v == "smooth" || v == "hsmrf") rm = RateMode::SMOOTH;
                 else Msg::error("Flag \"" + arg + "\" expects iid or smooth, but got \"" + val + "\".");
                 if (arg == "-lambda_prior_mode") lambdaMode = rm;
-                else if (arg == "-mu_prior_mode") muMode = rm;
-                else psiMode = rm;
+                else muMode = rm;
+            } else if (arg == "-psi_prior_mode") {
+                std::string nm, ms = val;
+                size_t c = val.find(':');
+                if (c != std::string::npos) { nm = val.substr(0, c); ms = val.substr(c + 1); }
+                for (char& ch : ms) ch = std::tolower((unsigned char)ch);
+                RateMode rm = RateMode::IID;
+                if (ms == "iid") rm = RateMode::IID;
+                else if (ms == "smooth" || ms == "hsmrf") rm = RateMode::SMOOTH;
+                else Msg::error("Flag \"-psi_prior_mode\" expects iid or smooth, but got \"" + ms + "\".");
+                if (nm.empty()) psiMode = rm; else psiModeByName[nm] = rm;
             } else if (arg == "-hsmrf_shifts") {
                 try { hsmrfShifts = std::stod(val); } catch (...) { Msg::error("Flag \"-hsmrf_shifts\" expects a number, but got \"" + val + "\"."); }
             } else if (arg == "-hsmrf_shift_size") {
@@ -228,7 +274,9 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
             } else if (arg == "-mu_skyline_times") {
                 parseSkylineTimes(arg, val, muSkylineTimes);
             } else if (arg == "-psi_skyline_times") {
-                parseSkylineTimes(arg, val, psiSkylineTimes);
+                size_t c = val.find(':');
+                if (c == std::string::npos) parseSkylineTimes(arg, val, psiSkylineTimes);
+                else { std::vector<double> tv; parseSkylineTimes(arg, val.substr(c + 1), tv); psiTimesByName[val.substr(0, c)] = tv; }
             } else if (arg == "-hessian") {
                 hessianFile = val;
             } else if (arg == "-seq") {

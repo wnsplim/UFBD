@@ -1,7 +1,9 @@
 #ifndef UserSettings_hpp
 #define UserSettings_hpp
 
+#include <map>
 #include <string>
+#include <vector>
 
 #include "Probability.hpp"
 
@@ -54,6 +56,11 @@ class UserSettings {
         std::vector<double>         getLambdaSkylineTimes(void) { return lambdaSkylineTimes; }
         std::vector<double>         getMuSkylineTimes(void)     { return muSkylineTimes; }
         std::vector<double>         getPsiSkylineTimes(void)    { return psiSkylineTimes; }
+        int                         getNumPsiTypes(void) { return psiTypeNames.empty() ? 1 : (int)psiTypeNames.size(); }
+        const std::vector<std::string>& getPsiTypeNames(void) { return psiTypeNames; }
+        Probability::PriorSpec      getPsiPrior(int t);
+        std::vector<double>         getPsiSkylineTimes(int t);
+        RateMode                    getPsiMode(int t);
         Model                       getModel(void) { return model; }
         double                      getRho(void) { return rho; }
         unsigned int                getSeed(void) { return seed; }
@@ -104,6 +111,10 @@ class UserSettings {
         std::vector<double>         lambdaSkylineTimes;
         std::vector<double>         muSkylineTimes;
         std::vector<double>         psiSkylineTimes;
+        std::vector<std::string>    psiTypeNames;
+        std::map<std::string, Probability::PriorSpec> psiPriorByName;
+        std::map<std::string, std::vector<double>> psiTimesByName;
+        std::map<std::string, RateMode> psiModeByName;
         Model                       model;
         double                      rho;
         unsigned int                seed;
