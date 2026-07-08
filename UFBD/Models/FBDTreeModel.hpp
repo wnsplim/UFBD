@@ -6,6 +6,7 @@
 #include "ParameterTree.hpp"
 #include "ParameterUnresolvedFossils.hpp"
 #include "PhylogeneticModel.hpp"
+#include "Probability.hpp"
 #include "Tree.hpp"
 
 #include <deque>
@@ -37,6 +38,7 @@ class FBDTreeModel : public PhylogeneticModel {
         void                        readState(std::istream& is);
         ParameterTree*              getParameterTree(void) { return parameterTree; }
         ParameterUnresolvedFossils* getUnresolvedFossils(void) { return unresolvedFossils; }
+        std::string                 getRateMap(void);
         bool                        hasOrigin(void) { return originAge != nullptr; }
         double                      getOriginAgeValue(void);
         void                        setupNodeAgeFloors(void);
@@ -86,10 +88,15 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      muAt(int i);
         double                      psiTotalAt(int i);
         double                      psiOfTypeAt(int type, int i);
+        std::vector<int>            buildSkylineRates(const std::string& prefix, const std::string& sep, int nBins, const Probability::PriorSpec& basePrior, double rate0, bool smooth, const std::vector<int>& groupIds, const std::map<int,Probability::PriorSpec>& groupPrior, double nShifts, double shiftSize, std::vector<ParameterDouble*>& outVec, ParameterShrinkageField*& outField, std::vector<std::string>& outNames);
+        void                        appendRateMap(const std::vector<double>& times, const std::vector<int>& binToChunk, const std::vector<std::string>& names);
         //ordered by memory footprint
         std::vector<ParameterDouble*> lambda;
         std::vector<ParameterDouble*> mu;
         std::vector<std::vector<ParameterDouble*>> psi;
+        std::vector<std::string>    lambdaName, muName;
+        std::vector<std::vector<std::string>> psiName;
+        std::vector<std::pair<std::string,std::string>> rateMapRows;
         ParameterShrinkageField*    lambdaField;
         ParameterShrinkageField*    muField;
         std::vector<ParameterShrinkageField*> psiField;

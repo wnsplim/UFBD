@@ -13,11 +13,6 @@
 #include <iostream>
 #include <thread>
 
-static std::string bulkPath(const std::string& p){
-    size_t d = p.rfind('.');
-    return (d == std::string::npos) ? p + "_bulk" : p.substr(0, d) + "_bulk" + p.substr(d);
-}
-
 ConvergenceRunner::ConvergenceRunner(std::vector<ChainRunner*> reps, const std::string& po, const std::string& to) : replicates(reps), paramBase(po), treeBase(to) {
     int M = (int)replicates.size();
     for(int r = 0; r < M; r++){
@@ -243,7 +238,7 @@ void ConvergenceRunner::writeMerged(void){
     int thin = UserSettings::userSettings().getThinning();
     long g = 0;
 
-    std::ofstream mp(bulkPath(paramBase));
+    std::ofstream mp(paramBase);
     bool wroteHeader = false;
     for(const std::string& fn : repParamFiles){
         std::ifstream in(fn);
@@ -273,7 +268,7 @@ void ConvergenceRunner::writeMerged(void){
     if(anyTree == false)
         return;
 
-    std::ofstream mt(bulkPath(treeBase));
+    std::ofstream mt(treeBase);
     mt << "#NEXUS\nBEGIN TREES;\n";
     long gt = 0;
     for(const std::string& fn : repTreeFiles){

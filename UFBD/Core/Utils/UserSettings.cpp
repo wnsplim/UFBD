@@ -68,6 +68,24 @@ RateMode UserSettings::getPsiMode(int t){
     return psiMode;
 }
 
+std::vector<int> UserSettings::getPsiGroups(int t){
+    if(psiTypeNames.empty() == false){
+        std::map<std::string, std::vector<int>>::iterator it = psiGroupsByName.find(psiTypeNames[t]);
+        if(it != psiGroupsByName.end()) return it->second;
+        return std::vector<int>();
+    }
+    return psiGroups;
+}
+
+std::map<int,Probability::PriorSpec> UserSettings::getPsiGroupPrior(int t){
+    if(psiTypeNames.empty() == false){
+        std::map<std::string, std::map<int,Probability::PriorSpec>>::iterator it = psiGroupPriorByName.find(psiTypeNames[t]);
+        if(it != psiGroupPriorByName.end()) return it->second;
+        return std::map<int,Probability::PriorSpec>();
+    }
+    return psiGroupPrior;
+}
+
 void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode) {
     // Defaults
     treeOut         = "";
@@ -127,7 +145,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-to", "-po", "-t", "-c", "-f", "-cond", "-rho", "-seed", "-n", "-thinning", "-nc", "-cores", "-help", "-h",
         "-lambda_prior", "-mu_prior", "-psi_prior", "-psi_types",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_groups",
-        "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
+        "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-lambda_groups", "-mu_groups", "-psi_groups", "-lambda_group_prior", "-mu_group_prior", "-psi_group_prior", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
         "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma",
         "-seq", "-partition", "-ncat", "-datatype", "-model", "-inv", "-freq",
         "-runs", "-burnin", "-rhat", "-min_ess", "-max_gen", "-resume", "-ar_log"
@@ -136,7 +154,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-to", "-po", "-t", "-c", "-f", "-cond", "-rho", "-seed", "-n", "-thinning", "-nc", "-cores",
         "-lambda_prior", "-mu_prior", "-psi_prior", "-psi_types",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_groups",
-        "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
+        "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-lambda_groups", "-mu_groups", "-psi_groups", "-lambda_group_prior", "-mu_group_prior", "-psi_group_prior", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
         "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma",
         "-seq", "-partition", "-ncat", "-datatype", "-model", "-inv", "-freq",
         "-runs", "-burnin", "-rhat", "-min_ess", "-max_gen"
@@ -237,6 +255,31 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 size_t c = val.find(':');
                 if (c == std::string::npos) { parsePriorInto(val, psiPrior.family, psiPrior.p1, psiPrior.p2); psiPrior.set = true; }
                 else { Probability::PriorSpec ps; parsePriorInto(val.substr(c + 1), ps.family, ps.p1, ps.p2); ps.set = true; psiPriorByName[val.substr(0, c)] = ps; }
+            } else if (arg == "-lambda_groups" || arg == "-mu_groups" || arg == "-psi_groups") {
+                std::string nm, lst = val;
+                if (arg == "-psi_groups") { size_t c = val.find(':'); if (c != std::string::npos) { nm = val.substr(0, c); lst = val.substr(c + 1); } }
+                std::vector<int> g;
+                std::stringstream ss(lst); std::string tok;
+                while (std::getline(ss, tok, ',')) if (tok.empty() == false) {
+                    try { g.push_back(std::stoi(tok)); }
+                    catch (...) { Msg::error("Flag \"" + arg + "\" expects comma-separated group ids, but got \"" + val + "\"."); }
+                }
+                if (arg == "-lambda_groups") lambdaGroups = g;
+                else if (arg == "-mu_groups") muGroups = g;
+                else if (nm.empty()) psiGroups = g; else psiGroupsByName[nm] = g;
+            } else if (arg == "-lambda_group_prior" || arg == "-mu_group_prior" || arg == "-psi_group_prior") {
+                size_t sp = val.rfind(':');
+                if (sp == std::string::npos) Msg::error("Flag \"" + arg + "\" expects [type:]<group_id>:<prior>.");
+                std::string pre = val.substr(0, sp), nm, gidStr = pre;
+                size_t nc = pre.find(':');
+                if (nc != std::string::npos) { nm = pre.substr(0, nc); gidStr = pre.substr(nc + 1); }
+                int gid = 0;
+                try { gid = std::stoi(gidStr); }
+                catch (...) { Msg::error("Flag \"" + arg + "\" expects [type:]<group_id>:<prior>."); }
+                Probability::PriorSpec ps; parsePriorInto(val.substr(sp + 1), ps.family, ps.p1, ps.p2); ps.set = true;
+                if (arg == "-lambda_group_prior") lambdaGroupPrior[gid] = ps;
+                else if (arg == "-mu_group_prior") muGroupPrior[gid] = ps;
+                else if (nm.empty()) psiGroupPrior[gid] = ps; else psiGroupPriorByName[nm][gid] = ps;
             } else if (arg == "-psi_types") {
                 std::stringstream ss(val); std::string tok;
                 while (std::getline(ss, tok, ',')) if (tok.empty() == false) psiTypeNames.push_back(tok);

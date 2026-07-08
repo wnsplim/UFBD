@@ -63,7 +63,10 @@ int main(int argc, const char* argv[]) {
             return new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), settings.getSequenceFile(), settings.getPartitionFile(), settings.getModelNStates(), settings.getNumCats(), cm, settings.getRgeneGamma(), settings.getSigma2Gamma(), sd);
         if(hessian)
             return new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), settings.getHessianFile(), settings.getTreeFile(), settings.getModelNStates(), cm, settings.getRgeneGamma(), settings.getSigma2Gamma(), sd);
-        return new FBDTreeModel(pt, input.getClades(), input.getFossils(), sd);
+        FBDTreeModel* m = new FBDTreeModel(pt, input.getClades(), input.getFossils(), sd);
+        static bool printedMap = false;
+        if(printedMap == false){ printedMap = true; std::string rm = m->getRateMap(); if(rm.empty() == false) std::cout << "Rate intervals:\n" << rm; }
+        return m;
     };
 
     bool resume = settings.getResume();
@@ -124,11 +127,9 @@ int main(int argc, const char* argv[]) {
     size_t dp = base.rfind(".log"); if(dp != std::string::npos) base = base.substr(0, dp);
     auto wrote = [](const std::string& p){ if(p.empty()) return false; std::ifstream f(p); return f.good(); };
     std::cout << "-----------------------------------------------------------------------\n";
-    if(wrote(base + "_bulk.log"))             std::cout << "MCMC log               -> " << base << "_bulk.log\n";
-    else if(wrote(settings.getParamOutput())) std::cout << "MCMC log               -> " << settings.getParamOutput() << "\n";
-    if(wrote(base + "_bulk.trees"))           std::cout << "tree log               -> " << base << "_bulk.trees\n";
-    else if(wrote(settings.getTreeOutput()))  std::cout << "tree log               -> " << settings.getTreeOutput() << "\n";
-    if(wrote(base + ".tree"))                 std::cout << "posterior summary tree -> " << base << ".tree\n";
+    if(wrote(settings.getParamOutput())) std::cout << "MCMC log               -> " << settings.getParamOutput() << "\n";
+    if(wrote(settings.getTreeOutput()))  std::cout << "tree log               -> " << settings.getTreeOutput() << "\n";
+    if(wrote(base + ".tree"))            std::cout << "posterior summary tree -> " << base << ".tree\n";
 
     return 0;
 }

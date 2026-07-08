@@ -61,6 +61,12 @@ class UserSettings {
         Probability::PriorSpec      getPsiPrior(int t);
         std::vector<double>         getPsiSkylineTimes(int t);
         RateMode                    getPsiMode(int t);
+        std::vector<int>            getLambdaGroups(void) { return lambdaGroups; }
+        std::vector<int>            getMuGroups(void) { return muGroups; }
+        std::vector<int>            getPsiGroups(int t);
+        std::map<int,Probability::PriorSpec> getLambdaGroupPrior(void) { return lambdaGroupPrior; }
+        std::map<int,Probability::PriorSpec> getMuGroupPrior(void) { return muGroupPrior; }
+        std::map<int,Probability::PriorSpec> getPsiGroupPrior(int t);
         Model                       getModel(void) { return model; }
         double                      getRho(void) { return rho; }
         unsigned int                getSeed(void) { return seed; }
@@ -115,6 +121,10 @@ class UserSettings {
         std::map<std::string, Probability::PriorSpec> psiPriorByName;
         std::map<std::string, std::vector<double>> psiTimesByName;
         std::map<std::string, RateMode> psiModeByName;
+        std::vector<int>            lambdaGroups, muGroups, psiGroups;
+        std::map<std::string, std::vector<int>> psiGroupsByName;
+        std::map<int, Probability::PriorSpec> lambdaGroupPrior, muGroupPrior, psiGroupPrior;
+        std::map<std::string, std::map<int, Probability::PriorSpec>> psiGroupPriorByName;
         Model                       model;
         double                      rho;
         unsigned int                seed;

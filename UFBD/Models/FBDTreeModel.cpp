@@ -216,34 +216,19 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     double mu0 = Probability::priorMean(mp.family, mp.p1, mp.p2);
     if(!(mu0 > 0.0 && std::isfinite(mu0))) mu0 = 0.1;
     if(mu0 == lam0) mu0 = 0.5 * lam0;
-    if(lamSmooth){
-        lambdaField = new ParameterShrinkageField(1.0, this, nLambda, lp, nShifts, shiftSize, lam0);
-        parameters.push_back(lambdaField);
-    }else{
-        for(int i = 0; i < nLambda; i++){
-            std::string suf = (nLambda > 1) ? std::to_string(i) : "";
-            ParameterDouble* l = new ParameterDouble(1.0, this, "lambda" + suf, 0.0, std::numeric_limits<double>::max());
-            l->setPrior(lp.family, lp.p1, lp.p2);
-            l->setValue(lam0);
-            lambda.push_back(l);
-            parameters.push_back(l);
-        }
+    {
+        std::vector<int> b2c = buildSkylineRates("lambda", "", nLambda, lp, lam0, lamSmooth, rateUs.getLambdaGroups(), rateUs.getLambdaGroupPrior(), nShifts, shiftSize, lambda, lambdaField, lambdaName);
+        for(int& u : lambdaIdx) u = b2c[u];
+        appendRateMap(lambdaTimes, b2c, lambdaName);
     }
-    if(muSmooth){
-        muField = new ParameterShrinkageField(1.0, this, nMu, mp, nShifts, shiftSize, mu0);
-        parameters.push_back(muField);
-    }else{
-        for(int i = 0; i < nMu; i++){
-            std::string suf = (nMu > 1) ? std::to_string(i) : "";
-            ParameterDouble* m = new ParameterDouble(1.0, this, "mu" + suf, 0.0, std::numeric_limits<double>::max());
-            m->setPrior(mp.family, mp.p1, mp.p2);
-            m->setValue(mu0);
-            mu.push_back(m);
-            parameters.push_back(m);
-        }
+    {
+        std::vector<int> b2c = buildSkylineRates("mu", "", nMu, mp, mu0, muSmooth, rateUs.getMuGroups(), rateUs.getMuGroupPrior(), nShifts, shiftSize, mu, muField, muName);
+        for(int& u : muIdx) u = b2c[u];
+        appendRateMap(muTimes, b2c, muName);
     }
     psi.assign(numPsiTypes, std::vector<ParameterDouble*>());
     psiField.assign(numPsiTypes, nullptr);
+    psiName.assign(numPsiTypes, std::vector<std::string>());
     for(int tp = 0; tp < numPsiTypes; tp++){
         Probability::PriorSpec pp = rateUs.getPsiPrior(tp);
         if(!pp.set) pp = defRate;
@@ -253,24 +238,12 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
         int nPsi = (int)psiTimes[tp].size();
         bool tpSmooth = (rateUs.getPsiMode(tp) == RateMode::SMOOTH);
         if(tpSmooth && nPsi < 2){ Msg::warning("smoothing (HSMRF) set for sampling rate " + ((numPsiTypes > 1) ? ("psi type '" + rateUs.getPsiTypeNames()[tp] + "'") : std::string("(psi)")) + " but only single rate interval."); tpSmooth = false; }
-        if(tpSmooth){
-            psiField[tp] = new ParameterShrinkageField(1.0, this, nPsi, pp, nShifts, shiftSize, psi0);
-            parameters.push_back(psiField[tp]);
-        }else{
-            for(int i = 0; i < nPsi; i++){
-                std::string nm = (numPsiTypes > 1) ? ("psi_" + rateUs.getPsiTypeNames()[tp] + (nPsi > 1 ? "_" + std::to_string(i) : ""))
-                                                   : ("psi" + ((nPsi > 1) ? std::to_string(i) : ""));
-                ParameterDouble* p = new ParameterDouble(1.0, this, nm, 0.0, std::numeric_limits<double>::max());
-                p->setPrior(pp.family, pp.p1, pp.p2);
-                p->setValue(psi0);
-                psi[tp].push_back(p);
-                parameters.push_back(p);
-            }
-        }
+        std::string prefix = (numPsiTypes > 1) ? ("psi_" + rateUs.getPsiTypeNames()[tp]) : "psi";
+        std::string sep = (numPsiTypes > 1) ? "_" : "";
+        std::vector<int> b2c = buildSkylineRates(prefix, sep, nPsi, pp, psi0, tpSmooth, rateUs.getPsiGroups(tp), rateUs.getPsiGroupPrior(tp), nShifts, shiftSize, psi[tp], psiField[tp], psiName[tp]);
+        for(int& u : psiIdx[tp]) u = b2c[u];
+        appendRateMap(psiTimes[tp], b2c, psiName[tp]);
     }
-    for(size_t i = 1; i < lambda.size(); i++) lambda[i]->setValue(lambda[0]->getValue());
-    for(size_t i = 1; i < mu.size(); i++)     mu[i]->setValue(mu[0]->getValue());
-    for(auto& pv : psi) for(size_t i = 1; i < pv.size(); i++) pv[i]->setValue(pv[0]->getValue());
     rho = UserSettings::userSettings().getRho();
     fossilType.assign((int)unrFossils.size(), 0);
     for(size_t i = 0; i < unrFossils.size(); i++){
@@ -305,9 +278,9 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
         for(auto& pv : psi) for(ParameterDouble* p : pv) p->setProposalProbability(15.0);
     }
     double fieldBase = (isResolved ? 15.0 : 1.0);
-    if(lambdaField) lambdaField->setProposalProbability(fieldBase * (double)nLambda);
-    if(muField)     muField->setProposalProbability(fieldBase * (double)nMu);
-    for(int tp = 0; tp < numPsiTypes; tp++) if(psiField[tp]) psiField[tp]->setProposalProbability(fieldBase * (double)psiTimes[tp].size());
+    if(lambdaField) lambdaField->setProposalProbability(fieldBase * (double)lambdaField->getNumBins());
+    if(muField)     muField->setProposalProbability(fieldBase * (double)muField->getNumBins());
+    for(int tp = 0; tp < numPsiTypes; tp++) if(psiField[tp]) psiField[tp]->setProposalProbability(fieldBase * (double)psiField[tp]->getNumBins());
 
     double sum = 0.0;
     for(Parameter* p : parameters)
@@ -316,6 +289,72 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
         p->setProposalProbability(p->getProposalProbability() / sum);
 
     RandomVariable::setActiveInstance(prevRng);
+}
+
+std::vector<int> FBDTreeModel::buildSkylineRates(const std::string& prefix, const std::string& sep, int nBins, const Probability::PriorSpec& basePrior, double rate0, bool smooth, const std::vector<int>& groupIds, const std::map<int,Probability::PriorSpec>& groupPrior, double nShifts, double shiftSize, std::vector<ParameterDouble*>& outVec, ParameterShrinkageField*& outField, std::vector<std::string>& outNames){
+    std::vector<int> binToChunk(nBins, 0);
+    std::map<int,int> gidToChunk;
+    std::vector<int> chunkGid, chunkMinBin;
+    for(int i = 0; i < nBins; i++){
+        int gid = groupIds.empty() ? i : groupIds[i];
+        std::map<int,int>::iterator it = gidToChunk.find(gid);
+        if(it == gidToChunk.end()){ int c = (int)chunkGid.size(); gidToChunk[gid] = c; chunkGid.push_back(gid); chunkMinBin.push_back(i); binToChunk[i] = c; }
+        else binToChunk[i] = it->second;
+    }
+    int nChunks = (int)chunkGid.size();
+    outNames.clear();
+    for(int c = 0; c < nChunks; c++)
+        outNames.push_back(prefix + ((nChunks > 1) ? (sep + std::to_string(chunkMinBin[c])) : ""));
+    if(smooth){
+        for(int i = 1; i < nBins; i++)
+            if(binToChunk[i] < binToChunk[i - 1])
+                Msg::error("HSMRF cannot use non-consecutive " + prefix + " groups.");
+        outField = new ParameterShrinkageField(1.0, this, nChunks, basePrior, nShifts, shiftSize, rate0);
+        parameters.push_back(outField);
+    }else{
+        for(int c = 0; c < nChunks; c++){
+            ParameterDouble* p = new ParameterDouble(1.0, this, outNames[c], 0.0, std::numeric_limits<double>::max());
+            std::map<int,Probability::PriorSpec>::const_iterator pit = groupPrior.find(chunkGid[c]);
+            bool ov = (pit != groupPrior.end() && pit->second.set);
+            const Probability::PriorSpec& sp = ov ? pit->second : basePrior;
+            p->setPrior(sp.family, sp.p1, sp.p2);
+            p->setValue(ov ? Probability::priorMean(sp.family, sp.p1, sp.p2) : rate0);
+            outVec.push_back(p);
+            parameters.push_back(p);
+        }
+    }
+    return binToChunk;
+}
+
+void FBDTreeModel::appendRateMap(const std::vector<double>& times, const std::vector<int>& binToChunk, const std::vector<std::string>& names){
+    int nBins = (int)binToChunk.size();
+    for(int c = 0; c < (int)names.size(); c++){
+        std::string iv;
+        bool first = true;
+        for(int i = 0; i < nBins; i++){
+            if(binToChunk[i] != c) continue;
+            char buf[64];
+            if(i + 1 < nBins) std::snprintf(buf, sizeof(buf), "[%g, %g)", times[i], times[i + 1]);
+            else              std::snprintf(buf, sizeof(buf), "[%g, inf)", times[i]);
+            iv += (first ? "" : " + ");
+            iv += buf;
+            first = false;
+        }
+        rateMapRows.push_back(std::make_pair(names[c], iv));
+    }
+}
+
+std::string FBDTreeModel::getRateMap(void){
+    size_t w = 0;
+    for(const std::pair<std::string,std::string>& r : rateMapRows)
+        if(r.first.size() > w) w = r.first.size();
+    std::string s;
+    for(const std::pair<std::string,std::string>& r : rateMapRows){
+        std::string nm = r.first;
+        nm.resize(w, ' ');
+        s += "    " + nm + "  " + r.second + "\n";
+    }
+    return s;
 }
 
 double FBDTreeModel::lambdaAt(int i){
@@ -366,20 +405,18 @@ static bool nodeOnStalk(Node* n, Node* crown, Node* origin){
 }
 
 std::vector<std::string> FBDTreeModel::getParameterNames(void){
-    const std::vector<std::string>& typeNames = UserSettings::userSettings().getPsiTypeNames();
     std::vector<std::string> names;
     if(lambdaField != nullptr)
-        for(int i = 0; i < lambdaField->getNumBins(); i++) names.push_back("lambda" + std::to_string(i));
+        for(const std::string& n : lambdaName) names.push_back(n);
     else
         for(ParameterDouble* p : lambda) names.push_back(p->getName());
     if(muField != nullptr)
-        for(int i = 0; i < muField->getNumBins(); i++) names.push_back("mu" + std::to_string(i));
+        for(const std::string& n : muName) names.push_back(n);
     else
         for(ParameterDouble* p : mu) names.push_back(p->getName());
     for(int tp = 0; tp < numPsiTypes; tp++){
         if(psiField[tp] != nullptr)
-            for(int i = 0; i < psiField[tp]->getNumBins(); i++)
-                names.push_back((numPsiTypes > 1) ? ("psi_" + typeNames[tp] + "_" + std::to_string(i)) : ("psi" + std::to_string(i)));
+            for(const std::string& n : psiName[tp]) names.push_back(n);
         else
             for(ParameterDouble* p : psi[tp]) names.push_back(p->getName());
     }
