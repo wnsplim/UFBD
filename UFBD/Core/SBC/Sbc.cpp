@@ -35,6 +35,19 @@ double drawPrior(const Probability::PriorSpec& s, RandomVariable* rng){
     return 0.0;
 }
 
+double drawChunk(const std::vector<int>& groups, const std::map<int,Probability::PriorSpec>& groupPrior,
+                 const Probability::PriorSpec& base, int bin, std::map<int,double>& chunkVal, RandomVariable* rng){
+    int gid = groups.empty() ? bin : groups[bin];
+    std::map<int,double>::iterator it = chunkVal.find(gid);
+    if(it != chunkVal.end())
+        return it->second;
+    std::map<int,Probability::PriorSpec>::const_iterator pit = groupPrior.find(gid);
+    const Probability::PriorSpec& sp = (pit != groupPrior.end() && pit->second.set) ? pit->second : base;
+    double v = drawPrior(sp, rng);
+    chunkVal[gid] = v;
+    return v;
+}
+
 double truthForName(const std::string& name, const SimParams& p, bool origin, double trueNSA, const std::vector<std::string>& psiTypeNames){
     auto idxOf = [](const std::string& rest) -> int { return rest.empty() ? 0 : std::stoi(rest); };
     if(name == "nSA")                 return trueNSA;
@@ -110,18 +123,27 @@ SimParams Sbc::drawParams(void){
     p.psiIdx.assign(nT, std::vector<int>());
     int lPrev = -1, mPrev = -1;
     std::vector<int> pPrev(nT, -1);
+    std::map<int,double> lamChunk, muChunk;
+    std::vector<std::map<int,double>> psiChunk(nT);
+    static const std::vector<int> noGroups;
+    static const std::map<int,Probability::PriorSpec> noGroupPrior;
     for(double s : cfg.intervalStart){
         int li = 0, mi = 0;
         for(int k = 0; k < (int)cfg.lambdaTimes.size(); k++) if(cfg.lambdaTimes[k] <= s) li = k;
         for(int k = 0; k < (int)cfg.muTimes.size(); k++)     if(cfg.muTimes[k] <= s)     mi = k;
-        if(li > lPrev){ p.lambda.push_back(drawPrior(cfg.lambdaPrior, rng)); lPrev = li; }
-        if(mi > mPrev){ p.mu.push_back(drawPrior(cfg.muPrior, rng));         mPrev = mi; }
+        if(li > lPrev){ p.lambda.push_back(drawChunk(cfg.lambdaGroups, cfg.lambdaGroupPrior, cfg.lambdaPrior, li, lamChunk, rng)); lPrev = li; }
+        if(mi > mPrev){ p.mu.push_back(drawChunk(cfg.muGroups, cfg.muGroupPrior, cfg.muPrior, mi, muChunk, rng)); mPrev = mi; }
         p.lambdaIdx.push_back(li);
         p.muIdx.push_back(mi);
         for(int t = 0; t < nT; t++){
             int pi = 0;
             for(int k = 0; k < (int)cfg.psiTimes[t].size(); k++) if(cfg.psiTimes[t][k] <= s) pi = k;
-            if(pi > pPrev[t]){ p.psi[t].push_back(drawPrior(cfg.psiPriors[t], rng)); pPrev[t] = pi; }
+            if(pi > pPrev[t]){
+                const std::vector<int>& g = (t < (int)cfg.psiGroups.size()) ? cfg.psiGroups[t] : noGroups;
+                const std::map<int,Probability::PriorSpec>& gp = (t < (int)cfg.psiGroupPriors.size()) ? cfg.psiGroupPriors[t] : noGroupPrior;
+                p.psi[t].push_back(drawChunk(g, gp, cfg.psiPriors[t], pi, psiChunk[t], rng));
+                pPrev[t] = pi;
+            }
             p.psiIdx[t].push_back(pi);
         }
     }

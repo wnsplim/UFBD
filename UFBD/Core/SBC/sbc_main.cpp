@@ -89,9 +89,15 @@ int main(int argc, const char* argv[]){
         for(double tv : s.getPsiSkylineTimes(t)) times.push_back(tv);
         cfg.psiTimes.push_back(times);
         cfg.psiPriors.push_back(s.getPsiPrior(t));
+        cfg.psiGroups.push_back(s.getPsiGroups(t));
+        cfg.psiGroupPriors.push_back(s.getPsiGroupPrior(t));
     }
     cfg.lambdaPrior = lambdaPrior;
     cfg.muPrior = muPrior;
+    cfg.lambdaGroups = s.getLambdaGroups();
+    cfg.muGroups = s.getMuGroups();
+    cfg.lambdaGroupPrior = s.getLambdaGroupPrior();
+    cfg.muGroupPrior = s.getMuGroupPrior();
     cfg.startAgePrior = { true, s.getConditionAgePrior(), s.getConditionAgePriorP1(), s.getConditionAgePriorP2() };
     cfg.dumpPrefix = out;
     (void)gen; (void)autoGen; (void)burnin; (void)thin; (void)bins;

@@ -4,6 +4,7 @@
 #include "ForwardSimulator.hpp"
 #include "Probability.hpp"
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -27,6 +28,12 @@ struct SbcConfig {
     Probability::PriorSpec  lambdaPrior;
     Probability::PriorSpec  muPrior;
     Probability::PriorSpec  startAgePrior;
+    std::vector<int>        lambdaGroups;
+    std::vector<int>        muGroups;
+    std::vector<std::vector<int>> psiGroups;
+    std::map<int,Probability::PriorSpec> lambdaGroupPrior;
+    std::map<int,Probability::PriorSpec> muGroupPrior;
+    std::vector<std::map<int,Probability::PriorSpec>> psiGroupPriors;
     std::string             dumpPrefix;
 };
 
