@@ -7,6 +7,7 @@
 #include "ChainRunner.hpp"
 #include "WriteTSV.hpp"
 class PhylogeneticModel;
+class Tree;
 
 class Mcmc : public ChainRunner {
     public:
@@ -23,6 +24,9 @@ class Mcmc : public ChainRunner {
         bool                    loadCheckpoint(void);
         void                    resumeOutputs(void);
         unsigned long           currentGen(void) { return gen; }
+        Tree*                   getTree(void);
+        void                    setVerbose(bool b) { verbose = b; }
+        void                    setLabel(int i) { runLabel = i; }
 
     private:
         void                    sample(unsigned long n, double lnL, double lnP);
@@ -32,6 +36,8 @@ class Mcmc : public ChainRunner {
         std::string             treeOut;
         std::string             paramOut;
         bool                    writeTrees;
+        bool                    verbose = false;
+        int                     runLabel = 0;
         int                     numCycles;
         int                     thinning;
         unsigned long           gen;

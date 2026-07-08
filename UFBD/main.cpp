@@ -11,6 +11,7 @@
 #include "Tree.hpp"
 #include "UserSettings.hpp"
 
+#include <fstream>
 #include <iostream>
 #include <random>
 #include <execinfo.h>
@@ -35,17 +36,18 @@ int main(int argc, const char* argv[]) {
     settings.initializeSettings(argc, argv);
     settings.print();
 
-    unsigned int masterSeed = settings.getSeedSet() ? settings.getSeed() : std::random_device{}();
+    unsigned int masterSeed = settings.getSeed();
 
     FBDInput input(settings.getTreeFile(), settings.getCladesFile(), settings.getFossilFile());
 
     Tree* pt = input.getTree();
-    pt->print();
 
     bool seq = settings.getSequenceFile().empty() == false;
     bool hessian = settings.getHessianFile().empty() == false;
-    if(seq == false && hessian == false)
-        Msg::warning("No sequence of Hessian file supplied: running the FBD model without a molecular clock.");
+    if(seq && hessian)
+        Msg::error("-seq and -hessian are mutually exclusive.");
+    if(settings.clockOrCtmcConfigured() && seq == false && hessian == false)
+        Msg::warning("ㅜo -seq or -hessian provided, running pure FBD model.");
     ClockModel cm = ClockModel::UCLN;
     std::string cn = settings.getClockModelName();
     if(cn == "gbm")  cm = ClockModel::GBM;
@@ -67,42 +69,36 @@ int main(int argc, const char* argv[]) {
     bool resume = settings.getResume();
 
     if(numRuns == 1 && autoStop == false){
+        ChainRunner* mcmc;
         if(numCoupledChains > 1){
-            std::cout << "Running Metropolis-coupled MCMC with " << numCoupledChains << " coupled chains across " << settings.getNumCores() << " threads\n";
-            std::cout << "-----------------------------------------------------------------------" << std::endl;
             std::vector<PhylogeneticModel*> models(numCoupledChains);
             for(int c = 0; c < numCoupledChains; c++)
                 models[c] = makeModel(masterSeed + (unsigned int)c);
-            MetropolisCoupledMcmc mcmc(settings.getChainLength(), thin, models, masterSeed);
-            if(resume){
-                mcmc.loadCheckpoint();
-                mcmc.resumeOutputs();
-                unsigned long g = mcmc.currentGen();
-                if(g < settings.getChainLength())
-                    mcmc.advance(settings.getChainLength() - g);
-                mcmc.finalize();
-            }else
-                mcmc.run();
+            mcmc = new MetropolisCoupledMcmc(settings.getChainLength(), thin, models, masterSeed);
+        }else
+            mcmc = new Mcmc((int)settings.getChainLength(), thin, makeModel(masterSeed));
+        mcmc->setVerbose(true);
+        mcmc->setLabel(0);
+        if(resume){
+            mcmc->loadCheckpoint();
+            mcmc->resumeOutputs();
+            unsigned long g = mcmc->currentGen();
+            if(g < settings.getChainLength())
+                mcmc->advance(settings.getChainLength() - g);
+            mcmc->finalize();
         }else{
-            std::cout << "Running standard MCMC\n";
-            std::cout << "-----------------------------------------------------------------------" << std::endl;
-            Mcmc mcmc((int)settings.getChainLength(), thin, makeModel(masterSeed));
-            if(resume){
-                mcmc.loadCheckpoint();
-                mcmc.resumeOutputs();
-                unsigned long g = mcmc.currentGen();
-                if(g < settings.getChainLength())
-                    mcmc.advance(settings.getChainLength() - g);
-                mcmc.finalize();
-            }else
-                mcmc.run();
+            mcmc->init();
+            mcmc->advance(settings.getChainLength());
+            mcmc->finalize();
         }
+        std::string sbase = settings.getParamOutput();
+        size_t sdp = sbase.rfind(".log"); if(sdp != std::string::npos) sbase = sbase.substr(0, sdp);
+        if(sbase.empty()) sbase = "out";
+        if(mcmc->getTree() != nullptr)
+            writeSummaryTree(mcmc->getTree(), mcmc->traceNames(), mcmc->traceColumns(), settings.getBurninFraction(), sbase + ".tree");
+        delete mcmc;
     }else{
         unsigned long ncyc = autoStop ? settings.getMaxGen() : settings.getChainLength();
-        std::cout << "Running " << numRuns << " independent runs";
-        if(numCoupledChains > 1) std::cout << " of " << numCoupledChains << "-chain MC^3";
-        if(autoStop) std::cout << ", auto-stopping on R-hat/ESS";
-        std::cout << "\n-----------------------------------------------------------------------" << std::endl;
         std::vector<ChainRunner*> reps;
         for(int r = 0; r < numRuns; r++){
             unsigned int base = masterSeed + (unsigned int)(r * (numCoupledChains + 1));
@@ -117,10 +113,22 @@ int main(int argc, const char* argv[]) {
             }
         }
         ConvergenceRunner cr(reps, settings.getParamOutput(), settings.getTreeOutput());
+        cr.setEmitSummaryTree(true);
+        cr.setVerbose(true);
         cr.run();
         for(ChainRunner* c : reps)
             delete c;
     }
+
+    std::string base = settings.getParamOutput();
+    size_t dp = base.rfind(".log"); if(dp != std::string::npos) base = base.substr(0, dp);
+    auto wrote = [](const std::string& p){ if(p.empty()) return false; std::ifstream f(p); return f.good(); };
+    std::cout << "-----------------------------------------------------------------------\n";
+    if(wrote(base + "_bulk.log"))             std::cout << "MCMC log               -> " << base << "_bulk.log\n";
+    else if(wrote(settings.getParamOutput())) std::cout << "MCMC log               -> " << settings.getParamOutput() << "\n";
+    if(wrote(base + "_bulk.trees"))           std::cout << "tree log               -> " << base << "_bulk.trees\n";
+    else if(wrote(settings.getTreeOutput()))  std::cout << "tree log               -> " << settings.getTreeOutput() << "\n";
+    if(wrote(base + ".tree"))                 std::cout << "posterior summary tree -> " << base << ".tree\n";
 
     return 0;
 }

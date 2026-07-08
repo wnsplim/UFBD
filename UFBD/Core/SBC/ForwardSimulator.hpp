@@ -10,6 +10,9 @@ class RandomVariable;
 
 struct SimParams {
     std::vector<double> intervalStart;
+    std::vector<int>    lambdaIdx;
+    std::vector<int>    muIdx;
+    std::vector<int>    psiIdx;
     std::vector<double> lambda;
     std::vector<double> mu;
     std::vector<double> psi;

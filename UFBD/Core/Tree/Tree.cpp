@@ -6,9 +6,12 @@
 #include "Tree.hpp"
 
 #include <cmath>
+#include <cstdio>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <algorithm>
+#include <limits>
 #include <set>
 #include <vector>
 
@@ -332,6 +335,104 @@ std::vector<Node*> Tree::getBackboneAgeNodes(void) {
         return out;
     collectBbNodes(descendToBackbone(getRoot(), keep, minName), keep, minName, out);
     return out;
+}
+
+static double ageOf(Node* n, const std::map<Node*,double>& age){
+    std::map<Node*,double>::const_iterator it = age.find(n);
+    return it != age.end() ? it->second : n->getTime();
+}
+
+static std::pair<double,double> hpd95(std::vector<double> s){
+    std::sort(s.begin(), s.end());
+    int n = (int)s.size();
+    int m = (int)std::ceil(0.95 * n);
+    if(m < 1) m = 1;
+    if(m >= n) return std::make_pair(s.front(), s.back());
+    double best = std::numeric_limits<double>::max();
+    int bi = 0;
+    for(int i = 0; i + m - 1 < n; i++){
+        double w = s[i + m - 1] - s[i];
+        if(w < best){ best = w; bi = i; }
+    }
+    return std::make_pair(s[bi], s[bi + m - 1]);
+}
+
+static void writeBackboneSummary(Node* p, std::set<Node*>& keep, std::map<Node*,std::string>& minName, std::map<Node*,int>& xidx, const std::map<Node*,double>& age, const std::map<Node*,std::pair<double,double>>& hpd, std::stringstream& strm){
+    if(p->getIsTip()){
+        std::string nm = p->getName();
+        std::replace(nm.begin(), nm.end(), ' ', '_');
+        strm << nm;
+        return;
+    }
+    std::vector<Node*> kc;
+    keptChildren(p, keep, minName, kc);
+    strm << "(";
+    for(size_t i = 0; i < kc.size(); i++){
+        Node* t = descendToBackbone(kc[i], keep, minName);
+        if(i > 0) strm << ",";
+        writeBackboneSummary(t, keep, minName, xidx, age, hpd, strm);
+        strm << ":" << std::fabs(ageOf(p, age) - ageOf(t, age));
+    }
+    strm << ")";
+    std::map<Node*,int>::iterator it = xidx.find(p);
+    if(it != xidx.end())
+        strm << "x" << it->second;
+    std::map<Node*,std::pair<double,double>>::const_iterator h = hpd.find(p);
+    if(h != hpd.end()){
+        char buf[96];
+        std::snprintf(buf, sizeof(buf), "[&95%%HPD={%.6g, %.6g}]", h->second.first, h->second.second);
+        strm << buf;
+    }
+}
+
+std::string Tree::getSummaryNewickString(const std::map<Node*,double>& age, const std::map<Node*,std::pair<double,double>>& hpd){
+    std::set<Node*> keep;
+    std::map<Node*,std::string> minName;
+    markBackbone(getRoot(), keep, minName);
+    if(keep.empty())
+        return "";
+    Node* bbRoot = descendToBackbone(getRoot(), keep, minName);
+    std::vector<Node*> bb;
+    collectBbNodes(bbRoot, keep, minName, bb);
+    std::map<Node*,int> xidx;
+    for(size_t i = 0; i < bb.size(); i++)
+        xidx[bb[i]] = (int)(i + 1);
+    std::stringstream strm;
+    strm << std::setprecision(17);
+    writeBackboneSummary(bbRoot, keep, minName, xidx, age, hpd, strm);
+    strm << ";";
+    return strm.str();
+}
+
+bool writeSummaryTree(Tree* tree, const std::vector<std::string>& names, const std::vector<std::vector<double>>& cols, double burninFrac, const std::string& path){
+    std::vector<Node*> bb = tree->getBackboneAgeNodes();
+    if(bb.empty())
+        return false;
+    std::map<std::string,int> colOf;
+    for(size_t j = 0; j < names.size(); j++)
+        colOf[names[j]] = (int)j;
+    std::map<Node*,double> age;
+    std::map<Node*,std::pair<double,double>> hpd;
+    for(size_t i = 0; i < bb.size(); i++){
+        std::map<std::string,int>::iterator it = colOf.find("x" + std::to_string(i + 1));
+        if(it == colOf.end() || (size_t)it->second >= cols.size())
+            return false;
+        const std::vector<double>& col = cols[it->second];
+        size_t b = (size_t)(burninFrac * col.size());
+        std::vector<double> s(col.begin() + b, col.end());
+        if(s.empty())
+            return false;
+        double sum = 0.0;
+        for(double v : s) sum += v;
+        age[bb[i]] = sum / (double)s.size();
+        hpd[bb[i]] = hpd95(s);
+    }
+    std::string nwk = tree->getSummaryNewickString(age, hpd);
+    if(nwk.empty())
+        return false;
+    std::ofstream os(path);
+    os << nwk << "\n";
+    return true;
 }
 
 void Tree::buildBackboneCache(void){

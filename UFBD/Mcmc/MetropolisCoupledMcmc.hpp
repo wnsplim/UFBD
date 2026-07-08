@@ -28,6 +28,9 @@ class MetropolisCoupledMcmc : public ChainRunner {
         bool                                loadCheckpoint(void);
         void                                resumeOutputs(void);
         unsigned long                       currentGen(void) { return gen; }
+        void                                setVerbose(bool b) { verbose = b; }
+        void                                setLabel(int i) { runLabel = i; }
+        Tree*                               getTree(void);
 
     private:
         //functions
@@ -58,6 +61,8 @@ class MetropolisCoupledMcmc : public ChainRunner {
         std::string                         treeOut;
         std::string                         paramOut;
         bool                                writeTrees;
+        bool                                verbose = false;
+        int                                 runLabel = 0;
         unsigned long                       numCycles;
         double                              deltaT;
         int                                 coldModelIdx;

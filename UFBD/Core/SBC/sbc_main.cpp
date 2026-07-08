@@ -65,6 +65,12 @@ int main(int argc, const char* argv[]){
     cfg.intervalStart.push_back(0.0);
     for(double t : s.getSkylineTimes())
         cfg.intervalStart.push_back(t);
+    cfg.lambdaTimes.push_back(0.0);
+    for(double t : s.getLambdaSkylineTimes()) cfg.lambdaTimes.push_back(t);
+    cfg.muTimes.push_back(0.0);
+    for(double t : s.getMuSkylineTimes())     cfg.muTimes.push_back(t);
+    cfg.psiTimes.push_back(0.0);
+    for(double t : s.getPsiSkylineTimes())    cfg.psiTimes.push_back(t);
     cfg.lambdaPrior = lambdaPrior;
     cfg.muPrior = muPrior;
     cfg.psiPrior = psiPrior;
@@ -73,7 +79,7 @@ int main(int argc, const char* argv[]){
     (void)gen; (void)autoGen; (void)burnin; (void)thin; (void)bins;
     (void)genSet; (void)burninSet; (void)thinSet; (void)binsSet;
 
-    unsigned int seed = s.getSeedSet() ? s.getSeed() : std::random_device{}();
+    unsigned int seed = s.getSeed();
     RandomVariable rng(seed);
     RandomVariable::setActiveInstance(&rng);
 

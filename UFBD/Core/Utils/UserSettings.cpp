@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <random>
 
 #include "Msg.hpp"
 #include "Probability.hpp"
@@ -155,8 +156,6 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 treeOut = val + ".trees";
             } else if (arg == "-po") {
                 parametersOut = val + ".log";
-                if (treeOut.empty())
-                    treeOut = val + ".trees";
             } else if (arg == "-t") {
                 treeFile = val;
             } else if (arg == "-c") {
@@ -288,8 +287,10 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                     Msg::error("Flag \"-burnin\" expects a fraction in [0, 1).");
             } else if (arg == "-rhat") {
                 rhatThreshold = std::stod(val);
+                rhatThresholdSet = true;
             } else if (arg == "-min_ess") {
                 essThreshold = std::stod(val);
+                essThresholdSet = true;
             } else if (arg == "-max_gen") {
                 maxGen = std::stoull(val);
             } else if (arg == "-n" && val == "auto") {
@@ -322,6 +323,9 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     if (conditioningSet == false)
         Msg::error("Flag \"-cond\" is required (crown or origin).");
 
+    if (seedSet == false)
+        seed = std::random_device{}();
+
     if (conditioningEvent == ConditioningEvent::EXTINCT && rho != 1.0) {
         Msg::warning("Extinct conditioning has no extant sampling; forcing rho = 1 (was " + std::to_string(rho) + ").");
         rho = 1.0;
@@ -340,6 +344,9 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
 
     if (chainLength < 1)
         Msg::error("Flag \"-n\" must be a positive integer (or \"auto\").");
+
+    if (autoChainLength == false && (essThresholdSet || rhatThresholdSet))
+        Msg::warning("-min_ess / -rhat apply only under -n auto; ignored for a fixed chain length.");
 
     if (thinning < 1)
         Msg::error("Flag \"-thinning\" must be a positive integer.");
@@ -426,33 +433,36 @@ void UserSettings::parsePriorInto(const std::string& spec, Probability::PriorFam
 
 void UserSettings::print(void) {
 
-    std::cout << "Tree input file name:                  " << treeFile << std::endl;
-    std::cout << "Clades input file name:                " << cladesFile << std::endl;
-    std::cout << "Fossils input file name:               " << fossilFile << std::endl;
-    std::cout << "Conditioning scheme:                   " << (conditioning == Conditioning::CROWN ? "crown" : "origin") << std::endl;
-    std::cout << "Conditioning age prior:                ";
-    if (!conditionAgePriorSet) std::cout << "improper uniform";
-    else switch (conditionAgePrior) {
-        case Probability::PriorFamily::EXPONENTIAL:      std::cout << "exp(" << conditionAgePriorP1 << ")"; break;
-        case Probability::PriorFamily::GAMMA:            std::cout << "gamma(" << conditionAgePriorP1 << "," << conditionAgePriorP2 << ")"; break;
-        case Probability::PriorFamily::LOGNORMAL:        std::cout << "lognormal(" << conditionAgePriorP1 << "," << conditionAgePriorP2 << ")"; break;
-        case Probability::PriorFamily::UNIFORM:          std::cout << "unif(" << conditionAgePriorP1 << "," << conditionAgePriorP2 << ")"; break;
-        case Probability::PriorFamily::TRUNCATED_NORMAL: std::cout << "truncnormal(" << conditionAgePriorP1 << "," << conditionAgePriorP2 << ")"; break;
-        case Probability::PriorFamily::IMPROPER:         std::cout << "improper"; break;
+    if (treeFile.empty() == false)
+        std::cout << "Tree input file:              " << treeFile << std::endl;
+    if (cladesFile.empty() == false)
+        std::cout << "Clades input file:            " << cladesFile << std::endl;
+    if (fossilFile.empty() == false)
+        std::cout << "Fossils input file:           " << fossilFile << std::endl;
+    if (sequenceFile.empty() == false)
+        std::cout << "Sequence input file:          " << sequenceFile << std::endl;
+    if (hessianFile.empty() == false)
+        std::cout << "Hessian input file:           " << hessianFile << std::endl;
+    if (parametersOut.empty() == false)
+        std::cout << "MCMC log output file:         " << parametersOut << std::endl;
+    if (treeOut.empty() == false)
+        std::cout << "Tree output file:             " << treeOut << std::endl;
+    if (parametersOut.empty() == false) {
+        std::string base = parametersOut;
+        size_t d = base.rfind(".log");
+        if (d != std::string::npos) base = base.substr(0, d);
+        std::cout << "Mean tree output file:        " << base << ".tree" << std::endl;
     }
-    std::cout << std::endl;
-    std::cout << "Model:                                 " << (model == Model::RFBD ? "RFBD" : (model == Model::HEA14 ? "HEA14" : "UFBD")) << std::endl;
-    std::cout << "Tree output file name:                 " << treeOut << std::endl;
-    std::cout << "Parameter output file name:            " << parametersOut << std::endl;
-    std::cout << "Extant sampling fraction (rho):        " << rho << std::endl;
-    if (seedSet)
-        std::cout << "Random number seed:                    " << seed << std::endl;
+    std::cout << "Random number seed:           " << seed << std::endl;
+    if (autoChainLength)
+        std::cout << "Maximum chain length:         " << maxGen << std::endl;
     else
-        std::cout << "Random number seed:                    (time-based)" << std::endl;
-    std::cout << "Chain length:                          " << chainLength << std::endl;
-    std::cout << "Coupled chains per run (MC3):          " << numCoupledChains << std::endl;
-    std::cout << "Number of cores:                       " << numCores << std::endl;
-    std::cout << "Thinning:       " << thinning << std::endl;
+        std::cout << "Chain length:                 " << chainLength << std::endl;
+    if (numCoupledChains > 1)
+        std::cout << "Coupled chains per run (MC3): " << numCoupledChains << std::endl;
+    std::cout << "Number of parallel chains:    " << numRuns << std::endl;
+    std::cout << "Thinning:                     " << thinning << std::endl;
+    std::cout << "Number of cores:              " << numCores << std::endl;
     std::cout << "-----------------------------------------------------------------------" << std::endl;
 
 }

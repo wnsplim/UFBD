@@ -14,6 +14,8 @@ class ConvergenceRunner {
         double              getMaxRhat(void) const { return lastMaxRhat; }
         double              getMinChainEss(void) const { return lastMinChainEss; }
         double              getMinBulkEss(void) const { return lastMinBulkEss; }
+        void                setEmitSummaryTree(bool b) { emitSummary = b; }
+        void                setVerbose(bool b) { verbose = b; }
 
     private:
         bool                report(unsigned long gen, bool finalPass);
@@ -26,6 +28,9 @@ class ConvergenceRunner {
         double              lastMaxRhat = 1.0;
         double              lastMinChainEss = -1.0;
         double              lastMinBulkEss = -1.0;
+        long                lastReportedGen = -1;
+        bool                emitSummary = false;
+        bool                verbose = false;
 };
 
 #endif

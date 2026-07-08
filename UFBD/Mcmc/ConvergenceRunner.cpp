@@ -1,6 +1,7 @@
 #include "ConvergenceRunner.hpp"
 #include "ChainRunner.hpp"
 #include "Convergence.hpp"
+#include "Tree.hpp"
 #include "Msg.hpp"
 #include "ThreadPool.hpp"
 #include "UserSettings.hpp"
@@ -12,12 +13,22 @@
 #include <iostream>
 #include <thread>
 
+static std::string bulkPath(const std::string& p){
+    size_t d = p.rfind('.');
+    return (d == std::string::npos) ? p + "_bulk" : p.substr(0, d) + "_bulk" + p.substr(d);
+}
+
 ConvergenceRunner::ConvergenceRunner(std::vector<ChainRunner*> reps, const std::string& po, const std::string& to) : replicates(reps), paramBase(po), treeBase(to) {
     int M = (int)replicates.size();
     for(int r = 0; r < M; r++){
-        std::string suffix = (M > 1) ? (".run" + std::to_string(r)) : "";
-        std::string pf = paramBase + suffix;
-        std::string tf = treeBase + suffix;
+        std::string pf = paramBase, tf = treeBase;
+        if(M > 1){
+            std::string tag = "_chain" + std::to_string(r);
+            size_t dp = paramBase.rfind('.');
+            pf = (dp == std::string::npos) ? paramBase + tag : paramBase.substr(0, dp) + tag + paramBase.substr(dp);
+            size_t dt = treeBase.rfind('.');
+            tf = (dt == std::string::npos) ? treeBase + tag : treeBase.substr(0, dt) + tag + treeBase.substr(dt);
+        }
         repParamFiles.push_back(pf);
         repTreeFiles.push_back(tf);
         replicates[r]->setOutputPaths(pf, tf);
@@ -26,6 +37,11 @@ ConvergenceRunner::ConvergenceRunner(std::vector<ChainRunner*> reps, const std::
 
 bool ConvergenceRunner::run(void){
     UserSettings& s = UserSettings::userSettings();
+    if(verbose)
+        for(int r = 0; r < (int)replicates.size(); r++){
+            replicates[r]->setVerbose(true);
+            replicates[r]->setLabel(r);
+        }
     bool autoStop = s.getAutoChainLength();
     unsigned long maxGen = autoStop ? s.getMaxGen() : s.getChainLength();
     long blockGens = (long)s.getEssThreshold() * (long)s.getThinning();
@@ -80,8 +96,7 @@ bool ConvergenceRunner::run(void){
                 c->advance(step);
         }
         gen += step;
-        bool met = report(gen, false);
-        if(autoStop && met){ stoppedEarly = true; break; }
+        if(autoStop && report(gen, false)){ stoppedEarly = true; break; }
     }
 
     for(ChainRunner* c : replicates)
@@ -91,19 +106,35 @@ bool ConvergenceRunner::run(void){
         delete p;
 
     std::cout << "-----------------------------------------------------------------------\n";
-    bool met = report(gen, true);
+    report(gen, true);
     writeMerged();
 
-    std::string crit = (replicates.size() >= 2) ? "R-hat/ESS" : "ESS";
+    if(emitSummary && replicates.empty() == false && replicates[0]->getTree() != nullptr){
+        const std::vector<std::string>& names = replicates[0]->traceNames();
+        std::vector<std::vector<double>> pooled(names.size());
+        double burn = s.getBurninFraction();
+        for(ChainRunner* c : replicates){
+            const std::vector<std::vector<double>>& cols = c->traceColumns();
+            for(size_t j = 0; j < cols.size() && j < pooled.size(); j++){
+                size_t b = (size_t)(cols[j].size() * burn);
+                pooled[j].insert(pooled[j].end(), cols[j].begin() + b, cols[j].end());
+            }
+        }
+        std::string base = paramBase;
+        size_t dp = base.rfind(".log");
+        if(dp != std::string::npos) base = base.substr(0, dp);
+        if(base.empty()) base = "out";
+        writeSummaryTree(replicates[0]->getTree(), names, pooled, 0.0, base + ".tree");
+    }
+
     if(autoStop){
+        std::string crit = (replicates.size() >= 2) ? "R-hat/ESS" : "ESS";
         if(stoppedEarly)
             std::cout << "Auto-stop at generation " << gen << ": " << crit << " stopping thresholds reached for all logged quantities.\n";
         else
             Msg::warning("reached the -max-gen limit (" + std::to_string(maxGen) + ") with quantities still below the " + crit + " thresholds.");
-    }else if(met == false){
-        Msg::warning("at the requested -n (" + std::to_string(maxGen) + ") some quantities remain below the " + crit + " thresholds.");
     }
-    return met;
+    return stoppedEarly;
 }
 
 bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
@@ -124,10 +155,8 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
         size_t post = n - (size_t)(n * burn);
         if(post < minPost) minPost = post;
     }
-    if(minPost < (size_t)essMin){
-        std::cout << "gen " << gen << "  (accumulating: " << minPost << "/" << (int)essMin << " post-burnin samples)\n";
+    if(finalPass == false && minPost < (size_t)essMin)
         return false;
-    }
 
     bool multiChain = replicates.size() >= 2;
     double worstRhat = 1.0;
@@ -146,7 +175,8 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
             chains.push_back(std::vector<double>(col.begin() + b, col.end()));
         }
         Convergence::Diagnostic d = Convergence::diagnose(chains);
-        if(multiChain && std::isnan(d.rhat) == false && d.rhat > worstRhat){ worstRhat = d.rhat; worstRhatName = names[p]; }
+        bool isDensity = (names[p] == "posterior" || names[p] == "likelihood" || names[p] == "prior");
+        if(multiChain && isDensity == false && std::isnan(d.rhat) == false && d.rhat > worstRhat){ worstRhat = d.rhat; worstRhatName = names[p]; }
         if(std::isnan(d.bulkEss) == false && (minBulkEss < 0.0 || d.bulkEss < minBulkEss)) minBulkEss = d.bulkEss;
         double worstChainEss = -1.0;
         for(const std::vector<double>& ch : chains){
@@ -158,7 +188,7 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
                 worstChainEss = ec;
         }
         if(worstChainEss >= 0.0 && (minEss < 0.0 || worstChainEss < minEss)){ minEss = worstChainEss; minEssName = names[p]; }
-        bool rhatOk = (multiChain == false) || std::isnan(d.rhat) || d.rhat <= rhatMax;
+        bool rhatOk = (multiChain == false) || isDensity || std::isnan(d.rhat) || d.rhat <= rhatMax;
         bool essOk = (worstChainEss < 0.0) || worstChainEss >= essMin;
         if(rhatOk == false || essOk == false){
             nBelow++;
@@ -168,13 +198,16 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
 
     lastMaxRhat = worstRhat; lastMinChainEss = minEss; lastMinBulkEss = minBulkEss;
 
-    std::cout << std::fixed;
-    std::cout << "gen " << gen;
-    if(multiChain)
-        std::cout << "  max R-hat " << std::setprecision(4) << worstRhat << " (" << worstRhatName << ")";
-    std::cout << "  min per-chain ESS " << std::setprecision(0) << minEss << " (" << minEssName << ")\n";
+    if((long)gen != lastReportedGen){
+        std::cout << std::fixed;
+        std::cout << "gen " << gen;
+        if(multiChain)
+            std::cout << "  max R-hat " << std::setprecision(4) << worstRhat << " (" << worstRhatName << ")";
+        std::cout << "  min per-chain ESS " << std::setprecision(0) << minEss << " (" << minEssName << ")\n";
+        lastReportedGen = (long)gen;
+    }
 
-    if(finalPass && nBelow > 0){
+    if(finalPass && nBelow > 0 && s.getAutoChainLength()){
         std::string crit = multiChain ? ("R-hat > " + std::to_string(rhatMax) + " or per-chain ESS < " + std::to_string((int)essMin))
                                       : ("per-chain ESS < " + std::to_string((int)essMin));
         std::string msg = std::to_string(nBelow) + " of " + std::to_string(nP) + " quantities have " + crit + " : ";
@@ -190,8 +223,10 @@ void ConvergenceRunner::writeMerged(void){
     if(replicates.size() < 2)
         return;
     double burn = UserSettings::userSettings().getBurninFraction();
+    int thin = UserSettings::userSettings().getThinning();
+    long g = 0;
 
-    std::ofstream mp(paramBase);
+    std::ofstream mp(bulkPath(paramBase));
     bool wroteHeader = false;
     for(const std::string& fn : repParamFiles){
         std::ifstream in(fn);
@@ -204,8 +239,12 @@ void ConvergenceRunner::writeMerged(void){
         if(wroteHeader == false){ mp << lines[0] << "\n"; wroteHeader = true; }
         int nData = (int)lines.size() - 1;
         int b = (int)(nData * burn);
-        for(int i = 1 + b; i < (int)lines.size(); i++)
-            mp << lines[i] << "\n";
+        for(int i = 1 + b; i < (int)lines.size(); i++){
+            g += thin;
+            size_t tab = lines[i].find('\t');
+            if(tab == std::string::npos) mp << lines[i] << "\n";
+            else mp << g << lines[i].substr(tab) << "\n";
+        }
     }
     mp.close();
 
@@ -217,7 +256,7 @@ void ConvergenceRunner::writeMerged(void){
     if(anyTree == false)
         return;
 
-    std::ofstream mt(treeBase);
+    std::ofstream mt(bulkPath(treeBase));
     for(const std::string& fn : repTreeFiles){
         std::ifstream in(fn);
         if(in.is_open() == false) continue;

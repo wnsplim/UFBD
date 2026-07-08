@@ -1,13 +1,21 @@
 #ifndef ChainRunner_hpp
 #define ChainRunner_hpp
 
+#include <iostream>
+#include <mutex>
 #include <string>
 #include <vector>
+
+class Tree;
 
 class ChainRunner {
 
     public:
         virtual                                 ~ChainRunner(void) {}
+        virtual Tree*                           getTree(void) { return nullptr; }
+        virtual void                            setVerbose(bool) {}
+        virtual void                            setLabel(int) {}
+        static void                             logLine(const std::string& s){ static std::mutex m; std::lock_guard<std::mutex> lk(m); std::cout << s; }
         virtual void                            init(void) = 0;
         virtual void                            advance(unsigned long nGens) = 0;
         virtual void                            finalize(void) = 0;

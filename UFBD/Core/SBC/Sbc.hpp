@@ -18,6 +18,9 @@ struct SbcConfig {
     double                  rho;
     double                  bb;
     std::vector<double>     intervalStart;
+    std::vector<double>     lambdaTimes;
+    std::vector<double>     muTimes;
+    std::vector<double>     psiTimes;
     Probability::PriorSpec  lambdaPrior;
     Probability::PriorSpec  muPrior;
     Probability::PriorSpec  psiPrior;

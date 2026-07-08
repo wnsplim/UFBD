@@ -20,8 +20,10 @@ Mcmc::Mcmc(int ng, int thin, PhylogeneticModel* m) : model(m), numCycles(ng), th
     UserSettings& settings = UserSettings::userSettings();
     treeOut = settings.getTreeOutput();
     paramOut = settings.getParamOutput();
-    writeTrees = (model->getTree()->getNumBackbone() > 0);
+    writeTrees = (treeOut.empty() == false && model->getTree()->getNumBackbone() > 0);
 }
+
+Tree* Mcmc::getTree(void) { return model->getTree(); }
 
 void Mcmc::run(void) {
     init();
@@ -54,13 +56,6 @@ void Mcmc::advance(unsigned long nGens) {
 
         bool acceptMove = (std::log(rng.uniformRv()) < lnR);
 
-        if (n % thinning == 0)
-            {
-            std::cout << std::fixed << std::setprecision(2);
-            std::cout << n << " -- " << curLnL << " -> " << newLnL << "\n";
-            model->print();
-            }
-
         if (acceptMove == true)
             {
             curLnL = newLnL;
@@ -71,6 +66,12 @@ void Mcmc::advance(unsigned long nGens) {
             {
             model->updateForRejection();
             }
+
+        if (verbose && n % thinning == 0) {
+            std::ostringstream os;
+            os << std::fixed << std::setprecision(2) << "chain " << runLabel << "  " << n << " -- posterior " << (curLnL + curLnP) << " likelihood " << curLnL << "\n";
+            ChainRunner::logLine(os.str());
+        }
 
         if (n == 1 || n == (unsigned long)numCycles || n % thinning == 0)
             sample(n, curLnL, curLnP);

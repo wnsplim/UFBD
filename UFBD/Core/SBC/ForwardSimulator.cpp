@@ -148,9 +148,9 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
 
         double curAge = p.startAge;
         while(curAge > 0.0 && active.empty() == false){
-            double lam = p.lambda[ii];
-            double m   = p.mu[ii];
-            double ps  = p.psi[ii];
+            double lam = p.lambda[p.lambdaIdx[ii]];
+            double m   = p.mu[p.muIdx[ii]];
+            double ps  = p.psi[p.psiIdx[ii]];
             double sum = lam + m + ps;
             int N = (int)active.size();
             double younger = p.intervalStart[ii];

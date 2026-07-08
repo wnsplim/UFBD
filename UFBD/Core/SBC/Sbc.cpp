@@ -96,10 +96,18 @@ SimParams Sbc::drawParams(void){
     p.originConditioning = cfg.originConditioning;
     p.condEvent = cfg.condEvent;
     p.startAge = drawPrior(cfg.startAgePrior, rng);
-    for(size_t i = 0; i < cfg.intervalStart.size(); i++){
-        p.lambda.push_back(drawPrior(cfg.lambdaPrior, rng));
-        p.mu.push_back(drawPrior(cfg.muPrior, rng));
-        p.psi.push_back(drawPrior(cfg.psiPrior, rng));
+    int lPrev = -1, mPrev = -1, pPrev = -1;
+    for(double s : cfg.intervalStart){
+        int li = 0, mi = 0, pi = 0;
+        for(int k = 0; k < (int)cfg.lambdaTimes.size(); k++) if(cfg.lambdaTimes[k] <= s) li = k;
+        for(int k = 0; k < (int)cfg.muTimes.size(); k++)     if(cfg.muTimes[k] <= s)     mi = k;
+        for(int k = 0; k < (int)cfg.psiTimes.size(); k++)    if(cfg.psiTimes[k] <= s)    pi = k;
+        if(li > lPrev){ p.lambda.push_back(drawPrior(cfg.lambdaPrior, rng)); lPrev = li; }
+        if(mi > mPrev){ p.mu.push_back(drawPrior(cfg.muPrior, rng));         mPrev = mi; }
+        if(pi > pPrev){ p.psi.push_back(drawPrior(cfg.psiPrior, rng));       pPrev = pi; }
+        p.lambdaIdx.push_back(li);
+        p.muIdx.push_back(mi);
+        p.psiIdx.push_back(pi);
     }
     return p;
 }
@@ -202,25 +210,6 @@ void Sbc::runInference(void){
         SimResult r = sim.simulate(truth);
 
         std::string repBase = cfg.dumpPrefix + "_rep" + std::to_string(rep);
-        if(cfg.dumpPrefix.empty() == false){
-            const char* asg = cfg.originConditioning ? "TOTAL" : "CROWN";
-            std::ofstream tf(repBase + ".tree");   tf << r.backboneNewick << "\n"; tf.close();
-            std::ofstream cf(repBase + ".clades"); cf << "whole\t";
-            for(int i = 1; i <= r.numBackbone; i++) cf << (i > 1 ? "," : "") << "T" << i;
-            cf << "\n"; cf.close();
-            std::ofstream ff(repBase + ".fossils");
-            for(size_t i = 0; i < r.fossilAges.size(); i++)
-                ff << "F" << (i + 1) << '\t' << r.fossilAges[i] << '\t' << r.fossilAges[i] << "\twhole\t" << asg << '\n';
-            for(int i = 0; i < r.numUE; i++)
-                ff << "U" << (i + 1) << "\t0\t0\twhole\t" << asg << '\n';
-            ff.close();
-            std::ofstream xf(repBase + ".truth");
-            for(size_t i = 0; i < truth.lambda.size(); i++) xf << "lambda" << i << "\t" << truth.lambda[i] << "\n";
-            for(size_t i = 0; i < truth.mu.size(); i++)     xf << "mu" << i << "\t" << truth.mu[i] << "\n";
-            for(size_t i = 0; i < truth.psi.size(); i++)    xf << "psi" << i << "\t" << truth.psi[i] << "\n";
-            xf << "x\t" << truth.startAge << "\nnSA\t" << r.numSA << "\n";
-            xf.close();
-        }
 
         Tree* tree = new Tree(r.backboneNewick);
         std::vector<std::string> taxa;
@@ -253,7 +242,7 @@ void Sbc::runInference(void){
             chains.push_back(new Mcmc(ng, thin, model));
         }
         printf("rep %d/%d:\n", rep + 1, cfg.numReps);
-        ConvergenceRunner cr(chains, repBase + "_run", repBase + "_runtree");
+        ConvergenceRunner cr(chains, repBase + ".log", repBase + ".trees");
         if(cr.run() == false)
             nUnconverged++;
         double repMaxRhat = cr.getMaxRhat(), repMinChainEss = cr.getMinChainEss(), repBulkEss = cr.getMinBulkEss();

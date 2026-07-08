@@ -59,6 +59,11 @@ MetropolisCoupledMcmc::~MetropolisCoupledMcmc(void){
         delete p;
 }
 
+Tree* MetropolisCoupledMcmc::getTree(void){
+    int i = (coldModelIdx >= 0) ? coldModelIdx : 0;
+    return models[i]->getTree();
+}
+
 double MetropolisCoupledMcmc::calcHeating(int idx){
     if(idx == 0)
         return 1.0;
@@ -175,14 +180,14 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
             }
         }
         
-        if (n % thinning == 0){
-            std::cout << std::fixed << std::setprecision(2);
+        if (verbose && n % thinning == 0){
             const size_t numAccepted = std::count(recentAcceptRej.begin(), recentAcceptRej.end(), true);
-            const double acceptanceRate = static_cast<double>(numAccepted) / recentAcceptRej.size();
-            std::cout << n << " -- "
-                << currLnL[coldModelIdx] << " -> " << newLnL[coldModelIdx]
-                << " | Chain swap acceptance ratio: " << acceptanceRate << "\n";
-            models[coldModelIdx]->print();
+            const double acceptanceRate = recentAcceptRej.empty() ? 0.0 : static_cast<double>(numAccepted) / recentAcceptRej.size();
+            std::ostringstream os;
+            os << std::fixed << std::setprecision(2) << "chain " << runLabel << "  " << n << " -- posterior "
+               << (currLnL[coldModelIdx] + currLnP[coldModelIdx]) << " likelihood " << currLnL[coldModelIdx]
+               << " | swap accept " << acceptanceRate << "\n";
+            ChainRunner::logLine(os.str());
         }
             
         //choose two chains and swap

@@ -71,6 +71,7 @@ class UserSettings {
         bool                        getUseInvariant(void) { return useInvariant; }
         const double*               getRgeneGamma(void) { return rgeneGamma; }
         const double*               getSigma2Gamma(void) { return sigma2Gamma; }
+        bool                        clockOrCtmcConfigured(void) { return clockModelName != "ucln" || substModel != "gtr" || datatypeProvided || nstatesProvided || partitionFile.empty() == false || useInvariant || numCats != 4 || freqMode != "model" || clockGroups.empty() == false; }
         void                        print(void);
         void                        printHelp(void);
 
@@ -116,6 +117,8 @@ class UserSettings {
         double                      burninFraction;
         double                      rhatThreshold;
         double                      essThreshold;
+        bool                        rhatThresholdSet = false;
+        bool                        essThresholdSet = false;
         unsigned long               maxGen;
         int                         numCores;
         int                         thinning;

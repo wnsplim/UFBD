@@ -5,6 +5,7 @@
 #include <map>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 class Node;
@@ -24,6 +25,7 @@ class Tree {
         std::string                         getNewickString(void);
         std::string                         getBackboneNewickString(void);
         std::vector<Node*>                  getBackboneAgeNodes(void);
+        std::string                         getSummaryNewickString(const std::map<Node*,double>& age, const std::map<Node*,std::pair<double,double>>& hpd);
         const std::vector<Node*>&           getBackboneRateNodes(void);
         void                                ensureBackboneCache(void);
         Node*                               getBackboneRoot(void);
@@ -87,5 +89,7 @@ class Tree {
         std::vector<Node*>                  bbParentByOffset;
         std::vector<std::vector<Node*>>     bbChildrenByOffset;
 };
+
+bool writeSummaryTree(Tree* tree, const std::vector<std::string>& names, const std::vector<std::vector<double>>& cols, double burninFrac, const std::string& path);
 
 #endif
