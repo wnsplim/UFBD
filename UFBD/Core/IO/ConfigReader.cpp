@@ -60,12 +60,12 @@ std::string getVal(const std::map<std::string,std::string>& kv, const std::strin
     return it == kv.end() ? std::string() : it->second;
 }
 
-// grammar: name:(lo,hi)[+(lo,hi)...] ; name:(lo,hi) ; ...
+// grammar: name:(lo,hi)[+(lo,hi)...] | name:(lo,hi) | ...
 void translateTimeBins(const std::string& spec, std::map<std::string,int>& nameToGid,
                        std::vector<double>& cuts, std::vector<int>& groups){
     struct Iv { double lo, hi; int gid; };
     std::vector<Iv> ivs;
-    for(std::string bt : splitChar(spec, ';')){
+    for(std::string bt : splitChar(spec, '|')){
         bt = trim(bt);
         if(bt.empty()) continue;
         size_t c = bt.find(':');
@@ -118,8 +118,8 @@ void translatePrior(const std::string& ratePrefix, const std::string& typeLabel,
                     const std::string& spec, const std::map<std::string,int>& nameToGid,
                     std::vector<std::string>& out){
     std::string flag = "-" + ratePrefix + "_prior";
-    std::vector<std::string> bins = splitChar(spec, ';');
-    // <prior> (all bins) OR binName:<prior>; binName:<prior> (per chunk)
+    std::vector<std::string> bins = splitChar(spec, '|');
+    // <prior> (all bins) OR binName:<prior> | binName:<prior> (per chunk)
     if(bins.size() == 1){
         std::string t = trim(bins[0]);
         size_t c = t.find(':');

@@ -1,10 +1,10 @@
 # .DS_Store
-FossilizedBirthDeathProcesses/.DS_Store
-FossilizedBirthDeathProcesses/FossilizedBirthDeathProcesses.xcodeproj/project.xcworkspace/xcuserdata/levir.xcuserdatad/UserInterfaceState.xcuserstate
+UFBD.xcodeproj/project.xcworkspace/xcuserdata/levir.xcuserdatad/UserInterfaceState.xcuserstate
 .DS_Store
 
 # Playground
 output/
+Examples/config_reference.cfg
 
 # Coding agent configurations
 CLAUDE.md
@@ -15,4 +15,4 @@ build/
 cmake-build-*/
 
 # Architecture spec
-FossilizedBirthDeathProcesses/codeArchitectureExplanation.txt
+codeArchitectureExplanation.txt

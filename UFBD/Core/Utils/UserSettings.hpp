@@ -70,7 +70,6 @@ class UserSettings {
         int                         getThinning(void) { return thinning; }
         std::string                 getHessianFile(void) { return hessianFile; }
         std::string                 getConfigFile(void) { return configFilePath; }
-        std::string                 getInvocation(void) { return invocation; }
         std::string                 getClockModelName(void) { return clockModelName; }
         const std::vector<int>&     getClockGroups(void) { return clockGroups; }
         int                         getModelNStates(void) {
