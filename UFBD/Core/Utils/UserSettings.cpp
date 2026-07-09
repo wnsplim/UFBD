@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <cstdlib>
 #include <set>
 #include <string>
 #include <vector>
@@ -166,6 +167,9 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
             arguments.push_back(cfgTokens[i]);
     }
 
+    for (size_t i = 1; i < arguments.size(); i++)
+        if (arguments[i] == "-help" || arguments[i] == "-h") { printHelp(); std::exit(0); }
+
     for (size_t i = 0; i < arguments.size(); i++) {
         bool q = arguments[i].find_first_of(" (),") != std::string::npos;
         invocation += (i ? " " : "");
@@ -211,12 +215,6 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
 
         if (knownFlags.find(arg) == knownFlags.end())
             Msg::error("unknown flag \"" + arg + "\".");
-
-        // Help flag
-        if (arg == "-help" || arg == "-h") {
-            printHelp();
-            return;
-        }
 
         if (arg == "-resume") {
             resume = true;
@@ -626,5 +624,108 @@ void UserSettings::print(void) {
 }
 
 void UserSettings::printHelp(void){
-    std::cout << ".\n";
+    std::cout << R"HELP(USAGE
+
+  ufbd [flags]
+  ufbd -config <file>     read settings from a config file (see README.md)
+
+Every setting can be given as a flag (below) or in a config file. When a
+setting appears in both, the config file is prioritized.
+
+A prior is written one of these ways:
+  improper | <number> (fixed value) | exp:rate | gamma:shape,rate |
+  lognormal:mu,sigma | unif:a,b | truncnormal:mean,sd
+
+REQUIRED
+  -fossils <file>         tab-separated: taxon, min age, max age, clade,
+                          CROWN|TOTAL|STEM, and an optional preservation type
+  -conditioning <event> [prior]
+                          event = crown | origin | anysample | extinct;
+                          the optional prior is the root-age prior
+                          (default: improper)
+
+INPUT
+  -backbone_tree <file>   rooted binary NEWICK or NEXUS tree; if not given,
+                          every taxon is treated as unresolved
+  -clade_def <file>       name<TAB>taxon,taxon,... ; a clade is all taxa under
+                          the MRCA of the listed ones
+
+OUTPUT  (prefixes: the engine appends .log/.trees/.tree, _chainN per chain)
+  -log_output <prefix>    parameter log: merged across parallel chains as
+                          <prefix>.log, per chain as <prefix>_chainN.log
+  -tree_output <prefix>   per-sample trees (same naming) plus the posterior
+                          mean tree <prefix>.tree
+                          The full console is also saved to
+                          <prefix>.console.txt.
+
+MCMC
+  -chain_length <N|auto>  number of generations, or 'auto' to stop on the
+                          convergence targets below
+  -thinning <N>           sample every N generations
+  -burn_in <frac>         burn-in fraction (default 0.25)
+  -parallel_chains <N>    independent replicate runs (needed for split R-hat)
+  -coupled_chains <N>     Metropolis-coupled chains per run (>1 enables MC3)
+  -cores <N>              number of threads
+  -seed <N>               random number seed
+
+CONVERGENCE  (used only with -chain_length auto)
+  -max_gen <N>            hard generation cap
+  -min_ess <N>            target minimum per-chain ESS
+  -rhat <x>               target maximum rank-normalized split R-hat
+
+FBD RATES
+  -rho <frac>             extant sampling fraction
+  -lambda_prior <prior>   speciation rate prior
+  -mu_prior <prior>       extinction rate prior
+  -psi_prior <prior>      fossil-sampling rate prior
+
+SKYLINE  (piecewise-constant rates; write lambda, mu, or psi for <r>)
+  -<r>_skyline_times <t,...>
+                          interior time boundaries (k boundaries -> k+1 bins)
+  -<r>_groups <g,...>     group id per bin; bins sharing an id share a rate
+  -<r>_prior_mode <iid|smooth>
+                          independent rates, or a smooth (HSMRF) field
+  -<r>_prior <gid>:<prior>
+                          prior for one bin group (repeat once per group)
+  -hsmrf_shifts <x>       HSMRF hyperparameters (only when a rate is smooth)
+  -hsmrf_shift_size <x>
+
+MULTIPLE PRESERVATION TYPES  (split psi by type)
+  -psi_types <name,...>   declare types; names must match the fossil table's
+                          6th column
+  Give per-type flags a 'name:' prefix, e.g.
+    -psi_prior type1:unif:0.01,0.04
+    -psi_skyline_times type1:20,40
+    -psi_prior_mode type1:smooth
+
+CLOCK & SUBSTITUTION MODEL
+  -sequence <file>        alignment (FASTA / PHYLIP / NEXUS)
+  -hessian <file>         Hessian for approximate dating (PAML in.BV format)
+  -partition <file>       NEXUS partition file (-sequence path only)
+  -datatype <nt|aa>       sequence data type
+  -n_states <N>           substitution state count (-hessian path only)
+  -ctmc_model <gtr|file>  'gtr', or a PAML matrix file for amino acids
+  -ctmc_gamma_cat <N>     number of discrete gamma rate categories
+  -ctmc_inv <on|off>      add a proportion of invariant sites
+  -ctmc_freq <model|empirical|estimated>
+                          equilibrium frequencies
+  -clock_model <ucln|gbm> uncorrelated lognormal, or geometric Brownian motion
+  -clock_partitions <g,...>
+                          clock group id per partition (omit = single clock)
+  -rgene_gamma <a,b,c>    gamma prior on the mean clock rate
+  -sigma2_gamma <a,b,c>   gamma prior on the clock rate variance
+
+OTHER
+  -config <file>          read a config file (its format is in README.md)
+  -help, -h               show this help
+
+RESUME
+  -resume                 Continue an interrupted run by re-running the SAME
+                          command with -resume added. A checkpoint is saved
+                          every -thinning samples to <log_output>.log.ckp; on
+                          resume the engine restores each chain's state, trims
+                          .log/.trees back to that checkpoint, and continues
+                          the run. Use the same output prefix as the original
+                          run.
+)HELP";
 }

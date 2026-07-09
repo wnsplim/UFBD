@@ -11,7 +11,39 @@
 #include <string>
 #include <vector>
 
+static void printSbcHelp(){
+    printf("%s", R"SBC(USAGE
+
+  sbc -sbc_mode <emit|simulate|infer> -sbc_reps <N> [flags]
+
+MODES
+  emit       write N simulated datasets to disk
+  simulate   simulate N datasets and print summary statistics only
+  infer      draw -> simulate -> infer -> rank; outputs <prefix>_ranks.tsv
+
+SBC FLAGS
+  -sbc_mode <emit|simulate|infer>
+                          required
+  -sbc_reps <N>           number of replicate datasets
+  -sbc_bb <frac>          fraction of extant tips kept as backbone (default 1;
+                          a value < 1 requires origin conditioning)
+  -sbc_out <prefix>       output prefix (required for -sbc_mode emit)
+  -fbd_model <UFBD|RFBD|HEA14>
+                          model variant
+
+DRAW PRIORS AND CHAIN CONTROL
+  These reuse the main ufbd flags: -lambda_prior, -mu_prior, -psi_prior (all
+  required), -conditioning <event> <prior> (required), -rho, -*_skyline_times,
+  -psi_types, and, for -sbc_mode infer, the MCMC/convergence flags
+  -chain_length, -min_ess, -max_gen, -thinning, -burn_in, -parallel_chains,
+  -cores, -seed. Run 'ufbd -help' for their descriptions.
+)SBC");
+}
+
 int main(int argc, const char* argv[]){
+
+    for(int i = 1; i < argc; i++)
+        if(std::string(argv[i]) == "-help" || std::string(argv[i]) == "-h"){ printSbcHelp(); return 0; }
 
     std::string invocation;
     for(int i = 0; i < argc; i++){
