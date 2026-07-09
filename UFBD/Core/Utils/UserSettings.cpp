@@ -10,6 +10,7 @@
 #include <cmath>
 #include <random>
 
+#include "ConfigReader.hpp"
 #include "Msg.hpp"
 #include "Probability.hpp"
 #include "UserSettings.hpp"
@@ -149,11 +150,38 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     for (int i = 0; i < argc; i++)
         arguments.push_back(std::string(argv[i]));
 
+    if (sbcMode == false) {
+        std::vector<std::string> cfgTokens;
+        for (size_t i = 1; i < arguments.size(); ) {
+            if (arguments[i] == "-config") {
+                if (i + 1 >= arguments.size()) Msg::error("flag \"-config\" expects a file path.");
+                configFilePath = arguments[i + 1];
+                cfgTokens = ConfigReader::translate(configFilePath);
+                arguments.erase(arguments.begin() + i, arguments.begin() + i + 2);
+            } else {
+                i++;
+            }
+        }
+        for (size_t i = 0; i < cfgTokens.size(); i++)
+            arguments.push_back(cfgTokens[i]);
+    }
+
+    for (size_t i = 0; i < arguments.size(); i++) {
+        bool q = arguments[i].find_first_of(" (),") != std::string::npos;
+        invocation += (i ? " " : "");
+        invocation += q ? "\"" + arguments[i] + "\"" : arguments[i];
+    }
+    if (sbcMode == false) {
+        std::cout << invocation << "\n";
+        if (configFilePath.empty() == false)
+            std::cout << "Config file:                  " << configFilePath << "\n";
+    }
+
     std::set<std::string> knownFlags = {
         "-tree_output", "-log_output", "-backbone_tree", "-clade_def", "-fossils", "-conditioning", "-rho", "-seed", "-chain_length", "-thinning", "-coupled_chains", "-cores", "-help", "-h",
         "-lambda_prior", "-mu_prior", "-psi_prior", "-psi_types",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_partitions",
-        "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-lambda_groups", "-mu_groups", "-psi_groups", "-lambda_group_prior", "-mu_group_prior", "-psi_group_prior", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
+        "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-lambda_groups", "-mu_groups", "-psi_groups", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
         "-hessian", "-clock_model", "-n_states", "-rgene_gamma", "-sigma2_gamma",
         "-sequence", "-partition", "-ctmc_gamma_cat", "-datatype", "-ctmc_model", "-ctmc_inv", "-ctmc_freq",
         "-parallel_chains", "-burn_in", "-rhat", "-min_ess", "-max_gen", "-resume", "-ar_log"
@@ -162,7 +190,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-tree_output", "-log_output", "-backbone_tree", "-clade_def", "-fossils", "-conditioning", "-rho", "-seed", "-chain_length", "-thinning", "-coupled_chains", "-cores",
         "-lambda_prior", "-mu_prior", "-psi_prior", "-psi_types",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_partitions",
-        "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-lambda_groups", "-mu_groups", "-psi_groups", "-lambda_group_prior", "-mu_group_prior", "-psi_group_prior", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
+        "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-lambda_groups", "-mu_groups", "-psi_groups", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
         "-hessian", "-clock_model", "-n_states", "-rgene_gamma", "-sigma2_gamma",
         "-sequence", "-partition", "-ctmc_gamma_cat", "-datatype", "-ctmc_model", "-ctmc_inv", "-ctmc_freq",
         "-parallel_chains", "-burn_in", "-rhat", "-min_ess", "-max_gen"
@@ -184,7 +212,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         if (knownFlags.find(arg) == knownFlags.end())
             Msg::error("unknown flag \"" + arg + "\".");
 
-        // Help flag (no value)
+        // Help flag
         if (arg == "-help" || arg == "-h") {
             printHelp();
             return;
@@ -257,15 +285,41 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                     Msg::error("flag \"-seed\" expects a non-negative integer, but got \"" + val + "\".");
                 }
                 seedSet = true;
-            } else if (arg == "-lambda_prior") {
-                parsePriorInto(val, lambdaPrior.family, lambdaPrior.p1, lambdaPrior.p2); lambdaPrior.set = true;
-            } else if (arg == "-mu_prior") {
-                parsePriorInto(val, muPrior.family, muPrior.p1, muPrior.p2); muPrior.set = true;
-            } else if (arg == "-psi_prior") {
+            } else if (arg == "-lambda_prior" || arg == "-mu_prior") {
+                // <prior> (all bins) OR <group_id>:<prior> (per-chunk override)
                 size_t c = val.find(':');
-                bool typed = (c != std::string::npos) && (isPriorFamilyKeyword(val.substr(0, c)) == false);
-                if (typed == false) { parsePriorInto(val, psiPrior.family, psiPrior.p1, psiPrior.p2); psiPrior.set = true; }
-                else { Probability::PriorSpec ps; parsePriorInto(val.substr(c + 1), ps.family, ps.p1, ps.p2); ps.set = true; psiPriorByName[val.substr(0, c)] = ps; }
+                std::string first = (c == std::string::npos) ? val : val.substr(0, c);
+                bool isGid = (c != std::string::npos) && first.empty() == false && std::all_of(first.begin(), first.end(), ::isdigit);
+                Probability::PriorSpec& base = (arg == "-lambda_prior") ? lambdaPrior : muPrior;
+                std::map<int, Probability::PriorSpec>& gp = (arg == "-lambda_prior") ? lambdaGroupPrior : muGroupPrior;
+                if (isGid) {
+                    Probability::PriorSpec ps; parsePriorInto(val.substr(c + 1), ps.family, ps.p1, ps.p2); ps.set = true;
+                    gp[std::stoi(first)] = ps;
+                } else {
+                    parsePriorInto(val, base.family, base.p1, base.p2); base.set = true;
+                }
+            } else if (arg == "-psi_prior") {
+                // <prior> | <type>:<prior> | <group_id>:<prior> | <type>:<group_id>:<prior>
+                size_t c = val.find(':');
+                std::string first = (c == std::string::npos) ? val : val.substr(0, c);
+                if (c == std::string::npos || isPriorFamilyKeyword(first)) {
+                    parsePriorInto(val, psiPrior.family, psiPrior.p1, psiPrior.p2); psiPrior.set = true;
+                } else if (first.empty() == false && std::all_of(first.begin(), first.end(), ::isdigit)) {
+                    Probability::PriorSpec ps; parsePriorInto(val.substr(c + 1), ps.family, ps.p1, ps.p2); ps.set = true;
+                    psiGroupPrior[std::stoi(first)] = ps;
+                } else {
+                    std::string rest = val.substr(c + 1);
+                    size_t c2 = rest.find(':');
+                    std::string r0 = (c2 == std::string::npos) ? rest : rest.substr(0, c2);
+                    Probability::PriorSpec ps;
+                    if (c2 != std::string::npos && r0.empty() == false && std::all_of(r0.begin(), r0.end(), ::isdigit)) {
+                        parsePriorInto(rest.substr(c2 + 1), ps.family, ps.p1, ps.p2); ps.set = true;
+                        psiGroupPriorByName[first][std::stoi(r0)] = ps;
+                    } else {
+                        parsePriorInto(rest, ps.family, ps.p1, ps.p2); ps.set = true;
+                        psiPriorByName[first] = ps;
+                    }
+                }
             } else if (arg == "-lambda_groups" || arg == "-mu_groups" || arg == "-psi_groups") {
                 std::string nm, lst = val;
                 if (arg == "-psi_groups") { size_t c = val.find(':'); if (c != std::string::npos) { nm = val.substr(0, c); lst = val.substr(c + 1); } }
@@ -278,26 +332,6 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 if (arg == "-lambda_groups") lambdaGroups = g;
                 else if (arg == "-mu_groups") muGroups = g;
                 else if (nm.empty()) psiGroups = g; else psiGroupsByName[nm] = g;
-            } else if (arg == "-lambda_group_prior" || arg == "-mu_group_prior" || arg == "-psi_group_prior") {
-                size_t c1 = val.find(':');
-                if (c1 == std::string::npos) Msg::error("flag \"" + arg + "\" expects [type:]<group_id>:<prior>.");
-                std::string first = val.substr(0, c1), nm, gidStr, priorSpec;
-                bool firstIsInt = first.empty() == false && std::all_of(first.begin(), first.end(), ::isdigit);
-                if (firstIsInt) {
-                    gidStr = first; priorSpec = val.substr(c1 + 1);
-                } else {
-                    nm = first;
-                    size_t c2 = val.find(':', c1 + 1);
-                    if (c2 == std::string::npos) Msg::error("flag \"" + arg + "\" expects [type:]<group_id>:<prior>.");
-                    gidStr = val.substr(c1 + 1, c2 - c1 - 1); priorSpec = val.substr(c2 + 1);
-                }
-                int gid = 0;
-                try { gid = std::stoi(gidStr); }
-                catch (...) { Msg::error("flag \"" + arg + "\" expects [type:]<group_id>:<prior>."); }
-                Probability::PriorSpec ps; parsePriorInto(priorSpec, ps.family, ps.p1, ps.p2); ps.set = true;
-                if (arg == "-lambda_group_prior") lambdaGroupPrior[gid] = ps;
-                else if (arg == "-mu_group_prior") muGroupPrior[gid] = ps;
-                else if (nm.empty()) psiGroupPrior[gid] = ps; else psiGroupPriorByName[nm][gid] = ps;
             } else if (arg == "-psi_types") {
                 std::stringstream ss(val); std::string tok;
                 while (std::getline(ss, tok, ',')) if (tok.empty() == false) psiTypeNames.push_back(tok);
@@ -491,6 +525,13 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         Msg::warning("amino-acid data (-datatype aa) with -ctmc_model gtr estimates 190 exchangeability parameters.");
     if (sequenceFile.empty() == false && nstatesProvided)
         Msg::warning("-n_states applies to the approximate-dating (-hessian) path only; ignoring it.");
+    if (hessianFile.empty() == false && nstatesProvided && datatypeProvided) {
+        int implied = (seqDataType == "aa" ? 20 : 4);
+        if (implied != nStates)
+            Msg::warning("-datatype implies " + std::to_string(implied) + " states but -n_states is " + std::to_string(nStates) + "; using " + std::to_string(nStates) + ".");
+    }
+    if (hessianFile.empty() == false && partitionFile.empty() == false)
+        Msg::warning("-partition (NEXUS charset) applies to the sequence path only; ignoring it under -hessian.");
 
     bool anySmooth = (lambdaMode == RateMode::SMOOTH || muMode == RateMode::SMOOTH || psiMode == RateMode::SMOOTH);
     for (std::map<std::string, RateMode>::iterator it = psiModeByName.begin(); it != psiModeByName.end(); ++it)

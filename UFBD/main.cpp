@@ -11,9 +11,12 @@
 #include "Tree.hpp"
 #include "UserSettings.hpp"
 
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <random>
+#include <sstream>
+#include <streambuf>
 #include <execinfo.h>
 #include <csignal>
 #include <cstdio>
@@ -27,13 +30,66 @@ static void crashBacktrace(int sig){
     _exit(128 + sig);
 }
 
+class TeeBuf : public std::streambuf {
+    public:
+        TeeBuf(std::streambuf* a, std::streambuf* b) : bufA(a), bufB(b) {}
+        void setB(std::streambuf* b) { bufB = b; }
+    protected:
+        int overflow(int c) override {
+            if(c == traits_type::eof()) return c;
+            int r1 = bufA->sputc((char)c);
+            int r2 = bufB->sputc((char)c);
+            return (r1 == traits_type::eof() || r2 == traits_type::eof()) ? traits_type::eof() : c;
+        }
+        int sync() override { return (bufA->pubsync() == 0 && bufB->pubsync() == 0) ? 0 : -1; }
+    private:
+        std::streambuf* bufA;
+        std::streambuf* bufB;
+};
+
+static std::streambuf* gOrigCout = nullptr;
+static std::streambuf* gOrigCerr = nullptr;
+static void restoreConsoleStreams(){
+    if(gOrigCout) std::cout.rdbuf(gOrigCout);
+    if(gOrigCerr) std::cerr.rdbuf(gOrigCerr);
+}
+
 int main(int argc, const char* argv[]) {
 
     signal(SIGSEGV, crashBacktrace);
     signal(SIGABRT, crashBacktrace);
 
+    std::ostringstream preBuf;
+    static std::ofstream consoleFile;
+    static TeeBuf teeOut(std::cout.rdbuf(), preBuf.rdbuf());
+    static TeeBuf teeErr(std::cerr.rdbuf(), preBuf.rdbuf());
+    gOrigCout = std::cout.rdbuf(&teeOut);
+    gOrigCerr = std::cerr.rdbuf(&teeErr);
+    std::atexit(restoreConsoleStreams);
+
     UserSettings& settings = UserSettings::userSettings();
     settings.initializeSettings(argc, argv);
+
+    std::string logBase = settings.getParamOutput();
+    std::string consolePath = "console.txt";
+    if(logBase.empty() == false){
+        size_t p = logBase.rfind(".log");
+        consolePath = (p != std::string::npos ? logBase.substr(0, p) : logBase) + ".console.txt";
+    }
+    for(const std::string& pth : {settings.getParamOutput(), settings.getTreeOutput(), consolePath}){
+        if(pth.empty()) continue;
+        std::filesystem::path d = std::filesystem::path(pth).parent_path();
+        if(d.empty() == false) std::filesystem::create_directories(d);
+    }
+    consoleFile.open(consolePath);
+    if(consoleFile.is_open()){
+        consoleFile << preBuf.str();
+        teeOut.setB(consoleFile.rdbuf());
+        teeErr.setB(consoleFile.rdbuf());
+    }else{
+        restoreConsoleStreams();
+    }
+
     settings.print();
 
     unsigned int masterSeed = settings.getSeed();

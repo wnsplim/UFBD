@@ -69,9 +69,17 @@ class UserSettings {
         unsigned int                getSeed(void) { return seed; }
         int                         getThinning(void) { return thinning; }
         std::string                 getHessianFile(void) { return hessianFile; }
+        std::string                 getConfigFile(void) { return configFilePath; }
+        std::string                 getInvocation(void) { return invocation; }
         std::string                 getClockModelName(void) { return clockModelName; }
         const std::vector<int>&     getClockGroups(void) { return clockGroups; }
-        int                         getModelNStates(void) { return datatypeProvided ? (seqDataType == "aa" ? 20 : 4) : nStates; }
+        int                         getModelNStates(void) {
+                                        if(sequenceFile.empty() == false)
+                                            return datatypeProvided ? (seqDataType == "aa" ? 20 : 4) : 4;
+                                        if(nstatesProvided)
+                                            return nStates;
+                                        return datatypeProvided ? (seqDataType == "aa" ? 20 : 4) : nStates;
+                                    }
         std::string                 getSequenceFile(void) { return sequenceFile; }
         std::string                 getPartitionFile(void) { return partitionFile; }
         int                         getNumCats(void) { return numCats; }
@@ -140,6 +148,8 @@ class UserSettings {
         int                         numCores;
         int                         thinning;
         std::string                 hessianFile;
+        std::string                 configFilePath;
+        std::string                 invocation;
         std::string                 clockModelName;
         std::vector<int>            clockGroups;
         int                         nStates;
