@@ -47,21 +47,6 @@ void markKeep(SimNode* n, bool useBackbone){
     n->keep = k;
 }
 
-int countSA(SimNode* n, bool& hasRetained){
-    if(n->left == nullptr && n->right == nullptr){
-        hasRetained = n->isFossil || n->extantSampled;
-        return 0;
-    }
-    bool lr = false, rr = false;
-    int s = 0;
-    if(n->left != nullptr)  s += countSA(n->left, lr);
-    if(n->right != nullptr) s += countSA(n->right, rr);
-    hasRetained = lr || rr;
-    if(n->left != nullptr && n->left->isFossil && rr)
-        s++;
-    return s;
-}
-
 SimNode* extantMRCA(SimNode* n){
     while(true){
         if(n->left == nullptr && n->right == nullptr)
@@ -240,9 +225,6 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
         }
         res.numExtantSampled = (int)extants.size();
         res.numUE = res.numExtantSampled - inBB;
-
-        bool rootRetained = false;
-        res.numSA = countSA(root, rootRetained);
 
         markKeep(root, true);
         SimNode* mrca = extantMRCA(root);

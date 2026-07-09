@@ -457,32 +457,36 @@ std::vector<double> FBDTreeModel::getParameterString(void){
 
 std::vector<std::string> FBDTreeModel::getLatentNames(void){
     std::vector<std::string> names;
-    if(unresolvedFossils != nullptr){
-        for(int i = 0; i < unresolvedFossils->getNumFossils(); i++){
-            std::string nm = (i < (int)unrFossilName.size()) ? unrFossilName[i] : std::to_string(i);
-            if(unresolvedFossils->isUE(i) == false && unresolvedFossils->getYMin(i) < unresolvedFossils->getYMax(i))
-                names.push_back("y_" + nm);
-            names.push_back("z_" + nm);
-        }
-    }
+    auto unrName = [&](int i){ return (i < (int)unrFossilName.size()) ? unrFossilName[i] : std::to_string(i); };
+    int nUnr = (unresolvedFossils != nullptr) ? unresolvedFossils->getNumFossils() : 0;
+    for(int i = 0; i < nUnr; i++)
+        if(unresolvedFossils->isUE(i) == false && unresolvedFossils->getYMin(i) < unresolvedFossils->getYMax(i))
+            names.push_back("y_" + unrName(i));
     for(const BackboneFossil& bf : backboneFossils)
         if(bf.yMin < bf.yMax)
             names.push_back("y_" + bf.tip->getName());
+    for(int i = 0; i < nUnr; i++)
+        names.push_back("z_" + unrName(i));
+    for(int i = 0; i < nUnr; i++)
+        if(unresolvedFossils->isUE(i) == false)
+            names.push_back("sa_" + unrName(i));
     return names;
 }
 
 std::vector<double> FBDTreeModel::getLatentString(void){
     std::vector<double> vals;
-    if(unresolvedFossils != nullptr){
-        for(int i = 0; i < unresolvedFossils->getNumFossils(); i++){
-            if(unresolvedFossils->isUE(i) == false && unresolvedFossils->getYMin(i) < unresolvedFossils->getYMax(i))
-                vals.push_back(unresolvedFossils->getFossilAge(i));
-            vals.push_back(unresolvedFossils->getAttachAge(i));
-        }
-    }
+    int nUnr = (unresolvedFossils != nullptr) ? unresolvedFossils->getNumFossils() : 0;
+    for(int i = 0; i < nUnr; i++)
+        if(unresolvedFossils->isUE(i) == false && unresolvedFossils->getYMin(i) < unresolvedFossils->getYMax(i))
+            vals.push_back(unresolvedFossils->getFossilAge(i));
     for(const BackboneFossil& bf : backboneFossils)
         if(bf.yMin < bf.yMax)
             vals.push_back(bf.tip->getTime());
+    for(int i = 0; i < nUnr; i++)
+        vals.push_back(unresolvedFossils->getAttachAge(i));
+    for(int i = 0; i < nUnr; i++)
+        if(unresolvedFossils->isUE(i) == false)
+            vals.push_back(unresolvedFossils->isSA(i) ? 1.0 : 0.0);
     return vals;
 }
 

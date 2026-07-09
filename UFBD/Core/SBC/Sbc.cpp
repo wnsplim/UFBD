@@ -48,9 +48,8 @@ double drawChunk(const std::vector<int>& groups, const std::map<int,Probability:
     return v;
 }
 
-double truthForName(const std::string& name, const SimParams& p, bool origin, double trueNSA, const std::vector<std::string>& psiTypeNames){
+double truthForName(const std::string& name, const SimParams& p, bool origin, const std::vector<std::string>& psiTypeNames){
     auto idxOf = [](const std::string& rest) -> int { return rest.empty() ? 0 : std::stoi(rest); };
-    if(name == "nSA")                 return trueNSA;
     if(name.rfind("lambda", 0) == 0)  return p.lambda[idxOf(name.substr(6))];
     if(name.rfind("mu", 0) == 0)      return p.mu[idxOf(name.substr(2))];
     if(name.rfind("psi_", 0) == 0){
@@ -197,7 +196,7 @@ void Sbc::runEmit(void){
                     : ("psi" + std::to_string(b));
                 xf << "\n" << lab << "\t" << truth.psi[t][b];
             }
-        xf << "\nx\t" << truth.startAge << "\nnSA\t" << r.numSA << '\n';
+        xf << "\nx\t" << truth.startAge << '\n';
         xf.close();
 
         printf("emit rep %d: %d backbone, %zu fossil, %d UE -> %s.{tree,clades,fossils,truth}\n",
@@ -304,7 +303,7 @@ void Sbc::runInference(void){
         const std::vector<std::string>& names = chains[0]->traceNames();
         std::map<std::string, double> thisRep;
         for(size_t c = 0; c < names.size(); c++){
-            double t = truthForName(names[c], truth, cfg.originConditioning, (double)r.numSA, cfg.psiTypeNames);
+            double t = truthForName(names[c], truth, cfg.originConditioning, cfg.psiTypeNames);
             if(std::isnan(t))
                 continue;
             std::vector<double> s;

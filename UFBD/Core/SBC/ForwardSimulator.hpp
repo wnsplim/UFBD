@@ -31,7 +31,6 @@ struct SimResult {
     int                 numBackbone = 0;
     int                 numUE = 0;
     int                 numFossils = 0;
-    int                 numSA = 0;
 };
 
 class ForwardSimulator {

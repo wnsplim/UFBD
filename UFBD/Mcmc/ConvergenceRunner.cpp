@@ -180,6 +180,8 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
     std::vector<std::string> bad;
 
     for(int p = 0; p < nP; p++){
+        if(names[p] == "nSA")
+            continue;
         std::vector<std::vector<double>> chains;
         for(ChainRunner* c : replicates){
             const std::vector<double>& col = c->traceColumns()[p];

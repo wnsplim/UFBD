@@ -23,7 +23,7 @@ MODES
 
 SBC FLAGS
   -sbc_mode <emit|simulate|infer>
-                          required
+                          engine mode
   -sbc_reps <N>           number of replicate datasets
   -sbc_bb <frac>          fraction of extant tips kept as backbone (default 1;
                           a value < 1 requires origin conditioning)
