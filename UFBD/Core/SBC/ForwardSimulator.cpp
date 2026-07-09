@@ -126,7 +126,7 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
 
     while(ok == false){
         if(++attempts > maxAttempts)
-            Msg::error("ForwardSimulator: exceeded max attempts");
+            Msg::error("exceeded max attempts");
 
         for(SimNode* n : allNodes)
             delete n;
@@ -192,7 +192,7 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
             }
             curAge = nextAge;
             if((int)active.size() > maxLineages)
-                Msg::error("ForwardSimulator: tree exceeded " + std::to_string(maxLineages) + " lineages (lambda=" + std::to_string(lam) + ", mu=" + std::to_string(m) + ", x0=" + std::to_string(p.startAge) + "); net diversification likely too high for the origin age.");
+                Msg::error("tree exceeded " + std::to_string(maxLineages) + " lineages (lambda=" + std::to_string(lam) + ", mu=" + std::to_string(m) + ", x0=" + std::to_string(p.startAge) + "); net diversification likely too high for the origin age.");
         }
 
         for(SimNode* n : active){

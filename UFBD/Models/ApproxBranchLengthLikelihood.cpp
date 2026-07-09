@@ -21,19 +21,15 @@ ApproxBranchLengthLikelihood::ApproxBranchLengthLikelihood(const std::string& he
     cachedRoot(nullptr)
 {
     if(nStates < 2)
-        Msg::error("ApproxBranchLengthLikelihood: nStates must be >= 2");
+        Msg::error("nStates must be >= 2");
 
     readHessianFile(hessianFile);
 
     std::ifstream tf(mlTreeFile);
-    if(tf.is_open() == false)
-        Msg::error("ApproxBranchLengthLikelihood: cannot open ML tree file '" + mlTreeFile + "'");
     std::string line, newick;
     while(std::getline(tf, line))
         if(line.find('(') != std::string::npos){ newick = line; break; }
     tf.close();
-    if(newick.empty())
-        Msg::error("ApproxBranchLengthLikelihood: no Newick in ML tree file '" + mlTreeFile + "'");
     size_t semi = newick.rfind(';');
     if(semi != std::string::npos)
         newick = newick.substr(0, semi + 1);
@@ -67,7 +63,7 @@ std::set<std::string> ApproxBranchLengthLikelihood::canonicalize(const std::set<
 void ApproxBranchLengthLikelihood::readHessianFile(const std::string& fn){
     std::ifstream f(fn);
     if(f.is_open() == false)
-        Msg::error("ApproxBranchLengthLikelihood: cannot open hessian file '" + fn + "'");
+        Msg::error("could not open hessian file '" + fn + "'");
     std::vector<std::string> lines;
     std::string line;
     while(std::getline(f, line))
@@ -107,10 +103,10 @@ void ApproxBranchLengthLikelihood::readHessianFile(const std::string& fn){
     };
     auto parseHeader = [&](size_t& idx, int& nsOut, std::string& newickOut){
         if(nextNonEmpty(idx) == false)
-            Msg::error("ApproxBranchLengthLikelihood: missing ns in hessian file");
+            Msg::error("missing taxon count in hessian file");
         std::istringstream iss(lines[idx]);
         if(!(iss >> nsOut))
-            Msg::error("ApproxBranchLengthLikelihood: invalid ns in hessian file");
+            Msg::error("invalid taxon count in hessian file");
         idx++;
         newickOut.clear();
         while(idx < lines.size()){
@@ -118,7 +114,7 @@ void ApproxBranchLengthLikelihood::readHessianFile(const std::string& fn){
             idx++;
         }
         if(newickOut.empty())
-            Msg::error("ApproxBranchLengthLikelihood: no Newick in hessian file");
+            Msg::error("no Newick in hessian file");
     };
 
     size_t idx = 0;
@@ -126,7 +122,7 @@ void ApproxBranchLengthLikelihood::readHessianFile(const std::string& fn){
     std::string newick;
     parseHeader(idx, ns, newick);
     if(ns < 3)
-        Msg::error("ApproxBranchLengthLikelihood: invalid ns in hessian file");
+        Msg::error("invalid taxon count in hessian file");
     nb = 2 * ns - 3;
 
     hessianNewick = newick;
@@ -144,19 +140,19 @@ void ApproxBranchLengthLikelihood::readHessianFile(const std::string& fn){
         }
         if(bl.empty()) break;
         if((int)bl.size() != nb)
-            Msg::error("ApproxBranchLengthLikelihood: wrong MLE branch length count");
+            Msg::error("wrong MLE branch length count");
         while((int)grad.size() < nb && idx < lines.size()){
             if(isHeaderAt(idx)) break;
             parseNumbers(lines[idx++], grad);
         }
         if((int)grad.size() != nb)
-            Msg::error("ApproxBranchLengthLikelihood: wrong gradient count");
+            Msg::error("wrong gradient count");
         while((int)hess.size() < nb * nb && idx < lines.size()){
             if(isHeaderAt(idx)) break;
             parseNumbers(lines[idx++], hess);
         }
         if((int)hess.size() != nb * nb)
-            Msg::error("ApproxBranchLengthLikelihood: wrong Hessian count");
+            Msg::error("wrong Hessian count");
 
         blMle.push_back(bl);
         gradient.push_back(grad);
@@ -169,7 +165,7 @@ void ApproxBranchLengthLikelihood::readHessianFile(const std::string& fn){
             std::string newickNext;
             parseHeader(idx, nsNext, newickNext);
             if(nsNext != ns)
-                Msg::error("ApproxBranchLengthLikelihood: ns mismatch between partitions");
+                Msg::error("taxon count differs between partitions");
         }
     }
 
@@ -274,9 +270,6 @@ void ApproxBranchLengthLikelihood::buildBranchOrder(const std::string& backboneN
         else for(int ch : nd[k].children) nd[k].tips.insert(nd[ch].tips.begin(), nd[ch].tips.end());
     }
 
-    if((int)nd[root].children.size() != 2)
-        Msg::error("ApproxBranchLengthLikelihood: backbone tree must have a binary root to order branches");
-
     int counter = 0;
     std::vector<int> st;
     for(int k = (int)nd[root].children.size() - 1; k >= 0; k--) st.push_back(nd[root].children[k]);
@@ -312,7 +305,7 @@ void ApproxBranchLengthLikelihood::buildBranchOrder(const std::string& backboneN
     newickCanonBiparts(hessianNewick, hessBip);
     for(int b = 0; b < nb; b++)
         if(hessBip.find(bipartitions[b]) == hessBip.end())
-            Msg::error("ApproxBranchLengthLikelihood: backbone topology does not match the Hessian tree");
+            Msg::error("backbone topology does not match the Hessian tree");
 }
 
 Node* ApproxBranchLengthLikelihood::findNodeByBipartition(const std::set<std::string>& bp, Tree* tree){

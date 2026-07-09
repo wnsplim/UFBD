@@ -142,9 +142,9 @@ bool ConvergenceRunner::run(void){
     if(verbose && autoStop){
         std::string crit = (replicates.size() >= 2) ? "R-hat/ESS" : "ESS";
         if(stoppedEarly)
-            std::cout << "Auto-stop at generation " << gen << ": " << crit << " stopping thresholds reached for all logged quantities.\n";
+            std::cout << "Auto-stop at generation " << gen << ": " << crit << " stopping thresholds reached for all logged metrics.\n";
         else
-            Msg::warning("reached the -max-gen limit (" + std::to_string(maxGen) + ") with quantities still below the " + crit + " thresholds.");
+            Msg::warning("reached the -max-gen limit (" + std::to_string(maxGen) + ") with convergence metric(s) still below the " + crit + " thresholds.");
     }
     return met;
 }
@@ -222,7 +222,7 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
     if(verbose && finalPass && nBelow > 0 && s.getAutoChainLength()){
         std::string crit = multiChain ? ("R-hat > " + std::to_string(rhatMax) + " or per-chain ESS < " + std::to_string((int)essMin))
                                       : ("per-chain ESS < " + std::to_string((int)essMin));
-        std::string msg = std::to_string(nBelow) + " of " + std::to_string(nP) + " quantities have " + crit + " : ";
+        std::string msg = std::to_string(nBelow) + " of " + std::to_string(nP) + " metrics have " + crit + " : ";
         for(size_t i = 0; i < bad.size(); i++){ msg += bad[i]; if(i + 1 < bad.size()) msg += ", "; }
         if((int)bad.size() < nBelow) msg += ", ...";
         Msg::warning(msg);

@@ -22,7 +22,7 @@ void RelaxedClockTreeModel::buildClock(ClockModel clockModel, const double* rgen
     if(pgroup.empty())
         pgroup = (lik != nullptr) ? lik->getPartitionGroups() : ctmc->getPartitionGroups();
     if(pgroup.empty() == false && (int)pgroup.size() != nPart)
-        Msg::error("clock groups (" + std::to_string(pgroup.size()) + ") do not match the number of partitions (" + std::to_string(nPart) + ")");
+        Msg::error("clock-partition assignment (" + std::to_string(pgroup.size()) + " entries) does not match the number of partitions (" + std::to_string(nPart) + ")");
     // CIR clock: halt — construction detached (ParameterBranchRatesCIR kept but never built)
     clock = new ParameterBranchRates(1.0, this, fbd->getTree(), nPart, pgroup, clockModel, rgeneParam, sigma2Param);
     clock->setUnresolvedFossils(fbd->getUnresolvedFossils());

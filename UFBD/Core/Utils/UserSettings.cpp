@@ -23,13 +23,21 @@ static void parseSkylineTimes(const std::string& flag, const std::string& val, s
             continue;
         double t;
         try { t = std::stod(tok); }
-        catch (...) { Msg::error("Flag \"" + flag + "\" expects comma-separated numbers, but got \"" + tok + "\"."); }
+        catch (...) { Msg::error("flag \"" + flag + "\" expects comma-separated numbers, but got \"" + tok + "\"."); }
         if (t <= 0.0)
-            Msg::error("Flag \"" + flag + "\" values must be positive, but got \"" + tok + "\".");
+            Msg::error("flag \"" + flag + "\" values must be positive, but got \"" + tok + "\".");
         if (out.empty() == false && t <= out.back())
-            Msg::error("Flag \"" + flag + "\" must be strictly increasing.");
+            Msg::error("flag \"" + flag + "\" must be strictly increasing.");
         out.push_back(t);
     }
+}
+
+static bool isPriorFamilyKeyword(const std::string& s){
+    std::string k = s;
+    for(char& ch : k) ch = (char)std::tolower((unsigned char)ch);
+    return k == "exp" || k == "exponential" || k == "gamma" || k == "lognormal"
+        || k == "unif" || k == "uniform" || k == "truncnormal" || k == "truncnorm" || k == "normal"
+        || k == "improper";
 }
 
 std::vector<double> UserSettings::getSkylineTimes(void){
@@ -142,37 +150,39 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         arguments.push_back(std::string(argv[i]));
 
     std::set<std::string> knownFlags = {
-        "-to", "-po", "-t", "-c", "-f", "-cond", "-rho", "-seed", "-n", "-thinning", "-nc", "-cores", "-help", "-h",
+        "-tree_output", "-log_output", "-backbone_tree", "-clade_def", "-fossils", "-conditioning", "-rho", "-seed", "-chain_length", "-thinning", "-coupled_chains", "-cores", "-help", "-h",
         "-lambda_prior", "-mu_prior", "-psi_prior", "-psi_types",
-        "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_groups",
+        "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_partitions",
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-lambda_groups", "-mu_groups", "-psi_groups", "-lambda_group_prior", "-mu_group_prior", "-psi_group_prior", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
-        "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma",
-        "-seq", "-partition", "-ncat", "-datatype", "-model", "-inv", "-freq",
-        "-runs", "-burnin", "-rhat", "-min_ess", "-max_gen", "-resume", "-ar_log"
+        "-hessian", "-clock_model", "-n_states", "-rgene_gamma", "-sigma2_gamma",
+        "-sequence", "-partition", "-ctmc_gamma_cat", "-datatype", "-ctmc_model", "-ctmc_inv", "-ctmc_freq",
+        "-parallel_chains", "-burn_in", "-rhat", "-min_ess", "-max_gen", "-resume", "-ar_log"
     };
     std::set<std::string> valueFlags = {
-        "-to", "-po", "-t", "-c", "-f", "-cond", "-rho", "-seed", "-n", "-thinning", "-nc", "-cores",
+        "-tree_output", "-log_output", "-backbone_tree", "-clade_def", "-fossils", "-conditioning", "-rho", "-seed", "-chain_length", "-thinning", "-coupled_chains", "-cores",
         "-lambda_prior", "-mu_prior", "-psi_prior", "-psi_types",
-        "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_groups",
+        "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_partitions",
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-lambda_groups", "-mu_groups", "-psi_groups", "-lambda_group_prior", "-mu_group_prior", "-psi_group_prior", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
-        "-hessian", "-clock", "-nstates", "-rgene_gamma", "-sigma2_gamma",
-        "-seq", "-partition", "-ncat", "-datatype", "-model", "-inv", "-freq",
-        "-runs", "-burnin", "-rhat", "-min_ess", "-max_gen"
+        "-hessian", "-clock_model", "-n_states", "-rgene_gamma", "-sigma2_gamma",
+        "-sequence", "-partition", "-ctmc_gamma_cat", "-datatype", "-ctmc_model", "-ctmc_inv", "-ctmc_freq",
+        "-parallel_chains", "-burn_in", "-rhat", "-min_ess", "-max_gen"
     };
     if (sbcMode) {
         knownFlags.insert("-fbd_model");
         valueFlags.insert("-fbd_model");
     }
 
+    bool hsmrfProvided = false;
+    bool coupledChainsProvided = false;
     for (int i = 1; i < (int)arguments.size(); i++) {
         std::string arg = arguments[i];
 
         // Check it looks like a flag
         if (arg.empty())
-            Msg::error("Empty argument at position " + std::to_string(i));
+            Msg::error("empty argument at position " + std::to_string(i));
 
         if (knownFlags.find(arg) == knownFlags.end())
-            Msg::error("Unknown flag \"" + arg + "\". Use -help to see valid options.");
+            Msg::error("unknown flag \"" + arg + "\".");
 
         // Help flag (no value)
         if (arg == "-help" || arg == "-h") {
@@ -194,34 +204,34 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         // All remaining flags require a value — check it exists
         if (valueFlags.count(arg)) {
             if (i + 1 >= (int)arguments.size())
-                Msg::error("Flag \"" + arg + "\" requires a value but none was provided.");
+                Msg::error("flag \"" + arg + "\" requires a value but none was provided.");
 
             std::string val = arguments[++i];
 
             // Catch accidentally passing another flag as a value
             if (knownFlags.count(val))
-                Msg::error("Flag \"" + arg + "\" expects a value, but got another flag \"" + val + "\".");
+                Msg::error("flag \"" + arg + "\" expects a value, but got another flag \"" + val + "\".");
 
-            if (arg == "-to") {
+            if (arg == "-tree_output") {
                 treeOut = val + ".trees";
-            } else if (arg == "-po") {
+            } else if (arg == "-log_output") {
                 parametersOut = val + ".log";
-            } else if (arg == "-t") {
+            } else if (arg == "-backbone_tree") {
                 treeFile = val;
-            } else if (arg == "-c") {
+            } else if (arg == "-clade_def") {
                 cladesFile = val;
-            } else if (arg == "-f") {
+            } else if (arg == "-fossils") {
                 fossilFile = val;
-            } else if (arg == "-cond") {
+            } else if (arg == "-conditioning") {
                 std::string v = val;
                 for (char& ch : v) ch = std::toupper((unsigned char)ch);
                 if (v == "CROWN")          { conditioning = Conditioning::CROWN;  conditioningEvent = ConditioningEvent::SURVIVAL; }
                 else if (v == "ORIGIN")    { conditioning = Conditioning::ORIGIN; conditioningEvent = ConditioningEvent::SURVIVAL; }
                 else if (v == "ANYSAMPLE") { conditioning = Conditioning::ORIGIN; conditioningEvent = ConditioningEvent::ANYSAMPLE; }
                 else if (v == "EXTINCT")   { conditioning = Conditioning::ORIGIN; conditioningEvent = ConditioningEvent::EXTINCT; }
-                else Msg::error("Flag \"-cond\" expects crown, origin, anysample, or extinct, but got \"" + val + "\".");
+                else Msg::error("flag \"-conditioning\" expects crown, origin, anysample, or extinct, but got \"" + val + "\".");
                 conditioningSet = true;
-                if (i + 1 < (int)arguments.size() && knownFlags.find(arguments[i + 1]) == knownFlags.end()) {
+                if (i + 1 < (int)arguments.size() && arguments[i + 1].empty() == false && arguments[i + 1][0] != '-') {
                     parsePriorInto(arguments[++i], conditionAgePrior, conditionAgePriorP1, conditionAgePriorP2);
                     conditionAgePriorSet = true;
                 }
@@ -231,20 +241,20 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 if (v == "RFBD")        model = Model::RFBD;
                 else if (v == "HEA14")  model = Model::HEA14;
                 else if (v == "UFBD")   model = Model::UFBD;
-                else Msg::error("Flag \"-fbd_model\" expects RFBD, HEA14, or UFBD, but got \"" + val + "\".");
+                else Msg::error("flag \"-fbd_model\" expects RFBD, HEA14, or UFBD, but got \"" + val + "\".");
             } else if (arg == "-rho") {
                 try {
                     rho = std::stod(val);
                 } catch (...) {
-                    Msg::error("Flag \"-rho\" expects a number, but got \"" + val + "\".");
+                    Msg::error("flag \"-rho\" expects a number, but got \"" + val + "\".");
                 }
                 if (rho <= 0.0 || rho > 1.0)
-                    Msg::error("Flag \"-rho\" must be in (0, 1].");
+                    Msg::error("flag \"-rho\" must be in (0, 1].");
             } else if (arg == "-seed") {
                 try {
                     seed = (unsigned int)std::stoul(val);
                 } catch (...) {
-                    Msg::error("Flag \"-seed\" expects a non-negative integer, but got \"" + val + "\".");
+                    Msg::error("flag \"-seed\" expects a non-negative integer, but got \"" + val + "\".");
                 }
                 seedSet = true;
             } else if (arg == "-lambda_prior") {
@@ -253,7 +263,8 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 parsePriorInto(val, muPrior.family, muPrior.p1, muPrior.p2); muPrior.set = true;
             } else if (arg == "-psi_prior") {
                 size_t c = val.find(':');
-                if (c == std::string::npos) { parsePriorInto(val, psiPrior.family, psiPrior.p1, psiPrior.p2); psiPrior.set = true; }
+                bool typed = (c != std::string::npos) && (isPriorFamilyKeyword(val.substr(0, c)) == false);
+                if (typed == false) { parsePriorInto(val, psiPrior.family, psiPrior.p1, psiPrior.p2); psiPrior.set = true; }
                 else { Probability::PriorSpec ps; parsePriorInto(val.substr(c + 1), ps.family, ps.p1, ps.p2); ps.set = true; psiPriorByName[val.substr(0, c)] = ps; }
             } else if (arg == "-lambda_groups" || arg == "-mu_groups" || arg == "-psi_groups") {
                 std::string nm, lst = val;
@@ -262,21 +273,28 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 std::stringstream ss(lst); std::string tok;
                 while (std::getline(ss, tok, ',')) if (tok.empty() == false) {
                     try { g.push_back(std::stoi(tok)); }
-                    catch (...) { Msg::error("Flag \"" + arg + "\" expects comma-separated group ids, but got \"" + val + "\"."); }
+                    catch (...) { Msg::error("flag \"" + arg + "\" expects comma-separated group IDs, but got \"" + val + "\"."); }
                 }
                 if (arg == "-lambda_groups") lambdaGroups = g;
                 else if (arg == "-mu_groups") muGroups = g;
                 else if (nm.empty()) psiGroups = g; else psiGroupsByName[nm] = g;
             } else if (arg == "-lambda_group_prior" || arg == "-mu_group_prior" || arg == "-psi_group_prior") {
-                size_t sp = val.rfind(':');
-                if (sp == std::string::npos) Msg::error("Flag \"" + arg + "\" expects [type:]<group_id>:<prior>.");
-                std::string pre = val.substr(0, sp), nm, gidStr = pre;
-                size_t nc = pre.find(':');
-                if (nc != std::string::npos) { nm = pre.substr(0, nc); gidStr = pre.substr(nc + 1); }
+                size_t c1 = val.find(':');
+                if (c1 == std::string::npos) Msg::error("flag \"" + arg + "\" expects [type:]<group_id>:<prior>.");
+                std::string first = val.substr(0, c1), nm, gidStr, priorSpec;
+                bool firstIsInt = first.empty() == false && std::all_of(first.begin(), first.end(), ::isdigit);
+                if (firstIsInt) {
+                    gidStr = first; priorSpec = val.substr(c1 + 1);
+                } else {
+                    nm = first;
+                    size_t c2 = val.find(':', c1 + 1);
+                    if (c2 == std::string::npos) Msg::error("flag \"" + arg + "\" expects [type:]<group_id>:<prior>.");
+                    gidStr = val.substr(c1 + 1, c2 - c1 - 1); priorSpec = val.substr(c2 + 1);
+                }
                 int gid = 0;
                 try { gid = std::stoi(gidStr); }
-                catch (...) { Msg::error("Flag \"" + arg + "\" expects [type:]<group_id>:<prior>."); }
-                Probability::PriorSpec ps; parsePriorInto(val.substr(sp + 1), ps.family, ps.p1, ps.p2); ps.set = true;
+                catch (...) { Msg::error("flag \"" + arg + "\" expects [type:]<group_id>:<prior>."); }
+                Probability::PriorSpec ps; parsePriorInto(priorSpec, ps.family, ps.p1, ps.p2); ps.set = true;
                 if (arg == "-lambda_group_prior") lambdaGroupPrior[gid] = ps;
                 else if (arg == "-mu_group_prior") muGroupPrior[gid] = ps;
                 else if (nm.empty()) psiGroupPrior[gid] = ps; else psiGroupPriorByName[nm][gid] = ps;
@@ -289,7 +307,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 RateMode rm = RateMode::IID;
                 if (v == "iid") rm = RateMode::IID;
                 else if (v == "smooth" || v == "hsmrf") rm = RateMode::SMOOTH;
-                else Msg::error("Flag \"" + arg + "\" expects iid or smooth, but got \"" + val + "\".");
+                else Msg::error("flag \"" + arg + "\" expects iid or smooth, but got \"" + val + "\".");
                 if (arg == "-lambda_prior_mode") lambdaMode = rm;
                 else muMode = rm;
             } else if (arg == "-psi_prior_mode") {
@@ -300,18 +318,20 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 RateMode rm = RateMode::IID;
                 if (ms == "iid") rm = RateMode::IID;
                 else if (ms == "smooth" || ms == "hsmrf") rm = RateMode::SMOOTH;
-                else Msg::error("Flag \"-psi_prior_mode\" expects iid or smooth, but got \"" + ms + "\".");
+                else Msg::error("flag \"-psi_prior_mode\" expects iid or smooth, but got \"" + ms + "\".");
                 if (nm.empty()) psiMode = rm; else psiModeByName[nm] = rm;
             } else if (arg == "-hsmrf_shifts") {
-                try { hsmrfShifts = std::stod(val); } catch (...) { Msg::error("Flag \"-hsmrf_shifts\" expects a number, but got \"" + val + "\"."); }
+                try { hsmrfShifts = std::stod(val); } catch (...) { Msg::error("flag \"-hsmrf_shifts\" expects a number, but got \"" + val + "\"."); }
+                hsmrfProvided = true;
             } else if (arg == "-hsmrf_shift_size") {
-                try { hsmrfShiftSize = std::stod(val); } catch (...) { Msg::error("Flag \"-hsmrf_shift_size\" expects a number, but got \"" + val + "\"."); }
+                try { hsmrfShiftSize = std::stod(val); } catch (...) { Msg::error("flag \"-hsmrf_shift_size\" expects a number, but got \"" + val + "\"."); }
+                hsmrfProvided = true;
             } else if (arg == "-cpu_time") {
                 std::string v = val;
                 for (char& ch : v) ch = std::tolower((unsigned char)ch);
                 if (v == "on" || v == "true" || v == "1") cpuTime = true;
                 else if (v == "off" || v == "false" || v == "0") cpuTime = false;
-                else Msg::error("Flag \"" + arg + "\" expects on or off, but got \"" + val + "\".");
+                else Msg::error("flag \"" + arg + "\" expects on or off, but got \"" + val + "\".");
             } else if (arg == "-lambda_skyline_times") {
                 parseSkylineTimes(arg, val, lambdaSkylineTimes);
             } else if (arg == "-mu_skyline_times") {
@@ -322,17 +342,17 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 else { std::vector<double> tv; parseSkylineTimes(arg, val.substr(c + 1), tv); psiTimesByName[val.substr(0, c)] = tv; }
             } else if (arg == "-hessian") {
                 hessianFile = val;
-            } else if (arg == "-seq") {
+            } else if (arg == "-sequence") {
                 sequenceFile = val;
             } else if (arg == "-partition") {
                 partitionFile = val;
-            } else if (arg == "-clock_groups") {
+            } else if (arg == "-clock_partitions") {
                 clockGroups.clear();
                 std::stringstream cgs(val);
                 std::string ct;
                 while (std::getline(cgs, ct, ',')) {
                     try { clockGroups.push_back(std::stoi(ct)); }
-                    catch (...) { Msg::error("Flag \"-clock_groups\" expects comma-separated integers, but got \"" + val + "\"."); }
+                    catch (...) { Msg::error("flag \"-clock_partitions\" expects comma-separated integers, but got \"" + val + "\"."); }
                 }
                 std::vector<int> seen;
                 for (int& g : clockGroups) {
@@ -341,7 +361,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                     if (idx < 0) { idx = (int)seen.size(); seen.push_back(g); }
                     g = idx;
                 }
-            } else if (arg == "-clock") {
+            } else if (arg == "-clock_model") {
                 clockModelName = val;
                 for (char& ch : clockModelName) ch = std::tolower((unsigned char)ch);
             } else if (arg == "-rgene_gamma") {
@@ -356,26 +376,26 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 for (char& ch : v) ch = std::tolower((unsigned char)ch);
                 if (v == "nt" || v == "dna" || v == "nucleotide") seqDataType = "nt";
                 else if (v == "aa" || v == "protein" || v == "aminoacid") seqDataType = "aa";
-                else Msg::error("Flag \"-datatype\" expects nt or aa, but got \"" + val + "\".");
-            } else if (arg == "-model") {
+                else Msg::error("flag \"-datatype\" expects nt or aa, but got \"" + val + "\".");
+            } else if (arg == "-ctmc_model") {
                 substModel = val;
-            } else if (arg == "-inv") {
+            } else if (arg == "-ctmc_inv") {
                 std::string v = val;
                 for (char& ch : v) ch = std::tolower((unsigned char)ch);
                 if (v == "on" || v == "true" || v == "1") useInvariant = true;
                 else if (v == "off" || v == "false" || v == "0") useInvariant = false;
-                else Msg::error("Flag \"-inv\" expects on or off, but got \"" + val + "\".");
-            } else if (arg == "-freq") {
+                else Msg::error("flag \"-ctmc_inv\" expects on or off, but got \"" + val + "\".");
+            } else if (arg == "-ctmc_freq") {
                 std::string v = val;
                 for (char& ch : v) ch = std::tolower((unsigned char)ch);
                 if (v == "model") freqMode = "model";
-                else if (v == "f" || v == "empirical" || v == "observed") freqMode = "empirical";
-                else if (v == "fo" || v == "estimate" || v == "estimated" || v == "free") freqMode = "estimate";
-                else Msg::error("Flag \"-freq\" expects model, F (empirical/observed counts), or FO (estimate), but got \"" + val + "\".");
-            } else if (arg == "-burnin") {
+                else if (v == "empirical") freqMode = "empirical";
+                else if (v == "estimated") freqMode = "estimate";
+                else Msg::error("flag \"-ctmc_freq\" expects model, empirical, or estimated, but got \"" + val + "\".");
+            } else if (arg == "-burn_in") {
                 burninFraction = std::stod(val);
                 if(burninFraction < 0.0 || burninFraction >= 1.0)
-                    Msg::error("Flag \"-burnin\" expects a fraction in [0, 1).");
+                    Msg::error("flag \"-burn_in\" expects a fraction in [0, 1).");
             } else if (arg == "-rhat") {
                 rhatThreshold = std::stod(val);
                 rhatThresholdSet = true;
@@ -384,7 +404,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 essThresholdSet = true;
             } else if (arg == "-max_gen") {
                 maxGen = std::stoull(val);
-            } else if (arg == "-n" && val == "auto") {
+            } else if (arg == "-chain_length" && val == "auto") {
                 autoChainLength = true;
             }else {
                 // Integer-valued flags
@@ -394,17 +414,17 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 bool isInt = !digits.empty() && std::all_of(digits.begin(), digits.end(), ::isdigit);
 
                 if (!isInt)
-                    Msg::error("Flag \"" + arg + "\" expects an integer, but got \"" + val + "\".");
+                    Msg::error("flag \"" + arg + "\" expects an integer, but got \"" + val + "\".");
 
                 int intVal = std::stoi(val);
 
-                if (arg == "-n")        chainLength     = intVal;
+                if (arg == "-chain_length")        chainLength     = intVal;
                 else if (arg == "-thinning") thinning = intVal;
-                else if (arg == "-nc")  numCoupledChains       = intVal;
+                else if (arg == "-coupled_chains") { numCoupledChains = intVal; coupledChainsProvided = true; }
                 else if (arg == "-cores") { numCores = intVal; coresProvided = true; }
-                else if (arg == "-nstates") { nStates = intVal; nstatesProvided = true; }
-                else if (arg == "-ncat")    numCats     = intVal;
-                else if (arg == "-runs")    numRuns     = intVal;
+                else if (arg == "-n_states") { nStates = intVal; nstatesProvided = true; }
+                else if (arg == "-ctmc_gamma_cat")    numCats     = intVal;
+                else if (arg == "-parallel_chains")    numRuns     = intVal;
             }
         }
     }
@@ -412,42 +432,51 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     // ── Post-parse validation  ──────────────────────────────
 
     if (conditioningSet == false)
-        Msg::error("Flag \"-cond\" is required (crown or origin).");
+        Msg::error("flag \"-conditioning\" is required.");
+
+    if (sbcMode == false && fossilFile.empty())
+        Msg::error("flag \"-fossils\" is required.");
+
+    if (sbcMode == false && (sequenceFile.empty() == false || hessianFile.empty() == false) && treeFile.empty())
+        Msg::error("when -sequence or -hessian is set, a backbone tree is required (-backbone_tree).");
 
     if (seedSet == false)
         seed = std::random_device{}();
 
     if (conditioningEvent == ConditioningEvent::EXTINCT && rho != 1.0) {
-        Msg::warning("Extinct conditioning has no extant sampling; forcing rho = 1 (was " + std::to_string(rho) + ").");
+        Msg::warning("extinct conditioning has no extant sampling; forcing rho = 1 (was " + std::to_string(rho) + ").");
         rho = 1.0;
     }
 
     int maxNumThreads = (int)std::thread::hardware_concurrency();
     if (maxNumThreads <= 0) {
-        Msg::warning("Could not determine hardware thread count; using single thread.");
+        Msg::warning("could not determine hardware thread count; using single thread.");
         maxNumThreads = 1;
     }
 
     if (numCoupledChains < 1) {
-        Msg::warning("Chains must be >= 1; resetting to 1.");
+        Msg::warning("chains must be >= 1; setting to 1.");
         numCoupledChains = 1;
     }
 
+    if (coupledChainsProvided && numCoupledChains == 1)
+        Msg::warning("-coupled_chains 1 runs plain MCMC, not Metropolis-coupled MCMC; use -coupled_chains > 1 to enable MC3.");
+
     if (chainLength < 1)
-        Msg::error("Flag \"-n\" must be a positive integer (or \"auto\").");
+        Msg::error("flag \"-chain_length\" must be a positive integer (or \"auto\").");
 
     if (sbcMode == false && autoChainLength == false && (essThresholdSet || rhatThresholdSet))
-        Msg::warning("-min_ess / -rhat apply only under -n auto; ignored for a fixed chain length.");
+        Msg::warning("-min_ess / -rhat apply only under -chain_length auto; ignored for a fixed chain length.");
 
     if (thinning < 1)
-        Msg::error("Flag \"-thinning\" must be a positive integer.");
+        Msg::error("flag \"-thinning\" must be a positive integer.");
 
     if (coresProvided == false && numCoupledChains > 1)
         numCores = numCoupledChains;
 
     if (numCores > maxNumThreads) {
         if (coresProvided)
-            Msg::warning("Requested " + std::to_string(numCores) +
+            Msg::warning("requested " + std::to_string(numCores) +
                          " cores, but only " + std::to_string(maxNumThreads) +
                          " available; capping at " + std::to_string(maxNumThreads) + ".");
         numCores = maxNumThreads;
@@ -457,68 +486,65 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
 
     bool empiricalModel = (substModel != "gtr");
     if (empiricalModel && seqDataType == "nt")
-        Msg::error("Empirical rate matrix (-model " + substModel + ") is for amino-acid; use -datatype aa.");
+        Msg::error("empirical rate matrix (-ctmc_model " + substModel + ") is for amino-acid; use -datatype aa.");
     if (seqDataType == "aa" && empiricalModel == false)
-        Msg::warning("Amino-acid data (-datatype aa) with -model gtr estimates 190 exchangeability parameters.");
+        Msg::warning("amino-acid data (-datatype aa) with -ctmc_model gtr estimates 190 exchangeability parameters.");
     if (sequenceFile.empty() == false && nstatesProvided)
-        Msg::error("-nstates applies to the approximate-dating (-hessian) path only.");
+        Msg::warning("-n_states applies to the approximate-dating (-hessian) path only; ignoring it.");
+
+    bool anySmooth = (lambdaMode == RateMode::SMOOTH || muMode == RateMode::SMOOTH || psiMode == RateMode::SMOOTH);
+    for (std::map<std::string, RateMode>::iterator it = psiModeByName.begin(); it != psiModeByName.end(); ++it)
+        if (it->second == RateMode::SMOOTH) anySmooth = true;
+    if (hsmrfProvided && anySmooth == false)
+        Msg::warning("-hsmrf_shifts / -hsmrf_shift_size have no effect: no rate uses HSMRF smoothing.");
 
     if (sbcMode == false) {
         if (treeOut.empty())
-            Msg::warning("No tree output file specified (-to).");
+            Msg::warning("no tree output file specified (-tree_output).");
         if (parametersOut.empty())
-            Msg::warning("No parameter output file specified (-po).");
+            Msg::warning("no parameter output file specified (-log_output).");
     }
 }
 
 void UserSettings::parsePriorInto(const std::string& spec, Probability::PriorFamily& family, double& p1, double& p2) {
-    size_t lp = spec.find('(');
-    if (lp == std::string::npos) {
+    const std::string help = "prior must be improper, a fixed number, or a distribution written exp:rate, gamma:shape,rate, lognormal:mu,sigma, unif:a,b, or truncnormal:mean,sd; got \"" + spec + "\".";
+    size_t cp = spec.find(':');
+    if (cp == std::string::npos) {
         std::string s = spec;
         for (char& ch : s) ch = std::tolower((unsigned char)ch);
-        if (s == "improper" || s == "flat") {
-            family = Probability::PriorFamily::IMPROPER;
-            return;
-        }
-        try {
-            p1 = std::stod(spec);
-            family = Probability::PriorFamily::FIXED;
-            return;
-        } catch (...) {
-            Msg::error("prior must be improper, a fixed number, or look like exp(rate), gamma(shape,rate), lognormal(mu,sigma), unif(a,b), or truncnormal(mean,sd); got \"" + spec + "\".");
-        }
+        if (s == "improper") { family = Probability::PriorFamily::IMPROPER; return; }
+        try { p1 = std::stod(spec); family = Probability::PriorFamily::FIXED; }
+        catch (...) { Msg::error(help); }
+        return;
     }
-    size_t rp = spec.find(')');
-    if (rp == std::string::npos || rp <= lp)
-        Msg::error("prior must be improper, a fixed number, or look like exp(rate), gamma(shape,rate), lognormal(mu,sigma), unif(a,b), or truncnormal(mean,sd); got \"" + spec + "\".");
-    std::string fam = spec.substr(0, lp);
+    std::string fam = spec.substr(0, cp);
     for (char& ch : fam) ch = std::tolower((unsigned char)ch);
     std::vector<double> ps;
-    std::stringstream ss(spec.substr(lp + 1, rp - lp - 1));
+    std::stringstream ss(spec.substr(cp + 1));
     std::string tok;
     while (std::getline(ss, tok, ',')) {
         try { ps.push_back(std::stod(tok)); }
         catch (...) { Msg::error("prior parameter \"" + tok + "\" is not a number in \"" + spec + "\"."); }
     }
     if (fam == "exp" || fam == "exponential") {
-        if (ps.size() != 1 || ps[0] <= 0.0) Msg::error("exp prior needs one positive rate: exp(rate).");
+        if (ps.size() != 1 || ps[0] <= 0.0) Msg::error("exp prior needs one positive rate: exp:rate.");
         family = Probability::PriorFamily::EXPONENTIAL; p1 = ps[0];
     } else if (fam == "gamma") {
-        if (ps.size() != 2 || ps[0] <= 0.0 || ps[1] <= 0.0) Msg::error("gamma prior needs positive shape,rate: gamma(shape,rate).");
+        if (ps.size() != 2 || ps[0] <= 0.0 || ps[1] <= 0.0) Msg::error("gamma prior needs positive shape,rate: gamma:shape,rate.");
         family = Probability::PriorFamily::GAMMA; p1 = ps[0]; p2 = ps[1];
-    } else if (fam == "lognormal" || fam == "lnorm") {
-        if (ps.size() != 2 || ps[1] <= 0.0) Msg::error("lognormal prior needs mu,sigma with sigma>0: lognormal(mu,sigma).");
+    } else if (fam == "lognormal") {
+        if (ps.size() != 2 || ps[1] <= 0.0) Msg::error("lognormal prior needs mu,sigma with sigma>0: lognormal:mu,sigma.");
         family = Probability::PriorFamily::LOGNORMAL; p1 = ps[0]; p2 = ps[1];
     } else if (fam == "unif" || fam == "uniform") {
-        if (ps.size() != 2 || ps[0] >= ps[1]) Msg::error("unif prior needs a<b: unif(a,b).");
+        if (ps.size() != 2 || ps[0] >= ps[1]) Msg::error("unif prior needs a<b: unif:a,b.");
         family = Probability::PriorFamily::UNIFORM; p1 = ps[0]; p2 = ps[1];
-    } else if (fam == "truncnormal" || fam == "tn" || fam == "normal") {
-        if (ps.size() != 2 || ps[1] <= 0.0) Msg::error("truncnormal prior needs mean,sd with sd>0: truncnormal(mean,sd).");
+    } else if (fam == "truncnormal" || fam == "truncnorm" || fam == "normal") {
+        if (ps.size() != 2 || ps[1] <= 0.0) Msg::error("truncnormal prior needs mean,sd with sd>0: truncnormal:mean,sd.");
         family = Probability::PriorFamily::TRUNCATED_NORMAL; p1 = ps[0]; p2 = ps[1];
-    } else if (fam == "improper" || fam == "flat") {
+    } else if (fam == "improper") {
         family = Probability::PriorFamily::IMPROPER;
     } else {
-        Msg::error("Unknown prior family \"" + fam + "\". Use improper / exp / gamma / lognormal / unif / truncnormal (or a fixed number).");
+        Msg::error(help);
     }
 }
 
@@ -559,5 +585,5 @@ void UserSettings::print(void) {
 }
 
 void UserSettings::printHelp(void){
-    std::cout << "Usage: TBA\n";
+    std::cout << ".\n";
 }

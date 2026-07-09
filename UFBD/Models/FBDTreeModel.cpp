@@ -78,17 +78,24 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
             static bool warnedNotYoungest = false;
             if(warnedNotYoungest == false){
                 warnedNotYoungest = true;
-                std::map<std::string, std::set<std::string>> cladeTaxa;
+                std::map<std::string, Node*> cladeCrown;
                 for(Clade& c : clades)
-                    cladeTaxa[c.getName()] = std::set<std::string>(c.getTaxa().begin(), c.getTaxa().end());
+                    cladeCrown[c.getName()] = c.getCrown();
+                auto isUnder = [](Node* a, Node* anc) -> bool {
+                    for(Node* p = a; ; p = p->getAncestor()){
+                        if(p == anc) return true;
+                        if(p->getAncestor() == p) return false;
+                    }
+                };
                 for(size_t k = 0; k < backboneFossils.size(); k++){
-                    std::string fTaxon = backboneFossils[k].tip->getName();
+                    Node* fTip = backboneFossils[k].tip;
+                    std::string fTaxon = fTip->getName();
                     double minCompat = std::numeric_limits<double>::infinity();
                     for(Fossil& g : fossils){
                         if(g.getTaxon() == fTaxon) continue;
-                        std::map<std::string, std::set<std::string>>::iterator ci = cladeTaxa.find(g.getClade());
-                        if(ci == cladeTaxa.end()) continue;
-                        if(ci->second.empty() == false && ci->second.count(fTaxon) == 0) continue;
+                        std::map<std::string, Node*>::iterator ci = cladeCrown.find(g.getClade());
+                        if(ci == cladeCrown.end()) continue;
+                        if(isUnder(fTip, ci->second) == false) continue;
                         if(g.getClade() == bbClade[k] &&
                            ((bbAsg[k] == Assignment::CROWN && g.getAssignment() == Assignment::STEM) ||
                             (bbAsg[k] == Assignment::STEM  && g.getAssignment() == Assignment::CROWN)))
@@ -150,23 +157,6 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     }
     for(BackboneFossil& bf : backboneFossils)
         bf.tip = parameterTree->getTree()->getNodeByOffset(bf.tip->getOffset());
-    if(isResolved == false && backboneFossils.empty() == false){
-        Tree* wt = parameterTree->getTree();
-        for(Clade& c : clades){
-            if(c.getTaxa().empty()) continue;
-            Node* mrca = wt->getMRCA(c.getTaxa());
-            int tipsUnder = 0;
-            for(Node* n : wt->getDownPassSequence()){
-                if(n->getIsTip() == false) continue;
-                for(Node* p = n; ; p = p->getAncestor()){
-                    if(p == mrca){ tipsUnder++; break; }
-                    if(p->getAncestor() == p) break;
-                }
-            }
-            if(tipsUnder != (int)c.getTaxa().size())
-                Msg::error("clade '" + c.getName() + "' does not match the backbone: its MRCA subtends " + std::to_string(tipsUnder) + " backbone tips but the clade lists " + std::to_string(c.getTaxa().size()) + " (a clade used with backbone fossils must be the exact monophyletic group).");
-        }
-    }
     parameters.push_back(parameterTree);
     if(originAge != nullptr)
         parameters.push_back(originAge);

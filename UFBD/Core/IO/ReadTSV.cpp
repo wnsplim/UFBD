@@ -7,7 +7,7 @@
 ReadTSV::ReadTSV(std::string filepath, bool, bool, bool){
     std::ifstream file(filepath);
     if(file.is_open() == false)
-        Msg::error("cannot open input file '" + filepath + "'");
+        Msg::error("could not open input file '" + filepath + "'");
 
     std::string line;
     while(std::getline(file, line)){

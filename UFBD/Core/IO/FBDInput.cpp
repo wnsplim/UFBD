@@ -16,7 +16,7 @@
 
 FBDInput::FBDInput(std::string treePath, std::string cladesPath, std::string fossilPath){
     if(treePath.empty()){
-        Msg::warning("No backbone tree supplied (-t): running with an empty backbone (all elements unresolved).");
+        Msg::warning("no backbone tree supplied (-backbone_tree): running with an empty backbone (every taxa unresolved).");
         tree = new Tree("");
         clades.push_back(Clade("whole", std::vector<std::string>(), tree->getCrown(), tree->getCrown()->getAncestor()));
     }else{
@@ -30,15 +30,76 @@ FBDInput::FBDInput(std::string treePath, std::string cladesPath, std::string fos
     }
 }
 
+static void stripBracketComments(std::string& s){
+    std::string out;
+    int depth = 0;
+    for(char c : s){
+        if(c == '[') depth++;
+        else if(c == ']'){ if(depth > 0) depth--; }
+        else if(depth == 0) out += c;
+    }
+    s.swap(out);
+}
+
+static std::string applyTranslate(const std::string& nwk, const std::map<std::string,std::string>& tr){
+    if(tr.empty()) return nwk;
+    std::string out, tok;
+    for(size_t i = 0; i <= nwk.size(); i++){
+        char c = (i < nwk.size()) ? nwk[i] : '\0';
+        if(c == '(' || c == ')' || c == ',' || c == ':' || c == ';' || c == '\0'){
+            if(tok.empty() == false){
+                std::map<std::string,std::string>::const_iterator it = tr.find(tok);
+                out += (it != tr.end()) ? it->second : tok;
+                tok.clear();
+            }
+            if(c != '\0') out += c;
+        }else
+            tok += c;
+    }
+    return out;
+}
+
+static std::string extractNewick(std::string content){
+    stripBracketComments(content);
+    std::string lower(content);
+    for(char& ch : lower) ch = (char)std::tolower((unsigned char)ch);
+    bool nexus = (lower.find("#nexus") != std::string::npos) || (lower.find("begin trees") != std::string::npos);
+    if(nexus == false)
+        return content;
+
+    std::map<std::string,std::string> tr;
+    size_t searchStart = lower.find("begin trees");
+    if(searchStart == std::string::npos) searchStart = 0;
+    size_t tpos = lower.find("translate", searchStart);
+    if(tpos != std::string::npos){
+        size_t semi = content.find(';', tpos);
+        std::string body = content.substr(tpos + 9, (semi == std::string::npos ? content.size() : semi) - (tpos + 9));
+        std::stringstream bs(body);
+        std::string entry;
+        while(std::getline(bs, entry, ',')){
+            std::stringstream es(entry);
+            std::string key, name;
+            es >> key >> name;
+            if(key.empty() == false && name.empty() == false) tr[key] = name;
+        }
+        if(semi != std::string::npos) searchStart = semi + 1;
+    }
+    size_t lp = content.find('(', searchStart);
+    size_t semi = (lp == std::string::npos) ? std::string::npos : content.find(';', lp);
+    if(lp == std::string::npos || semi == std::string::npos)
+        return "";
+    return applyTranslate(content.substr(lp, semi - lp + 1), tr);
+}
+
 Tree* FBDInput::readTree(std::string path){
     std::ifstream file(path);
     if(file.is_open() == false)
-        Msg::error("could not open tree file: " + path);
+        Msg::error("could not open backbone tree file '" + path + "'");
     std::stringstream ss;
     ss << file.rdbuf();
-    std::string newick = ss.str();
+    std::string newick = extractNewick(ss.str());
     if(Tree::isValidNewick(newick) == false)
-        Msg::error("tree file is not valid newick: " + path);
+        Msg::error("backbone tree file '" + path + "' has no valid tree (use NEWICK or NEXUS)");
     Tree* t = new Tree(newick);
     t->validateBackbone();
     return t;
@@ -61,8 +122,10 @@ void FBDInput::readClades(std::string path){
             Msg::error("clade row needs a name and a comma-separated taxon list");
         std::string name = row[0];
         std::vector<std::string> taxa = splitOnComma(row[1]);
-        if(taxa.empty())
-            Msg::error("clade '" + name + "' has no taxa");
+        if(taxa.empty()){
+            Msg::warning("clade '" + name + "' has no taxa; ignoring it");
+            continue;
+        }
         Node* crown = tree->getMRCA(taxa);
         for(Clade& c : clades)
             if(c.getCrown() == crown)
@@ -112,22 +175,22 @@ void FBDInput::readFossils(std::string path){
                               :                          Assignment::TOTAL;
 
         if(assignment == Assignment::STEM && maxAge == 0.0)
-            Msg::error("fossil '" + taxon + "' is an unresolved extant (age 0) assigned STEM; UE can only be CROWN or TOTAL.");
+            Msg::error("fossil '" + taxon + "' is an unresolved extant assigned STEM; UE can only be CROWN or TOTAL.");
 
         if(assignment == Assignment::CROWN && clade->getCrown()->getIsTip()){
             Msg::warning("fossil '" + taxon + "' assigned CROWN to singleton clade '" + cladeName + "'; treating as TOTAL");
             assignment = Assignment::TOTAL;
         }
         if(assignment == Assignment::STEM && clade->getCrown()->getIsTip()){
-            Msg::warning("fossil '" + taxon + "' assigned STEM to singleton clade '" + cladeName + "'; STEM and TOTAL coincide for a single-tip clade, treating as TOTAL");
+            Msg::warning("fossil '" + taxon + "' assigned STEM to singleton clade '" + cladeName + "'; treating as TOTAL");
             assignment = Assignment::TOTAL;
         }
         if(assignment == Assignment::STEM && clade->getCrown() == tree->getCrown()
            && UserSettings::userSettings().getConditioning() == Conditioning::CROWN)
-            Msg::error("fossil '" + taxon + "' is STEM on the whole-tree clade '" + cladeName + "' under crown conditioning: no stem edge exists rootward of the crown.");
+            Msg::error("conditioning on crown node but fossil '" + taxon + "' is STEM on the whole-tree clade '" + cladeName + "'.");
         if(UserSettings::userSettings().getConditioning() == Conditioning::CROWN
            && assignment == Assignment::TOTAL && clade->getCrown() == tree->getCrown()){
-            Msg::warning("fossil '" + taxon + "' is TOTAL on the whole-tree clade '" + cladeName + "'; treating as CROWN");
+            Msg::warning("conditioning on crown node but fossil '" + taxon + "' is TOTAL on the whole-tree clade '" + cladeName + "'; treating as CROWN");
             assignment = Assignment::CROWN;
         }
 

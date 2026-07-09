@@ -234,7 +234,6 @@ void Sbc::runSimulateOnly(void){
     printf("  #backbone   : mean %.3f  [%ld..%ld]\n", sBB/n, minB, maxB);
     printf("  #UE         : mean %.3f\n", sUE/n);
     printf("  #fossils    : mean %.3f  [%ld..%ld]\n", sFoss/n, minF, maxF);
-    printf("  P(nBackbone<2)=%.4f  P(nBackbone=1)=%.4f\n", nLt2/n, nEq1/n);
 }
 
 void Sbc::runInference(void){

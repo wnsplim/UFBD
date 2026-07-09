@@ -625,7 +625,7 @@ Node* Tree::getMRCA(const std::vector<std::string>& taxonNames){
     for(const std::string& name : taxonNames){
         Node* n = getTaxonNode(name);
         if(n == nullptr)
-            Msg::error("taxon not found in tree: " + name);
+            Msg::error("taxon '" + name + "' not found in the tree");
 
         if(mrca == nullptr){
             mrca = n;

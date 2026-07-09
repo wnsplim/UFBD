@@ -910,7 +910,7 @@ double Probability::MultivariateNormal::lnPdf(Eigen::MatrixXd* vec, Eigen::Matri
     Eigen::LDLT<Eigen::MatrixXd> lltOfV(sigma); //more numerically stable
     if(lltOfV.info() == Eigen::NumericalIssue){
         printEigen(sigma);
-        Msg::error("non posiative definite VCV");
+        Msg::error("non positive definite VCV");
     }
     if(sigma.cols() != sigma.rows())
         Msg::error("MVN lnPdf expecting sigma to be square matrix");
@@ -950,7 +950,7 @@ double Probability::MultivariateNormal::lnPdf(Eigen::VectorXd* vec, Eigen::Vecto
     Eigen::LDLT<Eigen::MatrixXd> lltOfV(sigma); //more numerically stable
     if(lltOfV.info() == Eigen::NumericalIssue){
         printEigen(sigma);
-        Msg::error("non posiative definite VCV");
+        Msg::error("non positive definite VCV");
     }
     if(sigma.cols() != sigma.rows())
         Msg::error("MVN lnPdf expecting sigma to be square matrix");
@@ -989,7 +989,7 @@ double Probability::MultivariateNormal::lnPrecisionMatrixPdf(Eigen::VectorXd* ve
     Eigen::LDLT<Eigen::MatrixXd> lltOfV(sigma); //more numerically stable
     if(lltOfV.info() == Eigen::NumericalIssue){
         printEigen(sigma);
-        Msg::error("non posiative definite VCV");
+        Msg::error("non positive definite VCV");
     }
     if(sigma.cols() != sigma.rows())
         Msg::error("MVN lnPdf expecting sigma to be square matrix");

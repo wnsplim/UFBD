@@ -23,11 +23,8 @@ int main(int argc, const char* argv[]){
     printf("%s\n", invocation.c_str());
 
     std::string mode, out;
-    bool repsSet = false, genSet = false, burninSet = false, thinSet = false, binsSet = false;
-    int reps = 0, thin = 0, bins = 0;
-    long gen = 0;
-    bool autoGen = false;
-    double burnin = 0.0;
+    bool repsSet = false;
+    int reps = 0;
     double bb = 1.0;
     std::vector<const char*> rest;
     rest.push_back(argv[0]);
@@ -35,21 +32,17 @@ int main(int argc, const char* argv[]){
         std::string a = argv[i];
         if(a == "-sbc_mode" && i + 1 < argc)        mode = argv[++i];
         else if(a == "-sbc_reps" && i + 1 < argc){  reps = std::stoi(argv[++i]); repsSet = true; }
-        else if(a == "-sbc_gen" && i + 1 < argc){   std::string g = argv[++i]; if(g == "auto") autoGen = true; else gen = std::stol(g); genSet = true; }
-        else if(a == "-sbc_burnin" && i + 1 < argc){ burnin = std::stod(argv[++i]); burninSet = true; }
-        else if(a == "-sbc_thin" && i + 1 < argc){  thin = std::stoi(argv[++i]); thinSet = true; }
-        else if(a == "-sbc_bins" && i + 1 < argc){  bins = std::stoi(argv[++i]); binsSet = true; }
         else if(a == "-sbc_bb" && i + 1 < argc)     bb = std::stod(argv[++i]);
         else if(a == "-sbc_out" && i + 1 < argc)    out = argv[++i];
         else                                        rest.push_back(argv[i]);
     }
 
     if(mode != "simulate" && mode != "infer" && mode != "emit")
-        Msg::error("SBC: -sbc_mode must be supplied as 'simulate', 'infer', or 'emit'.");
+        Msg::error("-sbc_mode must be supplied as 'simulate', 'infer', or 'emit'.");
     if(repsSet == false)
-        Msg::error("SBC: -sbc_reps is required.");
+        Msg::error("-sbc_reps is required.");
     if(mode == "emit" && out.empty())
-        Msg::error("SBC emit: -sbc_out (output file prefix) is required.");
+        Msg::error("-sbc_out (output file prefix) is required.");
 
     UserSettings& s = UserSettings::userSettings();
     s.initializeSettings((int)rest.size(), rest.data(), true);
@@ -57,12 +50,12 @@ int main(int argc, const char* argv[]){
     Probability::PriorSpec lambdaPrior = s.getLambdaPrior();
     Probability::PriorSpec muPrior     = s.getMuPrior();
     if(lambdaPrior.set == false || muPrior.set == false)
-        Msg::error("SBC: -lambda-prior, -mu-prior and -psi-prior are all required.");
+        Msg::error("-lambda_prior, -mu_prior, and -psi_prior are all required.");
     for(int t = 0; t < s.getNumPsiTypes(); t++)
         if(s.getPsiPrior(t).set == false)
-            Msg::error("SBC: -lambda-prior, -mu-prior and -psi-prior are all required.");
+            Msg::error("-lambda_prior, -mu_prior, and -psi_prior are all required.");
     if(s.getConditionAgePriorSet() == false)
-        Msg::error("SBC: -cond must supply a distribution to draw the origin age from.");
+        Msg::error("-conditioning must supply a distribution to draw the root age from.");
 
     SbcConfig cfg;
     cfg.numReps = reps;
@@ -73,7 +66,7 @@ int main(int argc, const char* argv[]){
     cfg.rho = s.getRho();
     cfg.bb = bb;
     if(cfg.originConditioning == false && cfg.bb < 1.0)
-        Msg::error("SBC: crown conditioning requires bb=1. Use origin conditioning for bb<1.");
+        Msg::error("crown conditioning requires bb=1. Use origin conditioning for bb<1.");
     cfg.intervalStart.push_back(0.0);
     for(double t : s.getSkylineTimes())
         cfg.intervalStart.push_back(t);
@@ -100,8 +93,6 @@ int main(int argc, const char* argv[]){
     cfg.muGroupPrior = s.getMuGroupPrior();
     cfg.startAgePrior = { true, s.getConditionAgePrior(), s.getConditionAgePriorP1(), s.getConditionAgePriorP2() };
     cfg.dumpPrefix = out;
-    (void)gen; (void)autoGen; (void)burnin; (void)thin; (void)bins;
-    (void)genSet; (void)burninSet; (void)thinSet; (void)binsSet;
 
     unsigned int seed = s.getSeed();
     RandomVariable rng(seed);

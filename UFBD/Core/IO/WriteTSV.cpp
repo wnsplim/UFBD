@@ -44,12 +44,12 @@ void WriteTSV::addFilepath(std::string fp, bool overwrite){
     fout.open(filepath, std::ios::out | std::ios::app);
     numRows = 0;
     if (!fout.is_open())
-        Msg::error("File stream is not open: " + filepath);
+        Msg::error("file stream is not open: " + filepath);
 }
 
 void WriteTSV::appendDataTSV(std::vector<double> data){
     if (!fout.is_open())
-        Msg::error("Attempting to write to TSV file before opening it.");
+        Msg::error("attempting to write to TSV file before opening it.");
 
     for(int i = 0; i < data.size(); i++){
         if(i < (data.size()-1))
