@@ -32,6 +32,9 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
     y[1].resize(numFossils);
     z[0].resize(numFossils);
     z[1].resize(numFossils);
+    lz[0].assign(numFossils, 0);
+    lz[1].assign(numFossils, 0);
+    lzDomain.assign(numFossils, std::vector<int>(1, 0));
 
     for(int i = 0; i < numFossils; i++){
         Fossil& f = fossils[i];
@@ -79,23 +82,16 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
     }
 }
 
-double ParameterUnresolvedFossils::getMinAttachAge(int i){
-    if(isStem[i] && isStemSpine(i))
-        return crownNode[i]->getTime();
-    return y[0][i];
+void ParameterUnresolvedFossils::setLandingZoneDomain(std::vector<std::vector<int> >& domain){
+    lzDomain = domain;
+    for(int i = 0; i < numFossils; i++){
+        lz[0][i] = lzDomain[i][0];
+        lz[1][i] = lzDomain[i][0];
+    }
 }
 
-bool ParameterUnresolvedFossils::isStemSpine(int i){
-    Node* cr = crownNode[i];
-    if(y[0][i] >= cr->getTime())
-        return false;
-    for(int j = 0; j < numFossils; j++){
-        if(j == i || isStem[j] == false || crownNode[j] != cr)
-            continue;
-        if(y[0][j] < y[0][i] || (y[0][j] == y[0][i] && j < i))
-            return false;
-    }
-    return true;
+double ParameterUnresolvedFossils::getMinAttachAge(int i){
+    return y[0][i];
 }
 
 double ParameterUnresolvedFossils::getMaxAttachAge(int i){
@@ -113,17 +109,18 @@ double ParameterUnresolvedFossils::update(void){
     lastWasFlip = false;
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastFossil = (int)(rng.uniformRv() * numFossils);
+    int i = lastFossil;
+    if(ue[i])
+        return updateAttachAge(i);                          // a UE has no y and no SA state
     double u = rng.uniformRv();
     if(u < 1.0/3.0)
-        return updateSampledAncestor(lastFossil);
+        return updateSampledAncestor(i);
     if(u < 2.0/3.0)
-        return updateFossilAge(lastFossil);
-    return updateAttachAge(lastFossil);
+        return updateFossilAge(i);
+    return updateAttachAge(i);
 }
 
 double ParameterUnresolvedFossils::updateFossilAge(int i){
-    if(ue[i])
-        return 0.0;
     RandomVariable& rng = RandomVariable::randomVariableInstance();
 
     if(spineIdx < 0){
@@ -203,8 +200,6 @@ double ParameterUnresolvedFossils::updateAttachAge(int i){
 double ParameterUnresolvedFossils::updateSampledAncestor(int i){
     if(i == spineIdx)
         return 0.0;
-    if(ue[i])
-        return 0.0;
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     double lo = getMinAttachAge(i);
     double hi = getMaxAttachAge(i);
@@ -263,6 +258,7 @@ void ParameterUnresolvedFossils::updateForAcceptance(void){
     }else{
         y[1][lastFossil] = y[0][lastFossil];
         z[1][lastFossil] = z[0][lastFossil];
+        lz[1][lastFossil] = lz[0][lastFossil];
     }
 }
 
@@ -282,20 +278,24 @@ void ParameterUnresolvedFossils::updateForRejection(void){
     }else{
         y[0][lastFossil] = y[1][lastFossil];
         z[0][lastFossil] = z[1][lastFossil];
+        lz[0][lastFossil] = lz[1][lastFossil];
     }
 }
 
 void ParameterUnresolvedFossils::writeState(std::ostream& os){
     Serialize::writeVec(os, y[1]);
     Serialize::writeVec(os, z[1]);
+    Serialize::writeIVec(os, lz[1]);
     os << spineIdx << ' ' << numAcceptances << ' ' << numRejections << '\n';
 }
 
 void ParameterUnresolvedFossils::readState(std::istream& is){
     Serialize::readVec(is, y[1]);
     Serialize::readVec(is, z[1]);
+    Serialize::readIVec(is, lz[1]);
     y[0] = y[1];
     z[0] = z[1];
+    lz[0] = lz[1];
     is >> spineIdx >> numAcceptances >> numRejections;
 }
 

@@ -61,6 +61,12 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      computeGamma(double z, int i);
         void                        buildEulerIndex(void);
         bool                        inSub(Node* node, Node* subtreeCrown);
+        void                        buildZoneIndex(void);
+        double                      zoneBackboneLineages(int mz, double z);
+        void                        rebuildStalkIndex(void);
+        double                      doLandingZoneGibbs(void);
+        double                      doLandingZoneJump(int i);
+        double                      validZoneSet(int i, int a, std::vector<std::pair<double,double> >& iv);
         void                        updateGammaCache(void);
         void                        computeAgeFloors(std::map<Node*,double>& floors);
         void                        resolveFossils(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils);
@@ -77,7 +83,6 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      doRateVectorScale(void);
         double                      doRateShrinkExpand(void);
         double                      doTurnoverMove(void);
-        double                      cladeBackboneLineages(int i, double z);
         std::vector<ParameterDouble*>* pickIidRateVector(void);
         void                        enumeratePrunableRoots(Tree* t, std::vector<Node*>& roots);
         void                        enumerateSubtreeHosts(Tree* t, std::vector<Node*>& crowns, std::vector<char>& isCrowns, std::vector<Node*>& origins, double rAge, double ceilingS, std::vector<Node*>& hosts, std::vector<double>& los, std::vector<double>& his);
@@ -161,22 +166,24 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<int>            subSize;
         std::vector<Node*>          nodesByPre;
         bool                        eulerBuilt = false;
-        std::vector<double>         sortedYounger;
-        std::vector<double>         sortedOlder;
-        std::vector<double>         sortedFossilY;
-        std::vector<double>         sortedFossilZ;
-        std::vector<std::pair<double,double>> sortedZY;
-        int                         wholeTreeTotalFast = -1;
-        int                         fastIsCrown = 0;
-        struct CladeGammaIndex {
-            std::vector<double> subY;
-            std::vector<std::pair<double,double>> subZY;
-            std::vector<double> totY, crY;
-            std::vector<std::pair<double,double>> totZY, crZY;
+        int                         numZones = 0;
+        std::vector<int>            minZoneOfNode;
+        int                         trunkMinZone = -1;
+        struct ZoneEdges {
+            std::vector<double> yng, old;
         };
-        std::map<Node*,CladeGammaIndex> cladeGamma;
-        std::vector<Node*>          activeClades;
-        int                         multiCladeFast = -1;
+        std::vector<ZoneEdges>      zoneEdges;
+        struct StalkBucket {
+            std::vector<double> y;
+            std::vector<std::pair<double,double>> zy;
+        };
+        std::vector<StalkBucket>    zoneStalks;
+        bool                        zoneIndexBuilt = false;
+        std::vector<int>            prevLandingZone;
+        std::vector<int>            lzGibbsIdx;
+        bool                        lastWasLzGibbs;
+        long                        lzAcc;
+        long                        lzAtt;
 };
 
 

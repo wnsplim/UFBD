@@ -1250,7 +1250,6 @@ double ParameterBranchRatesCIR::sigmaPncpMoveCIR(int p){
 }
 
 double ParameterBranchRatesCIR::update(void){
-    static const bool ncOn = [](){ const char* e = std::getenv("FBD_SIGMA_NC"); return e != nullptr && e[0] == '1'; }();
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastLocus = (int)(rng.uniformRv() * numLoci);
     double u = rng.uniformRv();
@@ -1264,8 +1263,6 @@ double ParameterBranchRatesCIR::update(void){
         return scaleMuRates(lastLocus);
     }
     if(u < 0.88){
-        if(ncOn && u >= 0.82)
-            return sigmaPncpMoveCIR(lastLocus);
         lastMove = 1;
         return scaleLocusSigma2(lastLocus);
     }

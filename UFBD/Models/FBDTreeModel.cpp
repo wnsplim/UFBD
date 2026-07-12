@@ -12,6 +12,7 @@
 #include "Msg.hpp"
 
 #include <iostream>
+#include <fstream>
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -31,6 +32,9 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     lastWasFbdRate = false;
     lastTreeMove = TM_NONE;
     for(int i = 0; i < TM_COUNT; i++) tmAcc[i] = tmAtt[i] = 0;
+    lastWasLzGibbs = false;
+    lzAcc = 0;
+    lzAtt = 0;
     turnoverStep = 0.1;
     frAccW = frAttW = 0;
     upDownStep = 0.1;
@@ -636,51 +640,12 @@ int countStraddling(const std::vector<double>& ySorted, const std::vector<std::p
                      [](double v, const std::pair<double,double>& p){ return v < p.first; }) - zy.begin());
     return below - above;
 }
-// straddlers with z_attach rootward of T (leave a crown/sub zone)
-double countAboveCrown(const std::vector<std::pair<double,double>>& zy, double T, double zq){
-    double s = 0.0;
-    for(std::vector<std::pair<double,double>>::const_iterator it = std::upper_bound(zy.begin(), zy.end(), std::pair<double,double>(T, INFINITY));
-             it != zy.end(); ++it)
-        if(it->second < zq && zq < it->first)
-            s += 1.0;
-    return s;
-}
 }
 
-// backbone lineages crossing z in fossil i's zone R_i
-double FBDTreeModel::cladeBackboneLineages(int i, double z){
-    Tree* tree = parameterTree->getTree();
-    if(eulerBuilt == false)
-        buildEulerIndex();
-    Node* crown = unresolvedFossils->getCrownNode(i);
-    bool stem = unresolvedFossils->getIsStem(i);
-    bool total = (unresolvedFossils->getIsCrown(i) == false && stem == false);
-    double count = 0.0;
-    if(stem == false && crown == tree->getCrown()){
-        count += (double)countStraddling(sortedYounger, sortedOlder, z);   // all edges in-zone
-    }else{
-        int lo = subPre[crown->getOffset()];
-        int hi = lo + subSize[crown->getOffset()];
-        for(int k = lo; k < hi; k++){
-            Node* n = nodesByPre[k];
-            if(n == tree->getRoot())
-                continue;
-            Node* anc = n->getAncestor();
-            if(n->getTime() < z && z < anc->getTime()){
-                bool inZone;
-                if(stem){
-                    inZone = (n == crown);              // stem edge only
-                }else{
-                    inZone = inSub(anc, crown);         // crown group
-                    if(inZone == false && total && n == crown)
-                        inZone = true;                  // total owns clade stem
-                }
-                if(inZone)
-                    count++;
-            }
-        }
-    }
-    if((total || stem) && crown == tree->getCrown() && originAge != nullptr){   // trunk crown->origin
+double FBDTreeModel::zoneBackboneLineages(int mz, double z){
+    double count = (double)countStraddling(zoneEdges[mz].yng, zoneEdges[mz].old, z);
+    if(mz == trunkMinZone){
+        Tree* tree = parameterTree->getTree();
         double x0 = originAge->getValue();
         if(tree->getNumBackbone() == 0){
             if(z >= x0)
@@ -713,6 +678,15 @@ double FBDTreeModel::update(void){
     lastWasFbdRate = false;
     if(lambdaField == nullptr && muField == nullptr && lambda.size() >= 1 && mu.size() >= 1 && rng.uniformRv() < 0.10){
         double r = doTurnoverMove();
+        RandomVariable::setActiveInstance(prevRng);
+        return r;
+    }
+
+    lastWasLzGibbs = false;
+    if(lzGibbsIdx.empty() == false && rng.uniformRv() < 0.15){
+        lastWasLzGibbs = true;
+        lzAtt++;
+        double r = doLandingZoneGibbs();
         RandomVariable::setActiveInstance(prevRng);
         return r;
     }
@@ -812,6 +786,11 @@ double FBDTreeModel::update(void){
 
 void FBDTreeModel::updateForAcceptance(void){
     if(lastTreeMove != TM_NONE){ tmAtt[lastTreeMove]++; tmAcc[lastTreeMove]++; }
+    if(lastWasLzGibbs){
+        unresolvedFossils->updateForAcceptance();
+        lzAcc++;
+        return;
+    }
     if(lastWasFbdRate){
         for(ParameterDouble* l : lambda) l->commitProposed();
         for(ParameterDouble* m : mu) m->commitProposed();
@@ -846,6 +825,11 @@ void FBDTreeModel::updateForAcceptance(void){
 
 void FBDTreeModel::updateForRejection(void){
     if(lastTreeMove != TM_NONE) tmAtt[lastTreeMove]++;
+    if(lastWasLzGibbs){
+        unresolvedFossils->updateForRejection();
+        rebuildStalkIndex();
+        return;
+    }
     if(lastWasFbdRate){
         for(ParameterDouble* l : lambda) l->restoreProposed();
         for(ParameterDouble* m : mu) m->restoreProposed();
@@ -1203,101 +1187,283 @@ bool FBDTreeModel::inSub(Node* node, Node* subtreeCrown){
     return pc <= pn && pn < pc + subSize[subtreeCrown->getOffset()];
 }
 
-// gamma_i(z) = backbone lineages crossing z in R_i + sum_j w_ij [pendant j crosses z in R_i]
-double FBDTreeModel::computeGamma(double z, int i){
+void FBDTreeModel::buildZoneIndex(void){
+    Tree* tree = parameterTree->getTree();
     if(eulerBuilt == false)
         buildEulerIndex();
-    Node* crown = unresolvedFossils->getCrownNode(i);
-    bool stem = unresolvedFossils->getIsStem(i);
-    bool total = (unresolvedFossils->getIsCrown(i) == false && stem == false);
-    double count = cladeBackboneLineages(i, z);
+    int nn = tree->getNumNodes();
+    int nf = unresolvedFossils->getNumFossils();
+    bool hasTrunk = (originAge != nullptr);
 
-    bool halfFix = (UserSettings::userSettings().getModel() == Model::UFBD);   // w=1/2 on reciprocal pairs
-    bool focalIsTip = (unresolvedFossils->isSA(i) == false);
-    int numFossils = unresolvedFossils->getNumFossils();
-
-    if(wholeTreeTotalFast == 1){                       // one clade, all TOTAL or all CROWN, no stem
-        if(total){
-            double crossing = (double)countStraddling(sortedFossilY, sortedFossilZ, z);   // focal self-cancels
-            if(halfFix && focalIsTip){
-                double spineCrosses = 0.0;             // spine keeps full weight (owns x0)
-                int sp = unresolvedFossils->getSpineIdx();
-                if(i != sp && sp >= 0 && unresolvedFossils->isSA(sp) == false){
-                    double ys = unresolvedFossils->getFossilAge(sp), zs = unresolvedFossils->getAttachAge(sp);
-                    if(ys < z && z < zs)
-                        spineCrosses = 1.0;
-                }
-                count += 0.5 * crossing + 0.5 * spineCrosses;
-            }else{
-                count += crossing;
+    std::vector<Node*> zCrown;
+    std::vector<char>  zIsCrown, zIsStem;
+    std::vector<int>   zoneOfFossil(nf, -1);
+    for(int i = 0; i < nf; i++){
+        Node* c = unresolvedFossils->getCrownNode(i);
+        char cr = unresolvedFossils->getIsCrown(i) ? 1 : 0;
+        char st = unresolvedFossils->getIsStem(i) ? 1 : 0;
+        for(int z = 0; z < (int)zCrown.size(); z++)
+            if(zCrown[z] == c && zIsCrown[z] == cr && zIsStem[z] == st){
+                zoneOfFossil[i] = z;
+                break;
             }
-        }else{
-            double crossing = (double)countStraddling(sortedFossilY, sortedZY, z);
-            crossing -= countAboveCrown(sortedZY, crown->getTime(), z);        // crown-cap
-            if(halfFix && focalIsTip)
-                count += 0.5 * crossing;
+        if(zoneOfFossil[i] < 0){
+            zoneOfFossil[i] = (int)zCrown.size();
+            zCrown.push_back(c);
+            zIsCrown.push_back(cr);
+            zIsStem.push_back(st);
+        }
+    }
+    numZones = (int)zCrown.size();
+
+    std::vector<char> member((size_t)numZones * nn, 0);
+    std::vector<char> trunkIn(numZones, 0);
+    std::vector<int>  zSize(numZones, 0);
+    for(int z = 0; z < numZones; z++){
+        Node* c = zCrown[z];
+        for(Node* n : tree->getDownPassSequence()){
+            if(n == tree->getRoot())
+                continue;
+            bool in;
+            if(zIsStem[z])
+                in = (n == c);
             else
-                count += crossing;
-        }
-        return count;
-    }
-    if(multiCladeFast == 1){                            // mixed CROWN/TOTAL over clades, no stem
-        const CladeGammaIndex& g = cladeGamma.find(crown)->second;
-        double T = crown->getTime();
-        double nested = (double)countStraddling(g.subY, g.subZY, z);
-        if(total == false)
-            nested -= countAboveCrown(g.subZY, T, z);   // crown-cap
-        if(halfFix && focalIsTip){
-            double reciprocal;                          // pendants owned as TOTAL/CROWN of this clade
-            if(total == false)
-                reciprocal = (double)countStraddling(g.totY, g.totZY, z) + (double)countStraddling(g.crY, g.crZY, z)
-                             - countAboveCrown(g.totZY, T, z) - countAboveCrown(g.crZY, T, z);
-            else{
-                reciprocal = (double)countStraddling(g.totY, g.totZY, z);
-                if(z <= T)
-                    reciprocal += (double)countStraddling(g.crY, g.crZY, z);
+                in = inSub(n->getAncestor(), c) || (zIsCrown[z] == 0 && n == c);
+            if(in){
+                member[(size_t)z * nn + n->getOffset()] = 1;
+                zSize[z]++;
             }
-            count += nested - 0.5 * reciprocal;
-        }else{
-            count += nested;
         }
-        return count;
+        if(hasTrunk && c == tree->getCrown() && zIsCrown[z] == 0){
+            trunkIn[z] = 1;
+            zSize[z]++;
+        }
     }
-    for(int j = 0; j < numFossils; j++){               // general reference: zone host law per fossil
-        if(j == i)
-            continue;
-        if(unresolvedFossils->isSA(j))
-            continue;
-        double yj = unresolvedFossils->getFossilAge(j);
-        double zj = unresolvedFossils->getAttachAge(j);
-        if(yj >= z || z >= zj)
-            continue;                                   // j must straddle z
-        bool reciprocal;                                // both orientations admissible -> 1/2 eligible
-        if(stem){
-            if(unresolvedFossils->getCrownNode(j) != crown)
-                continue;
-            bool jStem = unresolvedFossils->getIsStem(j);
-            bool jTotalOnStem = (unresolvedFossils->getIsCrown(j) == false) && (jStem == false) && (zj >= crown->getTime());
-            if(jStem == false && jTotalOnStem == false)
-                continue;                               // stem-i reaches only same-clade stem
-            reciprocal = true;
-        }else{
-            if(inSub(unresolvedFossils->getCrownNode(j), crown) == false)
-                continue;
-            if(total == false && zj > crown->getTime())
-                continue;                               // crown-cap
-            Node* crownJ = unresolvedFossils->getCrownNode(j);
-            bool jStem = unresolvedFossils->getIsStem(j);
-            bool jTotal = (unresolvedFossils->getIsCrown(j) == false) && (jStem == false);
-            bool iPendReachesRj = jTotal ? true
-                                : jStem  ? (z >= crownJ->getTime())
-                                :          (z <= crownJ->getTime());
-            reciprocal = inSub(crown, crownJ) && iPendReachesRj;
+
+    std::vector<char> zoneSubsetMat((size_t)numZones * numZones, 0);
+    for(int a = 0; a < numZones; a++)
+        for(int b = 0; b < numZones; b++){
+            bool sub = (trunkIn[a] == 0 || trunkIn[b] == 1);
+            for(int o = 0; o < nn && sub; o++)
+                if(member[(size_t)a * nn + o] && member[(size_t)b * nn + o] == 0)
+                    sub = false;
+            zoneSubsetMat[(size_t)a * numZones + b] = sub ? 1 : 0;
         }
-        double w = 1.0;
-        if(halfFix && focalIsTip && j != unresolvedFossils->getSpineIdx() && reciprocal)
-            w = 0.5;
-        count += w;
+
+    minZoneOfNode.assign(nn, -1);
+    for(Node* n : tree->getDownPassSequence()){
+        if(n == tree->getRoot())
+            continue;
+        int best = -1;
+        for(int z = 0; z < numZones; z++){
+            if(member[(size_t)z * nn + n->getOffset()] == 0)
+                continue;
+            if(best < 0 || zoneSubsetMat[(size_t)z * numZones + best])
+                best = z;
+        }
+        minZoneOfNode[n->getOffset()] = best;
+    }
+    trunkMinZone = -1;
+    if(hasTrunk)
+        for(int z = 0; z < numZones; z++){
+            if(trunkIn[z] == 0)
+                continue;
+            if(trunkMinZone < 0 || zoneSubsetMat[(size_t)z * numZones + trunkMinZone])
+                trunkMinZone = z;
+        }
+
+    std::vector<char> occupied(numZones, 0);
+    for(int o = 0; o < nn; o++)
+        if(minZoneOfNode[o] >= 0)
+            occupied[minZoneOfNode[o]] = 1;
+    if(trunkMinZone >= 0)
+        occupied[trunkMinZone] = 1;
+
+    std::vector<std::vector<int> > domain(nf);
+    for(int i = 0; i < nf; i++)
+        for(int z = 0; z < numZones; z++)
+            if(occupied[z] && zoneSubsetMat[(size_t)z * numZones + zoneOfFossil[i]])
+                domain[i].push_back(z);
+
+    lzGibbsIdx.clear();
+    for(int i = 0; i < nf; i++)
+        if(domain[i].size() > 1)
+            lzGibbsIdx.push_back(i);
+
+    zoneEdges.assign(numZones, ZoneEdges());
+    zoneStalks.assign(numZones, StalkBucket());
+    unresolvedFossils->setLandingZoneDomain(domain);
+    zoneIndexBuilt = true;
+}
+
+void FBDTreeModel::rebuildStalkIndex(void){
+    for(size_t k = 0; k < zoneStalks.size(); k++){
+        zoneStalks[k].y.clear();
+        zoneStalks[k].zy.clear();
+    }
+    int nf = unresolvedFossils->getNumFossils();
+    for(int i = 0; i < nf; i++){
+        if(unresolvedFossils->isSA(i))
+            continue;
+        StalkBucket& b = zoneStalks[unresolvedFossils->getLandingZone(i)];
+        double yi = unresolvedFossils->getFossilAge(i);
+        b.y.push_back(yi);
+        b.zy.push_back(std::make_pair(unresolvedFossils->getAttachAge(i), yi));
+    }
+    for(size_t k = 0; k < zoneStalks.size(); k++){
+        std::sort(zoneStalks[k].y.begin(),  zoneStalks[k].y.end());
+        std::sort(zoneStalks[k].zy.begin(), zoneStalks[k].zy.end());
+    }
+}
+
+double FBDTreeModel::validZoneSet(int i, int a, std::vector<std::pair<double,double> >& iv){
+    Tree* tree = parameterTree->getTree();
+    double lo = unresolvedFossils->getMinAttachAge(i);
+    double hi = unresolvedFossils->getMaxAttachAge(i);
+    std::vector<std::pair<double,double> > raw;
+    for(Node* n : tree->getDownPassSequence()){
+        if(n == tree->getRoot() || minZoneOfNode[n->getOffset()] != a)
+            continue;
+        raw.push_back(std::make_pair(n->getTime(), n->getAncestor()->getTime()));
+    }
+    if(a == trunkMinZone && tree->getNumBackbone() > 0)
+        raw.push_back(std::make_pair(tree->getCrown()->getTime(), originAge->getValue()));
+    int nf = unresolvedFossils->getNumFossils();
+    for(int j = 0; j < nf; j++){
+        if(j == i || unresolvedFossils->isSA(j) || unresolvedFossils->getLandingZone(j) != a)
+            continue;
+        raw.push_back(std::make_pair(unresolvedFossils->getFossilAge(j), unresolvedFossils->getAttachAge(j)));
+    }
+    std::vector<std::pair<double,double> > keep;
+    for(std::pair<double,double>& p : raw){
+        double a0 = (p.first  < lo) ? lo : p.first;
+        double b0 = (p.second > hi) ? hi : p.second;
+        if(b0 > a0)
+            keep.push_back(std::make_pair(a0, b0));
+    }
+    std::sort(keep.begin(), keep.end());
+    iv.clear();
+    for(std::pair<double,double>& p : keep){
+        if(iv.empty() == false && p.first <= iv.back().second){
+            if(p.second > iv.back().second)
+                iv.back().second = p.second;
+        }else{
+            iv.push_back(p);
+        }
+    }
+    double measure = 0.0;
+    for(std::pair<double,double>& p : iv)
+        measure += p.second - p.first;
+    return measure;
+}
+
+double FBDTreeModel::doLandingZoneJump(int i){
+    std::vector<int>& dom = unresolvedFossils->getLandingZoneDomain(i);
+    int k = (int)dom.size();
+    int cur = unresolvedFossils->getLandingZone(i);
+    int pick = (int)(rng.uniformRv() * (k - 1));
+    int cand = cur;
+    for(int d = 0; d < k; d++){
+        if(dom[d] == cur)
+            continue;
+        if(pick == 0){ cand = dom[d]; break; }
+        pick--;
+    }
+
+    std::vector<std::pair<double,double> > ivNew, ivOld;
+    double mNew = validZoneSet(i, cand, ivNew);
+    double mOld = validZoneSet(i, cur, ivOld);
+    unresolvedFossils->beginLandingZoneMove(i);
+    if(mNew <= 0.0 || mOld <= 0.0)
+        return -INFINITY;
+
+    double u = rng.uniformRv() * mNew;
+    double zNew = ivNew.back().second;
+    for(std::pair<double,double>& p : ivNew){
+        double w = p.second - p.first;
+        if(u < w){ zNew = p.first + u; break; }
+        u -= w;
+    }
+
+    unresolvedFossils->setLandingZone(i, cand);
+    unresolvedFossils->setAttachAge(i, zNew);
+    rebuildStalkIndex();
+    return std::log(mNew) - std::log(mOld);
+}
+
+double FBDTreeModel::doLandingZoneGibbs(void){
+    int i = lzGibbsIdx[(int)(rng.uniformRv() * (int)lzGibbsIdx.size())];
+    if(unresolvedFossils->isSA(i) == false && i != unresolvedFossils->getSpineIdx()
+       && rng.uniformRv() < 0.5)
+        return doLandingZoneJump(i);
+    std::vector<int>& dom = unresolvedFossils->getLandingZoneDomain(i);
+    int k = (int)dom.size();
+    int cur = unresolvedFossils->getLandingZone(i);
+    int nf = unresolvedFossils->getNumFossils();
+
+    std::vector<int> aff(1, i);                 // only i and the fossils its stalk can host change
+    if(unresolvedFossils->isSA(i) == false){
+        double yi = unresolvedFossils->getFossilAge(i);
+        double zi = unresolvedFossils->getAttachAge(i);
+        for(int j = 0; j < nf; j++){
+            double tj = unresolvedFossils->getAttachAge(j);
+            if(j != i && yi < tj && tj < zi)
+                aff.push_back(j);
+        }
+    }
+
+    std::vector<double> lnG(k, 0.0);
+    int curIdx = 0;
+    for(int d = 0; d < k; d++){
+        if(dom[d] == cur)
+            curIdx = d;
+        unresolvedFossils->setLandingZone(i, dom[d]);
+        rebuildStalkIndex();
+        for(int j : aff){
+            double g = computeGamma(unresolvedFossils->getAttachAge(j), j);
+            lnG[d] += (g > 0.0) ? std::log(g) : -INFINITY;
+        }
+    }
+
+    double mx = -INFINITY;
+    for(int d = 0; d < k; d++)
+        if(lnG[d] > mx) mx = lnG[d];
+    std::vector<double> w(k);
+    double sum = 0.0;
+    for(int d = 0; d < k; d++){
+        w[d] = std::exp(lnG[d] - mx);
+        sum += w[d];
+    }
+    double u = rng.uniformRv() * sum;
+    int pick = k - 1;
+    for(int d = 0; d < k; d++){
+        u -= w[d];
+        if(u < 0.0){ pick = d; break; }
+    }
+
+    unresolvedFossils->beginLandingZoneMove(i);
+    unresolvedFossils->setLandingZone(i, dom[pick]);
+    rebuildStalkIndex();
+    return lnG[curIdx] - lnG[pick];
+}
+
+double FBDTreeModel::computeGamma(double z, int i){
+    int mz = unresolvedFossils->getLandingZone(i);
+    double count = zoneBackboneLineages(mz, z);
+
+    bool halfFix = (UserSettings::userSettings().getModel() == Model::UFBD);
+    bool focalIsTip = (unresolvedFossils->isSA(i) == false);
+    double w = (halfFix && focalIsTip) ? 0.5 : 1.0;
+
+    const StalkBucket& b = zoneStalks[mz];
+    count += w * (double)countStraddling(b.y, b.zy, z);
+
+    int sp = unresolvedFossils->getSpineIdx();
+    if(halfFix && focalIsTip && sp >= 0 && sp != i && unresolvedFossils->isSA(sp) == false
+       && unresolvedFossils->getLandingZone(sp) == mz){
+        double ys = unresolvedFossils->getFossilAge(sp), zs = unresolvedFossils->getAttachAge(sp);
+        if(ys < z && z < zs)
+            count += 0.5;                              // spine acts as backbone: weight 1, not 1/2
     }
     return count;
 }
@@ -1307,10 +1473,15 @@ void FBDTreeModel::updateGammaCache(void){
     int nf = unresolvedFossils->getNumFossils();
     std::vector<Node*>& dpseq = tree->getDownPassSequence();
 
+    if(zoneIndexBuilt == false)
+        buildZoneIndex();
+
     Node* root = tree->getRoot();
+    int nEdge = 0;
+    for(int z = 0; z < numZones; z++) nEdge += (int)zoneEdges[z].yng.size();
     int budget = 0;
-    for(int x = (int)sortedYounger.size(); x > 1; x >>= 1) budget++;
-    int edits = (cacheInit && sortedYounger.empty() == false) ? 0 : -1;
+    for(int x = nEdge; x > 1; x >>= 1) budget++;
+    int edits = (cacheInit && nEdge > 0) ? 0 : -1;
     if(edits == 0){
         for(Node* nd : dpseq)
             if(nd->getTime() != prevNodeAge[nd->getOffset()]){
@@ -1324,27 +1495,39 @@ void FBDTreeModel::updateGammaCache(void){
             double newA = nd->getTime();
             if(oldA == newA)
                 continue;
-            if(nd != root){
-                sortedYounger.erase(std::lower_bound(sortedYounger.begin(), sortedYounger.end(), oldA));
-                sortedYounger.insert(std::lower_bound(sortedYounger.begin(), sortedYounger.end(), newA), newA);
+            int mz = (nd != root) ? minZoneOfNode[nd->getOffset()] : -1;
+            if(mz >= 0){
+                std::vector<double>& v = zoneEdges[mz].yng;
+                v.erase(std::lower_bound(v.begin(), v.end(), oldA));
+                v.insert(std::lower_bound(v.begin(), v.end(), newA), newA);
             }
-            int nc = (int)nd->getDescendants().size();
-            for(int c = 0; c < nc; c++){
-                sortedOlder.erase(std::lower_bound(sortedOlder.begin(), sortedOlder.end(), oldA));
-                sortedOlder.insert(std::lower_bound(sortedOlder.begin(), sortedOlder.end(), newA), newA);
+            for(Node* c : nd->getDescendants()){
+                int mc = minZoneOfNode[c->getOffset()];
+                if(mc < 0)
+                    continue;
+                std::vector<double>& v = zoneEdges[mc].old;
+                v.erase(std::lower_bound(v.begin(), v.end(), oldA));
+                v.insert(std::lower_bound(v.begin(), v.end(), newA), newA);
             }
         }
     }else{
-        sortedYounger.clear();
-        sortedOlder.clear();
+        for(int z = 0; z < numZones; z++){
+            zoneEdges[z].yng.clear();
+            zoneEdges[z].old.clear();
+        }
         for(Node* nd : dpseq){
             if(nd == root)
                 continue;
-            sortedYounger.push_back(nd->getTime());
-            sortedOlder.push_back(nd->getAncestor()->getTime());
+            int mz = minZoneOfNode[nd->getOffset()];
+            if(mz < 0)
+                continue;
+            zoneEdges[mz].yng.push_back(nd->getTime());
+            zoneEdges[mz].old.push_back(nd->getAncestor()->getTime());
         }
-        std::sort(sortedYounger.begin(), sortedYounger.end());
-        std::sort(sortedOlder.begin(), sortedOlder.end());
+        for(int z = 0; z < numZones; z++){
+            std::sort(zoneEdges[z].yng.begin(), zoneEdges[z].yng.end());
+            std::sort(zoneEdges[z].old.begin(), zoneEdges[z].old.end());
+        }
     }
 
     if(cacheInit == false){
@@ -1353,9 +1536,24 @@ void FBDTreeModel::updateGammaCache(void){
         prevY.assign(nf, -1.0);
         prevZ.assign(nf, -1.0);
         prevSA.assign(nf, -1);
+        prevLandingZone.assign(nf, -1);
         prevNodeAge.assign(tree->getNumNodes(), -1.0);
         prevX0 = -1.0;
         cacheInit = true;
+        for(int i = 0; i < nf; i++){
+            std::vector<int>& dom = unresolvedFossils->getLandingZoneDomain(i);
+            double zi = unresolvedFossils->getAttachAge(i);
+            int best = dom[0];
+            double bestCount = -1.0;
+            for(int d : dom){
+                double c = zoneBackboneLineages(d, zi);
+                if(c > bestCount){
+                    bestCount = c;
+                    best = d;
+                }
+            }
+            unresolvedFossils->initLandingZone(i, best);
+        }
     }
 
     if(originAge != nullptr){
@@ -1377,13 +1575,14 @@ void FBDTreeModel::updateGammaCache(void){
         double yi = unresolvedFossils->getFossilAge(i);
         double zi = unresolvedFossils->getAttachAge(i);
         int sai = unresolvedFossils->isSA(i) ? 1 : 0;
-        if(yi == prevY[i] && zi == prevZ[i] && sai == prevSA[i])
+        int lzi = unresolvedFossils->getLandingZone(i);
+        if(yi == prevY[i] && zi == prevZ[i] && sai == prevSA[i] && lzi == prevLandingZone[i])
             continue;
         gammaStale[i] = 1;
         bool wasTerm = (prevSA[i] == 0);
         bool isTerm = (sai == 0);
         if((wasTerm || isTerm) && prevY[i] >= 0.0){
-            bool pureZ = (yi == prevY[i] && wasTerm && isTerm);
+            bool pureZ = (yi == prevY[i] && wasTerm && isTerm && lzi == prevLandingZone[i]);
             double lo, hi;
             if(pureZ){
                 lo = std::min(prevZ[i], zi);
@@ -1397,12 +1596,7 @@ void FBDTreeModel::updateGammaCache(void){
             for(int j = 0; j < nf; j++){
                 if(gammaStale[j]) continue;
                 double tj = unresolvedFossils->isSA(j) ? unresolvedFossils->getFossilAge(j) : unresolvedFossils->getAttachAge(j);
-                bool aff = pureZ ? (tj >= lo && tj < hi) : (tj > lo && tj < hi);
-                if(pureZ && aff == false && (unresolvedFossils->getIsCrown(j) || unresolvedFossils->getIsStem(j))){
-                    double ct = unresolvedFossils->getCrownNode(j)->getTime();
-                    aff = (ct >= lo && ct < hi);
-                }
-                if(aff)
+                if(pureZ ? (tj >= lo && tj < hi) : (tj > lo && tj < hi))
                     gammaStale[j] = 1;
             }
         }
@@ -1427,97 +1621,7 @@ void FBDTreeModel::updateGammaCache(void){
         }
     }
 
-    if(wholeTreeTotalFast < 0){
-        wholeTreeTotalFast = 1;
-        Node* commonClade = (nf > 0) ? unresolvedFossils->getCrownNode(0) : tree->getCrown();
-        bool anyCrown = false, anyTotal = false;
-        for(int i = 0; i < nf; i++){
-            if(unresolvedFossils->getCrownNode(i) != commonClade || unresolvedFossils->getIsStem(i)){
-                wholeTreeTotalFast = 0;
-                break;
-            }
-            if(unresolvedFossils->getIsCrown(i)) anyCrown = true; else anyTotal = true;
-        }
-        if(wholeTreeTotalFast == 1 && anyCrown && anyTotal)
-            wholeTreeTotalFast = 0;
-        fastIsCrown = (wholeTreeTotalFast == 1 && anyCrown) ? 1 : 0;
-    }
-    if(wholeTreeTotalFast == 1){
-        sortedFossilY.clear();
-        for(int i = 0; i < nf; i++)
-            if(unresolvedFossils->isSA(i) == false)
-                sortedFossilY.push_back(unresolvedFossils->getFossilAge(i));
-        std::sort(sortedFossilY.begin(), sortedFossilY.end());
-        if(fastIsCrown){
-            sortedZY.clear();
-            for(int i = 0; i < nf; i++)
-                if(unresolvedFossils->isSA(i) == false)
-                    sortedZY.push_back(std::make_pair(unresolvedFossils->getAttachAge(i), unresolvedFossils->getFossilAge(i)));
-            std::sort(sortedZY.begin(), sortedZY.end());
-        }else{
-            sortedFossilZ.clear();
-            for(int i = 0; i < nf; i++)
-                if(unresolvedFossils->isSA(i) == false)
-                    sortedFossilZ.push_back(unresolvedFossils->getAttachAge(i));
-            std::sort(sortedFossilZ.begin(), sortedFossilZ.end());
-        }
-    }
-
-    if(multiCladeFast < 0){
-        multiCladeFast = 0;
-        if(wholeTreeTotalFast == 0 && tree->getNumBackbone() > 0){
-            bool anyStem = false;
-            for(int i = 0; i < nf; i++)
-                if(unresolvedFossils->getIsStem(i)){ anyStem = true; break; }
-            if(anyStem == false){
-                multiCladeFast = 1;
-                activeClades.clear();
-                for(int i = 0; i < nf; i++){
-                    Node* c = unresolvedFossils->getCrownNode(i);
-                    bool found = false;
-                    for(Node* a : activeClades) if(a == c){ found = true; break; }
-                    if(found == false) activeClades.push_back(c);
-                }
-            }
-        }
-    }
-    if(multiCladeFast == 1){
-        if(eulerBuilt == false)
-            buildEulerIndex();
-        cladeGamma.clear();
-        for(Node* c : activeClades)
-            cladeGamma[c];
-        for(int i = 0; i < nf; i++){
-            if(unresolvedFossils->isSA(i))
-                continue;
-            Node* cj = unresolvedFossils->getCrownNode(i);
-            double yj = unresolvedFossils->getFossilAge(i);
-            double zj = unresolvedFossils->getAttachAge(i);
-            CladeGammaIndex& own = cladeGamma[cj];
-            if(unresolvedFossils->getIsCrown(i)){
-                own.crY.push_back(yj);
-                own.crZY.push_back(std::make_pair(zj, yj));
-            }else{
-                own.totY.push_back(yj);
-                own.totZY.push_back(std::make_pair(zj, yj));
-            }
-            for(Node* c : activeClades)
-                if(inSub(cj, c)){
-                    CladeGammaIndex& g = cladeGamma[c];
-                    g.subY.push_back(yj);
-                    g.subZY.push_back(std::make_pair(zj, yj));
-                }
-        }
-        for(Node* c : activeClades){
-            CladeGammaIndex& g = cladeGamma[c];
-            std::sort(g.subY.begin(), g.subY.end());
-            std::sort(g.subZY.begin(), g.subZY.end());
-            std::sort(g.totY.begin(), g.totY.end());
-            std::sort(g.totZY.begin(), g.totZY.end());
-            std::sort(g.crY.begin(), g.crY.end());
-            std::sort(g.crZY.begin(), g.crZY.end());
-        }
-    }
+    rebuildStalkIndex();
 
     std::vector<int> staleIdx;
     for(int i = 0; i < nf; i++)
@@ -1538,9 +1642,11 @@ void FBDTreeModel::updateGammaCache(void){
         prevY[i] = unresolvedFossils->getFossilAge(i);
         prevZ[i] = unresolvedFossils->getAttachAge(i);
         prevSA[i] = unresolvedFossils->isSA(i) ? 1 : 0;
+        prevLandingZone[i] = unresolvedFossils->getLandingZone(i);
     }
     for(Node* n : dpseq)
         prevNodeAge[n->getOffset()] = n->getTime();
+
 }
 
 void FBDTreeModel::computeAgeFloors(std::map<Node*,double>& floors){
