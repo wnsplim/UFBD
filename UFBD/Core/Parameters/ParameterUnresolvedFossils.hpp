@@ -54,6 +54,10 @@ class ParameterUnresolvedFossils : public Parameter {
 
     private:
         enum MoveKind { SINGLE, FLIP, BULK };
+        enum SubMove { SUB_NOOP, SUB_SA, SUB_Y, SUB_Z, SUB_COUNT };
+        SubMove                     lastSub;
+        long                        subAcc[SUB_COUNT];
+        long                        subAtt[SUB_COUNT];
         double                      updateFossilAge(int i);
         double                      updateAttachAge(int i);
         double                      updateSampledAncestor(int i);

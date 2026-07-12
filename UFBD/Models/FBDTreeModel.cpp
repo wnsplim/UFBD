@@ -529,6 +529,8 @@ void FBDTreeModel::print(void){
         if(p != parameterTree)
             std::cout << p->getName() << " (A/R): " << p->getAcceptanceRatio() << "\t";
     }
+    if(unresolvedFossils != nullptr)
+        unresolvedFossils->print();
     static const char* tmName[TM_COUNT] = {"NE","WB","WE","treeScale","SARJ","upDown","jointScale","subtree","nodeAge","crown"};
     std::cout << "tree[";
     for(int i = 0; i < TM_COUNT; i++)
@@ -721,6 +723,9 @@ double FBDTreeModel::zoneBackboneEdges(int mz, double z){
 double FBDTreeModel::update(void){
     RandomVariable* prevRng = RandomVariable::getActiveInstance();
     RandomVariable::setActiveInstance(&rng);
+
+    if(isResolved == false && unresolvedFossils != nullptr)
+        updateGammaCache();
 
     lastMoveKind = MK_PARAM;
     bool haveIid = (lambdaField == nullptr && lambda.size() >= 2)

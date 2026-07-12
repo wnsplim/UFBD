@@ -1,4 +1,5 @@
 #include <cmath>
+#include <iostream>
 
 #include "FBDInput.hpp"
 #include "Msg.hpp"
@@ -18,6 +19,8 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
     numRejections = 0;
     lastFossil = -1;
     lastMove = SINGLE;
+    lastSub = SUB_NOOP;
+    for(int s = 0; s < SUB_COUNT; s++){ subAcc[s] = 0; subAtt[s] = 0; }
     spineIdx = -1;
 
     yMin.resize(numFossils);
@@ -102,13 +105,20 @@ double ParameterUnresolvedFossils::update(void){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastFossil = (int)(rng.uniformRv() * numFossils);
     int i = lastFossil;
-    if(ue[i])
+    if(ue[i]){
+        lastSub = (i == spineIdx) ? SUB_NOOP : SUB_Z;
         return updateAttachAge(i);                          // a UE has no y and no SA state
+    }
     double u = rng.uniformRv();
-    if(u < 1.0/3.0)
+    if(u < 1.0/3.0){
+        lastSub = (i == spineIdx) ? SUB_NOOP : SUB_SA;
         return updateSampledAncestor(i);
-    if(u < 2.0/3.0)
+    }
+    if(u < 2.0/3.0){
+        lastSub = SUB_Y;
         return updateFossilAge(i);
+    }
+    lastSub = (i == spineIdx || sa[0][i]) ? SUB_NOOP : SUB_Z;
     return updateAttachAge(i);
 }
 
@@ -255,6 +265,7 @@ double ParameterUnresolvedFossils::scaleAttachAges(const std::vector<int>& indic
 
 void ParameterUnresolvedFossils::updateForAcceptance(void){
     numAcceptances++;
+    if(lastMove == SINGLE || lastMove == FLIP){ subAtt[lastSub]++; subAcc[lastSub]++; }
     if(numFossils == 0)
         return;
     if(lastMove == FLIP){
@@ -275,6 +286,8 @@ void ParameterUnresolvedFossils::updateForAcceptance(void){
 
 void ParameterUnresolvedFossils::updateForRejection(void){
     numRejections++;
+    if(lastMove == SINGLE || lastMove == FLIP)
+        subAtt[lastSub]++;
     if(numFossils == 0)
         return;
     if(lastMove == FLIP){
@@ -317,4 +330,10 @@ void ParameterUnresolvedFossils::readState(std::istream& is){
 }
 
 void ParameterUnresolvedFossils::print(void){
+    static const char* nm[SUB_COUNT] = {"noop", "SAjump", "y", "z"};
+    std::cout << "fossilSub[";
+    for(int s = 1; s < SUB_COUNT; s++)
+        if(subAtt[s] > 0)
+            std::cout << nm[s] << ":" << (double)subAcc[s] / (double)subAtt[s] << "(" << subAtt[s] << ") ";
+    std::cout << "] ";
 }
