@@ -2,7 +2,6 @@
 #include <limits>
 #include <vector>
 
-#include "Msg.hpp"
 #include "ParameterShrinkageField.hpp"
 
 #include <mutex>
@@ -209,8 +208,6 @@ double ParameterShrinkageField::ellipticalSliceDelta(void){
     double theta = 2.0 * PI * rng.uniformRv();
     double tmin = theta - 2.0 * PI;
     double tmax = theta;
-    if(std::isfinite(lnL0) == false)
-        Msg::error("elliptical slice sampler: the current state has zero likelihood");
     while(true){
         double c = std::cos(theta);
         double s = std::sin(theta);
