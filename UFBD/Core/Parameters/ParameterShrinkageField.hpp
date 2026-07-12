@@ -13,6 +13,9 @@ class ParameterShrinkageField : public Parameter {
                                     ParameterShrinkageField(void) = delete;
                                     ParameterShrinkageField(double prob, PhylogeneticModel* m, int nBins, Probability::PriorSpec anchorPrior, double priorNShifts, double shiftSize, double init0);
         double                      getRate(int i) { return rateVal[0][i]; }
+        double                      shiftRates(double d);
+        void                        commitProposed(void);
+        void                        restoreProposed(void);
         int                         getNumBins(void) { return nBins; }
         double                      getAcceptanceRatio(void);
         double                      lnProbability(void);

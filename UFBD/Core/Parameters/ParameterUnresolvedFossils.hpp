@@ -42,6 +42,9 @@ class ParameterUnresolvedFossils : public Parameter {
         double                      lnProbability(void) { return 0.0; } // density is in the model's lnLikelihood, not a prior here
         void                        print(void);
         double                      update(void);
+        bool                        saEligible(int i) { return ue[i] == false && i != spineIdx && getMaxAttachAge(i) > y[0][i]; }
+        void                        beginBatchMove(void) { lastMove = BULK; }
+        double                      flipSA(int i, bool toSA);
         double                      scaleAllAttachAges(double m);
         double                      scaleAttachAges(const std::vector<int>& indices, double m);
         void                        updateForAcceptance(void);

@@ -23,6 +23,7 @@ class MetropolisCoupledMcmc : public ChainRunner {
         const std::vector<std::vector<double>>& latentColumns(void) { return latentCols; }
         const std::vector<std::string>&     latentNames(void) { return latentNms; }
         bool                                treeHasFossils(void);
+        void                                printMoveDiagnostics(int rep);
         void                                writeCheckpoint(void);
         bool                                loadCheckpoint(void);
         void                                setVerbose(bool b) { verbose = b; }

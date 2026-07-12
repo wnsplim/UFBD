@@ -1,3 +1,6 @@
+#include <map>
+#include <functional>
+#include <iomanip>
 #include "Node.hpp"
 #include "Parameter.hpp"
 #include "ParameterDouble.hpp"
@@ -31,8 +34,10 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     for(int i = 0; i < TM_COUNT; i++) tmAcc[i] = tmAtt[i] = 0;
     azAcc = 0;
     azAtt = 0;
-    turnoverStep = 0.1;
-    frAccW = frAttW = 0;
+    shiftStep = 0.005;
+    saBatch = 0;
+    rsAccW = rsAttW = 0;
+    rsAcc = rsTot = rsAdapt = 0;
     upDownStep = 0.1;
     upDownTotal = 0;
     cacheInit = false;
@@ -516,6 +521,10 @@ double FBDTreeModel::lnPriorProbability(void){
 void FBDTreeModel::print(void){
     if(UserSettings::userSettings().getArLog() == false)
         return;
+    std::ostream& os = std::cout;
+    std::ios_base::fmtflags f = os.flags();
+    std::streamsize pr = os.precision();
+    os << std::fixed << std::setprecision(3);
     for(Parameter* p : parameters){
         if(p != parameterTree)
             std::cout << p->getName() << " (A/R): " << p->getAcceptanceRatio() << "\t";
@@ -525,7 +534,14 @@ void FBDTreeModel::print(void){
     for(int i = 0; i < TM_COUNT; i++)
         if(tmAtt[i] > 0)
             std::cout << tmName[i] << ":" << (double)tmAcc[i] / (double)tmAtt[i] << " ";
-    std::cout << "] treeScaleStep: " << parameterTree->getScaleLambda() << "\n";
+    std::cout << "] treeScaleStep: " << parameterTree->getScaleLambda();
+    if(rsTot > 0)
+        std::cout << " rateShift[A/R:" << (double)rsAcc / (double)rsTot
+                  << " step:" << std::setprecision(5) << shiftStep << std::setprecision(3)
+                  << " batch:" << saBatch << "]";
+    std::cout << "\n";
+    os.flags(f);
+    os.precision(pr);
 }
 
 std::vector<ParameterDouble*>* FBDTreeModel::pickIidRateVector(void){
@@ -588,41 +604,89 @@ double FBDTreeModel::doRateShrinkExpand(void){
     return (double)(n - 1) * std::log(a);
 }
 
-double FBDTreeModel::doTurnoverMove(void){
-    lastMoveKind = MK_TURNOVER;
+double FBDTreeModel::doRateShift(void){
+    lastMoveKind = MK_RATESHIFT;
+    if(unresolvedFossils != nullptr)
+        unresolvedFossils->beginBatchMove();     // claim the restore branch before any early exit
+
+    double m = 0.95;
+    double b = m + Probability::Normal::rv(&rng) * std::sqrt(1.0 - m * m);
+    if(rng.uniformRv() < 0.5)
+        b = -b;
+    double d = shiftStep * b;
+
+    rsAttW++;
+    rsTot++;
+    if(rsAttW >= 200){
+        double ar = (double)rsAccW / (double)rsAttW;
+        rsAdapt++;
+        double gain = 1.0 / std::sqrt((double)rsAdapt);
+        shiftStep *= std::exp(gain * (ar - 0.3));
+        if(shiftStep < 1e-5) shiftStep = 1e-5;
+        if(shiftStep > 0.5)  shiftStep = 0.5;
+        if(ar > 0.4)      saBatch++;
+        else if(ar < 0.2) saBatch--;
+        if(saBatch < 1)   saBatch = 1;
+        rsAccW = 0;
+        rsAttW = 0;
+    }
+
     double lnH = 0.0;
-    for(size_t u = 0; u < intervalStart.size(); u++){
-        int i = lambdaIdx[u];
-        int j = muIdx[u];
-        double lam = lambda[i]->getValue();
-        double muv = mu[j]->getValue();
-        double d = lam - muv;
-        if(d <= 0.0)
-            return -std::numeric_limits<double>::infinity();
-        double t = muv / lam;
-        double tNew = t + turnoverStep * (rng.uniformRv() - 0.5);
-        while(tNew <= 0.0 || tNew >= 1.0){
-            if(tNew <= 0.0) tNew = -tNew;
-            if(tNew >= 1.0) tNew = 2.0 - tNew;
-        }
-        double lamNew = d / (1.0 - tNew);
-        double muNew = tNew * lamNew;
-        lambda[i]->scaleProposed(lamNew / lam);
-        mu[j]->scaleProposed(muNew / muv);
-        lnH += 2.0 * std::log(lamNew / lam);
+    if(lambdaField != nullptr){
+        double j = lambdaField->shiftRates(d);
+        if(std::isinf(j)) return -std::numeric_limits<double>::infinity();
+        lnH += j;
+    }else{
+        for(ParameterDouble* l : lambda)
+            if(l->getValue() + d <= 0.0)
+                return -std::numeric_limits<double>::infinity();
+        for(ParameterDouble* l : lambda)
+            l->shiftProposed(d);
     }
-    frAttW++;
-    if(frAttW >= 200){
-        turnoverStep *= std::exp((double)frAccW / frAttW - 0.3);
-        if(turnoverStep < 1e-3) turnoverStep = 1e-3;
-        if(turnoverStep > 0.9)  turnoverStep = 0.9;
-        frAccW = 0;
-        frAttW = 0;
+    if(muField != nullptr){
+        double j = muField->shiftRates(d);
+        if(std::isinf(j)) return -std::numeric_limits<double>::infinity();
+        lnH += j;
+    }else{
+        for(ParameterDouble* mv : mu)
+            if(mv->getValue() + d <= 0.0)
+                return -std::numeric_limits<double>::infinity();
+        for(ParameterDouble* mv : mu)
+            mv->shiftProposed(d);
     }
+
+    if(unresolvedFossils == nullptr)
+        return lnH;
+
+    bool toSA = (d < 0.0);
+    std::vector<int> pool;
+    int nOther = 0;
+    int nf = unresolvedFossils->getNumFossils();
+    for(int i = 0; i < nf; i++){
+        if(unresolvedFossils->saEligible(i) == false)
+            continue;
+        if(unresolvedFossils->isSA(i) == toSA) nOther++;
+        else                                   pool.push_back(i);
+    }
+    int B = saBatch;
+    if(B > (int)pool.size())
+        return -std::numeric_limits<double>::infinity();
+
+    for(int k = 0; k < B; k++){
+        int r = k + (int)(rng.uniformRv() * (double)(pool.size() - k));
+        std::swap(pool[k], pool[r]);
+        lnH += unresolvedFossils->flipSA(pool[k], toSA);
+    }
+    lnH += lnChoose((int)pool.size(), B) - lnChoose(nOther + B, B);
+    rebuildStalkIndex();
     return lnH;
 }
 
-// straddle count: intervals (lo<hi) with lo<zq<hi = #{lo<zq} - #{hi<=zq}
+double FBDTreeModel::lnChoose(int n, int k){
+    return std::lgamma((double)n + 1.0) - std::lgamma((double)k + 1.0) - std::lgamma((double)(n - k) + 1.0);
+}
+
+// crossing count: intervals (lo<hi) with lo<zq<hi = #{lo<zq} - #{hi<=zq}
 namespace {
 int countStraddling(const std::vector<double>& los, const std::vector<double>& his, double zq){
     int below = (int)(std::lower_bound(los.begin(), los.end(), zq) - los.begin());
@@ -669,8 +733,8 @@ double FBDTreeModel::update(void){
         RandomVariable::setActiveInstance(prevRng);
         return r;
     }
-    if(lambdaField == nullptr && muField == nullptr && lambda.size() >= 1 && mu.size() >= 1 && rng.uniformRv() < 0.10){
-        double r = doTurnoverMove();
+    if((lambdaField != nullptr || muField != nullptr) && rng.uniformRv() < 0.10){
+        double r = doRateShift();
         RandomVariable::setActiveInstance(prevRng);
         return r;
     }
@@ -721,7 +785,7 @@ double FBDTreeModel::update(void){
         computeAgeFloors(floors);
         t->setAgeFloors(floors);
     }
-    else if(updatedParameter == parameterTree && isResolved){
+    else if(updatedParameter == parameterTree && isResolved){ // Not deployed
         parameterTree->getTree()->setLastUpdateWasScale(false);
         double wNE = 10.0;
         double wWB = 10.0;
@@ -783,10 +847,14 @@ void FBDTreeModel::updateForAcceptance(void){
         azAcc++;
         return;
     }
-    if(lastMoveKind == MK_TURNOVER){
-        for(ParameterDouble* l : lambda) l->commitProposed();
-        for(ParameterDouble* m : mu) m->commitProposed();
-        frAccW++;
+    if(lastMoveKind == MK_RATESHIFT){
+        if(lambdaField != nullptr) lambdaField->commitProposed();
+        else for(ParameterDouble* l : lambda) l->commitProposed();
+        if(muField != nullptr) muField->commitProposed();
+        else for(ParameterDouble* m : mu) m->commitProposed();
+        if(unresolvedFossils != nullptr) unresolvedFossils->updateForAcceptance();
+        rsAccW++;
+        rsAcc++;
         return;
     }
     if(lastMoveKind == MK_RATEVEC){
@@ -822,9 +890,15 @@ void FBDTreeModel::updateForRejection(void){
         rebuildStalkIndex();
         return;
     }
-    if(lastMoveKind == MK_TURNOVER){
-        for(ParameterDouble* l : lambda) l->restoreProposed();
-        for(ParameterDouble* m : mu) m->restoreProposed();
+    if(lastMoveKind == MK_RATESHIFT){
+        if(lambdaField != nullptr) lambdaField->restoreProposed();
+        else for(ParameterDouble* l : lambda) l->restoreProposed();
+        if(muField != nullptr) muField->restoreProposed();
+        else for(ParameterDouble* m : mu) m->restoreProposed();
+        if(unresolvedFossils != nullptr){
+            unresolvedFossils->updateForRejection();
+            rebuildStalkIndex();
+        }
         return;
     }
     if(lastMoveKind == MK_RATEVEC){
@@ -855,8 +929,8 @@ void FBDTreeModel::updateForRejection(void){
 void FBDTreeModel::writeState(std::ostream& os){
     for(Parameter* p : parameters)
         p->writeState(os);
-    os << rateVecStep << ' ' << shrinkStep << ' ' << turnoverStep << ' ' << upDownStep << ' ' << upDownTotal << '\n';
-    os << rvAccW << ' ' << rvAttW << ' ' << seAccW << ' ' << seAttW << ' ' << frAccW << ' ' << frAttW << '\n';
+    os << rateVecStep << ' ' << shrinkStep << ' ' << shiftStep << ' ' << saBatch << ' ' << upDownStep << ' ' << upDownTotal << '\n';
+    os << rvAccW << ' ' << rvAttW << ' ' << seAccW << ' ' << seAttW << ' ' << rsAccW << ' ' << rsAttW << '\n';
     Serialize::writeBoolDeque(os, upDownRecent);
     for(int i = 0; i < TM_COUNT; i++) os << tmAcc[i] << ' ' << tmAtt[i] << ' ';
     os << '\n';
@@ -865,8 +939,8 @@ void FBDTreeModel::writeState(std::ostream& os){
 void FBDTreeModel::readState(std::istream& is){
     for(Parameter* p : parameters)
         p->readState(is);
-    is >> rateVecStep >> shrinkStep >> turnoverStep >> upDownStep >> upDownTotal;
-    is >> rvAccW >> rvAttW >> seAccW >> seAttW >> frAccW >> frAttW;
+    is >> rateVecStep >> shrinkStep >> shiftStep >> saBatch >> upDownStep >> upDownTotal;
+    is >> rvAccW >> rvAttW >> seAccW >> seAttW >> rsAccW >> rsAttW;
     Serialize::readBoolDeque(is, upDownRecent);
     for(int i = 0; i < TM_COUNT; i++) is >> tmAcc[i] >> tmAtt[i];
     cacheInit = false;

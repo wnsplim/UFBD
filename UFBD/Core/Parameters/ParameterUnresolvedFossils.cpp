@@ -210,6 +210,20 @@ double ParameterUnresolvedFossils::updateSampledAncestor(int i){
     return -std::log(range);
 }
 
+double ParameterUnresolvedFossils::flipSA(int i, bool toSA){
+    RandomVariable& rng = RandomVariable::randomVariableInstance();
+    double lo = getMinAttachAge(i);
+    double range = getMaxAttachAge(i) - lo;
+    if(toSA){
+        z[0][i] = y[0][i];
+        sa[0][i] = 1;
+        return -std::log(range);
+    }
+    z[0][i] = lo + rng.uniformRv() * range;
+    sa[0][i] = 0;
+    return std::log(range);
+}
+
 double ParameterUnresolvedFossils::scaleAllAttachAges(double m){
     lastMove = BULK;
     for(int i = 0; i < numFossils; i++){
@@ -247,8 +261,10 @@ void ParameterUnresolvedFossils::updateForAcceptance(void){
         y[1][flipS] = y[0][flipS]; z[1][flipS] = z[0][flipS]; sa[1][flipS] = sa[0][flipS];
         y[1][flipT] = y[0][flipT]; z[1][flipT] = z[0][flipT]; sa[1][flipT] = sa[0][flipT];
     }else if(lastMove == BULK){
-        for(int i = 0; i < numFossils; i++)
+        for(int i = 0; i < numFossils; i++){
             z[1][i] = z[0][i];
+            sa[1][i] = sa[0][i];
+        }
     }else{
         y[1][lastFossil] = y[0][lastFossil];
         z[1][lastFossil] = z[0][lastFossil];
@@ -268,8 +284,10 @@ void ParameterUnresolvedFossils::updateForRejection(void){
         sa[0][flipT] = sa[1][flipT] = flipTsa;
         spineIdx = flipS;
     }else if(lastMove == BULK){
-        for(int i = 0; i < numFossils; i++)
+        for(int i = 0; i < numFossils; i++){
             z[0][i] = z[1][i];
+            sa[0][i] = sa[1][i];
+        }
     }else{
         y[0][lastFossil] = y[1][lastFossil];
         z[0][lastFossil] = z[1][lastFossil];

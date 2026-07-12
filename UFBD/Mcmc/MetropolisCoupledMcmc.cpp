@@ -59,6 +59,14 @@ MetropolisCoupledMcmc::~MetropolisCoupledMcmc(void){
         delete p;
 }
 
+void MetropolisCoupledMcmc::printMoveDiagnostics(int rep){
+    for(size_t i = 0; i < models.size(); i++){
+        std::cout << "  run " << rep << " chain " << i
+                  << ((int)i == coldModelIdx ? " [cold]  " : " [heated]  ");
+        models[i]->print();
+    }
+}
+
 Tree* MetropolisCoupledMcmc::getTree(void){
     int i = (coldModelIdx >= 0) ? coldModelIdx : 0;
     return models[i]->getTree();

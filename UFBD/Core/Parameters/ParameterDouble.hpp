@@ -18,6 +18,7 @@ class ParameterDouble : public Parameter {
         double                      getValue(void) { return value[0]; } // 0 is the one we update, 1 is the one we don't (last currently accepted value)
         void                        setValue(double v) { value[0] = v; value[1] = v; }
         void                        scaleProposed(double c) { value[0] = value[1] * c; }
+        void                        shiftProposed(double d) { value[0] = value[1] + d; }
         void                        commitProposed(void) { value[1] = value[0]; }
         void                        restoreProposed(void) { value[0] = value[1]; }
         void                        setPrior(Probability::PriorFamily f, double p1, double p2);

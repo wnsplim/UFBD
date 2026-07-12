@@ -24,6 +24,11 @@ Mcmc::Mcmc(int ng, int thin, PhylogeneticModel* m) : model(m), numCycles(ng), th
     writeTrees = (treeOut.empty() == false && model->getTree()->getNumBackbone() > 0);
 }
 
+void Mcmc::printMoveDiagnostics(int rep) {
+    std::cout << "  run " << rep << "  ";
+    model->print();
+}
+
 Tree* Mcmc::getTree(void) { return model->getTree(); }
 bool Mcmc::treeHasFossils(void) { return model->treeIncludesFossils(); }
 

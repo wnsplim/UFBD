@@ -218,6 +218,9 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
         if(multiChain)
             std::cout << "  max R-hat " << std::setprecision(4) << worstRhat << " (" << worstRhatName << ")";
         std::cout << "  min per-chain ESS " << std::setprecision(0) << minEss << " (" << minEssName << ")\n";
+        if(s.getArLog())
+            for(size_t r = 0; r < replicates.size(); r++)
+                replicates[r]->printMoveDiagnostics((int)r);
         lastReportedGen = (long)gen;
     }
 

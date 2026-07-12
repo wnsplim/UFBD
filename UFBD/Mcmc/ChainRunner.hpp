@@ -29,6 +29,7 @@ class ChainRunner {
         virtual const std::vector<std::vector<double>>& latentColumns(void) { static std::vector<std::vector<double>> e; return e; }
         virtual const std::vector<std::string>& latentNames(void) { static std::vector<std::string> e; return e; }
         virtual bool                            treeHasFossils(void) { return false; }
+        virtual void                            printMoveDiagnostics(int rep) {}
         virtual void                            writeCheckpoint(void) {}
         virtual bool                            loadCheckpoint(void) { return false; }
         void                                    resumeOutputs(void);

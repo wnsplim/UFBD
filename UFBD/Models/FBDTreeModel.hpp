@@ -59,6 +59,7 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      calculateP0(double t);
         double                      calculateP0HatAt(int i, double t);
         double                      computeGamma(double z, int i);
+        static double               lnChoose(int n, int k);
         void                        buildEulerIndex(void);
         bool                        inSub(Node* node, Node* subtreeCrown);
         void                        buildZoneIndex(void);
@@ -82,7 +83,7 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      doSubtreeScale(void);
         double                      doRateVectorScale(void);
         double                      doRateShrinkExpand(void);
-        double                      doTurnoverMove(void);
+        double                      doRateShift(void);
         std::vector<ParameterDouble*>* pickIidRateVector(void);
         void                        enumeratePrunableRoots(Tree* t, std::vector<Node*>& roots);
         void                        enumerateSubtreeAttachEdges(Tree* t, std::vector<Node*>& crowns, std::vector<char>& isCrowns, std::vector<Node*>& origins, double rAge, double ceilingS, std::vector<Node*>& attachEdges, std::vector<double>& los, std::vector<double>& his);
@@ -131,8 +132,15 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<double>         c2HatVec;
         std::vector<double>         ePrevHat;
         double                      rhoVal;
-        enum MoveKind { MK_PARAM, MK_AZGIBBS, MK_TURNOVER, MK_RATEVEC, MK_UPDOWN, MK_JOINTSCALE };
+        enum MoveKind { MK_PARAM, MK_AZGIBBS, MK_RATESHIFT, MK_RATEVEC, MK_UPDOWN, MK_JOINTSCALE };
         MoveKind                    lastMoveKind;
+        double                      shiftStep;
+        int                         saBatch;
+        long                        rsAccW;
+        long                        rsAttW;
+        long                        rsAcc;
+        long                        rsTot;
+        long                        rsAdapt;
         bool                        lastRateVecScale;
         std::vector<ParameterDouble*>* lastRateVec;
         double                      rateVecStep;
@@ -145,9 +153,6 @@ class FBDTreeModel : public PhylogeneticModel {
         int                         lastTreeMove;
         long                        tmAcc[TM_COUNT];
         long                        tmAtt[TM_COUNT];
-        double                      turnoverStep;
-        long                        frAccW;
-        long                        frAttW;
         double                      upDownStep;
         int                         upDownTotal;
         std::deque<bool>            upDownRecent;

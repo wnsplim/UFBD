@@ -89,6 +89,37 @@ double ParameterShrinkageField::calibrateGlobalScale(int nBins, double priorNShi
     return zeta;
 }
 
+double ParameterShrinkageField::shiftRates(double d){
+    double rBar = 0.0;
+    for(int k = 0; k < nBins; k++)
+        rBar += rateVal[1][k];
+    rBar /= (double)nBins;
+    if(rBar + d <= 0.0)
+        return -INFINITY;
+    double c = (rBar + d) / rBar;
+    anchor[0] = anchor[1] + std::log(c);
+    delta[0] = delta[1];
+    for(int k = 0; k < nBins; k++)
+        rateVal[0][k] = rateVal[1][k] * c;
+    return std::log(rBar) - std::log(rBar + d);
+}
+
+void ParameterShrinkageField::commitProposed(void){
+    anchor[1] = anchor[0];
+    gamma[1] = gamma[0];
+    delta[1] = delta[0];
+    sigma[1] = sigma[0];
+    rateVal[1] = rateVal[0];
+}
+
+void ParameterShrinkageField::restoreProposed(void){
+    anchor[0] = anchor[1];
+    gamma[0] = gamma[1];
+    delta[0] = delta[1];
+    sigma[0] = sigma[1];
+    rateVal[0] = rateVal[1];
+}
+
 double ParameterShrinkageField::halfCauchyLnP(double x, double scale){
     if(x <= 0.0)
         return -INFINITY;
