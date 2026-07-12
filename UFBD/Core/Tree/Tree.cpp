@@ -121,8 +121,8 @@ Node* Tree::addOriginNode(double x0) {
     return originNode;
 }
 
-Node* Tree::insertFossilTip(Node* hostChild, std::string name, double y, double z){
-    Node* hostParent = hostChild->getAncestor();
+Node* Tree::insertFossilTip(Node* attachChild, std::string name, double y, double z){
+    Node* attachParent = attachChild->getAncestor();
 
     Node* split = addNode();
     split->setIsTip(false);
@@ -135,16 +135,16 @@ Node* Tree::insertFossilTip(Node* hostChild, std::string name, double y, double 
     fossil->setName(name);
     fossil->setTime(y);
 
-    hostParent->removeNeighbor(hostChild);
-    hostChild->removeNeighbor(hostParent);
+    attachParent->removeNeighbor(attachChild);
+    attachChild->removeNeighbor(attachParent);
 
-    hostParent->addNeighbor(split);
-    split->addNeighbor(hostParent);
-    split->setAncestor(hostParent);
+    attachParent->addNeighbor(split);
+    split->addNeighbor(attachParent);
+    split->setAncestor(attachParent);
 
-    split->addNeighbor(hostChild);
-    hostChild->addNeighbor(split);
-    hostChild->setAncestor(split);
+    split->addNeighbor(attachChild);
+    attachChild->addNeighbor(split);
+    attachChild->setAncestor(split);
 
     split->addNeighbor(fossil);
     fossil->addNeighbor(split);
@@ -221,7 +221,7 @@ double Tree::getBranchLength(Node* e1, Node* e2) {
 
 
 // slow O(N) reference gamma-count, kept only for ref
-int Tree::getNumLineagesAtTime(double t){
+int Tree::getNumEdgesAtTime(double t){
     std::set<Node*> branchesContainingFossils;
     branchesContainingFossils.clear();
     for(Node* n :downPassSequence){

@@ -31,9 +31,11 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
     y[1].resize(numFossils);
     z[0].resize(numFossils);
     z[1].resize(numFossils);
-    lz[0].assign(numFossils, 0);
-    lz[1].assign(numFossils, 0);
-    lzDomain.assign(numFossils, std::vector<int>(1, 0));
+    sa[0].assign(numFossils, 0);
+    sa[1].assign(numFossils, 0);
+    az[0].assign(numFossils, 0);
+    az[1].assign(numFossils, 0);
+    azDomain.assign(numFossils, std::vector<int>(1, 0));
 
     for(int i = 0; i < numFossils; i++){
         Fossil& f = fossils[i];
@@ -66,23 +68,18 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
     }
 
     if(backbone->getNumBackbone() == 0 && numFossils > 0 && originAge != nullptr){
-        double bestY = INFINITY;
-        for(int i = 0; i < numFossils; i++)
-            if(y[0][i] < bestY)
-                bestY = y[0][i];
-        std::vector<int> tied;
-        for(int i = 0; i < numFossils; i++)
-            if(y[0][i] == bestY)
-                tied.push_back(i);
-        spineIdx = tied[(int)(rng.uniformRv() * (int)tied.size())];
+        spineIdx = 0;
+        for(int i = 1; i < numFossils; i++)
+            if(y[0][i] < y[0][spineIdx])
+                spineIdx = i;
     }
 }
 
-void ParameterUnresolvedFossils::setLandingZoneDomain(std::vector<std::vector<int> >& domain){
-    lzDomain = domain;
+void ParameterUnresolvedFossils::setAttachmentZoneDomain(std::vector<std::vector<int> >& domain){
+    azDomain = domain;
     for(int i = 0; i < numFossils; i++){
-        lz[0][i] = lzDomain[i][0];
-        lz[1][i] = lzDomain[i][0];
+        az[0][i] = azDomain[i][0];
+        az[1][i] = azDomain[i][0];
     }
 }
 
@@ -119,7 +116,7 @@ double ParameterUnresolvedFossils::updateFossilAge(int i){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
 
     if(spineIdx < 0){
-        if(z[0][i] == y[0][i]){
+        if(sa[0][i]){
             double ceiling = getMaxAttachAge(i);
             double saHi = (yMax[i] < ceiling) ? yMax[i] : ceiling;
             y[0][i] = yMin[i] + rng.uniformRv() * (saHi - yMin[i]);
@@ -132,7 +129,7 @@ double ParameterUnresolvedFossils::updateFossilAge(int i){
     }
 
     int Sold = spineIdx;
-    bool iWasSA = (getAttachAge(i) == y[0][i]);
+    bool iWasSA = (sa[0][i] != 0);
     double yiNew = yMin[i] + rng.uniformRv() * (yMax[i] - yMin[i]);
     int Snew = i;
     double bestY = yiNew;
@@ -155,7 +152,7 @@ double ParameterUnresolvedFossils::updateFossilAge(int i){
         }
         return 0.0;
     }
-    bool SnewWasSA = (z[0][Snew] == y[0][Snew]);
+    bool SnewWasSA = (sa[0][Snew] != 0);
     double ynewSold = (i == Sold) ? yiNew : y[0][Sold];
     double zSold;
     if(SnewWasSA){
@@ -172,8 +169,12 @@ double ParameterUnresolvedFossils::updateFossilAge(int i){
     flipSz = z[0][Sold];
     flipTy = y[0][Snew];
     flipTz = z[0][Snew];
+    flipSsa = sa[0][Sold];
+    flipTsa = sa[0][Snew];
     y[0][i] = yiNew;
     z[0][Sold] = zSold;
+    sa[0][Sold] = SnewWasSA ? 1 : 0;
+    sa[0][Snew] = 0;
     spineIdx = Snew;
     return 0.0;
 }
@@ -181,7 +182,7 @@ double ParameterUnresolvedFossils::updateFossilAge(int i){
 double ParameterUnresolvedFossils::updateAttachAge(int i){
     if(i == spineIdx)
         return 0.0;
-    if(z[0][i] == y[0][i])
+    if(sa[0][i])
         return 0.0;
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     double lo = getMinAttachAge(i);
@@ -199,25 +200,27 @@ double ParameterUnresolvedFossils::updateSampledAncestor(int i){
     double range = hi - lo;
     if(range <= 0.0)
         return -INFINITY;
-    if(z[0][i] == y[0][i]){
+    if(sa[0][i]){
         z[0][i] = lo + rng.uniformRv() * range;
+        sa[0][i] = 0;
         return std::log(range);
     }
     z[0][i] = y[0][i];
+    sa[0][i] = 1;
     return -std::log(range);
 }
 
 double ParameterUnresolvedFossils::scaleAllAttachAges(double m){
     lastMove = BULK;
     for(int i = 0; i < numFossils; i++){
-        if(i == spineIdx || z[0][i] == y[0][i])
+        if(i == spineIdx || sa[0][i])
             continue;
         if(z[0][i] * m < y[0][i])
             return -INFINITY;
     }
     int count = 0;
     for(int i = 0; i < numFossils; i++){
-        if(i == spineIdx || z[0][i] == y[0][i])
+        if(i == spineIdx || sa[0][i])
             continue;
         z[0][i] *= m;
         count++;
@@ -241,15 +244,16 @@ void ParameterUnresolvedFossils::updateForAcceptance(void){
     if(numFossils == 0)
         return;
     if(lastMove == FLIP){
-        y[1][flipS] = y[0][flipS]; z[1][flipS] = z[0][flipS];
-        y[1][flipT] = y[0][flipT]; z[1][flipT] = z[0][flipT];
+        y[1][flipS] = y[0][flipS]; z[1][flipS] = z[0][flipS]; sa[1][flipS] = sa[0][flipS];
+        y[1][flipT] = y[0][flipT]; z[1][flipT] = z[0][flipT]; sa[1][flipT] = sa[0][flipT];
     }else if(lastMove == BULK){
         for(int i = 0; i < numFossils; i++)
             z[1][i] = z[0][i];
     }else{
         y[1][lastFossil] = y[0][lastFossil];
         z[1][lastFossil] = z[0][lastFossil];
-        lz[1][lastFossil] = lz[0][lastFossil];
+        sa[1][lastFossil] = sa[0][lastFossil];
+        az[1][lastFossil] = az[0][lastFossil];
     }
 }
 
@@ -260,6 +264,8 @@ void ParameterUnresolvedFossils::updateForRejection(void){
     if(lastMove == FLIP){
         y[0][flipS] = flipSy; z[0][flipS] = flipSz; y[1][flipS] = flipSy; z[1][flipS] = flipSz;
         y[0][flipT] = flipTy; z[0][flipT] = flipTz; y[1][flipT] = flipTy; z[1][flipT] = flipTz;
+        sa[0][flipS] = sa[1][flipS] = flipSsa;
+        sa[0][flipT] = sa[1][flipT] = flipTsa;
         spineIdx = flipS;
     }else if(lastMove == BULK){
         for(int i = 0; i < numFossils; i++)
@@ -267,24 +273,28 @@ void ParameterUnresolvedFossils::updateForRejection(void){
     }else{
         y[0][lastFossil] = y[1][lastFossil];
         z[0][lastFossil] = z[1][lastFossil];
-        lz[0][lastFossil] = lz[1][lastFossil];
+        sa[0][lastFossil] = sa[1][lastFossil];
+        az[0][lastFossil] = az[1][lastFossil];
     }
 }
 
 void ParameterUnresolvedFossils::writeState(std::ostream& os){
     Serialize::writeVec(os, y[1]);
     Serialize::writeVec(os, z[1]);
-    Serialize::writeIVec(os, lz[1]);
+    Serialize::writeCVec(os, sa[1]);
+    Serialize::writeIVec(os, az[1]);
     os << spineIdx << ' ' << numAcceptances << ' ' << numRejections << '\n';
 }
 
 void ParameterUnresolvedFossils::readState(std::istream& is){
     Serialize::readVec(is, y[1]);
     Serialize::readVec(is, z[1]);
-    Serialize::readIVec(is, lz[1]);
+    Serialize::readCVec(is, sa[1]);
+    sa[0] = sa[1];
+    Serialize::readIVec(is, az[1]);
     y[0] = y[1];
     z[0] = z[1];
-    lz[0] = lz[1];
+    az[0] = az[1];
     is >> spineIdx >> numAcceptances >> numRejections;
 }
 

@@ -36,12 +36,12 @@ struct SimResult {
 class ForwardSimulator {
 
     public:
-                        ForwardSimulator(RandomVariable* r) : rng(r), maxLineages(100000) {}
+                        ForwardSimulator(RandomVariable* r) : rng(r), maxActiveEdges(100000) {}
         SimResult       simulate(const SimParams& p);
 
     private:
         RandomVariable* rng;
-        int             maxLineages;
+        int             maxActiveEdges;
 };
 
 #endif

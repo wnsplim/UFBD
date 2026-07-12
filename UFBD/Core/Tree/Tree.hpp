@@ -33,7 +33,7 @@ class Tree {
         Node*                               getBackboneParent(Node* n);
         const std::vector<Node*>&           getBackboneChildren(Node* n);
         bool                                isBackboneNode(Node* n);
-        int                                 getNumLineagesAtTime(double t);
+        int                                 getNumEdgesAtTime(double t);
         bool                                isSATip(Node* n);
         bool                                isFakeSplit(Node* n);
         int                                 getNumNodes(void) { return (int)nodes.size(); }
@@ -62,7 +62,7 @@ class Tree {
         double                              updateFossilTipAge(Node* n);
         void                                setLastUpdateWasScale(bool b) { lastUpdateWasScale = b; }
         void                                assignStartingAges(const std::map<Node*,double>& minAges, double unit);
-        Node*                               insertFossilTip(Node* hostChild, std::string name, double y, double z);
+        Node*                               insertFossilTip(Node* attachChild, std::string name, double y, double z);
         void                                setAgeFloors(const std::map<Node*,double>& f) { ageFloors = f; }
         void                                print(void);
         void                                print(std::string header);

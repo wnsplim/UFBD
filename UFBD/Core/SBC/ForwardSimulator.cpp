@@ -176,8 +176,8 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
                 active[k] = c;
             }
             curAge = nextAge;
-            if((int)active.size() > maxLineages)
-                Msg::error("tree exceeded " + std::to_string(maxLineages) + " lineages (lambda=" + std::to_string(lam) + ", mu=" + std::to_string(m) + ", x0=" + std::to_string(p.startAge) + "); net diversification likely too high for the origin age.");
+            if((int)active.size() > maxActiveEdges)
+                Msg::error("tree exceeded " + std::to_string(maxActiveEdges) + " edges (lambda=" + std::to_string(lam) + ", mu=" + std::to_string(m) + ", x0=" + std::to_string(p.startAge) + "); net diversification likely too high for the origin age.");
         }
 
         for(SimNode* n : active){

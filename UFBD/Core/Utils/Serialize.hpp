@@ -29,6 +29,16 @@ inline void readIVec(std::istream& is, std::vector<int>& v) {
     for(size_t i = 0; i < n; i++) is >> v[i];
 }
 
+inline void writeCVec(std::ostream& os, const std::vector<char>& v) {
+    os << v.size();
+    for(char x : v) os << ' ' << (int)x;
+    os << '\n';
+}
+inline void readCVec(std::istream& is, std::vector<char>& v) {
+    size_t n; is >> n; v.resize(n);
+    for(size_t i = 0; i < n; i++){ int x; is >> x; v[i] = (char)x; }
+}
+
 inline void writeLVec(std::ostream& os, const std::vector<long>& v) {
     os << v.size();
     for(long x : v) os << ' ' << x;

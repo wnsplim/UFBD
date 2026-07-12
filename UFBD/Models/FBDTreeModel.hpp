@@ -62,15 +62,15 @@ class FBDTreeModel : public PhylogeneticModel {
         void                        buildEulerIndex(void);
         bool                        inSub(Node* node, Node* subtreeCrown);
         void                        buildZoneIndex(void);
-        double                      zoneBackboneLineages(int mz, double z);
+        double                      zoneBackboneEdges(int mz, double z);
         void                        rebuildStalkIndex(void);
-        double                      doLandingZoneGibbs(void);
-        double                      doLandingZoneJump(int i);
+        double                      doAttachmentZoneGibbs(void);
+        double                      doAttachmentZoneJump(int i);
         double                      validZoneSet(int i, int a, std::vector<std::pair<double,double> >& iv);
         void                        updateGammaCache(void);
         void                        computeAgeFloors(std::map<Node*,double>& floors);
         void                        resolveFossils(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils);
-        void                        enumerateFossilHosts(Tree* t, Node* crown, Node* origin, bool isCrown, double y, std::vector<Node*>& hosts, std::vector<double>& los, std::vector<double>& his);
+        void                        enumerateFossilAttachEdges(Tree* t, Node* crown, Node* origin, bool isCrown, double y, std::vector<Node*>& attachEdges, std::vector<double>& los, std::vector<double>& his);
         int                         fossilIndexByName(const std::string& nm);
         double                      doWilsonBalding(void);
         double                      doNarrowExchange(void);
@@ -85,7 +85,7 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      doTurnoverMove(void);
         std::vector<ParameterDouble*>* pickIidRateVector(void);
         void                        enumeratePrunableRoots(Tree* t, std::vector<Node*>& roots);
-        void                        enumerateSubtreeHosts(Tree* t, std::vector<Node*>& crowns, std::vector<char>& isCrowns, std::vector<Node*>& origins, double rAge, double ceilingS, std::vector<Node*>& hosts, std::vector<double>& los, std::vector<double>& his);
+        void                        enumerateSubtreeAttachEdges(Tree* t, std::vector<Node*>& crowns, std::vector<char>& isCrowns, std::vector<Node*>& origins, double rAge, double ceilingS, std::vector<Node*>& attachEdges, std::vector<double>& los, std::vector<double>& his);
         bool                        subtreeFossilsValidAt(Tree* t, Node* s, Node* g);
         bool                        subtreeAllFossil(Node* n);
         double                      lambdaAt(int i);
@@ -131,7 +131,7 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<double>         c2HatVec;
         std::vector<double>         ePrevHat;
         double                      rhoVal;
-        enum MoveKind { MK_PARAM, MK_LZGIBBS, MK_TURNOVER, MK_RATEVEC, MK_UPDOWN, MK_JOINTSCALE };
+        enum MoveKind { MK_PARAM, MK_AZGIBBS, MK_TURNOVER, MK_RATEVEC, MK_UPDOWN, MK_JOINTSCALE };
         MoveKind                    lastMoveKind;
         bool                        lastRateVecScale;
         std::vector<ParameterDouble*>* lastRateVec;
@@ -177,10 +177,10 @@ class FBDTreeModel : public PhylogeneticModel {
         };
         std::vector<StalkBucket>    zoneStalks;
         bool                        zoneIndexBuilt = false;
-        std::vector<int>            prevLandingZone;
-        std::vector<int>            lzGibbsIdx;
-        long                        lzAcc;
-        long                        lzAtt;
+        std::vector<int>            prevAttachmentZone;
+        std::vector<int>            azGibbsIdx;
+        long                        azAcc;
+        long                        azAtt;
 };
 
 

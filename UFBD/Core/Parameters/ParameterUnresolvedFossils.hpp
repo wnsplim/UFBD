@@ -23,16 +23,16 @@ class ParameterUnresolvedFossils : public Parameter {
         double                      getYMin(int i) { return yMin[i]; }
         double                      getYMax(int i) { return yMax[i]; }
         bool                        isUE(int i) { return ue[i]; }
-        bool                        isSA(int i) { return ue[i] == false && getAttachAge(i) == y[0][i]; }
+        bool                        isSA(int i) { return sa[0][i] != 0; }
         int                         getNumSampledAncestors(void) { int n = 0; for(int i = 0; i < numFossils; i++) if(isSA(i)) n++; return n; }
         int                         getSpineIdx(void) { return spineIdx; }
-        int                         getLandingZone(int i) { return lz[0][i]; }
-        std::vector<int>&           getLandingZoneDomain(int i) { return lzDomain[i]; }
-        void                        initLandingZone(int i, int v) { lz[0][i] = v; lz[1][i] = v; }
-        void                        setLandingZone(int i, int v) { lz[0][i] = v; }
+        int                         getAttachmentZone(int i) { return az[0][i]; }
+        std::vector<int>&           getAttachmentZoneDomain(int i) { return azDomain[i]; }
+        void                        initAttachmentZone(int i, int v) { az[0][i] = v; az[1][i] = v; }
+        void                        setAttachmentZone(int i, int v) { az[0][i] = v; }
         void                        setAttachAge(int i, double v) { z[0][i] = v; }
-        void                        beginLandingZoneMove(int i) { lastFossil = i; lastMove = SINGLE; }
-        void                        setLandingZoneDomain(std::vector<std::vector<int> >& domain);
+        void                        beginAttachmentZoneMove(int i) { lastFossil = i; lastMove = SINGLE; }
+        void                        setAttachmentZoneDomain(std::vector<std::vector<int> >& domain);
         Node*                       getCrownNode(int i) { return crownNode[i]; }
         Node*                       getMaxAttachNode(int i) { return isCrown[i] ? crownNode[i] : originNode[i]; }
         bool                        getIsCrown(int i) { return isCrown[i]; }
@@ -66,8 +66,9 @@ class ParameterUnresolvedFossils : public Parameter {
         std::vector<char>           ue;
         std::vector<double>         y[2]; // 0 = working (scored), 1 = last accepted
         std::vector<double>         z[2];
-        std::vector<int>            lz[2];
-        std::vector<std::vector<int> > lzDomain;
+        std::vector<char>           sa[2];
+        std::vector<int>            az[2];
+        std::vector<std::vector<int> > azDomain;
         int                         lastFossil;
         int                         spineIdx;
         MoveKind                    lastMove;
@@ -77,6 +78,8 @@ class ParameterUnresolvedFossils : public Parameter {
         double                      flipSz;
         double                      flipTy;
         double                      flipTz;
+        char                        flipSsa;
+        char                        flipTsa;
         int                         numAcceptances;
         int                         numRejections;
 };
