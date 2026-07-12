@@ -19,6 +19,7 @@ class SequenceCTMCModel {
                                         SequenceCTMCModel(PhylogeneticModel* owner, const std::string& sequenceFile, const std::string& partitionFile, int nStates, int numCats);
         void                            buildParameters(void);
         double                          computeLnL(Tree* tree, const std::vector<std::vector<double> >& branchRates, const std::vector<std::vector<BranchMGF> >& branchMGF);
+        void                            invalidateCache(void);
         double                          lnPrior(void);
         double                          update(void);
         void                            updateForAcceptance(void);

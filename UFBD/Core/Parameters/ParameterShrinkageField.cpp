@@ -2,7 +2,10 @@
 #include <limits>
 #include <vector>
 
+#include "Msg.hpp"
 #include "ParameterShrinkageField.hpp"
+
+#include <mutex>
 #include "PhylogeneticModel.hpp"
 #include "Probability.hpp"
 #include "RandomVariable.hpp"
@@ -45,8 +48,10 @@ ParameterShrinkageField::ParameterShrinkageField(double prob, PhylogeneticModel*
 }
 
 double ParameterShrinkageField::calibrateGlobalScale(int nBins, double priorNShifts, double shiftSize){
+    static std::mutex          cMtx;
     static std::vector<int>    cN;
     static std::vector<double> cPn, cSs, cZ;
+    std::lock_guard<std::mutex> cLock(cMtx);
     for(size_t i = 0; i < cN.size(); i++)
         if(cN[i] == nBins && cPn[i] == priorNShifts && cSs[i] == shiftSize)
             return cZ[i];
@@ -90,6 +95,7 @@ double ParameterShrinkageField::calibrateGlobalScale(int nBins, double priorNShi
 }
 
 double ParameterShrinkageField::shiftRates(double d){
+    lastMove = 0;
     double rBar = 0.0;
     for(int k = 0; k < nBins; k++)
         rBar += rateVal[1][k];
@@ -203,6 +209,8 @@ double ParameterShrinkageField::ellipticalSliceDelta(void){
     double theta = 2.0 * PI * rng.uniformRv();
     double tmin = theta - 2.0 * PI;
     double tmax = theta;
+    if(std::isfinite(lnL0) == false)
+        Msg::error("elliptical slice sampler: the current state has zero likelihood");
     while(true){
         double c = std::cos(theta);
         double s = std::sin(theta);

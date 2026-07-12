@@ -70,9 +70,11 @@ double ParameterDouble::updateBactrianScale(){
     double delta = m + Probability::Normal::rv(&rng) * s;
     if(Probability::Uniform::rv(&rng, 0.0, 1.0) < 0.5)
         delta = -delta;
-    double logScale = windowSize * delta;
-    value[0] = value[1] * std::exp(logScale);
-    return logScale;
+    double v = value[1] * std::exp(windowSize * delta);
+    if(v > upperBound)
+        v = upperBound * upperBound / v;
+    value[0] = v;
+    return std::log(v / value[1]);
 }
 
 void ParameterDouble::updateForAcceptance(void) {

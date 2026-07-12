@@ -1,3 +1,4 @@
+#include <cstdio>
 #include "FBDInput.hpp"
 #include "Msg.hpp"
 #include "Node.hpp"
@@ -64,25 +65,26 @@ static std::string extractNewick(std::string content){
     std::string lower(content);
     for(char& ch : lower) ch = (char)std::tolower((unsigned char)ch);
     bool nexus = (lower.find("#nexus") != std::string::npos) || (lower.find("begin trees") != std::string::npos);
-    if(nexus == false)
-        return content;
 
     std::map<std::string,std::string> tr;
-    size_t searchStart = lower.find("begin trees");
-    if(searchStart == std::string::npos) searchStart = 0;
-    size_t tpos = lower.find("translate", searchStart);
-    if(tpos != std::string::npos){
-        size_t semi = content.find(';', tpos);
-        std::string body = content.substr(tpos + 9, (semi == std::string::npos ? content.size() : semi) - (tpos + 9));
-        std::stringstream bs(body);
-        std::string entry;
-        while(std::getline(bs, entry, ',')){
-            std::stringstream es(entry);
-            std::string key, name;
-            es >> key >> name;
-            if(key.empty() == false && name.empty() == false) tr[key] = name;
+    size_t searchStart = 0;
+    if(nexus){
+        searchStart = lower.find("begin trees");
+        if(searchStart == std::string::npos) searchStart = 0;
+        size_t tpos = lower.find("translate", searchStart);
+        if(tpos != std::string::npos){
+            size_t semi = content.find(';', tpos);
+            std::string body = content.substr(tpos + 9, (semi == std::string::npos ? content.size() : semi) - (tpos + 9));
+            std::stringstream bs(body);
+            std::string entry;
+            while(std::getline(bs, entry, ',')){
+                std::stringstream es(entry);
+                std::string key, name;
+                es >> key >> name;
+                if(key.empty() == false && name.empty() == false) tr[key] = name;
+            }
+            if(semi != std::string::npos) searchStart = semi + 1;
         }
-        if(semi != std::string::npos) searchStart = semi + 1;
     }
     size_t lp = content.find('(', searchStart);
     size_t semi = (lp == std::string::npos) ? std::string::npos : content.find(';', lp);
@@ -222,6 +224,17 @@ void FBDInput::assignFossilAwareAges(void){
     }
     tree->assignStartingAges(minAges, unit);
 
+    if(getenv("FBD_CHK_INIT") != nullptr){
+        fprintf(stderr, "[init] maxFossil=%g numInternal=%d unit=%g  minAges:%d anchors\n", maxBound, numInternal, unit, (int)minAges.size());
+        for(std::map<Node*,double>::iterator it = minAges.begin(); it != minAges.end(); ++it)
+            fprintf(stderr, "[init]   anchor off=%d  floor=%g  -> age after assign=%g\n", it->first->getOffset(), it->second, it->first->getTime());
+        fprintf(stderr, "[init] crown off=%d age=%g | crown->anc off=%d age=%g | root off=%d age=%g\n",
+                tree->getCrown()->getOffset(), tree->getCrown()->getTime(),
+                (tree->getCrown()->getAncestor() != nullptr) ? tree->getCrown()->getAncestor()->getOffset() : -1,
+                (tree->getCrown()->getAncestor() != nullptr) ? tree->getCrown()->getAncestor()->getTime() : -1.0,
+                tree->getRoot()->getOffset(), tree->getRoot()->getTime());
+    }
+
     UserSettings& us = UserSettings::userSettings();
     if(us.getConditionAgePriorSet()){
         bool origin  = (us.getConditioning() == Conditioning::ORIGIN);
@@ -231,7 +244,7 @@ void FBDInput::assignFossilAwareAges(void){
             Msg::error("conditioning age prior lower bound (" + std::to_string(hi) + ") is younger than the oldest fossil (" + std::to_string(maxBound) + ")");
         double mean = Probability::priorMean(us.getConditionAgePrior(), us.getConditionAgePriorP1(), us.getConditionAgePriorP2());
         double target = origin ? 0.9 * mean : mean;
-        if(origin == false && target < maxBound)
+        if(target < maxBound)
             target = bounded ? hi : (maxBound * 1.05);
         double cur = tree->getCrown()->getTime();
         if(cur > 0.0)

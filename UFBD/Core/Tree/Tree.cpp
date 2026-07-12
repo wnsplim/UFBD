@@ -7,6 +7,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -179,6 +180,7 @@ void Tree::clone(const Tree& t) {
         p->setFlag(q->getFlag());
         p->setTime(q->getTime());
         p->setIsFossil(q->getIsFossil());
+        p->setIsSA(q->getIsSA());
         p->setFossilAgeRange(q->getFossilYMin(), q->getFossilYMax());
         if (q->getAncestor() != nullptr)
             p->setAncestor( this->nodes[q->getAncestor()->getOffset()] );
@@ -189,7 +191,12 @@ void Tree::clone(const Tree& t) {
         for (Node* qn : qNeighbors)
             p->addNeighbor( this->nodes[qn->getOffset()] );
         }
-        
+
+    this->ageFloors.clear();
+    for(std::map<Node*,double>::const_iterator it = t.ageFloors.begin(); it != t.ageFloors.end(); ++it)
+        this->ageFloors[this->nodes[it->first->getOffset()]] = it->second;
+    this->lastUpdateWasScale = t.lastUpdateWasScale;
+
     initializeDownPassSequence();
 }
 
@@ -658,6 +665,8 @@ void Tree::initializeDownPassSequence(void) {
 }
 
 void Tree::initializeTimes(void){
+    if(getenv("FBD_CHK_INIT") != nullptr)
+        fprintf(stderr, "[times] initializeTimes() called on tree %p (%d nodes)\n", (void*)this, (int)nodes.size());
     initializeDownPassSequence();
     std::map<Node*,double> noMinAges;
     assignStartingAges(noMinAges, 1.0);
@@ -830,7 +839,7 @@ double Tree::update(double scaleLambda){
 }
 
 bool Tree::isSATip(Node* n){
-    return n->getIsTip() && n->getIsFossil() && n->getAncestor() != n && n->getAncestor()->getTime() == n->getTime();
+    return n->getIsTip() && n->getIsFossil() && n->getAncestor() != n && n->getIsSA();
 }
 
 bool Tree::isFakeSplit(Node* n){

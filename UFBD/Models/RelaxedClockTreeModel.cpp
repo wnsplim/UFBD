@@ -83,6 +83,11 @@ RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades
     RandomVariable::setActiveInstance(prevRng);
 }
 
+void RelaxedClockTreeModel::invalidateLikelihoodCache(void){
+    if(ctmc != nullptr)
+        ctmc->invalidateCache();
+}
+
 double RelaxedClockTreeModel::lnLikelihood(void){
     if(ctmc == nullptr){
         return lik->computeLnL(fbd->getTree(), clock->getAbsoluteRates());

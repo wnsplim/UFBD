@@ -142,6 +142,7 @@ class BranchRateModel : public Parameter {
         std::vector<double>         cdStepNode;
         std::vector<long>           cdAccNode;
         std::vector<long>           cdAttNode;
+        std::vector<long>           cdTotNode;
         int                         lastCdNode;
         std::vector<int>            cdNodes;
         double                      sdStep;
@@ -157,9 +158,11 @@ class BranchRateModel : public Parameter {
         double                      ncStep;
         long                        ncAccW;
         long                        ncAttW;
+        long                        ncAtt;
         std::vector<std::vector<double>> sigTauL;
         std::vector<std::vector<double>> sigEllB;
         long                        sigRefresh;
+        std::vector<long>           sigCount;
 };
 
 class ParameterBranchRates : public BranchRateModel {

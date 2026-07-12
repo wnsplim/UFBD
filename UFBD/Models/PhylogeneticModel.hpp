@@ -24,6 +24,7 @@ class PhylogeneticModel {
         RandomVariable*                         getRng(void) { return &rng; }
         const Parameter*                        getUpdatedParameter(void) { return updatedParameter; };
         virtual double                          lnLikelihood(void) = 0;
+        virtual void                            invalidateLikelihoodCache(void) {}
         virtual double                          lnPriorProbability(void) = 0;
         virtual void                            print(void) = 0;
         virtual double                          update(void) = 0;

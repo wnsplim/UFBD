@@ -87,6 +87,9 @@ double SequenceLikelihood::computeLnL(Tree* tree,
     return lnL;
 }
 
+long SequenceLikelihood::ninfBl = 0;
+long SequenceLikelihood::ninfSite = 0;
+
 double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
                                       const std::vector<std::vector<double>>& branchRates,
                                       const std::vector<std::vector<double>>& exchangeability,
@@ -100,6 +103,17 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
     int n = numStates;
     int numNodes = tree->getNumNodes();
     int full = (1 << n) - 1;
+
+    std::vector<double> curBl(numNodes, 0.0);
+    for(Node* node : downPass){
+        if(node == root || tree->isBackboneNode(node) == false) continue;
+        int off = node->getOffset();
+        curBl[off] = branchRates[p][off] * (tree->getBackboneParent(node)->getTime() - node->getTime());
+        if(curBl[off] < 0.0){
+            ninfBl++;
+            return -std::numeric_limits<double>::infinity();
+        }
+    }
     {
         bool substDirty = (cacheValid == false) || (exchangeability[p] != lastExch[p]) || (frequency[p] != lastFreq[p]) || (alpha[p] != lastAlpha[p]) || (proportionInvariant[p] != lastPinv[p]);
         if((cacheValid == false) || (exchangeability[p] != lastExch[p]) || (frequency[p] != lastFreq[p]))
@@ -117,15 +131,6 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
             for(double& r : cat) r /= (1.0 - pinv);
         int K = (int)cat.size();
         int npat = (int)patternWeight[p].size();
-
-        std::vector<double> curBl(numNodes, 0.0);
-        for(Node* node : downPass){
-            if(node == root || tree->isBackboneNode(node) == false) continue;
-            int off = node->getOffset();
-            curBl[off] = branchRates[p][off] * (tree->getBackboneParent(node)->getTime() - node->getTime());
-            if(curBl[off] < 0.0)
-                return -std::numeric_limits<double>::infinity();
-        }
 
         std::vector<char> dirty(numNodes, 0);
         std::vector<Node*> dirtyNodes;
@@ -212,17 +217,20 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
             ThreadPool::current().parallelFor(OP_CTMC, npat, patBody);
         else
             patBody(0, npat);
-        double lnL = 0.0;
-        for(int h = 0; h < npat; h++){
-            if(siteLn[h] == -std::numeric_limits<double>::infinity())
-                return -std::numeric_limits<double>::infinity();
-            lnL += siteLn[h];
-        }
         lastBl[p] = curBl;
         lastExch[p] = exchangeability[p];
         lastFreq[p] = frequency[p];
         lastAlpha[p] = alpha[p];
         lastPinv[p] = proportionInvariant[p];
+
+        double lnL = 0.0;
+        for(int h = 0; h < npat; h++){
+            if(siteLn[h] == -std::numeric_limits<double>::infinity()){
+                ninfSite++;
+                return -std::numeric_limits<double>::infinity();
+            }
+            lnL += siteLn[h];
+        }
         return lnL;
     }
 }

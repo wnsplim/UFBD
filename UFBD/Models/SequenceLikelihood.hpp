@@ -48,6 +48,11 @@ class SequenceLikelihood {
         std::vector<std::vector<std::vector<int>>>   tipStateByOffset;
 
         bool                                            cacheValid;
+    public:
+        void                                            invalidateCache(void) { cacheValid = false; }
+        static long                                     ninfBl;
+        static long                                     ninfSite;
+    private:
         std::vector<std::vector<std::vector<double>>>   conP;
         std::vector<std::vector<double>>                lastBl;
         std::vector<std::vector<double>>                lastExch;

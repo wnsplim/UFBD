@@ -136,6 +136,7 @@ class FBDTreeModel : public PhylogeneticModel {
         MoveKind                    lastMoveKind;
         double                      shiftStep;
         int                         saBatch;
+        double                      saBatchF;
         long                        rsAccW;
         long                        rsAttW;
         long                        rsAcc;
@@ -147,8 +148,10 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      shrinkStep;
         long                        rvAccW;
         long                        rvAttW;
+        long                        rvAtt;
         long                        seAccW;
         long                        seAttW;
+        long                        seAtt;
         enum TreeMove { TM_NONE = -1, TM_NE, TM_WB, TM_WE, TM_TREESCALE, TM_SARJ, TM_UPDOWN, TM_JOINTSCALE, TM_SUBTREE, TM_NODEAGE, TM_CROWN, TM_COUNT };
         int                         lastTreeMove;
         long                        tmAcc[TM_COUNT];
@@ -164,6 +167,7 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<double>         prevNodeAge;
         double                      prevX0;
         bool                        cacheInit;
+        bool                        zoneInit;
         bool                        isResolved;
         std::vector<int>            subPre;
         std::vector<int>            subSize;

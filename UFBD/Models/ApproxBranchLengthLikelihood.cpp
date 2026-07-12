@@ -5,12 +5,66 @@
 #include "Tree.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <limits>
 #include <sstream>
+
+namespace {
+
+struct NwkNode {
+    std::vector<int>        children;
+    int                     parent;
+    std::string             name;
+    std::set<std::string>   tips;
+    double                  bl;
+    int                     ibranch;
+    bool                    dead;
+};
+
+void parseNewick(const std::string& nwk, std::vector<NwkNode>& nd){
+    auto newNode = [&](int par) -> int {
+        NwkNode p;
+        p.parent = par;
+        p.bl = 0.0;
+        p.ibranch = -1;
+        p.dead = false;
+        nd.push_back(p);
+        return (int)nd.size() - 1;
+    };
+    auto isToken = [](char c) -> bool {
+        return c != '(' && c != ')' && c != ',' && c != ':' && c != ';' && std::isspace((unsigned char)c) == 0;
+    };
+    int cur = newNode(-1);
+    size_t i = 0;
+    while(i < nwk.size()){
+        char c = nwk[i];
+        if(std::isspace((unsigned char)c)){ i++; }
+        else if(c == '('){ int ch = newNode(cur); nd[cur].children.push_back(ch); cur = ch; i++; }
+        else if(c == ','){ int sib = newNode(nd[cur].parent); nd[nd[cur].parent].children.push_back(sib); cur = sib; i++; }
+        else if(c == ')'){ cur = nd[cur].parent; i++; }
+        else if(c == ';'){ break; }
+        else if(c == ':'){
+            i++;
+            while(i < nwk.size() && std::isspace((unsigned char)nwk[i])) i++;
+            size_t j = i;
+            while(j < nwk.size() && isToken(nwk[j])) j++;
+            nd[cur].bl = std::strtod(nwk.substr(i, j - i).c_str(), nullptr);
+            i = j;
+        }
+        else {
+            size_t j = i;
+            while(j < nwk.size() && isToken(nwk[j])) j++;
+            nd[cur].name = nwk.substr(i, j - i);
+            i = j;
+        }
+    }
+}
+
+}
 
 ApproxBranchLengthLikelihood::ApproxBranchLengthLikelihood(const std::string& hessianFile, const std::string& mlTreeFile, const std::vector<std::string>& rogue, int nStates) :
     nb(0),
@@ -35,6 +89,10 @@ ApproxBranchLengthLikelihood::ApproxBranchLengthLikelihood(const std::string& he
         newick = newick.substr(0, semi + 1);
 
     buildBranchOrder(newick);
+    resolveBranchOrder();
+
+    for(int p = 0; p < nPartitions; p++)
+        applyArcsinTransform(p);
 }
 
 std::set<std::string> ApproxBranchLengthLikelihood::backboneTipsBelow(Node* n, Tree* tree){
@@ -125,11 +183,10 @@ void ApproxBranchLengthLikelihood::readHessianFile(const std::string& fn){
         Msg::error("invalid taxon count in hessian file");
     nb = 2 * ns - 3;
 
-    hessianNewick = newick;
-
     blMle.clear();
     gradient.clear();
     hessian.clear();
+    partitionNewick.clear();
     nPartitions = 0;
 
     while(idx < lines.size()){
@@ -157,18 +214,16 @@ void ApproxBranchLengthLikelihood::readHessianFile(const std::string& fn){
         blMle.push_back(bl);
         gradient.push_back(grad);
         hessian.push_back(hess);
-        applyArcsinTransform(nPartitions);
+        partitionNewick.push_back(newick);
         nPartitions++;
 
         if(isHeaderAt(idx)){
             int nsNext = 0;
-            std::string newickNext;
-            parseHeader(idx, nsNext, newickNext);
+            parseHeader(idx, nsNext, newick);
             if(nsNext != ns)
                 Msg::error("taxon count differs between partitions");
         }
     }
-
 }
 
 void ApproxBranchLengthLikelihood::applyArcsinTransform(int p){
@@ -195,47 +250,22 @@ void ApproxBranchLengthLikelihood::applyArcsinTransform(int p){
     }
 }
 
-void ApproxBranchLengthLikelihood::newickCanonBiparts(const std::string& nwk, std::set<std::set<std::string>>& out){
-    struct PNode { std::vector<int> children; int parent; std::string name; std::set<std::string> tips; };
-    std::vector<PNode> nd;
-    auto newNode = [&](int par) -> int { PNode p; p.parent = par; nd.push_back(p); return (int)nd.size() - 1; };
-    int root = newNode(-1);
-    int cur = root;
-    size_t i = 0;
-    while(i < nwk.size()){
-        char c = nwk[i];
-        if(c == '('){ int ch = newNode(cur); nd[cur].children.push_back(ch); cur = ch; i++; }
-        else if(c == ','){ int sib = newNode(nd[cur].parent); nd[nd[cur].parent].children.push_back(sib); cur = sib; i++; }
-        else if(c == ')'){ cur = nd[cur].parent; i++; }
-        else if(c == ':'){ i++; while(i < nwk.size() && nwk[i] != '(' && nwk[i] != ')' && nwk[i] != ',' && nwk[i] != ';') i++; }
-        else if(c == ';'){ break; }
-        else { size_t j = i; while(j < nwk.size() && nwk[j] != '(' && nwk[j] != ')' && nwk[j] != ',' && nwk[j] != ':' && nwk[j] != ';') j++; nd[cur].name = nwk.substr(i, j - i); i = j; }
-    }
+void ApproxBranchLengthLikelihood::newickBipartLengths(const std::string& nwk, std::map<std::set<std::string>, double>& out){
+    std::vector<NwkNode> nd;
+    parseNewick(nwk, nd);
     for(int k = (int)nd.size() - 1; k >= 0; k--){
         if(nd[k].children.empty()) nd[k].tips.insert(nd[k].name);
         else for(int ch : nd[k].children) nd[k].tips.insert(nd[ch].tips.begin(), nd[ch].tips.end());
     }
     for(int k = 0; k < (int)nd.size(); k++)
         if(nd[k].parent != -1)
-            out.insert(canonicalize(nd[k].tips));
+            out[canonicalize(nd[k].tips)] = nd[k].bl;
 }
 
 void ApproxBranchLengthLikelihood::buildBranchOrder(const std::string& backboneNewick){
-    struct PNode { std::vector<int> children; int parent; std::string name; std::set<std::string> tips; int ibranch; bool dead; };
-    std::vector<PNode> nd;
-    auto newNode = [&](int par) -> int { PNode p; p.parent = par; p.ibranch = -1; p.dead = false; nd.push_back(p); return (int)nd.size() - 1; };
-    int root = newNode(-1);
-    int cur = root;
-    size_t i = 0;
-    while(i < backboneNewick.size()){
-        char c = backboneNewick[i];
-        if(c == '('){ int ch = newNode(cur); nd[cur].children.push_back(ch); cur = ch; i++; }
-        else if(c == ','){ int sib = newNode(nd[cur].parent); nd[nd[cur].parent].children.push_back(sib); cur = sib; i++; }
-        else if(c == ')'){ cur = nd[cur].parent; i++; }
-        else if(c == ':'){ i++; while(i < backboneNewick.size() && backboneNewick[i] != '(' && backboneNewick[i] != ')' && backboneNewick[i] != ',' && backboneNewick[i] != ';') i++; }
-        else if(c == ';'){ break; }
-        else { size_t j = i; while(j < backboneNewick.size() && backboneNewick[j] != '(' && backboneNewick[j] != ')' && backboneNewick[j] != ',' && backboneNewick[j] != ':' && backboneNewick[j] != ';') j++; nd[cur].name = backboneNewick.substr(i, j - i); i = j; }
-    }
+    std::vector<NwkNode> nd;
+    parseNewick(backboneNewick, nd);
+    int root = 0;
 
     for(int k = 0; k < (int)nd.size(); k++)
         if(nd[k].children.empty() && rogueTaxa.find(nd[k].name) != rogueTaxa.end())
@@ -300,12 +330,46 @@ void ApproxBranchLengthLikelihood::buildBranchOrder(const std::string& backboneN
         bipartitions[b] = canonicalize(nd[k].tips);
     }
     crownBranchIdx = nd[son1].ibranch;
+}
 
-    std::set<std::set<std::string>> hessBip;
-    newickCanonBiparts(hessianNewick, hessBip);
+void ApproxBranchLengthLikelihood::resolveBranchOrder(void){
+    std::vector<std::map<std::set<std::string>, double>> bvLen(nPartitions);
+    for(int p = 0; p < nPartitions; p++){
+        newickBipartLengths(partitionNewick[p], bvLen[p]);
+        for(int b = 0; b < nb; b++)
+            if(bvLen[p].find(bipartitions[b]) == bvLen[p].end())
+                Msg::error("backbone topology does not match the Hessian tree");
+    }
+
+    auto fits = [&](int b, int k) -> bool {
+        for(int p = 0; p < nPartitions; p++){
+            double m = blMle[p][b];
+            if(std::fabs(bvLen[p][bipartitions[k]] - m) > 1.0e-6 + 1.0e-5 * std::fabs(m))
+                return false;
+        }
+        return true;
+    };
+
+    std::set<std::string> crownBipart = bipartitions[crownBranchIdx];
+    std::vector<std::set<std::string>> ordered(nb);
+    std::vector<bool> used(nb, false);
+    for(int b = 0; b < nb; b++){
+        int pick = -1;
+        if(used[b] == false && fits(b, b))
+            pick = b;
+        for(int k = 0; k < nb && pick < 0; k++)
+            if(used[k] == false && fits(b, k))
+                pick = k;
+        if(pick < 0)
+            Msg::error("hessian file branch " + std::to_string(b + 1) + " has no branch of the same length in its own tree");
+        used[pick] = true;
+        ordered[b] = bipartitions[pick];
+    }
+
+    bipartitions = ordered;
     for(int b = 0; b < nb; b++)
-        if(hessBip.find(bipartitions[b]) == hessBip.end())
-            Msg::error("backbone topology does not match the Hessian tree");
+        if(bipartitions[b] == crownBipart)
+            crownBranchIdx = b;
 }
 
 Node* ApproxBranchLengthLikelihood::findNodeByBipartition(const std::set<std::string>& bp, Tree* tree){

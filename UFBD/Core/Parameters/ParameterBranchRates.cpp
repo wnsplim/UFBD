@@ -1,3 +1,4 @@
+#include <cstdio>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
@@ -50,9 +51,8 @@ int AdaptiveMixSelector::pick(RandomVariable& rng){
 }
 
 void AdaptiveMixSelector::record(int op, double jump2, double cpu){
-    const double keep = 0.995;
-    cumJ2[op] = cumJ2[op] * keep + jump2;
-    cumCpu[op] = cumCpu[op] * keep + cpu;
+    cumJ2[op] += jump2;
+    cumCpu[op] += cpu;
     tries[op]++;
 }
 
@@ -85,6 +85,7 @@ BranchRateModel::BranchRateModel(double prob, PhylogeneticModel* m, Tree* t, int
     cdStepNode.assign(numNodes, 1.0);
     cdAccNode.assign(numNodes, 0);
     cdAttNode.assign(numNodes, 0);
+    cdTotNode.assign(numNodes, 0);
     lastCdNode = -1;
     sdStep = 1.0;
     sdAccW = 0;
@@ -99,6 +100,7 @@ BranchRateModel::BranchRateModel(double prob, PhylogeneticModel* m, Tree* t, int
     ncStep = 0.5;
     ncAccW = 0;
     ncAttW = 0;
+    ncAtt = 0;
     sigRefresh = 0;
     for(int i = 0; i < 3; i++){
         rgeneParam[i] = rg[i];
@@ -238,10 +240,12 @@ void BranchRateModel::writeState(std::ostream& os){
     Serialize::writeVec(os, cdStepNode);
     Serialize::writeLVec(os, cdAccNode);
     Serialize::writeLVec(os, cdAttNode);
-    os << ncStep << ' ' << ncAccW << ' ' << ncAttW << '\n';
+    Serialize::writeLVec(os, cdTotNode);
+    os << ncStep << ' ' << ncAccW << ' ' << ncAttW << ' ' << ncAtt << '\n';
     os << sdStep << ' ' << sdAccW << ' ' << sdAttW << ' ' << spStep << ' ' << spAccW << ' ' << spAttW << '\n';
     os << sdAcc << ' ' << sdAtt << ' ' << spAcc << ' ' << spAtt << '\n';
     os << sigRefresh << '\n';
+    Serialize::writeLVec(os, sigCount);
     Serialize::write2D(os, sigTauL);
     Serialize::write2D(os, sigEllB);
 }
@@ -259,10 +263,12 @@ void BranchRateModel::readState(std::istream& is){
     Serialize::readVec(is, cdStepNode);
     Serialize::readLVec(is, cdAccNode);
     Serialize::readLVec(is, cdAttNode);
-    is >> ncStep >> ncAccW >> ncAttW;
+    Serialize::readLVec(is, cdTotNode);
+    is >> ncStep >> ncAccW >> ncAttW >> ncAtt;
     is >> sdStep >> sdAccW >> sdAttW >> spStep >> spAccW >> spAttW;
     is >> sdAcc >> sdAtt >> spAcc >> spAtt;
     is >> sigRefresh;
+    Serialize::readLVec(is, sigCount);
     Serialize::read2D(is, sigTauL);
     Serialize::read2D(is, sigEllB);
 }
@@ -278,7 +284,7 @@ double BranchRateModel::constantDistanceMove(void){
     lastCdNode = cdIdx;
     double parentAge = node->getAncestor()->getTime();
     double myAge = node->getTime();
-    double maxChild = 0.0;
+    double maxChild = tree->getAgeFloor(node);
     for(Node* c : node->getNeighbors())
         if(c != node->getAncestor() && c->getTime() > maxChild)
             maxChild = c->getTime();
@@ -313,9 +319,11 @@ double BranchRateModel::constantDistanceMove(void){
     }
     lastMove = 4;
     cdAttNode[cdIdx]++;
+    cdTotNode[cdIdx]++;
     if(cdAttNode[cdIdx] >= 50){
         double ar = (double)cdAccNode[cdIdx] / cdAttNode[cdIdx];
-        cdStepNode[cdIdx] *= std::exp(ar - 0.3);
+        double gain = 1.0 / std::sqrt((double)(cdTotNode[cdIdx] / 50));
+        cdStepNode[cdIdx] *= std::exp(gain * (ar - 0.3));
         if(cdStepNode[cdIdx] < 1e-3) cdStepNode[cdIdx] = 1e-3;
         if(cdStepNode[cdIdx] > 10.0) cdStepNode[cdIdx] = 10.0;
         cdAccNode[cdIdx] = 0;
@@ -407,6 +415,9 @@ double BranchRateModel::simpleDistanceMove(void){
     double tj = L->getTime();
     double tk = R->getTime();
     double lower = (tj > tk) ? tj : tk;
+    double rootFloor = tree->getAgeFloor(root);
+    if(rootFloor > lower)
+        lower = rootFloor;
     double m = 0.95;
     double dB = m + Probability::Normal::rv(&rng) * std::sqrt(1.0 - m * m);
     if(rng.uniformRv() < 0.5) dB = -dB;
@@ -415,7 +426,8 @@ double BranchRateModel::simpleDistanceMove(void){
     sdAttW++;
     if(sdAttW >= 200){
         double ar = (double)sdAccW / sdAttW;
-        sdStep *= std::exp(ar - 0.3);
+        double gain = 1.0 / std::sqrt((double)(sdAtt / 200));
+        sdStep *= std::exp(gain * (ar - 0.3));
         if(sdStep < 1e-6) sdStep = 1e-6;
         sdAccW = 0;
         sdAttW = 0;
@@ -452,7 +464,8 @@ double BranchRateModel::smallPulleyMove(void){
     spAttW++;
     if(spAttW >= 200){
         double ar = (double)spAccW / spAttW;
-        spStep *= std::exp(ar - 0.3);
+        double gain = 1.0 / std::sqrt((double)(spAtt / 200));
+        spStep *= std::exp(gain * (ar - 0.3));
         if(spStep < 1e-4) spStep = 1e-4;
         if(spStep > 0.99) spStep = 0.99;
         spAccW = 0;
@@ -621,6 +634,14 @@ double ParameterBranchRates::gbmLnP(void){
                 double y2 = std::log(r2 / rA) + (tA + t2) * s2 / 2.0;
                 double quadForm = y1 * y1 * Tinv0 + 2.0 * y1 * y2 * Tinv1 + y2 * y2 * Tinv3;
                 terms[idx] = -(quadForm / (2.0 * s2) + 0.5 * std::log(detT * s2 * s2) + std::log(r1 * r2));
+                static const bool chkGbm = (getenv("FBD_CHK_GBM") != nullptr);
+                if(chkGbm && std::isfinite(terms[idx]) == false){
+                    static long nb = 0;
+                    if(++nb <= 5)
+                        fprintf(stderr, "[gbm] term=%g  t=%g tA=%g t1=%g t2=%g detT=%g s2=%g r1=%g r2=%g rA=%g y1=%g y2=%g quad=%g log(detT*s2*s2)=%g log(r1*r2)=%g\n",
+                                terms[idx], t, tA, t1, t2, detT, s2, r1, r2, rA, y1, y2, quadForm,
+                                std::log(detT * s2 * s2), std::log(r1 * r2));
+                }
             }
         });
         for(int idx = 0; idx < M; idx++)
@@ -755,6 +776,7 @@ void ParameterBranchRates::branchLikePrecision(int p, std::vector<double>& tauL,
     if((int)sigTauL.size() != numLoci){
         sigTauL.assign(numLoci, std::vector<double>());
         sigEllB.assign(numLoci, std::vector<double>());
+        sigCount.assign(numLoci, 0);
     }
     bool stale = sigTauL[p].empty() || (sigRefresh % K == 0);
     sigRefresh++;
@@ -775,8 +797,17 @@ void ParameterBranchRates::branchLikePrecision(int p, std::vector<double>& tauL,
             if(c > 0.0 && std::isfinite(c)){ tl[b] = c; el[b] = lr + g / c; }
         }
         model->lnLikelihood();
-        sigTauL[p] = tl;
-        sigEllB[p] = el;
+        sigCount[p]++;
+        if(sigTauL[p].empty()){
+            sigTauL[p] = tl;
+            sigEllB[p] = el;
+        }else{
+            double w = 1.0 / std::sqrt((double)sigCount[p]);
+            for(int b : branchNodes){
+                sigTauL[p][b] = (1.0 - w) * sigTauL[p][b] + w * tl[b];
+                sigEllB[p][b] = (1.0 - w) * sigEllB[p][b] + w * el[b];
+            }
+        }
     }
     tauL = sigTauL[p];
     ellB = sigEllB[p];
@@ -817,9 +848,11 @@ double ParameterBranchRates::sigmaPncpMove(int p){
         rate[0][p][b] = rNew;
     }
     ncAttW++;
+    ncAtt++;
     if(ncAttW >= 200){
         double ar = (double)ncAccW / ncAttW;
-        ncStep *= std::exp(ar - 0.3);
+        double gain = 1.0 / std::sqrt((double)(ncAtt / 200));
+        ncStep *= std::exp(gain * (ar - 0.3));
         if(ncStep < 1e-3) ncStep = 1e-3;
         if(ncStep > 10.0) ncStep = 10.0;
         ncAccW = 0;
@@ -874,9 +907,11 @@ double ParameterBranchRates::sigmaPncpMoveGBMC(int p){
         rate[0][p][off] = std::exp(xdNew);
     }
     ncAttW++;
+    ncAtt++;
     if(ncAttW >= 200){
         double ar = (double)ncAccW / ncAttW;
-        ncStep *= std::exp(ar - 0.3);
+        double gain = 1.0 / std::sqrt((double)(ncAtt / 200));
+        ncStep *= std::exp(gain * (ar - 0.3));
         if(ncStep < 1e-3) ncStep = 1e-3;
         if(ncStep > 10.0) ncStep = 10.0;
         ncAccW = 0;
@@ -938,9 +973,11 @@ double ParameterBranchRates::sigmaPncpMoveGBM(int p){
         }
     }
     ncAttW++;
+    ncAtt++;
     if(ncAttW >= 200){
         double ar = (double)ncAccW / ncAttW;
-        ncStep *= std::exp(ar - 0.3);
+        double gain = 1.0 / std::sqrt((double)(ncAtt / 200));
+        ncStep *= std::exp(gain * (ar - 0.3));
         if(ncStep < 1e-3) ncStep = 1e-3;
         if(ncStep > 10.0) ncStep = 10.0;
         ncAccW = 0;
@@ -989,9 +1026,11 @@ double ParameterBranchRates::sigmaPncpMoveWN(int p){
         rate[0][p][branchNodes[i]] = rNew;
     }
     ncAttW++;
+    ncAtt++;
     if(ncAttW >= 200){
         double ar = (double)ncAccW / ncAttW;
-        ncStep *= std::exp(ar - 0.3);
+        double gain = 1.0 / std::sqrt((double)(ncAtt / 200));
+        ncStep *= std::exp(gain * (ar - 0.3));
         if(ncStep < 1e-3) ncStep = 1e-3;
         if(ncStep > 10.0) ncStep = 10.0;
         ncAccW = 0;
@@ -1238,9 +1277,11 @@ double ParameterBranchRatesCIR::sigmaPncpMoveCIR(int p){
         rate[0][p][off] = rNew;
     }
     ncAttW++;
+    ncAtt++;
     if(ncAttW >= 200){
         double ar = (double)ncAccW / ncAttW;
-        ncStep *= std::exp(ar - 0.3);
+        double gain = 1.0 / std::sqrt((double)(ncAtt / 200));
+        ncStep *= std::exp(gain * (ar - 0.3));
         if(ncStep < 1e-3) ncStep = 1e-3;
         if(ncStep > 10.0) ncStep = 10.0;
         ncAccW = 0;

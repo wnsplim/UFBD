@@ -17,6 +17,7 @@ class Node {
         bool                getFlag(void) { return flag; }
         int                 getIndex(void) { return index; }
         bool                getIsFossil(void) { return fossil; }
+        bool                getIsSA(void) { return sampledAncestor; }
         bool                getIsTip(void) { return isTip; }
         std::string         getName(void) { return name; }
         std::set<Node*>&    getNeighbors(void) { return neighbors; }
@@ -31,6 +32,7 @@ class Node {
         void                setFlag(bool tf) { flag = tf; }
         void                setIndex(int x) { index = x; }
         void                setIsFossil(bool x) { fossil = x; }
+        void                setIsSA(bool x) { sampledAncestor = x; }
         void                setIsTip(bool tf) { isTip = tf; }
         void                setName(std::string s) { name = s; }
         void                setOffset(int x) { offset = x; }
@@ -47,6 +49,7 @@ class Node {
         bool                isTip;
         bool                flag;
         bool                fossil;
+        bool                sampledAncestor = false;
         int                 index;
         int                 offset;
 };

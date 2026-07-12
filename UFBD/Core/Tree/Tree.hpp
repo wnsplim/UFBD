@@ -64,6 +64,7 @@ class Tree {
         void                                assignStartingAges(const std::map<Node*,double>& minAges, double unit);
         Node*                               insertFossilTip(Node* attachChild, std::string name, double y, double z);
         void                                setAgeFloors(const std::map<Node*,double>& f) { ageFloors = f; }
+        double                              getAgeFloor(Node* n) { std::map<Node*,double>::iterator it = ageFloors.find(n); return (it != ageFloors.end()) ? it->second : 0.0; }
         void                                print(void);
         void                                print(std::string header);
         void                                reindexNodes(void);

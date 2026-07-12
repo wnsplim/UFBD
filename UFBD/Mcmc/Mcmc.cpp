@@ -1,7 +1,9 @@
 #include "Mcmc.hpp"
 #include "Msg.hpp"
 #include "PhylogeneticModel.hpp"
+#include "SequenceLikelihood.hpp"
 #include "RandomVariable.hpp"
+#include "Node.hpp"
 #include "Tree.hpp"
 #include "UserSettings.hpp"
 #include "WriteTSV.hpp"
@@ -36,6 +38,19 @@ void Mcmc::init(void) {
     RandomVariable::setActiveInstance(model->getRng());
     curLnL = model->lnLikelihood();
     curLnP = model->lnPriorProbability();
+    if(getenv("FBD_CHK_INIT") != nullptr){
+        Tree* it = model->getTree();
+        fprintf(stderr, "[mcmc-init] lnL=%g lnP=%g | root off=%d age=%g | crown off=%d age=%g\n",
+                curLnL, curLnP, it->getRoot()->getOffset(), it->getRoot()->getTime(),
+                it->getCrown()->getOffset(), it->getCrown()->getTime());
+    }
+    if(std::isfinite(curLnL) == false || std::isfinite(curLnP) == false){
+        std::ostringstream os;
+        os << std::setprecision(6) << "the initial state has lnLikelihood " << curLnL << " and lnPrior " << curLnP
+           << "; the chain cannot move from it. Every proposal would be rejected. Check that the backbone tree's node "
+              "ages are on the same time scale as the fossil ages and the conditioning prior.";
+        Msg::error(os.str());
+    }
     gen = 0;
 }
 
@@ -47,6 +62,43 @@ void Mcmc::advance(unsigned long nGens) {
     while (gen < target) {
         gen++;
         unsigned long n = gen;
+
+        static const bool chkState = (getenv("FBD_CHK_STATE") != nullptr);
+        if(chkState && gen > 1){
+            static long nBad = 0;
+            double rl = model->lnLikelihood(), rp = model->lnPriorProbability();
+            if(std::fabs(rl - curLnL) > 1e-6 || std::fabs(rp - curLnP) > 1e-6){
+                nBad++;
+                if(nBad <= 3)
+                    std::cout << "[state] VIOLATION gen " << gen << "  lnL " << curLnL << " vs " << rl
+                              << "  lnP " << curLnP << " vs " << rp << "\n" << std::flush;
+            }
+            if(gen % 20000 == 0)
+                std::cout << "[state] gen " << gen << "  violations " << nBad << "\n" << std::flush;
+        }
+
+        static const bool chkCache = (getenv("FBD_CHK_CACHE") != nullptr);
+        if(chkCache && gen > 1){
+            static long nBad = 0;
+            static double worst = 0.0;
+            double cached = model->lnLikelihood();
+            model->invalidateLikelihoodCache();
+            double fresh = model->lnLikelihood();
+            double e = std::fabs(cached - fresh);
+            if(std::isfinite(cached) == false && std::isfinite(fresh) == false)
+                e = 0.0;
+            if(e > worst) worst = e;
+            if(e > 1e-6){
+                nBad++;
+                if(nBad <= 3)
+                    std::cout << "[cache] CORRUPT gen " << gen << "  cached " << cached
+                              << "  fresh " << fresh << "  diff " << e << "\n" << std::flush;
+            }
+            if(gen % 20000 == 0)
+                std::cout << "[cache] gen " << gen << "  corrupt " << nBad << " (worst " << worst
+                          << ")  ninfBl " << SequenceLikelihood::ninfBl
+                          << "  ninfSite " << SequenceLikelihood::ninfSite << "\n" << std::flush;
+        }
 
         double lnProposalRatio = model->update();
         double newLnL = model->lnLikelihood();

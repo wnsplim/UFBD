@@ -29,18 +29,20 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     lastRateVec = nullptr;
     rateVecStep = 0.2;
     shrinkStep = 0.2;
-    rvAccW = rvAttW = seAccW = seAttW = 0;
+    rvAccW = rvAttW = rvAtt = seAccW = seAttW = seAtt = 0;
     lastTreeMove = TM_NONE;
     for(int i = 0; i < TM_COUNT; i++) tmAcc[i] = tmAtt[i] = 0;
     azAcc = 0;
     azAtt = 0;
     shiftStep = 0.005;
     saBatch = 0;
+    saBatchF = 1.0;
     rsAccW = rsAttW = 0;
     rsAcc = rsTot = rsAdapt = 0;
     upDownStep = 0.1;
     upDownTotal = 0;
     cacheInit = false;
+    zoneInit = false;
     lambdaField = nullptr;
     muField = nullptr;
     numPsiTypes = UserSettings::userSettings().getNumPsiTypes();
@@ -428,7 +430,7 @@ int FBDTreeModel::countResolvedSA(void){
     Tree* tree = parameterTree->getTree();
     int s = 0;
     for(Node* n : tree->getDownPassSequence())
-        if(n->getIsTip() && n->getIsFossil() && n->getAncestor()->getTime() == n->getTime())
+        if(n->getIsTip() && n->getIsFossil() && n->getIsSA())
             s++;
     return s;
 }
@@ -567,8 +569,10 @@ double FBDTreeModel::doRateVectorScale(void){
     for(ParameterDouble* p : *lastRateVec)
         p->scaleProposed(c);
     rvAttW++;
+    rvAtt++;
     if(rvAttW >= 200){
-        rateVecStep *= std::exp((double)rvAccW / rvAttW - 0.3);
+        double gain = 1.0 / std::sqrt((double)(rvAtt / 200));
+        rateVecStep *= std::exp(gain * ((double)rvAccW / rvAttW - 0.3));
         if(rateVecStep < 1e-3) rateVecStep = 1e-3;
         if(rateVecStep > 10.0)  rateVecStep = 10.0;
         rvAccW = 0;
@@ -596,8 +600,10 @@ double FBDTreeModel::doRateShrinkExpand(void){
         p->scaleProposed(target / cur);
     }
     seAttW++;
+    seAtt++;
     if(seAttW >= 200){
-        shrinkStep *= std::exp((double)seAccW / seAttW - 0.3);
+        double gain = 1.0 / std::sqrt((double)(seAtt / 200));
+        shrinkStep *= std::exp(gain * ((double)seAccW / seAttW - 0.3));
         if(shrinkStep < 1e-3) shrinkStep = 1e-3;
         if(shrinkStep > 10.0)  shrinkStep = 10.0;
         seAccW = 0;
@@ -626,9 +632,9 @@ double FBDTreeModel::doRateShift(void){
         shiftStep *= std::exp(gain * (ar - 0.3));
         if(shiftStep < 1e-5) shiftStep = 1e-5;
         if(shiftStep > 0.5)  shiftStep = 0.5;
-        if(ar > 0.4)      saBatch++;
-        else if(ar < 0.2) saBatch--;
-        if(saBatch < 1)   saBatch = 1;
+        saBatchF *= std::exp(gain * (ar - 0.3));
+        if(saBatchF < 1.0) saBatchF = 1.0;
+        saBatch = (int)(saBatchF + 0.5);
         rsAccW = 0;
         rsAttW = 0;
     }
@@ -934,8 +940,8 @@ void FBDTreeModel::updateForRejection(void){
 void FBDTreeModel::writeState(std::ostream& os){
     for(Parameter* p : parameters)
         p->writeState(os);
-    os << rateVecStep << ' ' << shrinkStep << ' ' << shiftStep << ' ' << saBatch << ' ' << upDownStep << ' ' << upDownTotal << '\n';
-    os << rvAccW << ' ' << rvAttW << ' ' << seAccW << ' ' << seAttW << ' ' << rsAccW << ' ' << rsAttW << '\n';
+    os << rateVecStep << ' ' << shrinkStep << ' ' << shiftStep << ' ' << saBatch << ' ' << saBatchF << ' ' << upDownStep << ' ' << upDownTotal << '\n';
+    os << rvAccW << ' ' << rvAttW << ' ' << rvAtt << ' ' << seAccW << ' ' << seAttW << ' ' << seAtt << ' ' << rsAccW << ' ' << rsAttW << '\n';
     Serialize::writeBoolDeque(os, upDownRecent);
     for(int i = 0; i < TM_COUNT; i++) os << tmAcc[i] << ' ' << tmAtt[i] << ' ';
     os << '\n';
@@ -944,11 +950,12 @@ void FBDTreeModel::writeState(std::ostream& os){
 void FBDTreeModel::readState(std::istream& is){
     for(Parameter* p : parameters)
         p->readState(is);
-    is >> rateVecStep >> shrinkStep >> shiftStep >> saBatch >> upDownStep >> upDownTotal;
-    is >> rvAccW >> rvAttW >> seAccW >> seAttW >> rsAccW >> rsAttW;
+    is >> rateVecStep >> shrinkStep >> shiftStep >> saBatch >> saBatchF >> upDownStep >> upDownTotal;
+    is >> rvAccW >> rvAttW >> rvAtt >> seAccW >> seAttW >> seAtt >> rsAccW >> rsAttW;
     Serialize::readBoolDeque(is, upDownRecent);
     for(int i = 0; i < TM_COUNT; i++) is >> tmAcc[i] >> tmAtt[i];
     cacheInit = false;
+    zoneInit = true;
 }
 
 double FBDTreeModel::calculateFBDProbability(void){
@@ -1079,7 +1086,7 @@ double FBDTreeModel::calculateResolvedFBD(void){
             else{
                 int ft = 0;
                 if(numPsiTypes > 1){ std::map<std::string,int>::iterator it = fossilTypeByName.find(n->getName()); if(it != fossilTypeByName.end()) ft = it->second; }
-                if(n->getAncestor()->getTime() == n->getTime())
+                if(n->getIsSA())
                     lnP += std::log(psiOfTypeAt(ft, findIndex(n->getTime())));
                 else
                     lnP += std::log(psiOfTypeAt(ft, findIndex(n->getTime()))) + std::log(calculateP0(n->getTime()));
@@ -1088,7 +1095,7 @@ double FBDTreeModel::calculateResolvedFBD(void){
         else if(n != root){
             bool fakeSplit = false;
             for(Node* c : n->getNeighbors())
-                if(c != n->getAncestor() && c->getIsTip() && c->getIsFossil() && c->getTime() == n->getTime()){ fakeSplit = true; break; }
+                if(c != n->getAncestor() && c->getIsTip() && c->getIsFossil() && c->getIsSA()){ fakeSplit = true; break; }
             if(fakeSplit == false)
                 lnP += std::log(2.0 * lambdaAt(findIndex(n->getTime())));
         }
@@ -1609,19 +1616,22 @@ void FBDTreeModel::updateGammaCache(void){
         prevNodeAge.assign(tree->getNumNodes(), -1.0);
         prevX0 = -1.0;
         cacheInit = true;
-        for(int i = 0; i < nf; i++){
-            std::vector<int>& dom = unresolvedFossils->getAttachmentZoneDomain(i);
-            double zi = unresolvedFossils->getAttachAge(i);
-            int best = dom[0];
-            double bestCount = -1.0;
-            for(int d : dom){
-                double c = zoneBackboneEdges(d, zi);
-                if(c > bestCount){
-                    bestCount = c;
-                    best = d;
+        if(zoneInit == false){
+            for(int i = 0; i < nf; i++){
+                std::vector<int>& dom = unresolvedFossils->getAttachmentZoneDomain(i);
+                double zi = unresolvedFossils->getAttachAge(i);
+                int best = dom[0];
+                double bestCount = -1.0;
+                for(int d : dom){
+                    double c = zoneBackboneEdges(d, zi);
+                    if(c > bestCount){
+                        bestCount = c;
+                        best = d;
+                    }
                 }
+                unresolvedFossils->initAttachmentZone(i, best);
             }
-            unresolvedFossils->initAttachmentZone(i, best);
+            zoneInit = true;
         }
     }
 
@@ -1986,15 +1996,17 @@ double FBDTreeModel::doSARJMCMC(void){
     double range = maxAge - y;
     if(range <= 0.0)
         return -INFINITY;
-    if(sp->getTime() == y){
+    if(f->getIsSA()){
         sp->setTime(y + rng.uniformRv() * range);
+        f->setIsSA(false);
         return std::log(range);
     }
     if(y < sib->getTime())
         return -INFINITY;
-    if(sib->getIsTip() && sib->getIsFossil() && sib->getTime() == y)
+    if(sib->getIsTip() && sib->getIsFossil() && sib->getIsSA())
         return -INFINITY;
     sp->setTime(y);
+    f->setIsSA(true);
     return -std::log(range);
 }
 

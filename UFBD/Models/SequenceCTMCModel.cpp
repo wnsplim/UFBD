@@ -172,3 +172,7 @@ void SequenceCTMCModel::readState(std::istream& is){
         pinv[p]->readState(is);
     }
 }
+
+void SequenceCTMCModel::invalidateCache(void){
+    seqLik->invalidateCache();
+}
