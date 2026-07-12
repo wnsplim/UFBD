@@ -22,17 +22,13 @@
 FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, unsigned int seed) :
     PhylogeneticModel(){
 
-    lastWasJointScale = false;
-    lastWasUpDown = false;
-    lastWasRateVec = false;
+    lastMoveKind = MK_PARAM;
     lastRateVec = nullptr;
     rateVecStep = 0.2;
     shrinkStep = 0.2;
     rvAccW = rvAttW = seAccW = seAttW = 0;
-    lastWasFbdRate = false;
     lastTreeMove = TM_NONE;
     for(int i = 0; i < TM_COUNT; i++) tmAcc[i] = tmAtt[i] = 0;
-    lastWasLzGibbs = false;
     lzAcc = 0;
     lzAtt = 0;
     turnoverStep = 0.1;
@@ -543,7 +539,7 @@ std::vector<ParameterDouble*>* FBDTreeModel::pickIidRateVector(void){
 }
 
 double FBDTreeModel::doRateVectorScale(void){
-    lastWasRateVec = true;
+    lastMoveKind = MK_RATEVEC;
     lastRateVecScale = true;
     lastRateVec = pickIidRateVector();
     double mB = 0.95;
@@ -564,7 +560,7 @@ double FBDTreeModel::doRateVectorScale(void){
 }
 
 double FBDTreeModel::doRateShrinkExpand(void){
-    lastWasRateVec = true;
+    lastMoveKind = MK_RATEVEC;
     lastRateVecScale = false;
     lastRateVec = pickIidRateVector();
     int n = (int)lastRateVec->size();
@@ -593,7 +589,7 @@ double FBDTreeModel::doRateShrinkExpand(void){
 }
 
 double FBDTreeModel::doTurnoverMove(void){
-    lastWasFbdRate = true;
+    lastMoveKind = MK_TURNOVER;
     double lnH = 0.0;
     for(size_t u = 0; u < intervalStart.size(); u++){
         int i = lambdaIdx[u];
@@ -662,9 +658,7 @@ double FBDTreeModel::update(void){
     RandomVariable* prevRng = RandomVariable::getActiveInstance();
     RandomVariable::setActiveInstance(&rng);
 
-    lastWasJointScale = false;
-    lastWasUpDown = false;
-    lastWasRateVec = false;
+    lastMoveKind = MK_PARAM;
     bool haveIid = (lambdaField == nullptr && lambda.size() >= 2)
                 || (muField == nullptr && mu.size() >= 2);
     for(int tp = 0; tp < numPsiTypes && !haveIid; tp++)
@@ -675,16 +669,14 @@ double FBDTreeModel::update(void){
         RandomVariable::setActiveInstance(prevRng);
         return r;
     }
-    lastWasFbdRate = false;
     if(lambdaField == nullptr && muField == nullptr && lambda.size() >= 1 && mu.size() >= 1 && rng.uniformRv() < 0.10){
         double r = doTurnoverMove();
         RandomVariable::setActiveInstance(prevRng);
         return r;
     }
 
-    lastWasLzGibbs = false;
     if(lzGibbsIdx.empty() == false && rng.uniformRv() < 0.15){
-        lastWasLzGibbs = true;
+        lastMoveKind = MK_LZGIBBS;
         lzAtt++;
         double r = doLandingZoneGibbs();
         RandomVariable::setActiveInstance(prevRng);
@@ -718,7 +710,7 @@ double FBDTreeModel::update(void){
             return r;
         }
         if(uMove >= slideAndCrown){
-            lastWasJointScale = true;
+            lastMoveKind = MK_JOINTSCALE;
             double r;
             if(uMove < slideAndCrown + blockUnit){ lastTreeMove = TM_JOINTSCALE; r = doJointScale(); }
             else { lastTreeMove = TM_SUBTREE; r = doSubtreeScale(); }
@@ -786,24 +778,24 @@ double FBDTreeModel::update(void){
 
 void FBDTreeModel::updateForAcceptance(void){
     if(lastTreeMove != TM_NONE){ tmAtt[lastTreeMove]++; tmAcc[lastTreeMove]++; }
-    if(lastWasLzGibbs){
+    if(lastMoveKind == MK_LZGIBBS){
         unresolvedFossils->updateForAcceptance();
         lzAcc++;
         return;
     }
-    if(lastWasFbdRate){
+    if(lastMoveKind == MK_TURNOVER){
         for(ParameterDouble* l : lambda) l->commitProposed();
         for(ParameterDouble* m : mu) m->commitProposed();
         frAccW++;
         return;
     }
-    if(lastWasRateVec){
+    if(lastMoveKind == MK_RATEVEC){
         for(ParameterDouble* p : *lastRateVec)
             p->commitProposed();
         if(lastRateVecScale) rvAccW++; else seAccW++;
         return;
     }
-    if(lastWasUpDown){
+    if(lastMoveKind == MK_UPDOWN){
         for(ParameterDouble* l : lambda) l->commitProposed();
         for(ParameterDouble* m : mu) m->commitProposed();
         for(auto& pv : psi) for(ParameterDouble* p : pv) p->commitProposed();
@@ -813,7 +805,7 @@ void FBDTreeModel::updateForAcceptance(void){
         upDownTotal++;
         upDownRecent.push_back(true);
         if(upDownRecent.size() > 1000) upDownRecent.pop_front();
-    }else if(lastWasJointScale){
+    }else if(lastMoveKind == MK_JOINTSCALE){
         parameterTree->updateForAcceptance();
         unresolvedFossils->updateForAcceptance();
     }else{
@@ -825,22 +817,22 @@ void FBDTreeModel::updateForAcceptance(void){
 
 void FBDTreeModel::updateForRejection(void){
     if(lastTreeMove != TM_NONE) tmAtt[lastTreeMove]++;
-    if(lastWasLzGibbs){
+    if(lastMoveKind == MK_LZGIBBS){
         unresolvedFossils->updateForRejection();
         rebuildStalkIndex();
         return;
     }
-    if(lastWasFbdRate){
+    if(lastMoveKind == MK_TURNOVER){
         for(ParameterDouble* l : lambda) l->restoreProposed();
         for(ParameterDouble* m : mu) m->restoreProposed();
         return;
     }
-    if(lastWasRateVec){
+    if(lastMoveKind == MK_RATEVEC){
         for(ParameterDouble* p : *lastRateVec)
             p->restoreProposed();
         return;
     }
-    if(lastWasUpDown){
+    if(lastMoveKind == MK_UPDOWN){
         for(ParameterDouble* l : lambda) l->restoreProposed();
         for(ParameterDouble* m : mu) m->restoreProposed();
         for(auto& pv : psi) for(ParameterDouble* p : pv) p->restoreProposed();
@@ -850,7 +842,7 @@ void FBDTreeModel::updateForRejection(void){
         upDownTotal++;
         upDownRecent.push_back(false);
         if(upDownRecent.size() > 1000) upDownRecent.pop_front();
-    }else if(lastWasJointScale){
+    }else if(lastMoveKind == MK_JOINTSCALE){
         parameterTree->updateForRejection();
         unresolvedFossils->updateForRejection();
     }else{
@@ -908,7 +900,7 @@ double FBDTreeModel::calculateFBDProbability(void){
         for(int i = 0; i < unresolvedFossils->getNumFossils(); i++){
             if(unresolvedFossils->getFossilAge(i) > x0)
                 return -INFINITY;
-            if(i != unresolvedFossils->getSpineIdx() && unresolvedFossils->getAttachAge(i) > x0)
+            if(unresolvedFossils->getAttachAge(i) > x0)
                 return -INFINITY;
         }
         double lx0 = lambdaAt(findIndex(x0));
@@ -944,8 +936,6 @@ double FBDTreeModel::calculateFBDProbability(void){
 
     //term 3: fossil attachment
     int numFossils = unresolvedFossils->getNumFossils();
-    if(originAge != nullptr)
-        unresolvedFossils->syncSpine(originAge->getValue());
     updateGammaCache();
     int spineIdx = unresolvedFossils->getSpineIdx();
     std::vector<double> termFoss(numFossils, 0.0);
@@ -1930,7 +1920,7 @@ double FBDTreeModel::doSARJMCMC(void){
 }
 
 double FBDTreeModel::doUpDownScale(void){
-    lastWasUpDown = true;
+    lastMoveKind = MK_UPDOWN;
     double ar = 0.0;
     for(bool b : upDownRecent)
         if(b)

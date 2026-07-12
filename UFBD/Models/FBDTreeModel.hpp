@@ -131,9 +131,8 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<double>         c2HatVec;
         std::vector<double>         ePrevHat;
         double                      rhoVal;
-        bool                        lastWasJointScale;
-        bool                        lastWasUpDown;
-        bool                        lastWasRateVec;
+        enum MoveKind { MK_PARAM, MK_LZGIBBS, MK_TURNOVER, MK_RATEVEC, MK_UPDOWN, MK_JOINTSCALE };
+        MoveKind                    lastMoveKind;
         bool                        lastRateVecScale;
         std::vector<ParameterDouble*>* lastRateVec;
         double                      rateVecStep;
@@ -142,7 +141,6 @@ class FBDTreeModel : public PhylogeneticModel {
         long                        rvAttW;
         long                        seAccW;
         long                        seAttW;
-        bool                        lastWasFbdRate;
         enum TreeMove { TM_NONE = -1, TM_NE, TM_WB, TM_WE, TM_TREESCALE, TM_SARJ, TM_UPDOWN, TM_JOINTSCALE, TM_SUBTREE, TM_NODEAGE, TM_CROWN, TM_COUNT };
         int                         lastTreeMove;
         long                        tmAcc[TM_COUNT];
@@ -181,7 +179,6 @@ class FBDTreeModel : public PhylogeneticModel {
         bool                        zoneIndexBuilt = false;
         std::vector<int>            prevLandingZone;
         std::vector<int>            lzGibbsIdx;
-        bool                        lastWasLzGibbs;
         long                        lzAcc;
         long                        lzAtt;
 };
