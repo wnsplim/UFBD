@@ -29,6 +29,7 @@ class RelaxedClockTreeModel : public PhylogeneticModel {
         bool                        treeIncludesFossils(void);
         double                      lnLikelihood(void);
         void                        invalidateLikelihoodCache(void);
+        void                        invalidatePriorCache(void);
         double                      lnPriorProbability(void);
         void                        print(void);
         double                      update(void);
@@ -48,6 +49,9 @@ class RelaxedClockTreeModel : public PhylogeneticModel {
         ApproxBranchLengthLikelihood* lik;
         SequenceCTMCModel*          ctmc;
         int                         lastMoveType;
+    public:
+        int                         getLastMoveType(void){ return lastMoveType; }
+    private:
         double                      ageScaleStep = 0.5;
         int                         ageScaleAtt = 0;
         int                         ageScaleAcc = 0;

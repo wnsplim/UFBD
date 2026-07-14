@@ -150,6 +150,8 @@ int main(int argc, const char* argv[]) {
             mcmc->advance(settings.getChainLength());
             mcmc->finalize();
         }
+        if(settings.getArLog())
+            mcmc->printMoveDiagnostics(0);
         std::string sbase = settings.getParamOutput();
         size_t sdp = sbase.rfind(".log"); if(sdp != std::string::npos) sbase = sbase.substr(0, sdp);
         if(sbase.empty()) sbase = "out";

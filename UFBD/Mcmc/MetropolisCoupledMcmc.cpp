@@ -38,7 +38,7 @@ MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int thin, std::ve
     UserSettings& settings = UserSettings::userSettings();
     treeOut = settings.getTreeOutput();
     paramOut = settings.getParamOutput();
-    writeTrees = (models[0]->getTree()->getNumBackbone() > 0);
+    writeTrees = (treeOut.empty() == false && models[0]->getTree()->getNumBackbone() > 0);
     gen = 0;
 
     int N = settings.getNumCores();
@@ -355,6 +355,10 @@ RandomVariable* MetropolisCoupledMcmc::resumeRng(void) {
 
 std::vector<std::string> MetropolisCoupledMcmc::resumeParameterNames(void) {
     return models[coldModelIdx]->getParameterNames();
+}
+
+std::vector<std::string> MetropolisCoupledMcmc::resumeLatentNames(void) {
+    return models[coldModelIdx]->getLatentNames();
 }
 
 void MetropolisCoupledMcmc::updateDeltaT(void) {

@@ -26,8 +26,8 @@ class ChainRunner {
         void                                    setOutputPaths(const std::string& po, const std::string& to) { paramOut = po; treeOut = to; }
         const std::vector<std::vector<double>>& traceColumns(void) { return traceCols; }
         const std::vector<std::string>&         traceNames(void) { return traceNms; }
-        virtual const std::vector<std::vector<double>>& latentColumns(void) { static std::vector<std::vector<double>> e; return e; }
-        virtual const std::vector<std::string>& latentNames(void) { static std::vector<std::string> e; return e; }
+        const std::vector<std::vector<double>>& latentColumns(void) { return latentCols; }
+        const std::vector<std::string>&         latentNames(void) { return latentNms; }
         virtual bool                            treeHasFossils(void) { return false; }
         virtual void                            printMoveDiagnostics(int rep) {}
         virtual void                            writeCheckpoint(void) {}
@@ -41,15 +41,22 @@ class ChainRunner {
         static void                             requireCheckpointIntact(std::istream& is, const std::string& path);
         virtual RandomVariable*                 resumeRng(void) = 0;
         virtual std::vector<std::string>        resumeParameterNames(void) = 0;
+        virtual std::vector<std::string>        resumeLatentNames(void) = 0;
+        void                                    resumeLatentOutput(void);
 
         WriteTSV                                params;
         WriteTSV                                trees;
+        WriteTSV                                latent;
         std::string                             paramOut;
         std::string                             treeOut;
+        std::string                             latentOut;
         bool                                    writeTrees;
+        bool                                    writeLatent = false;
         unsigned long                           gen;
         std::vector<std::vector<double>>        traceCols;
         std::vector<std::string>                traceNms;
+        std::vector<std::vector<double>>        latentCols;
+        std::vector<std::string>                latentNms;
 };
 
 #endif

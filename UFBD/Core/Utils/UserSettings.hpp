@@ -11,6 +11,7 @@ enum class Conditioning { CROWN, ORIGIN };
 enum class ConditioningEvent { SURVIVAL, ANYSAMPLE, EXTINCT };
 enum class Model { RFBD, HEA14, UFBD };
 enum class RateMode { IID, SMOOTH };
+enum class Sigma2Param { PNCP, C, NC };
 
 class UserSettings {
 
@@ -87,7 +88,8 @@ class UserSettings {
         bool                        getUseInvariant(void) { return useInvariant; }
         const double*               getRgeneGamma(void) { return rgeneGamma; }
         const double*               getSigma2Gamma(void) { return sigma2Gamma; }
-        bool                        clockOrCtmcConfigured(void) { return clockModelName != "ucln" || substModel != "gtr" || datatypeProvided || nstatesProvided || partitionFile.empty() == false || useInvariant || numCats != 4 || freqMode != "model" || clockGroups.empty() == false; }
+        Sigma2Param                 getSigma2Param(void) { return sigma2Param; }
+        bool                        clockOrCtmcConfigured(void) { return clockModelName != "ucln" || substModel != "gtr" || datatypeProvided || nstatesProvided || partitionFile.empty() == false || useInvariant || numCats != 4 || freqMode != "model" || clockGroups.empty() == false || sigma2Param != Sigma2Param::PNCP; }
         void                        print(void);
         void                        printHelp(void);
 
@@ -150,6 +152,7 @@ class UserSettings {
         std::string                 configFilePath;
         std::string                 invocation;
         std::string                 clockModelName;
+        Sigma2Param                 sigma2Param = Sigma2Param::PNCP;
         std::vector<int>            clockGroups;
         int                         nStates;
         std::string                 sequenceFile;

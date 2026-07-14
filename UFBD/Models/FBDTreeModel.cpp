@@ -22,6 +22,18 @@
 #include <limits>
 #include <string>
 
+static double offsetFromLambda(double rate0, double lam0, const Probability::PriorSpec& sp){
+    if(rate0 != lam0)
+        return rate0;
+    const double hi = std::numeric_limits<double>::max();
+    const double cand[4] = {0.5 * rate0, 1.5 * rate0, rate0 * (1.0 - 1e-3), rate0 * (1.0 + 1e-3)};
+    for(int i = 0; i < 4; i++)
+        if(cand[i] > 0.0 && cand[i] != lam0 &&
+           std::isfinite(Probability::priorLnPdf(sp.family, sp.p1, sp.p2, cand[i], 0.0, hi)))
+            return cand[i];
+    return rate0;
+}
+
 FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, unsigned int seed) :
     PhylogeneticModel(){
 
@@ -212,7 +224,7 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     if(!(lam0 > 0.0 && std::isfinite(lam0))) lam0 = 0.1;
     double mu0 = Probability::priorMean(mp.family, mp.p1, mp.p2);
     if(!(mu0 > 0.0 && std::isfinite(mu0))) mu0 = 0.1;
-    if(mu0 == lam0) mu0 = 0.5 * lam0;
+    mu0 = offsetFromLambda(mu0, lam0, mp);
     {
         std::vector<int> b2c = buildSkylineRates("lambda", "", nLambda, lp, lam0, lamSmooth, rateUs.getLambdaGroups(), rateUs.getLambdaGroupPrior(), nShifts, shiftSize, lambda, lambdaField, lambdaName);
         for(int& u : lambdaIdx) u = b2c[u];
@@ -231,7 +243,7 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
         if(!pp.set) pp = defRate;
         double psi0 = Probability::priorMean(pp.family, pp.p1, pp.p2);
         if(!(psi0 > 0.0 && std::isfinite(psi0))) psi0 = 0.1;
-        if(psi0 == lam0) psi0 = 0.5 * lam0;
+        psi0 = offsetFromLambda(psi0, lam0, pp);
         int nPsi = (int)psiTimes[tp].size();
         bool tpSmooth = (rateUs.getPsiMode(tp) == RateMode::SMOOTH);
         if(tpSmooth && nPsi < 2){ Msg::warning("smoothing (HSMRF) set for sampling rate " + ((numPsiTypes > 1) ? ("psi type '" + rateUs.getPsiTypeNames()[tp] + "'") : std::string("(psi)")) + " but only single rate interval."); tpSmooth = false; }
@@ -506,7 +518,6 @@ double FBDTreeModel::lnLikelihood(void){
 
 double FBDTreeModel::lnPriorProbability(void){
     double lnP = 0.0;
-    
     for(Parameter* p : parameters)
         if( p != parameterTree)
             lnP += p->lnProbability();
@@ -615,7 +626,7 @@ double FBDTreeModel::doRateShrinkExpand(void){
 double FBDTreeModel::doRateShift(void){
     lastMoveKind = MK_RATESHIFT;
     if(unresolvedFossils != nullptr)
-        unresolvedFossils->beginBatchMove();     // claim the restore branch before any early exit
+        unresolvedFossils->beginBatchMove();
 
     double m = 0.95;
     double b = m + Probability::Normal::rv(&rng) * std::sqrt(1.0 - m * m);
@@ -794,7 +805,7 @@ double FBDTreeModel::update(void){
         }
         std::map<Node*,double> floors;
         computeAgeFloors(floors);
-        t->setAgeFloors(floors);
+        parameterTree->setAgeFloors(floors);
     }
     else if(updatedParameter == parameterTree && isResolved){ // Not deployed
         parameterTree->getTree()->setLastUpdateWasScale(false);
@@ -942,6 +953,7 @@ void FBDTreeModel::writeState(std::ostream& os){
         p->writeState(os);
     os << rateVecStep << ' ' << shrinkStep << ' ' << shiftStep << ' ' << saBatch << ' ' << saBatchF << ' ' << upDownStep << ' ' << upDownTotal << '\n';
     os << rvAccW << ' ' << rvAttW << ' ' << rvAtt << ' ' << seAccW << ' ' << seAttW << ' ' << seAtt << ' ' << rsAccW << ' ' << rsAttW << '\n';
+    os << rsAcc << ' ' << rsTot << ' ' << rsAdapt << ' ' << azAcc << ' ' << azAtt << '\n';
     Serialize::writeBoolDeque(os, upDownRecent);
     for(int i = 0; i < TM_COUNT; i++) os << tmAcc[i] << ' ' << tmAtt[i] << ' ';
     os << '\n';
@@ -952,6 +964,7 @@ void FBDTreeModel::readState(std::istream& is){
         p->readState(is);
     is >> rateVecStep >> shrinkStep >> shiftStep >> saBatch >> saBatchF >> upDownStep >> upDownTotal;
     is >> rvAccW >> rvAttW >> rvAtt >> seAccW >> seAttW >> seAtt >> rsAccW >> rsAttW;
+    is >> rsAcc >> rsTot >> rsAdapt >> azAcc >> azAtt;
     Serialize::readBoolDeque(is, upDownRecent);
     for(int i = 0; i < TM_COUNT; i++) is >> tmAcc[i] >> tmAtt[i];
     cacheInit = false;
@@ -2063,7 +2076,7 @@ double FBDTreeModel::getOriginAgeValue(void){
 void FBDTreeModel::setupNodeAgeFloors(void){
     std::map<Node*,double> floors;
     computeAgeFloors(floors);
-    parameterTree->getTree()->setAgeFloors(floors);
+    parameterTree->setAgeFloors(floors);
     parameterTree->getTree()->setLastUpdateWasScale(false);
 }
 

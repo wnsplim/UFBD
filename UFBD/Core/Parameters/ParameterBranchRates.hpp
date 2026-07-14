@@ -32,6 +32,12 @@ struct BranchMGF {
     int    kind;
     double rho, rhoUp, Ln, sigmaPB, theta, muH;
     double alpha, beta;
+
+    bool operator!=(const BranchMGF& o) const {
+        return kind != o.kind || rho != o.rho || rhoUp != o.rhoUp || Ln != o.Ln
+            || sigmaPB != o.sigmaPB || theta != o.theta || muH != o.muH
+            || alpha != o.alpha || beta != o.beta;
+    }
 };
 
 // CIR clock: halt — detached dead code (kept, not wired)
@@ -161,8 +167,9 @@ class BranchRateModel : public Parameter {
         long                        ncAtt;
         std::vector<std::vector<double>> sigTauL;
         std::vector<std::vector<double>> sigEllB;
-        long                        sigRefresh;
+        std::vector<long>           sigRefresh;
         std::vector<long>           sigCount;
+        std::vector<double>         centeredness;
 };
 
 class ParameterBranchRates : public BranchRateModel {

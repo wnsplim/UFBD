@@ -52,9 +52,12 @@ class SequenceLikelihood {
         void                                            invalidateCache(void) { cacheValid = false; }
         static long                                     ninfBl;
         static long                                     ninfSite;
+        static double                                   minCumScale;
     private:
         std::vector<std::vector<std::vector<double>>>   conP;
+        std::vector<std::vector<std::vector<double>>>   cumScale;
         std::vector<std::vector<double>>                lastBl;
+        std::vector<std::vector<BranchMGF>>             lastMGF;
         std::vector<std::vector<double>>                lastExch;
         std::vector<std::vector<double>>                lastFreq;
         std::vector<double>                             lastAlpha;

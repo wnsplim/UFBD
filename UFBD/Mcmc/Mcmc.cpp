@@ -40,15 +40,14 @@ void Mcmc::init(void) {
     curLnP = model->lnPriorProbability();
     if(getenv("FBD_CHK_INIT") != nullptr){
         Tree* it = model->getTree();
-        fprintf(stderr, "[mcmc-init] lnL=%g lnP=%g | root off=%d age=%g | crown off=%d age=%g\n",
+        fprintf(stderr, "[mcmc-init] lnL=%.17g lnP=%.17g | root off=%d age=%g | crown off=%d age=%g\n",
                 curLnL, curLnP, it->getRoot()->getOffset(), it->getRoot()->getTime(),
                 it->getCrown()->getOffset(), it->getCrown()->getTime());
     }
     if(std::isfinite(curLnL) == false || std::isfinite(curLnP) == false){
         std::ostringstream os;
-        os << std::setprecision(6) << "the initial state has lnLikelihood " << curLnL << " and lnPrior " << curLnP
-           << "; the chain cannot move from it. Every proposal would be rejected. Check that the backbone tree's node "
-              "ages are on the same time scale as the fossil ages and the conditioning prior.";
+        os << std::setprecision(6) << "the initial state has lnLikelihood " << curLnL
+           << " and lnPrior " << curLnP;
         Msg::error(os.str());
     }
     gen = 0;
@@ -100,6 +99,24 @@ void Mcmc::advance(unsigned long nGens) {
                           << "  ninfSite " << SequenceLikelihood::ninfSite << "\n" << std::flush;
         }
 
+        static const bool chkPrior = (getenv("FBD_CHK_PRIOR") != nullptr);
+        if(chkPrior && gen > 1){
+            static long nBad = 0;
+            double cached = model->lnPriorProbability();
+            model->invalidatePriorCache();
+            double fresh = model->lnPriorProbability();
+            double e = std::fabs(cached - fresh);
+            if(std::isfinite(cached) == false && std::isfinite(fresh) == false) e = 0.0;
+            if(e > 1e-6 || (std::isfinite(cached) != std::isfinite(fresh))){
+                nBad++;
+                if(nBad <= 3)
+                    std::cout << "[prior] STALE gen " << gen << "  cached " << cached
+                              << "  fresh " << fresh << "\n" << std::flush;
+            }
+            if(gen % 20000 == 0)
+                std::cout << "[prior] gen " << gen << "  stale " << nBad << "\n" << std::flush;
+        }
+
         double lnProposalRatio = model->update();
         double newLnL = model->lnLikelihood();
         double lnLikelihoodRatio = newLnL - curLnL;
@@ -120,6 +137,11 @@ void Mcmc::advance(unsigned long nGens) {
             model->updateForRejection();
             }
 
+        static const bool trc = (getenv("FBD_TRACE") != nullptr);
+        if(trc)
+            fprintf(stderr, "[t] %lu mv=%d h=%.17g curL=%.17g curP=%.17g a=%d\n", gen,
+                    model->getLastMoveType(), lnProposalRatio, curLnL, curLnP, (int)acceptMove);
+
         if (verbose && n % thinning == 0) {
             std::ostringstream os;
             os << std::fixed << std::setprecision(2) << "chain " << runLabel << "  " << n << " -- posterior " << (curLnL + curLnP) << " likelihood " << curLnL << "\n";
@@ -132,6 +154,9 @@ void Mcmc::advance(unsigned long nGens) {
 }
 
 void Mcmc::finalize(void) {
+    if(getenv("FBD_CHK_SCALE") != nullptr)
+        std::cout << "[scale] min cumScale at root = " << SequenceLikelihood::minCumScale
+                  << "  (underflow of the unscaled product begins near -708)\n" << std::flush;
     params.closeTSV();
     if(writeTrees)
         trees.appendDataTSV("END;");
@@ -231,7 +256,47 @@ bool Mcmc::loadCheckpoint(void) {
     model->getRng()->readState(is);
     model->readState(is);
     requireCheckpointIntact(is, path);
+    static const bool chkCkp = (getenv("FBD_CHK_CKP") != nullptr);
+    if(chkCkp)
+        checkCheckpointRoundTrip(path);
     return true;
+}
+
+void Mcmc::checkCheckpointRoundTrip(const std::string& path) {
+    std::ostringstream os;
+    os << std::setprecision(17);
+    os << gen << ' ' << thinning << '\n';
+    os << curLnL << ' ' << curLnP << '\n';
+    model->getRng()->writeState(os);
+    model->writeState(os);
+
+    std::vector<std::string> onDisk, roundTrip;
+    std::ifstream f(path);
+    for(std::string t; f >> t; )
+        onDisk.push_back(t);
+    std::istringstream rt(os.str());
+    for(std::string t; rt >> t; )
+        roundTrip.push_back(t);
+
+    size_t n = (onDisk.size() < roundTrip.size()) ? onDisk.size() : roundTrip.size();
+    size_t i = 0;
+    while(i < n && onDisk[i] == roundTrip[i])
+        i++;
+    if(i == n && onDisk.size() == roundTrip.size()){
+        std::cout << "[CHK_CKP] writeState(readState(x)) == x  (" << onDisk.size() << " tokens)\n";
+        return;
+    }
+    std::cout << "[CHK_CKP] STATE LOST ON RESUME: first mismatch at token " << i
+              << "  (on-disk " << onDisk.size() << " tokens, round-trip " << roundTrip.size() << ")\n";
+    size_t lo = (i > 6) ? i - 6 : 0;
+    size_t hi = (i + 7 < n) ? i + 7 : n;
+    std::cout << "[CHK_CKP]   on-disk   :";
+    for(size_t j = lo; j < hi; j++)
+        std::cout << (j == i ? " >>" : " ") << onDisk[j];
+    std::cout << "\n[CHK_CKP]   round-trip:";
+    for(size_t j = lo; j < hi; j++)
+        std::cout << (j == i ? " >>" : " ") << roundTrip[j];
+    std::cout << '\n';
 }
 
 RandomVariable* Mcmc::resumeRng(void) {
@@ -240,4 +305,8 @@ RandomVariable* Mcmc::resumeRng(void) {
 
 std::vector<std::string> Mcmc::resumeParameterNames(void) {
     return model->getParameterNames();
+}
+
+std::vector<std::string> Mcmc::resumeLatentNames(void) {
+    return model->getLatentNames();
 }

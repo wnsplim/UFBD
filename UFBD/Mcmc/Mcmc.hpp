@@ -17,8 +17,6 @@ class Mcmc : public ChainRunner {
         void                    init(void);
         void                    advance(unsigned long nGens);
         void                    finalize(void);
-        const std::vector<std::vector<double>>& latentColumns(void) { return latentCols; }
-        const std::vector<std::string>&         latentNames(void) { return latentNms; }
         bool                    treeHasFossils(void);
         void                    printMoveDiagnostics(int rep);
         void                    writeCheckpoint(void);
@@ -30,21 +28,18 @@ class Mcmc : public ChainRunner {
     protected:
         RandomVariable*         resumeRng(void);
         std::vector<std::string> resumeParameterNames(void);
+        std::vector<std::string> resumeLatentNames(void);
 
     private:
         void                    sample(unsigned long n, double lnL, double lnP);
+        void                    checkCheckpointRoundTrip(const std::string& path);
         PhylogeneticModel*      model;
-        WriteTSV                latent;
-        std::string             latentOut;
-        bool                    writeLatent = false;
         bool                    verbose = false;
         int                     runLabel = 0;
         int                     numCycles;
         int                     thinning;
         double                  curLnL;
         double                  curLnP;
-        std::vector<std::vector<double>> latentCols;
-        std::vector<std::string>         latentNms;
 };
 
 #endif

@@ -12,6 +12,7 @@
 #include "Serialize.hpp"
 #include "ThreadPool.hpp"
 #include "Tree.hpp"
+#include "UserSettings.hpp"
 
 void AdaptiveMixSelector::init(int n){
     nOps = n;
@@ -101,7 +102,7 @@ BranchRateModel::BranchRateModel(double prob, PhylogeneticModel* m, Tree* t, int
     ncAccW = 0;
     ncAttW = 0;
     ncAtt = 0;
-    sigRefresh = 0;
+    sigRefresh.assign(numLoci, 0);
     for(int i = 0; i < 3; i++){
         rgeneParam[i] = rg[i];
         sigma2Param[i] = s2[i];
@@ -226,6 +227,12 @@ void BranchRateModel::print(void){
     std::cout << "SimpleDist (A/R): " << sdar << " [" << sdAcc << "/" << sdAtt << "]\n";
     if(spAtt > 0)
         std::cout << "SmallPulley (A/R): " << (double)spAcc / spAtt << " [" << spAcc << "/" << spAtt << "]\n";
+    if(centeredness.empty() == false){
+        std::cout << "sigma2 parameterization (1=centered, 0=non-centered):";
+        for(int p = 0; p < (int)centeredness.size(); p++)
+            std::cout << ' ' << centeredness[p];
+        std::cout << '\n';
+    }
 }
 
 void BranchRateModel::writeState(std::ostream& os){
@@ -244,7 +251,7 @@ void BranchRateModel::writeState(std::ostream& os){
     os << ncStep << ' ' << ncAccW << ' ' << ncAttW << ' ' << ncAtt << '\n';
     os << sdStep << ' ' << sdAccW << ' ' << sdAttW << ' ' << spStep << ' ' << spAccW << ' ' << spAttW << '\n';
     os << sdAcc << ' ' << sdAtt << ' ' << spAcc << ' ' << spAtt << '\n';
-    os << sigRefresh << '\n';
+    Serialize::writeLVec(os, sigRefresh);
     Serialize::writeLVec(os, sigCount);
     Serialize::write2D(os, sigTauL);
     Serialize::write2D(os, sigEllB);
@@ -267,7 +274,7 @@ void BranchRateModel::readState(std::istream& is){
     is >> ncStep >> ncAccW >> ncAttW >> ncAtt;
     is >> sdStep >> sdAccW >> sdAttW >> spStep >> spAccW >> spAttW;
     is >> sdAcc >> sdAtt >> spAcc >> spAtt;
-    is >> sigRefresh;
+    Serialize::readLVec(is, sigRefresh);
     Serialize::readLVec(is, sigCount);
     Serialize::read2D(is, sigTauL);
     Serialize::read2D(is, sigEllB);
@@ -281,7 +288,9 @@ double BranchRateModel::constantDistanceMove(void){
             internals.push_back(n);
     Node* node = internals[(int)(rng.uniformRv() * internals.size())];
     int cdIdx = node->getOffset();
+    lastMove = 4;
     lastCdNode = cdIdx;
+    cdNodes.clear();
     double parentAge = node->getAncestor()->getTime();
     double myAge = node->getTime();
     double maxChild = tree->getAgeFloor(node);
@@ -290,6 +299,11 @@ double BranchRateModel::constantDistanceMove(void){
             maxChild = c->getTime();
     double yHi = std::log(parentAge);
     double yLo = (maxChild > 0.0) ? std::log(maxChild) : (yHi - 30.0);
+    if(getenv("FBD_CHK_CD") != nullptr && yLo >= yHi)
+        fprintf(stderr, "[cd] EMPTY node=%d floor=%.17g maxChild=%.17g myAge=%.17g parentAge=%.17g\n",
+                cdIdx, tree->getAgeFloor(node), maxChild, myAge, parentAge);
+    if(yLo >= yHi)
+        return -std::numeric_limits<double>::infinity();
     double y = std::log(myAge);
     double mBact = 0.95;
     double dBact = mBact + Probability::Normal::rv(&rng) * std::sqrt(1.0 - mBact * mBact);
@@ -301,7 +315,6 @@ double BranchRateModel::constantDistanceMove(void){
     }
     double newAge = std::exp(ynew);
     node->setTime(newAge);
-    cdNodes.clear();
     cdNodes.push_back(node->getOffset());
     double bbParentAge = tree->getBackboneParent(node)->getTime();
     double lnNum = std::log(bbParentAge - myAge);
@@ -317,7 +330,6 @@ double BranchRateModel::constantDistanceMove(void){
         for(int p = 0; p < numLoci; p++)
             rate[0][p][c->getOffset()] *= prevC / newC;
     }
-    lastMove = 4;
     cdAttNode[cdIdx]++;
     cdTotNode[cdIdx]++;
     if(cdAttNode[cdIdx] >= 50){
@@ -777,11 +789,14 @@ void ParameterBranchRates::branchLikePrecision(int p, std::vector<double>& tauL,
         sigTauL.assign(numLoci, std::vector<double>());
         sigEllB.assign(numLoci, std::vector<double>());
         sigCount.assign(numLoci, 0);
+        sigRefresh.assign(numLoci, 0);
     }
-    bool stale = sigTauL[p].empty() || (sigRefresh % K == 0);
-    sigRefresh++;
+    static const bool freezeTau = (getenv("FBD_PNCP_FREEZE") != nullptr);
+    bool stale = sigTauL[p].empty() || (freezeTau == false && sigRefresh[p] % K == 0);
+    sigRefresh[p]++;
     if(stale){
         std::vector<double> tl(numNodes, 0.0), el(numNodes, 0.0);
+        std::vector<bool> ok(numNodes, false);
         const double eps = 1.0e-3;
         double L0 = model->lnLikelihood();
         for(int b : branchNodes){
@@ -794,23 +809,37 @@ void ParameterBranchRates::branchLikePrecision(int p, std::vector<double>& tauL,
             rate[0][p][b] = r0;
             double g = (Lp - Lm) / (2.0 * eps);
             double c = -(Lp - 2.0 * L0 + Lm) / (eps * eps);
-            if(c > 0.0 && std::isfinite(c)){ tl[b] = c; el[b] = lr + g / c; }
+            if(c > 0.0 && std::isfinite(c)){ tl[b] = c; el[b] = lr + g / c; ok[b] = true; }
         }
         model->lnLikelihood();
         sigCount[p]++;
-        if(sigTauL[p].empty()){
+        static const bool hardReplace = (getenv("FBD_PNCP_REPLACE") != nullptr);
+        if(sigTauL[p].empty() || hardReplace){
             sigTauL[p] = tl;
             sigEllB[p] = el;
         }else{
             double w = 1.0 / std::sqrt((double)sigCount[p]);
             for(int b : branchNodes){
+                if(ok[b] == false)
+                    continue;
                 sigTauL[p][b] = (1.0 - w) * sigTauL[p][b] + w * tl[b];
                 sigEllB[p][b] = (1.0 - w) * sigEllB[p][b] + w * el[b];
             }
         }
+        if((int)centeredness.size() != numLoci)
+            centeredness.assign(numLoci, 0.0);
+        double s2 = sigma2[0][p];
+        double acc = 0.0;
+        for(int b : branchNodes)
+            acc += sigTauL[p][b] * s2 / (1.0 + sigTauL[p][b] * s2);
+        centeredness[p] = acc / (double)branchNodes.size();
     }
     tauL = sigTauL[p];
     ellB = sigEllB[p];
+    if(UserSettings::userSettings().getSigma2Param() == Sigma2Param::NC){
+        tauL.assign(numNodes, 0.0);
+        ellB.assign(numNodes, 0.0);
+    }
 }
 
 double ParameterBranchRates::sigmaPncpMove(int p){
@@ -1056,7 +1085,7 @@ double ParameterBranchRates::update(void){
         lastMove = 0;
         return scaleLocusRate(lastLocus);
     }
-    if(clockModel == ClockModel::WN){           // gamma rates: (P)NCP n/a → centered σ² move (likelihood-neutral)
+    if(clockModel == ClockModel::WN || UserSettings::userSettings().getSigma2Param() == Sigma2Param::C){
         lastMove = 1;
         return scaleLocusSigma2(lastLocus);
     }

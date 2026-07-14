@@ -41,6 +41,14 @@ double ParameterTree::update(void) {
     return trees[0]->update(scaleLambda);
 }
 
+void ParameterTree::setAgeFloors(const std::map<Node*,double>& f) {
+    std::map<int,double> byOffset;
+    for(std::map<Node*,double>::const_iterator it = f.begin(); it != f.end(); ++it)
+        byOffset[it->first->getOffset()] = it->second;
+    trees[0]->setAgeFloorsByOffset(byOffset);
+    trees[1]->setAgeFloorsByOffset(byOffset);
+}
+
 void ParameterTree::updateForAcceptance(void) {
     numAcceptances++;
     if(trees[0]->getLastUpdateWasScale())
@@ -79,9 +87,9 @@ void ParameterTree::tuneScale(bool accepted) {
             if(b == true)
                 numAccepted++;
         double rate = numAccepted / recentScaleAcceptRej.size();
-        if(rate < 0.44 - 0.2)
+        if(rate < 0.3 - 0.2)
             scaleLambda /= 1.1;
-        else if(rate > 0.44 + 0.2)
+        else if(rate > 0.3 + 0.2)
             scaleLambda *= 1.1;
     }
 }

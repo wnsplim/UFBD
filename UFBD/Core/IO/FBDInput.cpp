@@ -116,9 +116,20 @@ static std::vector<std::string> splitOnComma(const std::string& s){
     return out;
 }
 
+static bool isHeaderRow(const std::vector<std::string>& row, const std::string& firstField){
+    if(row.empty())
+        return false;
+    std::string f = row[0];
+    for(char& ch : f)
+        ch = (char)std::tolower((unsigned char)ch);
+    return f == firstField;
+}
+
 void FBDInput::readClades(std::string path){
     ReadTSV reader(path, false, false, true);
     std::vector<std::vector<std::string>> rows = reader.getReadStringData();
+    if(rows.empty() == false && isHeaderRow(rows[0], "clade"))
+        rows.erase(rows.begin());
     for(std::vector<std::string>& row : rows){
         if(row.size() < 2)
             Msg::error("clade row needs a name and a comma-separated taxon list");
@@ -139,6 +150,8 @@ void FBDInput::readClades(std::string path){
 void FBDInput::readFossils(std::string path){
     ReadTSV reader(path, false, false, true);
     std::vector<std::vector<std::string>> rows = reader.getReadStringData();
+    if(rows.empty() == false && isHeaderRow(rows[0], "taxon"))
+        rows.erase(rows.begin());
     for(std::vector<std::string>& row : rows){
         if(row.size() < 5)
             Msg::error("fossil row needs: taxon, min_age, max_age, clade, assignment");

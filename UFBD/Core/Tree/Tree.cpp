@@ -882,6 +882,13 @@ std::vector<Node*> Tree::getInternalAgeNodes(void){
     return candidates;
 }
 
+void Tree::setAgeFloorsByOffset(const std::map<int,double>& f)
+{
+    ageFloors.clear();
+    for(std::map<int,double>::const_iterator it = f.begin(); it != f.end(); ++it)
+        ageFloors[nodes[it->first]] = it->second;
+}
+
 double Tree::updateNodeAgeOnNode(Node* n){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     double parentAge = n->getAncestor()->getTime();
@@ -981,11 +988,11 @@ void Tree::writeTree(Node* p, std::stringstream& strm) {
 
 void Tree::writeState(std::ostream& os) {
 
-    os << nodes.size() << ' ' << crown->getOffset() << ' ' << (origin != nullptr ? origin->getOffset() : -1) << ' ' << numTaxa << '\n';
+    os << nodes.size() << ' ' << crown->getOffset() << ' ' << (origin != nullptr ? origin->getOffset() : -1) << ' ' << numTaxa << ' ' << (lastUpdateWasScale ? 1 : 0) << '\n';
     for (Node* n : nodes)
         {
         os << (n->getIsTip() ? 1 : 0) << ' ' << (n->getIsFossil() ? 1 : 0) << ' ' << (n->getFlag() ? 1 : 0)
-           << ' ' << n->getIndex() << ' ' << n->getTime();
+           << ' ' << (n->getIsSA() ? 1 : 0) << ' ' << n->getIndex() << ' ' << n->getTime();
         std::set<Node*>& nb = n->getNeighbors();
         os << ' ' << nb.size();
         std::vector<int> nbOff;
@@ -1002,8 +1009,9 @@ void Tree::writeState(std::ostream& os) {
 void Tree::readState(std::istream& is) {
 
     size_t nn;
-    int crownOff, originOff;
-    is >> nn >> crownOff >> originOff >> numTaxa;
+    int crownOff, originOff, luws;
+    is >> nn >> crownOff >> originOff >> numTaxa >> luws;
+    lastUpdateWasScale = (luws != 0);
     if (nodes.size() != nn)
         {
         deleteNodes();
@@ -1013,14 +1021,15 @@ void Tree::readState(std::istream& is) {
     std::vector<std::vector<int>> nbrs(nn);
     for (size_t i = 0; i < nn; i++)
         {
-        int tip, foss, fl, idx;
+        int tip, foss, fl, isa, idx;
         double tm;
         size_t nc;
-        is >> tip >> foss >> fl >> idx >> tm >> nc;
+        is >> tip >> foss >> fl >> isa >> idx >> tm >> nc;
         Node* p = nodes[i];
         p->setIsTip(tip != 0);
         p->setIsFossil(foss != 0);
         p->setFlag(fl != 0);
+        p->setIsSA(isa != 0);
         p->setIndex(idx);
         p->setTime(tm);
         nbrs[i].resize(nc);

@@ -32,7 +32,7 @@ ParameterShrinkageField::ParameterShrinkageField(double prob, PhylogeneticModel*
     if(present0 <= 0.0)
         present0 = 1.0;
     RandomVariable& rng = RandomVariable::randomVariableInstance();
-    anchor[0] = anchor[1] = std::log(present0) + Probability::Normal::rv(&rng) * zeta;
+    anchor[0] = anchor[1] = std::log(present0);
     gamma[0] = gamma[1] = zeta;
     delta[0].assign(nDelta, 0.0);
     sigma[0].assign(nDelta, 1.0);

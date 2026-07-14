@@ -65,6 +65,8 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
         y[1][i] = yi;
         double lo = getMinAttachAge(i);
         double hi = getMaxAttachAge(i);
+        if(isStem[i] && crownNode[i]->getTime() > lo)
+            lo = crownNode[i]->getTime();
         double zi = lo + rng.uniformRv() * (hi - lo);
         z[0][i] = zi;
         z[1][i] = zi;
@@ -80,10 +82,6 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
 
 void ParameterUnresolvedFossils::setAttachmentZoneDomain(std::vector<std::vector<int> >& domain){
     azDomain = domain;
-    for(int i = 0; i < numFossils; i++){
-        az[0][i] = azDomain[i][0];
-        az[1][i] = azDomain[i][0];
-    }
 }
 
 double ParameterUnresolvedFossils::getMinAttachAge(int i){

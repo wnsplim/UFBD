@@ -61,7 +61,9 @@ double SequenceLikelihood::computeLnL(Tree* tree,
     int numNodes = tree->getNumNodes();
     if(cacheValid == false){
         conP.assign(numPartitions, std::vector<std::vector<double>>(numNodes));
+        cumScale.assign(numPartitions, std::vector<std::vector<double>>(numNodes));
         lastBl.assign(numPartitions, std::vector<double>(numNodes, -1.0));
+        lastMGF.assign(numPartitions, std::vector<BranchMGF>(numNodes, BranchMGF{-1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}));
         lastExch.assign(numPartitions, std::vector<double>());
         lastFreq.assign(numPartitions, std::vector<double>());
         lastAlpha.assign(numPartitions, -1.0);
@@ -89,6 +91,7 @@ double SequenceLikelihood::computeLnL(Tree* tree,
 
 long SequenceLikelihood::ninfBl = 0;
 long SequenceLikelihood::ninfSite = 0;
+double SequenceLikelihood::minCumScale = 0.0;
 
 double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
                                       const std::vector<std::vector<double>>& branchRates,
@@ -143,6 +146,7 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
                 if(conP[p][off].empty()){
                     const std::vector<int>& st = tipStateByOffset[p][off];
                     conP[p][off].assign(K * npat * n, 0.0);
+                    cumScale[p][off].assign(npat, 0.0);
                     for(int k = 0; k < K; k++)
                         for(int h = 0; h < npat; h++){
                             int m = st.empty() ? full : st[h];
@@ -156,13 +160,14 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
             bool nd = substDirty;
             for(Node* c : children){
                 int coff = c->getOffset();
-                if(dirty[coff] || curBl[coff] != lastBl[p][coff]) nd = true;
+                if(dirty[coff] || curBl[coff] != lastBl[p][coff] || branchMGF[p][coff] != lastMGF[p][coff]) nd = true;
             }
             if(nd == false) continue;
             dirty[off] = 1;
             dirtyNodes.push_back(node);
             dirtyChildren.push_back(children);
             conP[p][off].assign(K * npat * n, 1.0);
+            cumScale[p][off].assign(npat, 0.0);
             for(Node* c : children){
                 int coff = c->getOffset();
                 Pcache[coff].assign(K * n * n, 0.0);
@@ -174,10 +179,13 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
         int croff = root->getOffset();
         const std::vector<double>& rootConP = conP[p][croff];
         std::vector<double> siteLn(npat);
+        const double ninf = -std::numeric_limits<double>::infinity();
         auto patBody = [&](int h0, int h1){
             for(size_t di = 0; di < dirtyNodes.size(); di++){
                 Node* node = dirtyNodes[di];
-                std::vector<double>& cp = conP[p][node->getOffset()];
+                int noff = node->getOffset();
+                std::vector<double>& cp = conP[p][noff];
+                std::vector<double>& cs = cumScale[p][noff];
                 const std::vector<Node*>& children = dirtyChildren[di];
                 for(Node* c : children){
                     int coff = c->getOffset();
@@ -194,7 +202,28 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
                             }
                     }
                 }
+                static const bool noScale = (getenv("FBD_NOSCALE") != nullptr);
+                for(int h = h0; h < h1; h++){
+                    double mx = 0.0;
+                    for(int k = 0; k < K; k++)
+                        for(int a = 0; a < n; a++){
+                            double v = cp[(k * npat + h) * n + a];
+                            if(v > mx) mx = v;
+                        }
+                    double s = 0.0;
+                    if(mx > 0.0 && noScale == false){
+                        double inv = 1.0 / mx;
+                        for(int k = 0; k < K; k++)
+                            for(int a = 0; a < n; a++)
+                                cp[(k * npat + h) * n + a] *= inv;
+                        s = std::log(mx);
+                    }
+                    for(Node* c : children)
+                        s += cumScale[p][c->getOffset()][h];
+                    cs[h] = s;
+                }
             }
+            const std::vector<double>& csRoot = cumScale[p][croff];
             for(int h = h0; h < h1; h++){
                 double gammaLk = 0.0;
                 for(int k = 0; k < K; k++){
@@ -209,15 +238,30 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
                     for(int a = 0; a < n; a++)
                         if(mask & (1 << a)) pinvLk += frequency[p][a];
                 }
-                double site = pinv * pinvLk + (1.0 - pinv) * gammaLk;
-                siteLn[h] = (site <= 0.0) ? -std::numeric_limits<double>::infinity() : patternWeight[p][h] * std::log(site);
+                double lnInv = (pinv > 0.0 && pinvLk > 0.0) ? std::log(pinv) + std::log(pinvLk) : ninf;
+                double lnVar = (pinv < 1.0 && gammaLk > 0.0) ? std::log(1.0 - pinv) + std::log(gammaLk) + csRoot[h] : ninf;
+                if(lnInv == ninf && lnVar == ninf){
+                    siteLn[h] = ninf;
+                    continue;
+                }
+                double mx = (lnInv > lnVar) ? lnInv : lnVar;
+                siteLn[h] = patternWeight[p][h] * (mx + std::log(std::exp(lnInv - mx) + std::exp(lnVar - mx)));
             }
         };
         if(parallelPatterns)
             ThreadPool::current().parallelFor(OP_CTMC, npat, patBody);
         else
             patBody(0, npat);
+        if(getenv("FBD_CHK_SCALE") != nullptr){
+            const std::vector<double>& csr = cumScale[p][croff];
+            double lo = 0.0;
+            for(int h = 0; h < npat; h++)
+                if(csr[h] < lo) lo = csr[h];
+            if(lo < minCumScale) minCumScale = lo;
+        }
+
         lastBl[p] = curBl;
+        lastMGF[p] = branchMGF[p];
         lastExch[p] = exchangeability[p];
         lastFreq[p] = frequency[p];
         lastAlpha[p] = alpha[p];

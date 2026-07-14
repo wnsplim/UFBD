@@ -90,4 +90,55 @@ void ChainRunner::resumeOutputs(void) {
         tout.close();
         trees.addFilepath(treeOut, false);
     }
+
+    resumeLatentOutput();
+}
+
+void ChainRunner::resumeLatentOutput(void) {
+    std::vector<std::string> latNames = resumeLatentNames();
+    if(latNames.empty())
+        return;
+
+    latentOut = paramOut;
+    size_t dp = latentOut.rfind(".log");
+    latentOut.insert(dp != std::string::npos ? dp : latentOut.size(), "_latent");
+    latentNms = latNames;
+    latentCols.assign(latNames.size(), std::vector<double>());
+
+    std::ifstream lin(latentOut);
+    std::string header;
+    std::vector<std::string> keep;
+    if(lin.is_open()){
+        std::getline(lin, header);
+        std::string line;
+        while(std::getline(lin, line)){
+            if(line.empty())
+                continue;
+            std::stringstream ss(line);
+            double nval;
+            ss >> nval;
+            if((unsigned long)nval > gen)
+                break;
+            keep.push_back(line);
+        }
+        lin.close();
+    }
+
+    for(const std::string& line : keep){
+        std::stringstream ss(line);
+        double nval;
+        ss >> nval;
+        double v;
+        for(size_t j = 0; j < latentCols.size() && (ss >> v); j++)
+            latentCols[j].push_back(v);
+    }
+
+    std::ofstream lout(latentOut, std::ios::out | std::ios::trunc);
+    lout << header << '\n';
+    for(const std::string& line : keep)
+        lout << line << '\n';
+    lout.close();
+
+    latent.addFilepath(latentOut, false);
+    writeLatent = true;
 }

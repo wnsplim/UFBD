@@ -11,6 +11,9 @@ ReadTSV::ReadTSV(std::string filepath, bool, bool, bool){
 
     std::string line;
     while(std::getline(file, line)){
+        size_t f = line.find_first_not_of(" \t\r\n");
+        if(f == std::string::npos || line[f] == '#')
+            continue;
         std::vector<std::string> row;
         std::stringstream ss(line);
         std::string cell;

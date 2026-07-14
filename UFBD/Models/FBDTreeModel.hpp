@@ -167,6 +167,9 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<double>         prevNodeAge;
         double                      prevX0;
         bool                        cacheInit;
+    public:
+        void                        invalidateGammaCache(void){ cacheInit = false; }
+    private:
         bool                        zoneInit;
         bool                        isResolved;
         std::vector<int>            subPre;

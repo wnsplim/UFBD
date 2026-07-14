@@ -127,6 +127,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     thinning        = 1000;
     hessianFile     = "";
     clockModelName  = "ucln";
+    sigma2Param     = Sigma2Param::PNCP;
     nStates         = 4;
     sequenceFile    = "";
     partitionFile   = "";
@@ -186,7 +187,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-lambda_prior", "-mu_prior", "-psi_prior", "-psi_types",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_partitions",
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-lambda_groups", "-mu_groups", "-psi_groups", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
-        "-hessian", "-clock_model", "-n_states", "-rgene_gamma", "-sigma2_gamma",
+        "-hessian", "-clock_model", "-n_states", "-rgene_gamma", "-sigma2_gamma", "-sigma2_param",
         "-sequence", "-partition", "-ctmc_gamma_cat", "-datatype", "-ctmc_model", "-ctmc_inv", "-ctmc_freq",
         "-parallel_chains", "-burn_in", "-rhat", "-min_ess", "-max_gen", "-resume", "-ar_log"
     };
@@ -195,7 +196,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-lambda_prior", "-mu_prior", "-psi_prior", "-psi_types",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_partitions",
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-lambda_groups", "-mu_groups", "-psi_groups", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
-        "-hessian", "-clock_model", "-n_states", "-rgene_gamma", "-sigma2_gamma",
+        "-hessian", "-clock_model", "-n_states", "-rgene_gamma", "-sigma2_gamma", "-sigma2_param",
         "-sequence", "-partition", "-ctmc_gamma_cat", "-datatype", "-ctmc_model", "-ctmc_inv", "-ctmc_freq",
         "-parallel_chains", "-burn_in", "-rhat", "-min_ess", "-max_gen"
     };
@@ -402,6 +403,13 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
             } else if (arg == "-sigma2_gamma") {
                 std::stringstream ss(val); std::string tok; int k = 0;
                 while (std::getline(ss, tok, ',') && k < 3) if (tok.empty() == false) sigma2Gamma[k++] = std::stod(tok);
+            } else if (arg == "-sigma2_param") {
+                std::string v = val;
+                for (char& ch : v) ch = std::tolower((unsigned char)ch);
+                if (v == "pncp") sigma2Param = Sigma2Param::PNCP;
+                else if (v == "c") sigma2Param = Sigma2Param::C;
+                else if (v == "nc") sigma2Param = Sigma2Param::NC;
+                else Msg::error("flag \"-sigma2_param\" expects pncp, c or nc, but got \"" + val + "\".");
             } else if (arg == "-datatype") {
                 datatypeProvided = true;
                 std::string v = val;
@@ -714,6 +722,11 @@ CLOCK & SUBSTITUTION MODEL
                           clock group id per partition (omit = single clock)
   -rgene_gamma <a,b,c>    gamma prior on the mean clock rate
   -sigma2_gamma <a,b,c>   gamma prior on the clock rate variance
+  -sigma2_param <pncp|c|nc>
+                          parameterization of the sigma2. pncp (default) adapts per branch to
+                          how much the data constrain that branch; c is fully centered and nc fully
+                          non-centered. Both fixed choices mix badly when the data disagree with
+                          them, so change this only if you know which regime your data are in.
 
 OTHER
   -config <file>          read a config file (its format is in README.md)

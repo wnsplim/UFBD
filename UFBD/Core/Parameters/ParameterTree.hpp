@@ -17,6 +17,7 @@ class ParameterTree : public Parameter {
         double                      getAcceptanceRatio(void) { return ((double) numAcceptances) /( (double)numAcceptances + (double)numRejections ) ;}
         double                      getScaleLambda(void) { return scaleLambda; }
         Tree*                       getTree(void) { return trees[0]; }
+        void                        setAgeFloors(const std::map<Node*,double>& f);
         double                      lnProbability(void);
         void                        print(void);
         void                        setTree(Tree* t);

@@ -95,6 +95,10 @@ double RelaxedClockTreeModel::lnLikelihood(void){
     return ctmc->computeLnL(fbd->getTree(), clock->getAbsoluteRates(), clock->getBranchMGF());
 }
 
+void RelaxedClockTreeModel::invalidatePriorCache(void){
+    fbd->invalidateGammaCache();
+}
+
 double RelaxedClockTreeModel::lnPriorProbability(void){
     double lnp = fbd->lnLikelihood() + fbd->lnPriorProbability() + clock->lnProbability();
     if(ctmc != nullptr)
@@ -133,6 +137,7 @@ double RelaxedClockTreeModel::update(void){
     double u = r.uniformRv();
     if(u < 0.20){ lastMoveType = 0; return clock->update(); }
     if(u < 0.516){
+        fbd->setupNodeAgeFloors();
         if(nInternalAge == 0) nInternalAge = (int)fbd->getAgeLogNodes().size();
         double pCrown = (nInternalAge > 0) ? 1.0 / nInternalAge : 0.0;
         if(r.uniformRv() < pCrown){ lastMoveType = 8; return clock->simpleDistanceMove(); }
@@ -158,7 +163,7 @@ double RelaxedClockTreeModel::update(void){
         if(ageScaleAtt % 50 == 0){
             double ar = (double)ageScaleAcc / ageScaleAtt;
             double gain = 1.0 / std::sqrt((double)(ageScaleAtt / 50));
-            ageScaleStep *= std::exp(gain * (ar - 0.44));
+            ageScaleStep *= std::exp(gain * (ar - 0.3));
             if(ageScaleStep < 1e-4) ageScaleStep = 1e-4;
             if(ageScaleStep > 20.0)  ageScaleStep = 20.0;
         }

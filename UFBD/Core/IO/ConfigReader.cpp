@@ -216,7 +216,7 @@ std::vector<std::string> ConfigReader::translate(const std::string& path){
         "partition","datatype","n_states","ctmc_model","ctmc_gamma_cat","ctmc_inv","ctmc_freq"
     };
     static const std::set<std::string> clockKeys = {
-        "clock_partitions","clock_model","rgene_gamma","sigma2_gamma"
+        "clock_partitions","clock_model","rgene_gamma","sigma2_gamma","sigma2_param"
     };
     static const std::set<std::string> rateKeys = { "time_bins","prior","mode" };
 

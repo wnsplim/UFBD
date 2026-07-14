@@ -4,6 +4,7 @@ UFBD.xcodeproj/project.xcworkspace/xcuserdata/levir.xcuserdatad/UserInterfaceSta
 
 # Playground
 output/
+Examples/raw
 Examples/config_reference.cfg
 
 # Coding agent configurations
