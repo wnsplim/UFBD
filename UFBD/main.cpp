@@ -68,6 +68,7 @@ int main(int argc, const char* argv[]) {
     std::atexit(restoreConsoleStreams);
 
     UserSettings& settings = UserSettings::userSettings();
+    Msg::setDeferWarnings(true);
     settings.initializeSettings(argc, argv);
 
     std::string logBase = settings.getParamOutput();
@@ -90,13 +91,17 @@ int main(int argc, const char* argv[]) {
         restoreConsoleStreams();
     }
 
+    FBDInput input(settings.getTreeFile(), settings.getCladesFile(), settings.getFossilFile());
+    Tree* pt = input.getTree();
+
     settings.print();
+    if(Msg::hasDeferredWarnings()){
+        Msg::flushWarnings();
+        std::cout << "-----------------------------------------------------------------------\n";
+    }
+    Msg::setDeferWarnings(false);
 
     unsigned int masterSeed = settings.getSeed();
-
-    FBDInput input(settings.getTreeFile(), settings.getCladesFile(), settings.getFossilFile());
-
-    Tree* pt = input.getTree();
 
     bool seq = settings.getSequenceFile().empty() == false;
     bool hessian = settings.getHessianFile().empty() == false;

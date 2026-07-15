@@ -1,0 +1,16 @@
+../../ufbd -backbone_tree cet72.treefile -chain_length 10 -clade_def cetacea.clades -conditioning origin "uniform:50,60" -coupled_chains 1 -fossils cetacea.fossils -hessian in.BV -thinning 5000
+Config file:                  /tmp/q.cfg
+Tree input file:              cet72.treefile
+Clades input file:            cetacea.clades
+Fossils input file:           cetacea.fossils
+Hessian input file:           in.BV
+Random number seed:           1079071034
+Chain length:                 10
+Number of parallel chains:    4
+Thinning:                     5000
+PNCP tuning iterations:       50000
+Number of cores:              1
+-----------------------------------------------------------------------
+Warning: -coupled_chains 1 runs plain MCMC, not Metropolis-coupled MCMC; use -coupled_chains > 1 to enable MC3.
+Warning: no tree output file specified (-tree_output).
+Warning: no parameter output file specified (-log_output).

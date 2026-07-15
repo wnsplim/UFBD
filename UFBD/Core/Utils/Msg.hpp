@@ -9,6 +9,9 @@ namespace Msg {
 
    void   error(std::string s);
    void   warning(std::string s);
+   void   setDeferWarnings(bool b);
+   bool   hasDeferredWarnings(void);
+   void   flushWarnings(void);
 }
 
 #endif
