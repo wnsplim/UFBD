@@ -18,11 +18,20 @@ ConvergenceRunner::ConvergenceRunner(std::vector<ChainRunner*> reps, const std::
     for(int r = 0; r < M; r++){
         std::string pf = paramBase, tf = treeBase;
         if(M > 1){
-            std::string tag = "_chain" + std::to_string(r);
-            size_t dp = paramBase.rfind('.');
-            pf = (dp == std::string::npos) ? paramBase + tag : paramBase.substr(0, dp) + tag + paramBase.substr(dp);
-            size_t dt = treeBase.rfind('.');
-            tf = (dt == std::string::npos) ? treeBase + tag : treeBase.substr(0, dt) + tag + treeBase.substr(dt);
+            std::string sfx = std::to_string(r);
+            std::string tag = "_chain" + sfx;
+            if(paramBase.empty())
+                pf = "chain" + sfx;
+            else {
+                size_t dp = paramBase.rfind('.');
+                pf = (dp == std::string::npos) ? paramBase + tag : paramBase.substr(0, dp) + tag + paramBase.substr(dp);
+            }
+            if(treeBase.empty())
+                tf = "chain" + sfx;
+            else {
+                size_t dt = treeBase.rfind('.');
+                tf = (dt == std::string::npos) ? treeBase + tag : treeBase.substr(0, dt) + tag + treeBase.substr(dt);
+            }
         }
         repParamFiles.push_back(pf);
         repTreeFiles.push_back(tf);
