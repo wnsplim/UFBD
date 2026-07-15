@@ -147,7 +147,7 @@ void Mcmc::advance(unsigned long nGens) {
 
         if (verbose && tuning == false && n % thinning == 0) {
             std::ostringstream os;
-            os << std::fixed << std::setprecision(2) << "chain " << runLabel << "  " << n << " -- posterior " << (curLnL + curLnP) << " likelihood " << curLnL << "\n";
+            os << std::fixed << std::setprecision(2) << "chain " << runLabel << "  " << n << " -- posterior " << (curLnL + curLnP) << " likelihood " << curLnL << " prior " << curLnP << "\n";
             ChainRunner::logLine(os.str());
         }
 

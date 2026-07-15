@@ -209,7 +209,7 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
             std::ostringstream os;
             os << std::fixed << std::setprecision(2) << "chain " << runLabel << "  " << n << " -- posterior "
                << (currLnL[coldModelIdx] + currLnP[coldModelIdx]) << " likelihood " << currLnL[coldModelIdx]
-               << " | swap accept " << acceptanceRate << "\n";
+               << " prior " << currLnP[coldModelIdx] << " | swap accept " << acceptanceRate << "\n";
             ChainRunner::logLine(os.str());
         }
             

@@ -14,6 +14,7 @@
 #include <vector>
 
 ThreadPool::ThreadPool(int numThreads) : stop(false), chainCap(numThreads){
+    dispatchCost.store(-1.0, std::memory_order_relaxed);
     for(int i = 0; i < OP_NUM; i++){
         opCost[i].store(-1.0, std::memory_order_relaxed);
         opCalls[i].store(0, std::memory_order_relaxed);
@@ -62,6 +63,24 @@ void ThreadPool::enqueue(std::function<void()> task){
     cv.notify_one();
 }
 
+double ThreadPool::measureDispatch(int nt){
+    if(nt <= 1)
+        return 0.0;
+    std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
+    int remaining = nt;
+    std::mutex m;
+    std::condition_variable doneCv;
+    for(int k = 0; k < nt; k++)
+        enqueue([&remaining, &m, &doneCv](){
+            std::lock_guard<std::mutex> lk(m);
+            if(--remaining == 0)
+                doneCv.notify_one();
+        });
+    std::unique_lock<std::mutex> lk(m);
+    doneCv.wait(lk, [&remaining]{ return remaining == 0; });
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+}
+
 void ThreadPool::parallelFor(int opId, int n, const std::function<void(int, int)>& body, int maxThreads){
     if(n <= 0)
         return;
@@ -77,7 +96,13 @@ void ThreadPool::parallelFor(int opId, int n, const std::function<void(int, int)
         opCost[opId].store((cost < 0.0) ? per : 0.8 * cost + 0.2 * per, std::memory_order_relaxed);
         return;
     }
-    if((double)n * cost < 150e-6){
+    double disp = dispatchCost.load(std::memory_order_relaxed);
+    if(disp < 0.0 || (calls % 4099) == 0){
+        double d = measureDispatch(nt);
+        disp = (disp < 0.0) ? d : 0.7 * disp + 0.3 * d;
+        dispatchCost.store(disp, std::memory_order_relaxed);
+    }
+    if((double)n * cost < 2.0 * disp){
         body(0, n);
         return;
     }

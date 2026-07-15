@@ -19,6 +19,7 @@ class ThreadPool {
     void                                enqueue(std::function<void()> task);
     int                                 size(void) { return (int)threads.size(); }
     void                                parallelFor(int opId, int n, const std::function<void(int, int)>& body, int maxThreads = 1000000);
+    double                              measureDispatch(int nt);
     void                                parallelTasks(const std::vector<std::function<void()>>& tasks);
     void                                setChainCap(int c) { chainCap = (c < 1) ? 1 : c; }
     static ThreadPool&                  shared(void);
@@ -34,6 +35,7 @@ class ThreadPool {
     int                                 chainCap;
     std::atomic<double>                 opCost[OP_NUM];
     std::atomic<long>                   opCalls[OP_NUM];
+    std::atomic<double>                 dispatchCost;
 };
 
 #endif
