@@ -665,8 +665,6 @@ void Tree::initializeDownPassSequence(void) {
 }
 
 void Tree::initializeTimes(void){
-    if(getenv("FBD_CHK_INIT") != nullptr)
-        fprintf(stderr, "[times] initializeTimes() called on tree %p (%d nodes)\n", (void*)this, (int)nodes.size());
     initializeDownPassSequence();
     std::map<Node*,double> noMinAges;
     assignStartingAges(noMinAges, 1.0);

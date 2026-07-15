@@ -38,6 +38,7 @@ class Mcmc : public ChainRunner {
         int                     runLabel = 0;
         int                     numCycles;
         int                     thinning;
+        bool                    tuning = false;
         double                  curLnL;
         double                  curLnP;
 };

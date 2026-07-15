@@ -336,9 +336,17 @@ void ApproxBranchLengthLikelihood::resolveBranchOrder(void){
     std::vector<std::map<std::set<std::string>, double>> bvLen(nPartitions);
     for(int p = 0; p < nPartitions; p++){
         newickBipartLengths(partitionNewick[p], bvLen[p]);
-        for(int b = 0; b < nb; b++)
-            if(bvLen[p].find(bipartitions[b]) == bvLen[p].end())
-                Msg::error("backbone topology does not match the Hessian tree");
+        std::set<std::string> hessTips;
+        for(const auto& kv : bvLen[p])
+            hessTips.insert(kv.first.begin(), kv.first.end());
+        for(int b = 0; b < nb; b++){
+            if(bvLen[p].find(bipartitions[b]) != bvLen[p].end())
+                continue;
+            for(const std::string& t : bipartitions[b])
+                if(hessTips.count(t) == 0)
+                    Msg::error("backbone tip '" + t + "' not in the Hessian tree");
+            Msg::error("backbone topology does not match the Hessian tree");
+        }
     }
 
     auto fits = [&](int b, int k) -> bool {

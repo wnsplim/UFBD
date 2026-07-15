@@ -49,6 +49,17 @@ bool ConvergenceRunner::run(void){
         std::cout << "min per-chain ESS >= " << (int)s.getEssThreshold() << ".\n";
     }
 
+    int M = (int)replicates.size();
+    int nCores = UserSettings::userSettings().getNumCores();
+    bool parallelRuns = (M > 1 && UserSettings::userSettings().getNumCoupledChains() == 1);
+    int nWorkers = parallelRuns ? std::min(nCores, M) : 0;
+    std::vector<ThreadPool*> runPools;
+    for(int t = 0; t < nWorkers; t++){
+        int per = nCores / nWorkers + (t < nCores % nWorkers ? 1 : 0);
+        if(per < 1) per = 1;
+        runPools.push_back(new ThreadPool(per));
+    }
+
     unsigned long gen = 0;
     if(s.getResume()){
         for(ChainRunner* c : replicates){
@@ -61,20 +72,21 @@ bool ConvergenceRunner::run(void){
             if(cg < gen)
                 c->advance(gen - cg);
         }
+    }else if(parallelRuns){
+        std::vector<std::thread> workers;
+        for(int t = 0; t < nWorkers; t++){
+            workers.emplace_back([this, t, nWorkers, &runPools](){
+                ThreadPool::setCurrent(runPools[t]);
+                for(int r = t; r < (int)replicates.size(); r += nWorkers)
+                    replicates[r]->init();
+                ThreadPool::setCurrent(nullptr);
+            });
+        }
+        for(std::thread& w : workers)
+            w.join();
     }else{
         for(ChainRunner* c : replicates)
             c->init();
-    }
-
-    int M = (int)replicates.size();
-    int nCores = UserSettings::userSettings().getNumCores();
-    bool parallelRuns = (M > 1 && UserSettings::userSettings().getNumCoupledChains() == 1);
-    int nWorkers = parallelRuns ? std::min(nCores, M) : 0;
-    std::vector<ThreadPool*> runPools;
-    for(int t = 0; t < nWorkers; t++){
-        int per = nCores / nWorkers + (t < nCores % nWorkers ? 1 : 0);
-        if(per < 1) per = 1;
-        runPools.push_back(new ThreadPool(per));
     }
 
     bool stoppedEarly = false;

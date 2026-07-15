@@ -187,7 +187,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-lambda_prior", "-mu_prior", "-psi_prior", "-psi_types",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_partitions",
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-lambda_groups", "-mu_groups", "-psi_groups", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
-        "-hessian", "-clock_model", "-n_states", "-rgene_gamma", "-sigma2_gamma", "-sigma2_param",
+        "-hessian", "-clock_model", "-n_states", "-rgene_gamma", "-sigma2_gamma", "-sigma2_param", "-pncp_tuning",
         "-sequence", "-partition", "-ctmc_gamma_cat", "-datatype", "-ctmc_model", "-ctmc_inv", "-ctmc_freq",
         "-parallel_chains", "-burn_in", "-rhat", "-min_ess", "-max_gen", "-resume", "-ar_log"
     };
@@ -196,7 +196,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-lambda_prior", "-mu_prior", "-psi_prior", "-psi_types",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_partitions",
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-lambda_groups", "-mu_groups", "-psi_groups", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
-        "-hessian", "-clock_model", "-n_states", "-rgene_gamma", "-sigma2_gamma", "-sigma2_param",
+        "-hessian", "-clock_model", "-n_states", "-rgene_gamma", "-sigma2_gamma", "-sigma2_param", "-pncp_tuning",
         "-sequence", "-partition", "-ctmc_gamma_cat", "-datatype", "-ctmc_model", "-ctmc_inv", "-ctmc_freq",
         "-parallel_chains", "-burn_in", "-rhat", "-min_ess", "-max_gen"
     };
@@ -410,6 +410,8 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 else if (v == "c") sigma2Param = Sigma2Param::C;
                 else if (v == "nc") sigma2Param = Sigma2Param::NC;
                 else Msg::error("flag \"-sigma2_param\" expects pncp, c or nc, but got \"" + val + "\".");
+            } else if (arg == "-pncp_tuning") {
+                pncpTuningGens = std::stoul(val);
             } else if (arg == "-datatype") {
                 datatypeProvided = true;
                 std::string v = val;
@@ -626,6 +628,8 @@ void UserSettings::print(void) {
         std::cout << "Coupled chains per run (MC3): " << numCoupledChains << std::endl;
     std::cout << "Number of parallel chains:    " << numRuns << std::endl;
     std::cout << "Thinning:                     " << thinning << std::endl;
+    if (sigma2Param == Sigma2Param::PNCP)
+        std::cout << "PNCP tuning iterations:       " << pncpTuningGens << std::endl;
     std::cout << "Number of cores:              " << numCores << std::endl;
     std::cout << "-----------------------------------------------------------------------" << std::endl;
 

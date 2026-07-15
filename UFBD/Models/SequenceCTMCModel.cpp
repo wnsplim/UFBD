@@ -46,10 +46,10 @@ void SequenceCTMCModel::buildParameters(void){
     bool freqObserved = (fm == "empirical");
     freqEstimated = (freqObserved == false) && (empirical == false || fm == "estimate");
 
-    int nLoci = seqLik->getNumPartitions();
+    int nClockPartitions = seqLik->getNumPartitions();
     int nExch = nStates * (nStates - 1) / 2;
-    for(int p = 0; p < nLoci; p++){
-        std::string suf = (nLoci > 1) ? std::to_string(p) : "";
+    for(int p = 0; p < nClockPartitions; p++){
+        std::string suf = (nClockPartitions > 1) ? std::to_string(p) : "";
         exch.push_back(new ParameterSimplex(1.0, owner, "exch" + suf, nExch, 1.0, 500.0));
         freq.push_back(new ParameterSimplex(1.0, owner, "freq" + suf, nStates, 1.0, 300.0));
         ParameterDouble* a = new ParameterDouble(1.0, owner, "alpha" + suf, 0.0, 1.0e8);
@@ -69,10 +69,10 @@ void SequenceCTMCModel::buildParameters(void){
         double se = 0.0; for(double x : e) se += x; for(double& x : e) x /= se;
         datFreq = em.getFrequencies();
         double sf = 0.0; for(double x : datFreq) sf += x; for(double& x : datFreq) x /= sf;
-        for(int p = 0; p < nLoci; p++)
+        for(int p = 0; p < nClockPartitions; p++)
             exch[p]->setValue(e);
     }
-    for(int p = 0; p < nLoci; p++){
+    for(int p = 0; p < nClockPartitions; p++){
         if(freqObserved)
             freq[p]->setValue(observedFreq[p]);
         else if(empirical)
@@ -85,10 +85,10 @@ int SequenceCTMCModel::getNumPartitions(void) const {
 }
 
 double SequenceCTMCModel::computeLnL(Tree* tree, const std::vector<std::vector<double> >& branchRates, const std::vector<std::vector<BranchMGF> >& branchMGF){
-    int nLoci = seqLik->getNumPartitions();
-    std::vector<std::vector<double> > exchV(nLoci), freqV(nLoci);
-    std::vector<double> alphaV(nLoci), pinvV(nLoci);
-    for(int p = 0; p < nLoci; p++){
+    int nClockPartitions = seqLik->getNumPartitions();
+    std::vector<std::vector<double> > exchV(nClockPartitions), freqV(nClockPartitions);
+    std::vector<double> alphaV(nClockPartitions), pinvV(nClockPartitions);
+    for(int p = 0; p < nClockPartitions; p++){
         exchV[p] = exch[p]->getValue();
         freqV[p] = freq[p]->getValue();
         alphaV[p] = alpha[p]->getValue();

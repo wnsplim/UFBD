@@ -58,6 +58,7 @@ class MetropolisCoupledMcmc : public ChainRunner {
         int                                 chainDecision;
         RandomVariable                      swapRng;
         bool                                verbose = false;
+        bool                                tuning = false;
         int                                 runLabel = 0;
         unsigned long                       numCycles;
         double                              deltaT;

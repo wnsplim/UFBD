@@ -38,12 +38,6 @@ void Mcmc::init(void) {
     RandomVariable::setActiveInstance(model->getRng());
     curLnL = model->lnLikelihood();
     curLnP = model->lnPriorProbability();
-    if(getenv("FBD_CHK_INIT") != nullptr){
-        Tree* it = model->getTree();
-        fprintf(stderr, "[mcmc-init] lnL=%.17g lnP=%.17g | root off=%d age=%g | crown off=%d age=%g\n",
-                curLnL, curLnP, it->getRoot()->getOffset(), it->getRoot()->getTime(),
-                it->getCrown()->getOffset(), it->getCrown()->getTime());
-    }
     if(std::isfinite(curLnL) == false || std::isfinite(curLnP) == false){
         std::ostringstream os;
         os << std::setprecision(6) << "the initial state has lnLikelihood " << curLnL
@@ -51,6 +45,16 @@ void Mcmc::init(void) {
         Msg::error(os.str());
     }
     gen = 0;
+
+    UserSettings& settings = UserSettings::userSettings();
+    if(settings.getSigma2Param() == Sigma2Param::PNCP && settings.getPncpTuningGens() > 0){
+        model->setChainLabel(runLabel);
+        tuning = true;
+        advance(settings.getPncpTuningGens());
+        model->freezePncpTuning();
+        tuning = false;
+        gen = 0;
+    }
 }
 
 void Mcmc::advance(unsigned long nGens) {
@@ -95,8 +99,7 @@ void Mcmc::advance(unsigned long nGens) {
             }
             if(gen % 20000 == 0)
                 std::cout << "[cache] gen " << gen << "  corrupt " << nBad << " (worst " << worst
-                          << ")  ninfBl " << SequenceLikelihood::ninfBl
-                          << "  ninfSite " << SequenceLikelihood::ninfSite << "\n" << std::flush;
+                          << ")\n" << std::flush;
         }
 
         static const bool chkPrior = (getenv("FBD_CHK_PRIOR") != nullptr);
@@ -142,21 +145,18 @@ void Mcmc::advance(unsigned long nGens) {
             fprintf(stderr, "[t] %lu mv=%d h=%.17g curL=%.17g curP=%.17g a=%d\n", gen,
                     model->getLastMoveType(), lnProposalRatio, curLnL, curLnP, (int)acceptMove);
 
-        if (verbose && n % thinning == 0) {
+        if (verbose && tuning == false && n % thinning == 0) {
             std::ostringstream os;
             os << std::fixed << std::setprecision(2) << "chain " << runLabel << "  " << n << " -- posterior " << (curLnL + curLnP) << " likelihood " << curLnL << "\n";
             ChainRunner::logLine(os.str());
         }
 
-        if (n == 1 || n == (unsigned long)numCycles || n % thinning == 0)
+        if (tuning == false && (n == 1 || n == (unsigned long)numCycles || n % thinning == 0))
             sample(n, curLnL, curLnP);
     }
 }
 
 void Mcmc::finalize(void) {
-    if(getenv("FBD_CHK_SCALE") != nullptr)
-        std::cout << "[scale] min cumScale at root = " << SequenceLikelihood::minCumScale
-                  << "  (underflow of the unscaled product begins near -708)\n" << std::flush;
     params.closeTSV();
     if(writeTrees)
         trees.appendDataTSV("END;");

@@ -89,6 +89,7 @@ class UserSettings {
         const double*               getRgeneGamma(void) { return rgeneGamma; }
         const double*               getSigma2Gamma(void) { return sigma2Gamma; }
         Sigma2Param                 getSigma2Param(void) { return sigma2Param; }
+        unsigned long               getPncpTuningGens(void) { return pncpTuningGens; }
         bool                        clockOrCtmcConfigured(void) { return clockModelName != "ucln" || substModel != "gtr" || datatypeProvided || nstatesProvided || partitionFile.empty() == false || useInvariant || numCats != 4 || freqMode != "model" || clockGroups.empty() == false || sigma2Param != Sigma2Param::PNCP; }
         void                        print(void);
         void                        printHelp(void);
@@ -153,6 +154,7 @@ class UserSettings {
         std::string                 invocation;
         std::string                 clockModelName;
         Sigma2Param                 sigma2Param = Sigma2Param::PNCP;
+        unsigned long               pncpTuningGens = 50000;
         std::vector<int>            clockGroups;
         int                         nStates;
         std::string                 sequenceFile;

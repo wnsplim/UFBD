@@ -95,6 +95,18 @@ void MetropolisCoupledMcmc::init(void) {
         idx++;
     }
     gen = 0;
+
+    UserSettings& settings = UserSettings::userSettings();
+    if(settings.getSigma2Param() == Sigma2Param::PNCP && settings.getPncpTuningGens() > 0){
+        for(PhylogeneticModel* m : models)
+            m->setChainLabel(runLabel);
+        tuning = true;
+        advance(settings.getPncpTuningGens());
+        for(PhylogeneticModel* m : models)
+            m->freezePncpTuning();
+        tuning = false;
+        gen = 0;
+    }
 }
 
 void MetropolisCoupledMcmc::finalize(void) {
@@ -233,7 +245,7 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
         if (recentAcceptRej.size() > 10000)
             recentAcceptRej.pop_front();
         
-        if (n == 1 || n == numCycles || n % thinning == 0 )
+        if (tuning == false && (n == 1 || n == numCycles || n % thinning == 0))
             sample(n);
     }
 }

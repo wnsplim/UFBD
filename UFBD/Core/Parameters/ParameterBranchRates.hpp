@@ -97,9 +97,9 @@ class BranchRateModel : public Parameter {
     public:
                                     BranchRateModel(double prob, PhylogeneticModel* m, Tree* tree, int numPartitions, const std::vector<int>& partitionGroup, const double* rgeneParam, const double* sigma2Param);
         double                      getAcceptanceRatio(void);
-        int                         getNumLoci(void) { return numLoci; }
-        double                      getLocusRate(int p) { return mu[0][p]; }
-        double                      getLocusSigma2(int p) { return sigma2[0][p]; }
+        int                         getNumClockPartitions(void) { return numClockPartitions; }
+        double                      getClockPartitionRate(int p) { return mu[0][p]; }
+        double                      getClockPartitionSigma2(int p) { return sigma2[0][p]; }
         int                         getNumBranchNodes(void) { return (int)branchNodes.size(); }
         int                         getBranchNodeOffset(int i) { return branchNodes[i]; }
         void                        scaleAll(double sf);
@@ -115,19 +115,21 @@ class BranchRateModel : public Parameter {
         void                        updateForRejection(void);
         void                        writeState(std::ostream& os);
         void                        readState(std::istream& is);
+        void                        freezePncp(void);
+        void                        setChainLabel(int c) { chainLabel = c; }
         virtual std::vector<std::vector<double>> getAbsoluteRates(void) = 0;
         virtual std::vector<std::vector<BranchMGF>> getBranchMGF(void){ return std::vector<std::vector<BranchMGF>>(numPartitions, std::vector<BranchMGF>(numNodes, BranchMGF{0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0})); }
 
     protected:
-        double                      scaleLocusRate(int p);
-        double                      scaleLocusSigma2(int p);
+        double                      scaleClockPartitionRate(int p);
+        double                      scaleClockPartitionSigma2(int p);
         double                      scaleBranchRate(int p, int b);
         double                      globalRateBranchRatesScale(int p);
         double                      bactrianMultiplier(int moveType);
         double                      gammaDirichletLnP(const std::vector<double>& v, const double* param);
         double                      gammaLnPdf(double a, double b, double x);
         Tree*                       tree;
-        int                         numLoci;
+        int                         numClockPartitions;
         int                         numPartitions;
         std::vector<int>            partitionGroup;
         int                         numNodes;
@@ -142,7 +144,7 @@ class BranchRateModel : public Parameter {
         int                         acc[4];
         int                         rej[4];
         int                         lastMove;
-        int                         lastLocus;
+        int                         lastClockPartition;
         int                         lastNode;
         ParameterUnresolvedFossils* uf;
         std::vector<double>         cdStepNode;
@@ -170,6 +172,9 @@ class BranchRateModel : public Parameter {
         std::vector<long>           sigRefresh;
         std::vector<long>           sigCount;
         std::vector<double>         centeredness;
+        std::vector<double>         pncpMeanTau;
+        bool                        pncpFrozen = false;
+        int                         chainLabel = 0;
 };
 
 class ParameterBranchRates : public BranchRateModel {
@@ -210,7 +215,7 @@ class ParameterBranchRatesCIR : public BranchRateModel {
         void                        updateForRejection(void);
 
     private:
-        double                      scaleLocusTheta(int p);
+        double                      scaleClockPartitionTheta(int p);
         double                      scaleMuRates(int p);
         double                      sigmaPncpMoveCIR(int p);
         double                      cirLnP(void);

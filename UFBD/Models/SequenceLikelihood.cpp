@@ -89,10 +89,6 @@ double SequenceLikelihood::computeLnL(Tree* tree,
     return lnL;
 }
 
-long SequenceLikelihood::ninfBl = 0;
-long SequenceLikelihood::ninfSite = 0;
-double SequenceLikelihood::minCumScale = 0.0;
-
 double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
                                       const std::vector<std::vector<double>>& branchRates,
                                       const std::vector<std::vector<double>>& exchangeability,
@@ -113,7 +109,6 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
         int off = node->getOffset();
         curBl[off] = branchRates[p][off] * (tree->getBackboneParent(node)->getTime() - node->getTime());
         if(curBl[off] < 0.0){
-            ninfBl++;
             return -std::numeric_limits<double>::infinity();
         }
     }
@@ -252,14 +247,6 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
             ThreadPool::current().parallelFor(OP_CTMC, npat, patBody);
         else
             patBody(0, npat);
-        if(getenv("FBD_CHK_SCALE") != nullptr){
-            const std::vector<double>& csr = cumScale[p][croff];
-            double lo = 0.0;
-            for(int h = 0; h < npat; h++)
-                if(csr[h] < lo) lo = csr[h];
-            if(lo < minCumScale) minCumScale = lo;
-        }
-
         lastBl[p] = curBl;
         lastMGF[p] = branchMGF[p];
         lastExch[p] = exchangeability[p];
@@ -270,7 +257,6 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
         double lnL = 0.0;
         for(int h = 0; h < npat; h++){
             if(siteLn[h] == -std::numeric_limits<double>::infinity()){
-                ninfSite++;
                 return -std::numeric_limits<double>::infinity();
             }
             lnL += siteLn[h];
