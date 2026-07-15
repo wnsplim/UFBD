@@ -42,7 +42,10 @@ class FBDTreeModel : public PhylogeneticModel {
         bool                        hasOrigin(void) { return originAge != nullptr; }
         double                      getOriginAgeValue(void);
         void                        setupNodeAgeFloors(void);
+        double                      fossilSweep(void);
     private:
+        double                      fossilTermLn(int i, int spineIdx);
+        double                      term3Sum(void);
         double                      calculateFBDProbability(void);
         double                      calculateResolvedFBD(void);
         int                         countResolvedSA(void);

@@ -173,11 +173,15 @@ double RelaxedClockTreeModel::update(void){
         int nRate = clock->getNumClockPartitions() * (1 + clock->getNumBranchNodes());
         return ((double)kAge - (double)nRate) * std::log(cc);
     }
+    if(fbd->getUnresolvedFossils() != nullptr && u < 0.751){
+        lastMoveType = 9;
+        return fbd->fossilSweep();
+    }
     lastMoveType = 2; return fbd->update();
 }
 
 void RelaxedClockTreeModel::updateForAcceptance(void){
-    if(lastMoveType == 7) return;
+    if(lastMoveType == 7 || lastMoveType == 9) return;
     if(lastMoveType == 6)
         ctmc->updateForAcceptance();
     else if(lastMoveType == 0)
@@ -205,7 +209,7 @@ void RelaxedClockTreeModel::updateForAcceptance(void){
 }
 
 void RelaxedClockTreeModel::updateForRejection(void){
-    if(lastMoveType == 7) return;
+    if(lastMoveType == 7 || lastMoveType == 9) return;
     if(lastMoveType == 6)
         ctmc->updateForRejection();
     else if(lastMoveType == 0)

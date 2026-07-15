@@ -1039,26 +1039,8 @@ double FBDTreeModel::calculateFBDProbability(void){
     int spineIdx = unresolvedFossils->getSpineIdx();
     std::vector<double> termFoss(numFossils, 0.0);
     ThreadPool::current().parallelFor(OP_FBD, numFossils, [&](int lo, int hi){
-        for(int i = lo; i < hi; i++){
-            if(unresolvedFossils->isSA(i)){
-                termFoss[i] = std::log(psiOfTypeAt(fossilType[i], findIndex(unresolvedFossils->getFossilAge(i)))) + cachedGammaLn[i];
-                continue;
-            }
-            if(i == spineIdx && unresolvedFossils->isUE(i)){
-                termFoss[i] = 0.0;
-                continue;
-            }
-            if(unresolvedFossils->isUE(i)){
-                termFoss[i] = uePqLn(unresolvedFossils->getAttachAge(i)) + cachedGammaLn[i];
-                continue;
-            }
-            if(i == spineIdx){
-                double ys = unresolvedFossils->getFossilAge(i);
-                termFoss[i] = std::log(psiOfTypeAt(fossilType[i], findIndex(ys))) + std::log(calculateP0(ys)) - lnD(ys);
-                continue;
-            }
-            termFoss[i] = fossilPqLn(unresolvedFossils->getFossilAge(i), unresolvedFossils->getAttachAge(i), fossilType[i]) + cachedGammaLn[i];
-        }
+        for(int i = lo; i < hi; i++)
+            termFoss[i] = fossilTermLn(i, spineIdx);
     });
     for(int i = 0; i < numFossils; i++)
         fbdProb += termFoss[i];
@@ -1067,6 +1049,68 @@ double FBDTreeModel::calculateFBDProbability(void){
         fbdProb += std::log(psiOfTypeAt(bf.type, findIndex(y))) + std::log(calculateP0(y)) - lnD(y);
     }
     return fbdProb;
+}
+
+double FBDTreeModel::fossilTermLn(int i, int spineIdx){
+    if(unresolvedFossils->isSA(i))
+        return std::log(psiOfTypeAt(fossilType[i], findIndex(unresolvedFossils->getFossilAge(i)))) + cachedGammaLn[i];
+    if(i == spineIdx && unresolvedFossils->isUE(i))
+        return 0.0;
+    if(unresolvedFossils->isUE(i))
+        return uePqLn(unresolvedFossils->getAttachAge(i)) + cachedGammaLn[i];
+    if(i == spineIdx){
+        double ys = unresolvedFossils->getFossilAge(i);
+        return std::log(psiOfTypeAt(fossilType[i], findIndex(ys))) + std::log(calculateP0(ys)) - lnD(ys);
+    }
+    return fossilPqLn(unresolvedFossils->getFossilAge(i), unresolvedFossils->getAttachAge(i), fossilType[i]) + cachedGammaLn[i];
+}
+
+double FBDTreeModel::term3Sum(void){
+    int nf = unresolvedFossils->getNumFossils();
+    int spineIdx = unresolvedFossils->getSpineIdx();
+    bool useOrigin = (UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN);
+    double x0 = useOrigin ? originAge->getValue() : 0.0;
+    double s = 0.0;
+    for(int i = 0; i < nf; i++){
+        if(useOrigin && (unresolvedFossils->getFossilAge(i) > x0 || unresolvedFossils->getAttachAge(i) > x0))
+            return -INFINITY;
+        s += fossilTermLn(i, spineIdx);
+    }
+    return s;
+}
+
+double FBDTreeModel::fossilSweep(void){
+    RandomVariable* prevRng = RandomVariable::getActiveInstance();
+    RandomVariable::setActiveInstance(&rng);
+    int nf = unresolvedFossils->getNumFossils();
+    rhoVal = rho;
+    prepareIntervals();
+    updateGammaCache();
+
+    std::vector<int> order(nf);
+    for(int i = 0; i < nf; i++) order[i] = i;
+    for(int i = nf - 1; i > 0; i--)
+        std::swap(order[i], order[(int)(rng.uniformRv() * (i + 1))]);
+
+    double t3 = term3Sum();
+    for(int idx : order){
+        double ratio = unresolvedFossils->proposeOneFossil(idx);
+        if(ratio == -INFINITY){
+            unresolvedFossils->updateForRejection();
+            continue;
+        }
+        updateGammaCache();
+        double t3new = term3Sum();
+        if(std::log(rng.uniformRv()) < (t3new - t3) + ratio){
+            t3 = t3new;
+            unresolvedFossils->updateForAcceptance();
+        }else{
+            unresolvedFossils->updateForRejection();
+            updateGammaCache();
+        }
+    }
+    RandomVariable::setActiveInstance(prevRng);
+    return std::numeric_limits<double>::infinity();
 }
 
 double FBDTreeModel::calculateResolvedFBD(void){

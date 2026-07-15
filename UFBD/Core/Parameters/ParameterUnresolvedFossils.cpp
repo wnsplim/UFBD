@@ -99,10 +99,14 @@ double ParameterUnresolvedFossils::getMaxAttachAge(int i){
 double ParameterUnresolvedFossils::update(void){
     if(numFossils == 0)
         return 0.0;
-    lastMove = SINGLE;
     RandomVariable& rng = RandomVariable::randomVariableInstance();
-    lastFossil = (int)(rng.uniformRv() * numFossils);
-    int i = lastFossil;
+    return proposeOneFossil((int)(rng.uniformRv() * numFossils));
+}
+
+double ParameterUnresolvedFossils::proposeOneFossil(int i){
+    lastMove = SINGLE;
+    lastFossil = i;
+    RandomVariable& rng = RandomVariable::randomVariableInstance();
     if(ue[i]){
         lastSub = (i == spineIdx) ? SUB_NOOP : SUB_Z;
         return updateAttachAge(i);                          // a UE has no y and no SA state
