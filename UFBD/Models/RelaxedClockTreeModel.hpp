@@ -42,7 +42,7 @@ class RelaxedClockTreeModel : public PhylogeneticModel {
 
     private:
         void                        buildClock(ClockModel clockModel, const double* rgeneParam, const double* sigma2Param);
-        void                        crownInitScale(Tree* t);
+        void                        crownInitScale(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils);
         void                        collectNodeAges(std::vector<std::string>* names, std::vector<double>* vals);
         double                      nodeAgeSweep(void);
         double                      nodeAgeJump2(void);

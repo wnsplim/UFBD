@@ -146,11 +146,11 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
 
     originAge = nullptr;
     if(UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN){
-        double x0init = t->getCrown()->getTime();
+        double floor = t->getCrown()->getTime();
         for(Fossil& f : fossils)
-            if(f.getMaxAge() > x0init)
-                x0init = f.getMaxAge();
-        x0init *= 1.05;
+            if(f.getMaxAge() > floor)
+                floor = f.getMaxAge();
+        double x0init = floor * 1.05;
         originAge = new ParameterDouble(1.0, this, "originAge", 0.0, std::numeric_limits<double>::max());
         UserSettings& us = UserSettings::userSettings();
         if(us.getConditionAgePriorSet()){
@@ -158,6 +158,9 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
             double pm = Probability::priorMean(us.getConditionAgePrior(), us.getConditionAgePriorP1(), us.getConditionAgePriorP2());
             if(pm > x0init)
                 x0init = pm;
+            double hi = us.getConditionAgePriorP2();
+            if(us.getConditionAgePrior() == Probability::PriorFamily::UNIFORM && x0init >= hi)
+                x0init = 0.5 * (floor + hi);
         }else{
             originAge->setPrior(Probability::PriorFamily::IMPROPER, 0.0, 0.0);
         }

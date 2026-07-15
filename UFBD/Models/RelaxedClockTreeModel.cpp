@@ -29,14 +29,49 @@ void RelaxedClockTreeModel::buildClock(ClockModel clockModel, const double* rgen
     naSel.init(2);
 }
 
-void RelaxedClockTreeModel::crownInitScale(Tree* t){
+void RelaxedClockTreeModel::crownInitScale(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils){
     UserSettings& us = UserSettings::userSettings();
-    if(us.getConditioning() != Conditioning::CROWN || us.getConditionAgePriorSet() == false)
+    if(us.getConditionAgePriorSet() == false)
+        return;
+    Conditioning cond = us.getConditioning();
+    if(cond != Conditioning::CROWN && cond != Conditioning::ORIGIN)
         return;
     double pm = Probability::priorMean(us.getConditionAgePrior(), us.getConditionAgePriorP1(), us.getConditionAgePriorP2());
     double crownAge = t->getCrown()->getTime();
-    if(crownAge > 0.0 && std::isfinite(pm) && pm > crownAge)
-        t->scaleInternalAges(pm / crownAge);
+    if(crownAge <= 0.0 || std::isfinite(pm) == false || pm <= 0.0)
+        return;
+    double target = (cond == Conditioning::ORIGIN) ? 0.9 * pm : pm;
+    if(target > 0.0 && target != crownAge)
+        t->scaleInternalAges(target / crownAge);
+
+    std::map<Node*,double> floor;
+    for(Fossil& f : fossils){
+        Clade* clade = nullptr;
+        for(Clade& c : clades)
+            if(c.getName() == f.getClade()){ clade = &c; break; }
+        Node* cr = (clade == nullptr || clade->getTaxa().empty()) ? t->getCrown() : t->getMRCA(clade->getTaxa());
+        Node* node = (f.getAssignment() == Assignment::CROWN) ? cr : cr->getAncestor();
+        if(node == nullptr)
+            continue;
+        std::map<Node*,double>::iterator it = floor.find(node);
+        if(it == floor.end() || f.getMaxAge() > it->second)
+            floor[node] = f.getMaxAge();
+    }
+    for(Node* n : t->getDownPassSequence()){
+        if(n->getIsTip())
+            continue;
+        double a = n->getTime();
+        std::map<Node*,double>::iterator it = floor.find(n);
+        if(it != floor.end() && it->second * 1.05 > a)
+            a = it->second * 1.05;
+        double maxChild = 0.0;
+        for(Node* c : n->getNeighbors())
+            if(c != n->getAncestor() && c->getTime() > maxChild)
+                maxChild = c->getTime();
+        if(a <= maxChild)
+            a = maxChild * 1.02 + 1e-9;
+        n->setTime(a);
+    }
 }
 
 double RelaxedClockTreeModel::nodeAgeJump2(void){
@@ -53,7 +88,7 @@ RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades
     rng.setSeed(seed);
     RandomVariable* prevRng = RandomVariable::getActiveInstance();
     RandomVariable::setActiveInstance(&rng);
-    crownInitScale(t);
+    crownInitScale(t, clades, fossils);
     fbd = new FBDTreeModel(t, clades, fossils, seed);
     ctmc = nullptr;
     std::vector<std::string> rogue;
@@ -70,7 +105,7 @@ RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades
     rng.setSeed(seed);
     RandomVariable* prevRng = RandomVariable::getActiveInstance();
     RandomVariable::setActiveInstance(&rng);
-    crownInitScale(t);
+    crownInitScale(t, clades, fossils);
     fbd = new FBDTreeModel(t, clades, fossils, seed);
     lik = nullptr;
     ctmc = new SequenceCTMCModel(this, sequenceFile, partitionFile, nStates, numCats);
