@@ -46,6 +46,11 @@ class FBDTreeModel : public PhylogeneticModel {
     private:
         double                      fossilTermLn(int i, int spineIdx);
         double                      term3Sum(void);
+        double                      fossilSweepSequential(void);
+        double                      fossilSweepParallel(void);
+        void                        rebuildZoneStalks(int z, const std::vector<int>& fos);
+        void                        zoneRecomputeGamma(const std::vector<int>& fos);
+        double                      zoneTermSum(const std::vector<int>& fos, double x0, bool useOrigin);
         double                      calculateFBDProbability(void);
         double                      calculateResolvedFBD(void);
         int                         countResolvedSA(void);

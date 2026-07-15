@@ -1079,14 +1079,50 @@ double FBDTreeModel::term3Sum(void){
     return s;
 }
 
+void FBDTreeModel::rebuildZoneStalks(int z, const std::vector<int>& fos){
+    zoneStalks[z].y.clear();
+    zoneStalks[z].zy.clear();
+    for(int i : fos){
+        if(unresolvedFossils->isSA(i))
+            continue;
+        double yi = unresolvedFossils->getFossilAge(i);
+        zoneStalks[z].y.push_back(yi);
+        zoneStalks[z].zy.push_back(std::make_pair(unresolvedFossils->getAttachAge(i), yi));
+    }
+    std::sort(zoneStalks[z].y.begin(), zoneStalks[z].y.end());
+    std::sort(zoneStalks[z].zy.begin(), zoneStalks[z].zy.end());
+}
+
+void FBDTreeModel::zoneRecomputeGamma(const std::vector<int>& fos){
+    for(int i : fos){
+        double g = computeGamma(unresolvedFossils->getAttachAge(i), i);
+        cachedGammaLn[i] = (g > 0.0) ? std::log(g) : -INFINITY;
+    }
+}
+
+double FBDTreeModel::zoneTermSum(const std::vector<int>& fos, double x0, bool useOrigin){
+    double s = 0.0;
+    for(int i : fos){
+        if(useOrigin && (unresolvedFossils->getFossilAge(i) > x0 || unresolvedFossils->getAttachAge(i) > x0))
+            return -INFINITY;
+        s += fossilTermLn(i, -1);
+    }
+    return s;
+}
+
 double FBDTreeModel::fossilSweep(void){
     RandomVariable* prevRng = RandomVariable::getActiveInstance();
     RandomVariable::setActiveInstance(&rng);
-    int nf = unresolvedFossils->getNumFossils();
     rhoVal = rho;
     prepareIntervals();
     updateGammaCache();
+    double r = (unresolvedFossils->getSpineIdx() < 0) ? fossilSweepParallel() : fossilSweepSequential();
+    RandomVariable::setActiveInstance(prevRng);
+    return r;
+}
 
+double FBDTreeModel::fossilSweepSequential(void){
+    int nf = unresolvedFossils->getNumFossils();
     std::vector<int> order(nf);
     for(int i = 0; i < nf; i++) order[i] = i;
     for(int i = nf - 1; i > 0; i--)
@@ -1109,7 +1145,73 @@ double FBDTreeModel::fossilSweep(void){
             updateGammaCache();
         }
     }
-    RandomVariable::setActiveInstance(prevRng);
+    return std::numeric_limits<double>::infinity();
+}
+
+double FBDTreeModel::fossilSweepParallel(void){
+    int nf = unresolvedFossils->getNumFossils();
+    int nsub = unresolvedFossils->subMoveCount();
+    bool useOrigin = (UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN);
+    double x0 = useOrigin ? originAge->getValue() : 0.0;
+
+    std::vector<std::vector<int> > zoneFos(numZones);
+    for(int i = 0; i < nf; i++)
+        zoneFos[unresolvedFossils->getAttachmentZone(i)].push_back(i);
+
+    std::vector<unsigned int> seed(numZones);
+    for(int z = 0; z < numZones; z++)
+        seed[z] = (unsigned int)(rng.uniformRv() * 4294967295.0) + 1u;
+
+    std::vector<std::vector<long> > zAtt(numZones, std::vector<long>(nsub, 0));
+    std::vector<std::vector<long> > zAcc(numZones, std::vector<long>(nsub, 0));
+    std::vector<long> zNAcc(numZones, 0), zNRej(numZones, 0);
+
+    ThreadPool::current().parallelFor(OP_FBD, numZones, [&](int lo, int hi){
+        for(int z = lo; z < hi; z++){
+            std::vector<int>& fos = zoneFos[z];
+            if(fos.empty())
+                continue;
+            RandomVariable zr;
+            zr.setSeed(seed[z]);
+            std::vector<int> ord = fos;
+            for(int a = (int)ord.size() - 1; a > 0; a--)
+                std::swap(ord[a], ord[(int)(zr.uniformRv() * (a + 1))]);
+            double zt = zoneTermSum(fos, x0, useOrigin);
+            for(int idx : ord){
+                int sub;
+                double ratio = unresolvedFossils->proposeFossilParallel(idx, zr, sub);
+                zAtt[z][sub]++;
+                if(ratio == -INFINITY){
+                    unresolvedFossils->rejectFossil(idx);
+                    zNRej[z]++;
+                    continue;
+                }
+                rebuildZoneStalks(z, fos);
+                zoneRecomputeGamma(fos);
+                double ztnew = zoneTermSum(fos, x0, useOrigin);
+                if(std::log(zr.uniformRv()) < (ztnew - zt) + ratio){
+                    zt = ztnew;
+                    unresolvedFossils->acceptFossil(idx);
+                    zAcc[z][sub]++;
+                    zNAcc[z]++;
+                }else{
+                    unresolvedFossils->rejectFossil(idx);
+                    zNRej[z]++;
+                    rebuildZoneStalks(z, fos);
+                    zoneRecomputeGamma(fos);
+                }
+            }
+        }
+    });
+
+    std::vector<long> att(nsub, 0), acc(nsub, 0);
+    long nAcc = 0, nRej = 0;
+    for(int z = 0; z < numZones; z++){
+        for(int s = 0; s < nsub; s++){ att[s] += zAtt[z][s]; acc[s] += zAcc[z][s]; }
+        nAcc += zNAcc[z]; nRej += zNRej[z];
+    }
+    unresolvedFossils->mergeSubStats(att.data(), acc.data(), nAcc, nRej);
+    updateGammaCache();
     return std::numeric_limits<double>::infinity();
 }
 

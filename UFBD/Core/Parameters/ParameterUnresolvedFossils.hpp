@@ -10,6 +10,7 @@
 
 class Node;
 class Tree;
+class RandomVariable;
 
 class ParameterUnresolvedFossils : public Parameter {
 
@@ -43,6 +44,11 @@ class ParameterUnresolvedFossils : public Parameter {
         void                        print(void);
         double                      update(void);
         double                      proposeOneFossil(int i);
+        double                      proposeFossilParallel(int i, RandomVariable& rng, int& subKind);
+        void                        acceptFossil(int i);
+        void                        rejectFossil(int i);
+        int                         subMoveCount(void) { return SUB_COUNT; }
+        void                        mergeSubStats(const long* att, const long* acc, long nAcc, long nRej);
         bool                        saEligible(int i) { return ue[i] == false && i != spineIdx && getMaxAttachAge(i) > y[0][i]; }
         void                        beginBatchMove(void) { lastMove = BULK; }
         double                      flipSA(int i, bool toSA);
@@ -59,9 +65,10 @@ class ParameterUnresolvedFossils : public Parameter {
         SubMove                     lastSub;
         long                        subAcc[SUB_COUNT];
         long                        subAtt[SUB_COUNT];
-        double                      updateFossilAge(int i);
-        double                      updateAttachAge(int i);
-        double                      updateSampledAncestor(int i);
+        double                      proposeCore(int i, RandomVariable& rng, MoveKind& mk, SubMove& sm);
+        double                      updateFossilAge(int i, RandomVariable& rng, MoveKind& mk);
+        double                      updateAttachAge(int i, RandomVariable& rng);
+        double                      updateSampledAncestor(int i, RandomVariable& rng);
         Tree*                       backbone;
         ParameterDouble*            originAge;
         int                         numFossils;

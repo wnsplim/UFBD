@@ -96,6 +96,25 @@ double ParameterUnresolvedFossils::getMaxAttachAge(int i){
     return originNode[i]->getTime();
 }
 
+double ParameterUnresolvedFossils::proposeCore(int i, RandomVariable& rng, MoveKind& mk, SubMove& sm){
+    mk = SINGLE;
+    if(ue[i]){
+        sm = (i == spineIdx) ? SUB_NOOP : SUB_Z;
+        return updateAttachAge(i, rng);                     // a UE has no y and no SA state
+    }
+    double u = rng.uniformRv();
+    if(u < 1.0/3.0){
+        sm = (i == spineIdx) ? SUB_NOOP : SUB_SA;
+        return updateSampledAncestor(i, rng);
+    }
+    if(u < 2.0/3.0){
+        sm = SUB_Y;
+        return updateFossilAge(i, rng, mk);
+    }
+    sm = (i == spineIdx || sa[0][i]) ? SUB_NOOP : SUB_Z;
+    return updateAttachAge(i, rng);
+}
+
 double ParameterUnresolvedFossils::update(void){
     if(numFossils == 0)
         return 0.0;
@@ -104,29 +123,40 @@ double ParameterUnresolvedFossils::update(void){
 }
 
 double ParameterUnresolvedFossils::proposeOneFossil(int i){
-    lastMove = SINGLE;
     lastFossil = i;
     RandomVariable& rng = RandomVariable::randomVariableInstance();
-    if(ue[i]){
-        lastSub = (i == spineIdx) ? SUB_NOOP : SUB_Z;
-        return updateAttachAge(i);                          // a UE has no y and no SA state
-    }
-    double u = rng.uniformRv();
-    if(u < 1.0/3.0){
-        lastSub = (i == spineIdx) ? SUB_NOOP : SUB_SA;
-        return updateSampledAncestor(i);
-    }
-    if(u < 2.0/3.0){
-        lastSub = SUB_Y;
-        return updateFossilAge(i);
-    }
-    lastSub = (i == spineIdx || sa[0][i]) ? SUB_NOOP : SUB_Z;
-    return updateAttachAge(i);
+    return proposeCore(i, rng, lastMove, lastSub);
 }
 
-double ParameterUnresolvedFossils::updateFossilAge(int i){
-    RandomVariable& rng = RandomVariable::randomVariableInstance();
+double ParameterUnresolvedFossils::proposeFossilParallel(int i, RandomVariable& rng, int& subKind){
+    MoveKind mk;
+    SubMove sm;
+    double r = proposeCore(i, rng, mk, sm);
+    subKind = (int)sm;
+    return r;
+}
 
+void ParameterUnresolvedFossils::acceptFossil(int i){
+    y[1][i] = y[0][i];
+    z[1][i] = z[0][i];
+    sa[1][i] = sa[0][i];
+    az[1][i] = az[0][i];
+}
+
+void ParameterUnresolvedFossils::rejectFossil(int i){
+    y[0][i] = y[1][i];
+    z[0][i] = z[1][i];
+    sa[0][i] = sa[1][i];
+    az[0][i] = az[1][i];
+}
+
+void ParameterUnresolvedFossils::mergeSubStats(const long* att, const long* acc, long nAcc, long nRej){
+    for(int s = 0; s < SUB_COUNT; s++){ subAtt[s] += att[s]; subAcc[s] += acc[s]; }
+    numAcceptances += nAcc;
+    numRejections += nRej;
+}
+
+double ParameterUnresolvedFossils::updateFossilAge(int i, RandomVariable& rng, MoveKind& mk){
     if(spineIdx < 0){
         if(sa[0][i]){
             double ceiling = getMaxAttachAge(i);
@@ -174,7 +204,7 @@ double ParameterUnresolvedFossils::updateFossilAge(int i){
         if(zSold < ynewSold)
             return -INFINITY;
     }
-    lastMove = FLIP;
+    mk = FLIP;
     flipS = Sold;
     flipT = Snew;
     flipSy = y[0][Sold];
@@ -191,22 +221,20 @@ double ParameterUnresolvedFossils::updateFossilAge(int i){
     return 0.0;
 }
 
-double ParameterUnresolvedFossils::updateAttachAge(int i){
+double ParameterUnresolvedFossils::updateAttachAge(int i, RandomVariable& rng){
     if(i == spineIdx)
         return 0.0;
     if(sa[0][i])
         return 0.0;
-    RandomVariable& rng = RandomVariable::randomVariableInstance();
     double lo = getMinAttachAge(i);
     double hi = getMaxAttachAge(i);
     z[0][i] = lo + rng.uniformRv() * (hi - lo);
     return 0.0;
 }
 
-double ParameterUnresolvedFossils::updateSampledAncestor(int i){
+double ParameterUnresolvedFossils::updateSampledAncestor(int i, RandomVariable& rng){
     if(i == spineIdx)
         return 0.0;
-    RandomVariable& rng = RandomVariable::randomVariableInstance();
     double lo = getMinAttachAge(i);
     double hi = getMaxAttachAge(i);
     double range = hi - lo;
