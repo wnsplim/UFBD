@@ -62,6 +62,8 @@ void Mcmc::advance(unsigned long nGens) {
     RandomVariable& rng = RandomVariable::randomVariableInstance();
 
     unsigned long target = gen + nGens;
+    if(gen == 0 && tuning == false)
+        sample(0, curLnL, curLnP);
     while (gen < target) {
         gen++;
         unsigned long n = gen;
@@ -151,7 +153,7 @@ void Mcmc::advance(unsigned long nGens) {
             ChainRunner::logLine(os.str());
         }
 
-        if (tuning == false && (n == 1 || n == (unsigned long)numCycles || n % thinning == 0))
+        if (tuning == false && n % thinning == 0)
             sample(n, curLnL, curLnP);
     }
 }
@@ -167,7 +169,7 @@ void Mcmc::finalize(void) {
 
 void Mcmc::sample(unsigned long n, double lnL, double lnP) {
     bool cpuTime = UserSettings::userSettings().getCpuTime();
-    if(n == 1){
+    if(n == 0){
         params.addFilepath(paramOut, true);
         std::vector<std::string> cn = {"n", "posterior", "likelihood", "prior"};
         std::vector<std::string> headStr = model->getParameterNames();

@@ -123,6 +123,8 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
     RandomVariable& rng = RandomVariable::randomVariableInstance();
 
     unsigned long target = gen + nGens;
+    if(gen == 0 && tuning == false)
+        sample(0);
     while (gen < target){
         gen++;
         unsigned long n = gen;
@@ -245,13 +247,13 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
         if (recentAcceptRej.size() > 10000)
             recentAcceptRej.pop_front();
         
-        if (tuning == false && (n == 1 || n == numCycles || n % thinning == 0))
+        if (tuning == false && n % thinning == 0)
             sample(n);
     }
 }
 
 void MetropolisCoupledMcmc::sample(unsigned long n) {
-    if(n == 1){
+    if(n == 0){
         params.addFilepath(paramOut, true);
         std::vector<std::string> cn = {"n", "posterior", "likelihood", "prior"};
         std::vector<std::string> headStr = models[coldModelIdx]->getParameterNames();
