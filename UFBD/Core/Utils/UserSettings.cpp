@@ -501,9 +501,6 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         numCoupledChains = 1;
     }
 
-    if (coupledChainsProvided && numCoupledChains == 1)
-        Msg::warning("-coupled_chains 1 runs plain MCMC, not Metropolis-coupled MCMC; use -coupled_chains > 1 to enable MC3.");
-
     if (chainLength < 1)
         Msg::error("flag \"-chain_length\" must be a positive integer (or \"auto\").");
 

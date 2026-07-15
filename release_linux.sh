@@ -23,7 +23,8 @@ cmake --build "$BUILD" --target ufbd -j"$(nproc)"
 cp "$BUILD/ufbd" "$STAGE/ufbd"
 cp "$ROOT/README.md" "$STAGE/README.md"
 
-cp "$BUILD/ufbd" "$ROOT/ufbd"
+cp "$BUILD/ufbd" "$ROOT/ufbd.tmp"
+mv -f "$ROOT/ufbd.tmp" "$ROOT/ufbd"
 
 cd "$RELEASE_DIR"
 rm -f "$NAME.zip"
