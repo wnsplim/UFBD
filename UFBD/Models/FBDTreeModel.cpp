@@ -29,7 +29,7 @@ static double offsetFromLambda(double rate0, double lam0, const Probability::Pri
     const double cand[4] = {0.5 * rate0, 1.5 * rate0, rate0 * (1.0 - 1e-3), rate0 * (1.0 + 1e-3)};
     for(int i = 0; i < 4; i++)
         if(cand[i] > 0.0 && cand[i] != lam0 &&
-           std::isfinite(Probability::priorLnPdf(sp.family, sp.p1, sp.p2, cand[i], 0.0, hi)))
+           std::isfinite(Probability::priorLnPdf(sp.family, sp.p1, sp.p2, cand[i], 0.0, hi, sp.p3)))
             return cand[i];
     return rate0;
 }
@@ -154,13 +154,16 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
         originAge = new ParameterDouble(1.0, this, "originAge", 0.0, std::numeric_limits<double>::max());
         UserSettings& us = UserSettings::userSettings();
         if(us.getConditionAgePriorSet()){
-            originAge->setPrior(us.getConditionAgePrior(), us.getConditionAgePriorP1(), us.getConditionAgePriorP2());
-            double pm = Probability::priorMean(us.getConditionAgePrior(), us.getConditionAgePriorP1(), us.getConditionAgePriorP2());
+            double off = us.getConditionAgePriorP3();
+            originAge->setPrior(us.getConditionAgePrior(), us.getConditionAgePriorP1(), us.getConditionAgePriorP2(), off);
+            double pm = Probability::priorMean(us.getConditionAgePrior(), us.getConditionAgePriorP1(), us.getConditionAgePriorP2(), off);
             if(pm > x0init)
                 x0init = pm;
             double hi = us.getConditionAgePriorP2();
             if(us.getConditionAgePrior() == Probability::PriorFamily::UNIFORM && x0init >= hi)
                 x0init = 0.5 * (floor + hi);
+            if(x0init <= off)
+                x0init = off + 0.05 * (floor > 0.0 ? floor : 1.0);
         }else{
             originAge->setPrior(Probability::PriorFamily::IMPROPER, 0.0, 0.0);
         }
@@ -223,9 +226,9 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     if(muSmooth && nMu < 2){ Msg::warning("smoothing (HSMRF) set for extinction rate (mu) but only single rate interval."); muSmooth = false; }
     double nShifts = rateUs.getHsmrfShifts();
     double shiftSize = rateUs.getHsmrfShiftSize();
-    double lam0 = Probability::priorMean(lp.family, lp.p1, lp.p2);
+    double lam0 = Probability::priorMean(lp.family, lp.p1, lp.p2, lp.p3);
     if(!(lam0 > 0.0 && std::isfinite(lam0))) lam0 = 0.1;
-    double mu0 = Probability::priorMean(mp.family, mp.p1, mp.p2);
+    double mu0 = Probability::priorMean(mp.family, mp.p1, mp.p2, mp.p3);
     if(!(mu0 > 0.0 && std::isfinite(mu0))) mu0 = 0.1;
     mu0 = offsetFromLambda(mu0, lam0, mp);
     {
@@ -244,7 +247,7 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     for(int tp = 0; tp < numPsiTypes; tp++){
         Probability::PriorSpec pp = rateUs.getPsiPrior(tp);
         if(!pp.set) pp = defRate;
-        double psi0 = Probability::priorMean(pp.family, pp.p1, pp.p2);
+        double psi0 = Probability::priorMean(pp.family, pp.p1, pp.p2, pp.p3);
         if(!(psi0 > 0.0 && std::isfinite(psi0))) psi0 = 0.1;
         psi0 = offsetFromLambda(psi0, lam0, pp);
         int nPsi = (int)psiTimes[tp].size();
@@ -330,7 +333,7 @@ std::vector<int> FBDTreeModel::buildSkylineRates(const std::string& prefix, cons
             bool ov = (pit != groupPrior.end() && pit->second.set);
             const Probability::PriorSpec& sp = ov ? pit->second : basePrior;
             p->setPrior(sp.family, sp.p1, sp.p2);
-            p->setValue(ov ? Probability::priorMean(sp.family, sp.p1, sp.p2) : rate0);
+            p->setValue(ov ? Probability::priorMean(sp.family, sp.p1, sp.p2, sp.p3) : rate0);
             outVec.push_back(p);
             parameters.push_back(p);
         }
@@ -528,7 +531,7 @@ double FBDTreeModel::lnPriorProbability(void){
     UserSettings& us = UserSettings::userSettings();
     if(us.getConditioning() == Conditioning::CROWN){
         double crownAge = parameterTree->getTree()->getCrown()->getTime();
-        lnP += Probability::priorLnPdf(us.getConditionAgePrior(), us.getConditionAgePriorP1(), us.getConditionAgePriorP2(), crownAge, 0.0, std::numeric_limits<double>::max());
+        lnP += Probability::priorLnPdf(us.getConditionAgePrior(), us.getConditionAgePriorP1(), us.getConditionAgePriorP2(), crownAge, 0.0, std::numeric_limits<double>::max(), us.getConditionAgePriorP3());
     }
 
     return lnP;

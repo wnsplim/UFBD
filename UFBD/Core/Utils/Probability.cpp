@@ -9,28 +9,30 @@
 
 #pragma mark - PriorFamily
 
-double Probability::priorLnPdf(PriorFamily family, double p1, double p2, double x, double lower, double upper){
+double Probability::priorLnPdf(PriorFamily family, double p1, double p2, double x, double lower, double upper, double offset){
     double lnp = -INFINITY;
+    double lo  = (lower > offset) ? lower : offset;
+    double y   = x - offset;
     switch(family){
-        case PriorFamily::IMPROPER:         lnp = 0.0;                                                       break;
-        case PriorFamily::TRUNCATED_NORMAL: lnp = TruncatedNormal::lnPdf(x, p1, p2, lower, upper);            break;
-        case PriorFamily::EXPONENTIAL:      lnp = Exponential::lnPdf(p1, x);                                  break;
-        case PriorFamily::GAMMA:            lnp = Gamma::lnPdf(p1, p2, x);                                    break;
-        case PriorFamily::LOGNORMAL:        lnp = Normal::lnPdf(p1, p2 * p2, std::log(x)) - std::log(x);      break;
-        case PriorFamily::UNIFORM:          lnp = (x < p1 || x > p2) ? -INFINITY : Uniform::lnPdf(p1, p2, x); break;
-        case PriorFamily::FIXED:            lnp = 0.0;                                                       break;
+        case PriorFamily::IMPROPER:         lnp = 0.0;                                                                break;
+        case PriorFamily::TRUNCATED_NORMAL: lnp = TruncatedNormal::lnPdf(x, p1, p2, lo, upper);                       break;
+        case PriorFamily::EXPONENTIAL:      lnp = (y > 0.0) ? Exponential::lnPdf(p1, y) : -INFINITY;                  break;
+        case PriorFamily::GAMMA:            lnp = (y > 0.0) ? Gamma::lnPdf(p1, p2, y) : -INFINITY;                    break;
+        case PriorFamily::LOGNORMAL:        lnp = (y > 0.0) ? Normal::lnPdf(p1, p2 * p2, std::log(y)) - std::log(y) : -INFINITY; break;
+        case PriorFamily::UNIFORM:          lnp = (x < p1 || x > p2) ? -INFINITY : Uniform::lnPdf(p1, p2, x);         break;
+        case PriorFamily::FIXED:            lnp = 0.0;                                                                break;
     }
     return lnp;
 }
 
 
-double Probability::priorMean(PriorFamily family, double p1, double p2){
+double Probability::priorMean(PriorFamily family, double p1, double p2, double offset){
     switch(family){
         case PriorFamily::IMPROPER:         return 1.0;
         case PriorFamily::TRUNCATED_NORMAL: return p1;
-        case PriorFamily::EXPONENTIAL:      return 1.0 / p1;
-        case PriorFamily::GAMMA:            return p1 / p2;
-        case PriorFamily::LOGNORMAL:        return std::exp(p1);
+        case PriorFamily::EXPONENTIAL:      return 1.0 / p1 + offset;
+        case PriorFamily::GAMMA:            return p1 / p2 + offset;
+        case PriorFamily::LOGNORMAL:        return std::exp(p1) + offset;
         case PriorFamily::UNIFORM:          return 0.5 * (p1 + p2);
         case PriorFamily::FIXED:            return p1;
     }

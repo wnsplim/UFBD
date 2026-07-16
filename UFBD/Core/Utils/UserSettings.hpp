@@ -43,6 +43,7 @@ class UserSettings {
         Probability::PriorFamily         getConditionAgePrior(void) { return conditionAgePrior; }
         double                      getConditionAgePriorP1(void) { return conditionAgePriorP1; }
         double                      getConditionAgePriorP2(void) { return conditionAgePriorP2; }
+        double                      getConditionAgePriorP3(void) { return conditionAgePriorP3; }
         bool                        getConditionAgePriorSet(void) { return conditionAgePriorSet; }
         Probability::PriorSpec      getLambdaPrior(void) { return lambdaPrior; }
         Probability::PriorSpec      getMuPrior(void) { return muPrior; }
@@ -98,7 +99,7 @@ class UserSettings {
                                     UserSettings(void) {}
                                     UserSettings(const UserSettings& u);
         UserSettings&               operator=(const UserSettings&);
-        void                        parsePriorInto(const std::string& spec, Probability::PriorFamily& family, double& p1, double& p2);
+        void                        parsePriorInto(const std::string& spec, Probability::PriorFamily& family, double& p1, double& p2, double& p3);
         std::string                 treeOut;
         std::string                 parametersOut;
         std::string                 treeFile;
@@ -111,6 +112,7 @@ class UserSettings {
         bool                        conditionAgePriorSet;
         double                      conditionAgePriorP1;
         double                      conditionAgePriorP2;
+        double                      conditionAgePriorP3;
         Probability::PriorSpec      lambdaPrior;
         Probability::PriorSpec      muPrior;
         Probability::PriorSpec      psiPrior;

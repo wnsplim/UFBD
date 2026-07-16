@@ -28,7 +28,7 @@ ParameterShrinkageField::ParameterShrinkageField(double prob, PhylogeneticModel*
     moveWeight[1] = 0.15;
     moveWeight[2] = 0.30;
     moveWeight[3] = 0.40;
-    double present0 = (init0 > 0.0) ? init0 : (ap.set ? Probability::priorMean(ap.family, ap.p1, ap.p2) : 1.0);
+    double present0 = (init0 > 0.0) ? init0 : (ap.set ? Probability::priorMean(ap.family, ap.p1, ap.p2, ap.p3) : 1.0);
     if(present0 <= 0.0)
         present0 = 1.0;
     RandomVariable& rng = RandomVariable::randomVariableInstance();
@@ -136,7 +136,7 @@ double ParameterShrinkageField::lnProbability(void){
     if(gamma[0] <= 0.0)
         return -INFINITY;
     double present = std::exp(anchor[0]);
-    double lnp = Probability::priorLnPdf(anchorPrior.family, anchorPrior.p1, anchorPrior.p2, present, 0.0, std::numeric_limits<double>::max());
+    double lnp = Probability::priorLnPdf(anchorPrior.family, anchorPrior.p1, anchorPrior.p2, present, 0.0, std::numeric_limits<double>::max(), anchorPrior.p3);
     lnp += anchor[0];
     lnp += halfCauchyLnP(gamma[0], zeta);
     double g2 = gamma[0] * gamma[0];

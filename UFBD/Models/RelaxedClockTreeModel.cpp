@@ -36,7 +36,7 @@ void RelaxedClockTreeModel::crownInitScale(Tree* t, std::vector<Clade>& clades, 
     Conditioning cond = us.getConditioning();
     if(cond != Conditioning::CROWN && cond != Conditioning::ORIGIN)
         return;
-    double pm = Probability::priorMean(us.getConditionAgePrior(), us.getConditionAgePriorP1(), us.getConditionAgePriorP2());
+    double pm = Probability::priorMean(us.getConditionAgePrior(), us.getConditionAgePriorP1(), us.getConditionAgePriorP2(), us.getConditionAgePriorP3());
     double crownAge = t->getCrown()->getTime();
     if(crownAge <= 0.0 || std::isfinite(pm) == false || pm <= 0.0)
         return;

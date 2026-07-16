@@ -109,6 +109,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     conditionAgePrior    = Probability::PriorFamily::IMPROPER;
     conditionAgePriorP1  = 0.0;
     conditionAgePriorP2  = 0.0;
+    conditionAgePriorP3  = 0.0;
     model           = Model::UFBD;
     rho             = 1.0;
     seed            = 0;
@@ -259,7 +260,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 else Msg::error("flag \"-conditioning\" expects crown, origin, anysample, or extinct, but got \"" + val + "\".");
                 conditioningSet = true;
                 if (i + 1 < (int)arguments.size() && arguments[i + 1].empty() == false && arguments[i + 1][0] != '-') {
-                    parsePriorInto(arguments[++i], conditionAgePrior, conditionAgePriorP1, conditionAgePriorP2);
+                    parsePriorInto(arguments[++i], conditionAgePrior, conditionAgePriorP1, conditionAgePriorP2, conditionAgePriorP3);
                     conditionAgePriorSet = true;
                 }
             } else if (arg == "-fbd_model") {
@@ -292,19 +293,19 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 Probability::PriorSpec& base = (arg == "-lambda_prior") ? lambdaPrior : muPrior;
                 std::map<int, Probability::PriorSpec>& gp = (arg == "-lambda_prior") ? lambdaGroupPrior : muGroupPrior;
                 if (isGid) {
-                    Probability::PriorSpec ps; parsePriorInto(val.substr(c + 1), ps.family, ps.p1, ps.p2); ps.set = true;
+                    Probability::PriorSpec ps; parsePriorInto(val.substr(c + 1), ps.family, ps.p1, ps.p2, ps.p3); ps.set = true;
                     gp[std::stoi(first)] = ps;
                 } else {
-                    parsePriorInto(val, base.family, base.p1, base.p2); base.set = true;
+                    parsePriorInto(val, base.family, base.p1, base.p2, base.p3); base.set = true;
                 }
             } else if (arg == "-psi_prior") {
                 // <prior> | <type>:<prior> | <group_id>:<prior> | <type>:<group_id>:<prior>
                 size_t c = val.find(':');
                 std::string first = (c == std::string::npos) ? val : val.substr(0, c);
                 if (c == std::string::npos || isPriorFamilyKeyword(first)) {
-                    parsePriorInto(val, psiPrior.family, psiPrior.p1, psiPrior.p2); psiPrior.set = true;
+                    parsePriorInto(val, psiPrior.family, psiPrior.p1, psiPrior.p2, psiPrior.p3); psiPrior.set = true;
                 } else if (first.empty() == false && std::all_of(first.begin(), first.end(), ::isdigit)) {
-                    Probability::PriorSpec ps; parsePriorInto(val.substr(c + 1), ps.family, ps.p1, ps.p2); ps.set = true;
+                    Probability::PriorSpec ps; parsePriorInto(val.substr(c + 1), ps.family, ps.p1, ps.p2, ps.p3); ps.set = true;
                     psiGroupPrior[std::stoi(first)] = ps;
                 } else {
                     std::string rest = val.substr(c + 1);
@@ -312,10 +313,10 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                     std::string r0 = (c2 == std::string::npos) ? rest : rest.substr(0, c2);
                     Probability::PriorSpec ps;
                     if (c2 != std::string::npos && r0.empty() == false && std::all_of(r0.begin(), r0.end(), ::isdigit)) {
-                        parsePriorInto(rest.substr(c2 + 1), ps.family, ps.p1, ps.p2); ps.set = true;
+                        parsePriorInto(rest.substr(c2 + 1), ps.family, ps.p1, ps.p2, ps.p3); ps.set = true;
                         psiGroupPriorByName[first][std::stoi(r0)] = ps;
                     } else {
-                        parsePriorInto(rest, ps.family, ps.p1, ps.p2); ps.set = true;
+                        parsePriorInto(rest, ps.family, ps.p1, ps.p2, ps.p3); ps.set = true;
                         psiPriorByName[first] = ps;
                     }
                 }
@@ -552,8 +553,9 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     }
 }
 
-void UserSettings::parsePriorInto(const std::string& spec, Probability::PriorFamily& family, double& p1, double& p2) {
-    const std::string help = "prior must be improper, a fixed number, or a distribution written exp:rate, gamma:shape,rate, lognormal:mu,sigma, unif:a,b, or truncnormal:mean,sd; got \"" + spec + "\".";
+void UserSettings::parsePriorInto(const std::string& spec, Probability::PriorFamily& family, double& p1, double& p2, double& p3) {
+    p3 = 0.0;
+    const std::string help = "prior must be improper, a fixed number, or a distribution written exp:rate[,offset], gamma:shape,rate[,offset], lognormal:mu,sigma[,offset], unif:a,b, or truncnormal:mean,sd[,offset]; got \"" + spec + "\".";
     size_t cp = spec.find(':');
     if (cp == std::string::npos) {
         std::string s = spec;
@@ -573,20 +575,20 @@ void UserSettings::parsePriorInto(const std::string& spec, Probability::PriorFam
         catch (...) { Msg::error("prior parameter \"" + tok + "\" is not a number in \"" + spec + "\"."); }
     }
     if (fam == "exp" || fam == "exponential") {
-        if (ps.size() != 1 || ps[0] <= 0.0) Msg::error("exp prior needs one positive rate: exp:rate.");
-        family = Probability::PriorFamily::EXPONENTIAL; p1 = ps[0];
+        if ((ps.size() != 1 && ps.size() != 2) || ps[0] <= 0.0) Msg::error("exp prior needs one positive rate and an optional offset: exp:rate[,offset].");
+        family = Probability::PriorFamily::EXPONENTIAL; p1 = ps[0]; if (ps.size() == 2) p3 = ps[1];
     } else if (fam == "gamma") {
-        if (ps.size() != 2 || ps[0] <= 0.0 || ps[1] <= 0.0) Msg::error("gamma prior needs positive shape,rate: gamma:shape,rate.");
-        family = Probability::PriorFamily::GAMMA; p1 = ps[0]; p2 = ps[1];
+        if ((ps.size() != 2 && ps.size() != 3) || ps[0] <= 0.0 || ps[1] <= 0.0) Msg::error("gamma prior needs positive shape,rate and an optional offset: gamma:shape,rate[,offset].");
+        family = Probability::PriorFamily::GAMMA; p1 = ps[0]; p2 = ps[1]; if (ps.size() == 3) p3 = ps[2];
     } else if (fam == "lognormal") {
-        if (ps.size() != 2 || ps[1] <= 0.0) Msg::error("lognormal prior needs mu,sigma with sigma>0: lognormal:mu,sigma.");
-        family = Probability::PriorFamily::LOGNORMAL; p1 = ps[0]; p2 = ps[1];
+        if ((ps.size() != 2 && ps.size() != 3) || ps[1] <= 0.0) Msg::error("lognormal prior needs mu,sigma with sigma>0 and an optional offset: lognormal:mu,sigma[,offset].");
+        family = Probability::PriorFamily::LOGNORMAL; p1 = ps[0]; p2 = ps[1]; if (ps.size() == 3) p3 = ps[2];
     } else if (fam == "unif" || fam == "uniform") {
         if (ps.size() != 2 || ps[0] >= ps[1]) Msg::error("unif prior needs a<b: unif:a,b.");
         family = Probability::PriorFamily::UNIFORM; p1 = ps[0]; p2 = ps[1];
     } else if (fam == "truncnormal" || fam == "truncnorm" || fam == "normal") {
-        if (ps.size() != 2 || ps[1] <= 0.0) Msg::error("truncnormal prior needs mean,sd with sd>0: truncnormal:mean,sd.");
-        family = Probability::PriorFamily::TRUNCATED_NORMAL; p1 = ps[0]; p2 = ps[1];
+        if ((ps.size() != 2 && ps.size() != 3) || ps[1] <= 0.0) Msg::error("truncnormal prior needs mean,sd with sd>0 and an optional lower/offset: truncnormal:mean,sd[,offset].");
+        family = Probability::PriorFamily::TRUNCATED_NORMAL; p1 = ps[0]; p2 = ps[1]; if (ps.size() == 3) p3 = ps[2];
     } else if (fam == "improper") {
         family = Probability::PriorFamily::IMPROPER;
     } else {

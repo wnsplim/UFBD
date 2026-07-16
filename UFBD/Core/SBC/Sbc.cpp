@@ -77,7 +77,7 @@ void initAges(Tree* tree, std::vector<Fossil>& fossils, bool origin, const Proba
         minAges[tree->getRoot()] = maxFoss * 1.05;
     tree->assignStartingAges(minAges, unit);
 
-    double mean = Probability::priorMean(xp.family, xp.p1, xp.p2);
+    double mean = Probability::priorMean(xp.family, xp.p1, xp.p2, xp.p3);
     double target = origin ? 0.9 * mean : mean;
     if(origin == false && target < maxFoss)
         target = maxFoss * 1.05;

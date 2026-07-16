@@ -24,10 +24,11 @@ namespace  Probability {
         PriorFamily family = PriorFamily::TRUNCATED_NORMAL;
         double      p1     = 0.0;
         double      p2     = 1.0;
+        double      p3     = 0.0;
     };
 
-    double priorLnPdf(PriorFamily family, double p1, double p2, double x, double lower, double upper);
-    double priorMean(PriorFamily family, double p1, double p2);
+    double priorLnPdf(PriorFamily family, double p1, double p2, double x, double lower, double upper, double offset = 0.0);
+    double priorMean(PriorFamily family, double p1, double p2, double offset = 0.0);
 
     namespace Beta {
     

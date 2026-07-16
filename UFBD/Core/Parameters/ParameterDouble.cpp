@@ -27,19 +27,22 @@ ParameterDouble::ParameterDouble(double prob, PhylogeneticModel* m, std::string 
     priorP2 = 1.0;
 }
 
-void ParameterDouble::setPrior(Probability::PriorFamily f, double p1, double p2){
+void ParameterDouble::setPrior(Probability::PriorFamily f, double p1, double p2, double p3){
     priorFamily = f;
     priorP1 = p1;
     priorP2 = p2;
+    priorP3 = p3;
     if(f == Probability::PriorFamily::FIXED){
         setValue(p1);
         setProposalProbability(0.0);
     } else if(f == Probability::PriorFamily::UNIFORM && (value[0] < p1 || value[0] > p2))
         setValue(0.5 * (p1 + p2));
+    else if(p3 != 0.0 && value[0] <= p3)
+        setValue(Probability::priorMean(f, p1, p2, p3));
 }
 
 double ParameterDouble::lnProbability(void){
-    return Probability::priorLnPdf(priorFamily, priorP1, priorP2, value[0], lowerBound, upperBound);
+    return Probability::priorLnPdf(priorFamily, priorP1, priorP2, value[0], lowerBound, upperBound, priorP3);
 }
 
 void ParameterDouble::print(void){
