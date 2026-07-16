@@ -222,7 +222,7 @@ void FBDInput::assignFossilAwareAges(void){
     int numInternal = tree->getNumNodes() - tree->getNumBackbone();
     double unit = (maxBound > 0.0) ? maxBound / (numInternal + 1) : 1.0;
 
-    std::map<Node*,double> minAges, crownLo, stemHi;
+    std::map<Node*,double> minAges;
     for(Fossil& f : fossils){
         Clade* clade = nullptr;
         for(Clade& c : clades)
@@ -231,19 +231,13 @@ void FBDInput::assignFossilAwareAges(void){
                 break;
             }
         Node* crown = clade->getCrown();
+        bool wholeStem = (f.getAssignment() != Assignment::CROWN && crown == tree->getCrown());
         Node* anchor = (f.getAssignment() == Assignment::CROWN) ? crown : clade->getOrigin();
         double bound = f.getMaxAge() * 1.05;
-        if(minAges.count(anchor) == 0 || bound > minAges[anchor])
+        if(wholeStem == false && (minAges.count(anchor) == 0 || bound > minAges[anchor]))
             minAges[anchor] = bound;
-        if(f.getAssignment() == Assignment::CROWN){
-            if(crownLo.count(crown) == 0 || f.getMaxAge() > crownLo[crown])
-                crownLo[crown] = f.getMaxAge();
-        }else if(f.getAssignment() == Assignment::STEM){
-            if(stemHi.count(crown) == 0 || f.getMaxAge() < stemHi[crown])
-                stemHi[crown] = f.getMaxAge();
-        }
     }
-    tree->assignStartingAges(minAges, crownLo, stemHi, unit);
+    tree->assignStartingAges(minAges, unit);
 
     UserSettings& us = UserSettings::userSettings();
     if(us.getConditionAgePriorSet()){

@@ -62,7 +62,6 @@ class Tree {
         double                              updateFossilTipAge(Node* n);
         void                                setLastUpdateWasScale(bool b) { lastUpdateWasScale = b; }
         void                                assignStartingAges(const std::map<Node*,double>& minAges, double unit);
-        void                                assignStartingAges(const std::map<Node*,double>& minAges, const std::map<Node*,double>& crownLo, const std::map<Node*,double>& stemHi, double unit);
         Node*                               insertFossilTip(Node* attachChild, std::string name, double y, double z);
         void                                setAgeFloorsByOffset(const std::map<int,double>& f);
         double                              getAgeFloor(Node* n) { std::map<Node*,double>::iterator it = ageFloors.find(n); return (it != ageFloors.end()) ? it->second : 0.0; }

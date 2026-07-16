@@ -36,13 +36,12 @@ void RelaxedClockTreeModel::crownInitScale(Tree* t, std::vector<Clade>& clades, 
     Conditioning cond = us.getConditioning();
     if(cond != Conditioning::CROWN && cond != Conditioning::ORIGIN)
         return;
-    double pm = Probability::priorMean(us.getConditionAgePrior(), us.getConditionAgePriorP1(), us.getConditionAgePriorP2(), us.getConditionAgePriorP3());
-    double crownAge = t->getCrown()->getTime();
-    if(crownAge <= 0.0 || std::isfinite(pm) == false || pm <= 0.0)
-        return;
-    double target = (cond == Conditioning::ORIGIN) ? 0.9 * pm : pm;
-    if(target > 0.0 && target != crownAge)
-        t->scaleInternalAges(target / crownAge);
+    if(cond == Conditioning::CROWN){
+        double pm = Probability::priorMean(us.getConditionAgePrior(), us.getConditionAgePriorP1(), us.getConditionAgePriorP2(), us.getConditionAgePriorP3());
+        double crownAge = t->getCrown()->getTime();
+        if(crownAge > 0.0 && std::isfinite(pm) && pm > 0.0 && pm != crownAge)
+            t->scaleInternalAges(pm / crownAge);
+    }
 
     std::map<Node*,double> floor;
     for(Fossil& f : fossils){
@@ -50,12 +49,13 @@ void RelaxedClockTreeModel::crownInitScale(Tree* t, std::vector<Clade>& clades, 
         for(Clade& c : clades)
             if(c.getName() == f.getClade()){ clade = &c; break; }
         Node* cr = (clade == nullptr || clade->getTaxa().empty()) ? t->getCrown() : t->getMRCA(clade->getTaxa());
+        bool wholeStem = (f.getAssignment() != Assignment::CROWN && cr == t->getCrown());
         Node* node = (f.getAssignment() == Assignment::CROWN) ? cr : cr->getAncestor();
-        if(node == nullptr)
-            continue;
-        std::map<Node*,double>::iterator it = floor.find(node);
-        if(it == floor.end() || f.getMaxAge() > it->second)
-            floor[node] = f.getMaxAge();
+        if(wholeStem == false && node != nullptr){
+            std::map<Node*,double>::iterator it = floor.find(node);
+            if(it == floor.end() || f.getMaxAge() > it->second)
+                floor[node] = f.getMaxAge();
+        }
     }
     for(Node* n : t->getDownPassSequence()){
         if(n->getIsTip())
