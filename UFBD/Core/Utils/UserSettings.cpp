@@ -555,7 +555,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
 
 void UserSettings::parsePriorInto(const std::string& spec, Probability::PriorFamily& family, double& p1, double& p2, double& p3) {
     p3 = 0.0;
-    const std::string help = "prior must be improper, a fixed number, or a distribution written exp:rate[,offset], gamma:shape,rate[,offset], lognormal:mu,sigma[,offset], unif:a,b, or truncnormal:mean,sd[,offset]; got \"" + spec + "\".";
+    const std::string help = "prior must be a fixed number or a distribution written improper[:offset], exp:rate[,offset], gamma:shape,rate[,offset], lognormal:mu,sigma[,offset], unif:a,b, or truncnormal:mean,sd[,offset]; got \"" + spec + "\".";
     size_t cp = spec.find(':');
     if (cp == std::string::npos) {
         std::string s = spec;
@@ -590,7 +590,8 @@ void UserSettings::parsePriorInto(const std::string& spec, Probability::PriorFam
         if ((ps.size() != 2 && ps.size() != 3) || ps[1] <= 0.0) Msg::error("truncnormal prior needs mean,sd with sd>0 and an optional lower/offset: truncnormal:mean,sd[,offset].");
         family = Probability::PriorFamily::TRUNCATED_NORMAL; p1 = ps[0]; p2 = ps[1]; if (ps.size() == 3) p3 = ps[2];
     } else if (fam == "improper") {
-        family = Probability::PriorFamily::IMPROPER;
+        if (ps.size() > 1) Msg::error("improper prior takes at most an offset: improper[:offset].");
+        family = Probability::PriorFamily::IMPROPER; if (ps.size() == 1) p3 = ps[0];
     } else {
         Msg::error(help);
     }

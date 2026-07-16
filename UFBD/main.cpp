@@ -11,6 +11,8 @@
 #include "Tree.hpp"
 #include "UserSettings.hpp"
 
+#include <chrono>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -54,6 +56,22 @@ static void restoreConsoleStreams(){
     if(gOrigCerr) std::cerr.rdbuf(gOrigCerr);
 }
 
+static std::string clockString(std::chrono::system_clock::time_point tp){
+    std::time_t t = std::chrono::system_clock::to_time_t(tp);
+    char buf[64];
+    std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", std::localtime(&t));
+    return std::string(buf);
+}
+
+static std::string elapsedString(double secs){
+    long s = (long)(secs + 0.5);
+    long h = s / 3600; s %= 3600;
+    long m = s / 60;   s %= 60;
+    char buf[64];
+    std::snprintf(buf, sizeof(buf), "%ldh %02ldm %02lds", h, m, s);
+    return std::string(buf);
+}
+
 int main(int argc, const char* argv[]) {
 
     signal(SIGSEGV, crashBacktrace);
@@ -66,6 +84,9 @@ int main(int argc, const char* argv[]) {
     gOrigCout = std::cout.rdbuf(&teeOut);
     gOrigCerr = std::cerr.rdbuf(&teeErr);
     std::atexit(restoreConsoleStreams);
+
+    auto runStart = std::chrono::system_clock::now();
+    std::cout << "Run started:  " << clockString(runStart) << "\n";
 
     UserSettings& settings = UserSettings::userSettings();
     Msg::setDeferWarnings(true);
@@ -193,6 +214,10 @@ int main(int argc, const char* argv[]) {
     if(wrote(settings.getParamOutput())) std::cout << "MCMC log               -> " << settings.getParamOutput() << "\n";
     if(wrote(settings.getTreeOutput()))  std::cout << "tree log               -> " << settings.getTreeOutput() << "\n";
     if(wrote(base + ".tree"))            std::cout << "posterior summary tree -> " << base << ".tree\n";
+
+    auto runEnd = std::chrono::system_clock::now();
+    std::cout << "Run finished: " << clockString(runEnd)
+              << "   elapsed " << elapsedString(std::chrono::duration<double>(runEnd - runStart).count()) << "\n";
 
     return 0;
 }
