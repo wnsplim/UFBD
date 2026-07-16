@@ -222,7 +222,7 @@ void FBDInput::assignFossilAwareAges(void){
     int numInternal = tree->getNumNodes() - tree->getNumBackbone();
     double unit = (maxBound > 0.0) ? maxBound / (numInternal + 1) : 1.0;
 
-    std::map<Node*,double> minAges;
+    std::map<Node*,double> minAges, crownLo, stemHi;
     for(Fossil& f : fossils){
         Clade* clade = nullptr;
         for(Clade& c : clades)
@@ -230,12 +230,20 @@ void FBDInput::assignFossilAwareAges(void){
                 clade = &c;
                 break;
             }
-        Node* anchor = (f.getAssignment() == Assignment::CROWN) ? clade->getCrown() : clade->getOrigin();
+        Node* crown = clade->getCrown();
+        Node* anchor = (f.getAssignment() == Assignment::CROWN) ? crown : clade->getOrigin();
         double bound = f.getMaxAge() * 1.05;
         if(minAges.count(anchor) == 0 || bound > minAges[anchor])
             minAges[anchor] = bound;
+        if(f.getAssignment() == Assignment::CROWN){
+            if(crownLo.count(crown) == 0 || f.getMaxAge() > crownLo[crown])
+                crownLo[crown] = f.getMaxAge();
+        }else if(f.getAssignment() == Assignment::STEM){
+            if(stemHi.count(crown) == 0 || f.getMaxAge() < stemHi[crown])
+                stemHi[crown] = f.getMaxAge();
+        }
     }
-    tree->assignStartingAges(minAges, unit);
+    tree->assignStartingAges(minAges, crownLo, stemHi, unit);
 
     UserSettings& us = UserSettings::userSettings();
     if(us.getConditionAgePriorSet()){
@@ -244,12 +252,14 @@ void FBDInput::assignFossilAwareAges(void){
         double hi = bounded ? us.getConditionAgePriorP2() : std::numeric_limits<double>::max();
         if(bounded && hi < maxBound)
             Msg::error("conditioning age prior lower bound (" + std::to_string(hi) + ") is younger than the oldest fossil (" + std::to_string(maxBound) + ")");
-        double mean = Probability::priorMean(us.getConditionAgePrior(), us.getConditionAgePriorP1(), us.getConditionAgePriorP2(), us.getConditionAgePriorP3());
-        double target = origin ? 0.9 * mean : mean;
-        if(target < maxBound)
-            target = bounded ? hi : (maxBound * 1.05);
-        double cur = tree->getCrown()->getTime();
-        if(cur > 0.0)
-            tree->scaleInternalAges(target / cur);
+        if(origin == false){
+            double mean = Probability::priorMean(us.getConditionAgePrior(), us.getConditionAgePriorP1(), us.getConditionAgePriorP2(), us.getConditionAgePriorP3());
+            double target = mean;
+            if(target < maxBound)
+                target = bounded ? hi : (maxBound * 1.05);
+            double cur = tree->getCrown()->getTime();
+            if(cur > 0.0)
+                tree->scaleInternalAges(target / cur);
+        }
     }
 }

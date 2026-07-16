@@ -671,6 +671,11 @@ void Tree::initializeTimes(void){
 }
 
 void Tree::assignStartingAges(const std::map<Node*,double>& minAges, double unit){
+    std::map<Node*,double> none;
+    assignStartingAges(minAges, none, none, unit);
+}
+
+void Tree::assignStartingAges(const std::map<Node*,double>& minAges, const std::map<Node*,double>& crownLo, const std::map<Node*,double>& stemHi, double unit){
     for(Node* n : downPassSequence){
         if(n->getIsTip()){
             if(n->getIsFossil() == false)
@@ -681,10 +686,19 @@ void Tree::assignStartingAges(const std::map<Node*,double>& minAges, double unit
         for(Node* c : n->getNeighbors())
             if(c != n->getAncestor() && c->getTime() > maxChild)
                 maxChild = c->getTime();
-        double age = maxChild + unit;
-        std::map<Node*,double>::const_iterator it = minAges.find(n);
-        if(it != minAges.end() && it->second > age)
-            age = it->second;
+        double hardLo = maxChild + unit;
+        std::map<Node*,double>::const_iterator itM = minAges.find(n);
+        if(itM != minAges.end() && itM->second > hardLo)
+            hardLo = itM->second;
+        double age = hardLo;
+        std::map<Node*,double>::const_iterator itS = stemHi.find(n);
+        if(itS != stemHi.end() && itS->second > hardLo){
+            std::map<Node*,double>::const_iterator itC = crownLo.find(n);
+            double cLo = (itC != crownLo.end()) ? itC->second : 0.0;
+            double comp = (cLo > 0.0) ? 0.5 * (cLo + itS->second) : 0.9 * itS->second;
+            if(comp > age)
+                age = (comp < itS->second) ? comp : itS->second;
+        }
         n->setTime(age);
     }
 }
