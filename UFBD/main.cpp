@@ -141,14 +141,22 @@ int main(int argc, const char* argv[]) {
     int thin = settings.getThinning();
 
     auto makeModel = [&](unsigned int sd) -> PhylogeneticModel* {
+        PhylogeneticModel* model;
         if(seq)
-            return new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), settings.getSequenceFile(), settings.getPartitionFile(), settings.getModelNStates(), settings.getNumCats(), cm, settings.getRgeneGamma(), settings.getSigma2Gamma(), sd);
-        if(hessian)
-            return new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), settings.getHessianFile(), settings.getTreeFile(), settings.getModelNStates(), cm, settings.getRgeneGamma(), settings.getSigma2Gamma(), sd);
-        FBDTreeModel* m = new FBDTreeModel(pt, input.getClades(), input.getFossils(), sd);
+            model = new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), settings.getSequenceFile(), settings.getPartitionFile(), settings.getModelNStates(), settings.getNumCats(), cm, settings.getRgeneGamma(), settings.getSigma2Gamma(), sd);
+        else if(hessian)
+            model = new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), settings.getHessianFile(), settings.getTreeFile(), settings.getModelNStates(), cm, settings.getRgeneGamma(), settings.getSigma2Gamma(), sd);
+        else
+            model = new FBDTreeModel(pt, input.getClades(), input.getFossils(), sd);
         static bool printedMap = false;
-        if(printedMap == false){ printedMap = true; std::string rm = m->getRateMap(); if(rm.empty() == false) std::cout << "Rate intervals:\n" << rm; }
-        return m;
+        if(printedMap == false){
+            printedMap = true;
+            std::string rm;
+            if(FBDTreeModel* fm = dynamic_cast<FBDTreeModel*>(model))              rm = fm->getRateMap();
+            else if(RelaxedClockTreeModel* rc = dynamic_cast<RelaxedClockTreeModel*>(model)) rm = rc->getRateMap();
+            if(rm.empty() == false) std::cout << "Rate intervals:\n" << rm;
+        }
+        return model;
     };
 
     bool resume = settings.getResume();

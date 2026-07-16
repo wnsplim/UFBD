@@ -341,6 +341,8 @@ std::vector<double> RelaxedClockTreeModel::getParameterString(void){
 
 bool RelaxedClockTreeModel::treeIncludesFossils(void){ return fbd->treeIncludesFossils(); }
 
+std::string RelaxedClockTreeModel::getRateMap(void){ return fbd->getRateMap(); }
+
 std::vector<std::string> RelaxedClockTreeModel::getLatentNames(void){
     std::vector<std::string> n = fbd->getLatentNames();
     Tree* tr = fbd->getTree();

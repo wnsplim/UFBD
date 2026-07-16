@@ -1308,8 +1308,9 @@ double FBDTreeModel::calculateLnConditioning(double t){
         case ConditioningEvent::ANYSAMPLE:
             return calculateLnAnySample(t);
         case ConditioningEvent::EXTINCT: {
-            double d = std::exp(calculateLnAnySample(t)) - std::exp(calculateLnSurvival(t));
-            return (d > 0.0) ? std::log(d) : -INFINITY;
+            int k = findIndex(t);
+            double pExtinct = calculateP0HatAt(k, t) - calculateP0At(k, t);
+            return (pExtinct > 0.0) ? std::log(pExtinct) : -INFINITY;
         }
     }
     return -INFINITY;

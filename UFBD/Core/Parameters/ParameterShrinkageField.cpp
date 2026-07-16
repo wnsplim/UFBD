@@ -214,12 +214,18 @@ double ParameterShrinkageField::ellipticalSliceDelta(void){
         for(int k = 0; k < nDelta; k++)
             delta[0][k] = f0[k] * c + nu[k] * s;
         recomputeRates();
-        if(model->lnLikelihood() > logy)
+        double lnL = model->lnLikelihood();
+        if(std::isfinite(lnL) && lnL > logy)
             break;
         if(theta < 0.0)
             tmin = theta;
         else
             tmax = theta;
+        if(tmax - tmin < 1e-12){
+            delta[0] = f0;
+            recomputeRates();
+            break;
+        }
         theta = tmin + (tmax - tmin) * rng.uniformRv();
     }
     return std::numeric_limits<double>::infinity();
