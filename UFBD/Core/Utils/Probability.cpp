@@ -722,7 +722,7 @@ double Probability::TruncatedNormal::lnPdf(double x, double mu, double sigma, do
 
     if ( x < lower )
     {
-        pdf = 0.0;
+        pdf = -INFINITY;
     }
     else if ( x <= upper )
     {
@@ -738,7 +738,7 @@ double Probability::TruncatedNormal::lnPdf(double x, double mu, double sigma, do
     }
     else
     {
-    pdf = 0.0;
+    pdf = -INFINITY;
     }
 
     return pdf;
