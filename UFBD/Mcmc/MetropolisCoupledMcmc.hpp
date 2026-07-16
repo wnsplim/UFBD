@@ -37,7 +37,8 @@ class MetropolisCoupledMcmc : public ChainRunner {
         //functions
         double                              calcHeating(int idx);
         void                                sample(unsigned long n);
-        void                                updateDeltaT(void);
+        void                                writeColdSample(unsigned long n);
+        void                                adaptDeltaT(bool swapAccepted);
         //objects ordered by memory footprint
         std::deque<bool>                    recentAcceptRej;
         std::vector<PhylogeneticModel*>     models;
@@ -62,6 +63,10 @@ class MetropolisCoupledMcmc : public ChainRunner {
         int                                 runLabel = 0;
         unsigned long                       numCycles;
         double                              deltaT;
+        unsigned long                       resampleEvery;
+        long                                swapAdaptCount;
+        int                                 swapAdaptAcc;
+        int                                 swapAdaptAtt;
         int                                 coldModelIdx;
         int                                 numModels;
         int                                 thinning;

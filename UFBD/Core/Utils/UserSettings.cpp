@@ -190,7 +190,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-lambda_groups", "-mu_groups", "-psi_groups", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
         "-hessian", "-clock_model", "-n_states", "-rgene_gamma", "-sigma2_gamma", "-sigma2_param", "-pncp_tuning",
         "-sequence", "-partition", "-ctmc_gamma_cat", "-datatype", "-ctmc_model", "-ctmc_inv", "-ctmc_freq",
-        "-parallel_chains", "-burn_in", "-rhat", "-min_ess", "-max_gen", "-resume", "-ar_log"
+        "-parallel_chains", "-burn_in", "-rhat", "-min_ess", "-max_gen", "-delta_temperature", "-swap_interval", "-resume", "-ar_log"
     };
     std::set<std::string> valueFlags = {
         "-tree_output", "-log_output", "-backbone_tree", "-clade_def", "-fossils", "-conditioning", "-rho", "-seed", "-chain_length", "-thinning", "-coupled_chains", "-cores",
@@ -199,7 +199,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-lambda_groups", "-mu_groups", "-psi_groups", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
         "-hessian", "-clock_model", "-n_states", "-rgene_gamma", "-sigma2_gamma", "-sigma2_param", "-pncp_tuning",
         "-sequence", "-partition", "-ctmc_gamma_cat", "-datatype", "-ctmc_model", "-ctmc_inv", "-ctmc_freq",
-        "-parallel_chains", "-burn_in", "-rhat", "-min_ess", "-max_gen"
+        "-parallel_chains", "-burn_in", "-rhat", "-min_ess", "-max_gen", "-delta_temperature", "-swap_interval"
     };
     if (sbcMode) {
         knownFlags.insert("-fbd_model");
@@ -439,6 +439,16 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 burninFraction = std::stod(val);
                 if(burninFraction < 0.0 || burninFraction >= 1.0)
                     Msg::error("flag \"-burn_in\" expects a fraction in [0, 1).");
+            } else if (arg == "-delta_temperature") {
+                deltaTemperature = std::stod(val);
+                if(deltaTemperature <= 0.0)
+                    Msg::error("flag \"-delta_temperature\" must be positive.");
+                deltaTemperatureProvided = true;
+            } else if (arg == "-swap_interval") {
+                resampleEvery = std::stoul(val);
+                if(resampleEvery == 0)
+                    Msg::error("flag \"-swap_interval\" must be a positive integer.");
+                resampleEveryProvided = true;
             } else if (arg == "-rhat") {
                 rhatThreshold = std::stod(val);
                 rhatThresholdSet = true;
@@ -501,6 +511,12 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         Msg::warning("chains must be >= 1; setting to 1.");
         numCoupledChains = 1;
     }
+
+    if (deltaTemperatureProvided && numCoupledChains <= 1)
+        Msg::warning("-delta_temperature has no effect without -coupled_chains > 1.");
+
+    if (resampleEveryProvided && numCoupledChains <= 1)
+        Msg::warning("-swap_interval has no effect without -coupled_chains > 1.");
 
     if (chainLength < 1)
         Msg::error("flag \"-chain_length\" must be a positive integer (or \"auto\").");
@@ -626,6 +642,10 @@ void UserSettings::print(void) {
         std::cout << "Chain length:                 " << chainLength << std::endl;
     if (numCoupledChains > 1)
         std::cout << "Coupled chains per run (MC3): " << numCoupledChains << std::endl;
+    if (numCoupledChains > 1)
+        std::cout << "MC3 initial delta temperature: " << deltaTemperature << std::endl;
+    if (numCoupledChains > 1)
+        std::cout << "MC3 swap interval (gens):     " << resampleEvery << std::endl;
     std::cout << "Number of parallel chains:    " << numRuns << std::endl;
     std::cout << "Thinning:                     " << thinning << std::endl;
     if (sigma2Param == Sigma2Param::PNCP)
@@ -677,6 +697,9 @@ MCMC
   -burn_in <frac>         burn-in fraction (default 0.25)
   -parallel_chains <N>    independent replicate runs (needed for split R-hat)
   -coupled_chains <N>     Metropolis-coupled chains per run (>1 enables MC3)
+  -delta_temperature <x>  MC3 initial temperature spacing (default 0.1); the
+                          ladder self-tunes toward ~0.234 swap acceptance
+  -swap_interval <N>      MC3 generations between chain-swap attempts (default 1000)
   -cores <N>              number of threads
   -seed <N>               random number seed
 

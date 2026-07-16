@@ -60,11 +60,12 @@ bool ConvergenceRunner::run(void){
 
     int M = (int)replicates.size();
     int nCores = UserSettings::userSettings().getNumCores();
-    bool parallelRuns = (M > 1 && UserSettings::userSettings().getNumCoupledChains() == 1);
+    bool parallelRuns = (M > 1);
+    bool coupledRuns = UserSettings::userSettings().getNumCoupledChains() > 1;
     int nWorkers = parallelRuns ? std::min(nCores, M) : 0;
     std::vector<ThreadPool*> runPools;
     for(int t = 0; t < nWorkers; t++){
-        int per = nCores / nWorkers + (t < nCores % nWorkers ? 1 : 0);
+        int per = coupledRuns ? 1 : (nCores / nWorkers + (t < nCores % nWorkers ? 1 : 0));
         if(per < 1) per = 1;
         runPools.push_back(new ThreadPool(per));
     }

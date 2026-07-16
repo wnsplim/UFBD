@@ -10,6 +10,7 @@
 #include "WriteTSV.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <fstream>
 #include <chrono>
@@ -22,7 +23,8 @@ MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int thin, std::ve
     models(m),
     numModels(models.size()),
     coldModelIdx(-1),
-    deltaT(0.2),
+    deltaT(UserSettings::userSettings().getDeltaTemperature()),
+    resampleEvery(UserSettings::userSettings().getResampleEvery()),
     threadPool(std::max(1, std::min((int)m.size(), UserSettings::userSettings().getNumCores()))){
     swapRng.setSeed(masterSeed + numModels);
     currLnL.reserve(numModels); //needs to be reserve for pushback
@@ -41,17 +43,13 @@ MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int thin, std::ve
     writeTrees = (treeOut.empty() == false && models[0]->getTree()->getNumBackbone() > 0);
     gen = 0;
 
-    int N = settings.getNumCores();
-    for(int i = 0; i < numModels; i++){
-        int per = N / numModels + (i < N % numModels ? 1 : 0);
-        if(per < 1) per = 1;
-        chainPools.push_back(new ThreadPool(per));
-    }
-    ThreadPool::shared().setChainCap(std::max(1, N / std::max(1, numModels)));
     chainCalibGen = 0;
     chainSeqT = 0.0;
     chainParT = 0.0;
     chainDecision = -1;
+    swapAdaptCount = 0;
+    swapAdaptAcc = 0;
+    swapAdaptAtt = 0;
 }
 
 MetropolisCoupledMcmc::~MetropolisCoupledMcmc(void){
@@ -119,136 +117,120 @@ void MetropolisCoupledMcmc::finalize(void) {
 }
 
 void MetropolisCoupledMcmc::advance(unsigned long nGens) {
+    if(chainPools.empty()){
+        UserSettings& s = UserSettings::userSettings();
+        int nRuns = std::max(1, s.getNumRuns());
+        int budget = s.getNumCores() / nRuns + ((runLabel < s.getNumCores() % nRuns) ? 1 : 0);
+        for(int i = 0; i < numModels; i++){
+            int per = budget / numModels + ((i < budget % numModels) ? 1 : 0);
+            if(per < 1) per = 1;
+            chainPools.push_back(new ThreadPool(per));
+        }
+        chainDecision = 1;
+    }
     RandomVariable::setActiveInstance(&swapRng);
     RandomVariable& rng = RandomVariable::randomVariableInstance();
+
+    coldModelIdx = -1;
+    for(int i = 0; i < numModels; i++)
+        if(indices[i] == 0){ coldModelIdx = i; break; }
 
     unsigned long target = gen + nGens;
     if(gen == 0 && tuning == false)
         sample(0);
-    while (gen < target){
-        gen++;
-        unsigned long n = gen;
-        if(n < 10000 && n % 50 == 0)
-            updateDeltaT();
-        
-        bool canParallel = (numModels > 1 && threadPool.size() > 1);
-        bool parallelChains = canParallel && (chainDecision < 0 ? chainCalibGen >= 100 : chainDecision == 1);
-        std::chrono::steady_clock::time_point cwT0 = std::chrono::steady_clock::now();
-        if(parallelChains){
+
+    bool canParallel = (numModels > 1 && threadPool.size() > 1);
+    while(gen < target){
+        unsigned long blockLen = std::min(resampleEvery, target - gen);
+        unsigned long gen0 = gen;
+
+        coldModelIdx = -1;
+        for(int i = 0; i < numModels; i++)
+            if(indices[i] == 0){ coldModelIdx = i; break; }
+
+        auto runBlock = [this, blockLen, gen0](int i){
+            RandomVariable::setActiveInstance(models[i]->getRng());
+            ThreadPool::setCurrent(chainPools[i]);
+            RandomVariable* r = models[i]->getRng();
+            double heat = calcHeating(indices[i]);
+            bool cold = (i == coldModelIdx);
+            for(unsigned long b = 1; b <= blockLen; b++){
+                double lnProp = models[i]->update();
+                if(lnProp == -INFINITY){
+                    models[i]->updateForRejection();
+                }else{
+                    double nL = models[i]->lnLikelihood();
+                    double nP = models[i]->lnPriorProbability();
+                    double lnAcc = heat * ((nL - currLnL[i]) + (nP - currLnP[i])) + lnProp;
+                    if(log(r->uniformRv()) < lnAcc){
+                        currLnL[i] = nL;
+                        currLnP[i] = nP;
+                        models[i]->updateForAcceptance();
+                    }else{
+                        models[i]->updateForRejection();
+                    }
+                }
+                if(cold && tuning == false && (gen0 + b) % (unsigned long)thinning == 0)
+                    writeColdSample(gen0 + b);
+            }
+            ThreadPool::setCurrent(nullptr);
+        };
+
+        if(canParallel){
             std::vector<std::function<void()>> tasks;
             tasks.reserve(numModels);
-            for(int i = 0; i < numModels; i++){
-                tasks.push_back([this, i](){
-                    RandomVariable::setActiveInstance(models[i]->getRng());
-                    ThreadPool::setCurrent(chainPools[i]);
-                    lnProposalRatio[i] = models[i]->update();
-                    if(lnProposalRatio[i] == -INFINITY){
-                        newLnL[i] = currLnL[i];
-                        newLnP[i] = currLnP[i];
-                        lnAcceptanceProbabilities[i] = -INFINITY;
-                    }else{
-                        newLnL[i] = models[i]->lnLikelihood();
-                        newLnP[i] = models[i]->lnPriorProbability();
-                        lnLikelihoodRatio[i] = newLnL[i] - currLnL[i];
-                        lnPriorRatio[i]      = newLnP[i] - currLnP[i];
-                        int    chainIdx = indices[i];
-                        double heat     = (chainIdx == 0) ? 1.0 : calcHeating(chainIdx);
-                        lnAcceptanceProbabilities[i] = heat * (lnLikelihoodRatio[i] + lnPriorRatio[i])
-                                                       + lnProposalRatio[i];
-                    }
-                    ThreadPool::setCurrent(nullptr);
-                });
-            }
+            for(int i = 0; i < numModels; i++)
+                tasks.push_back([&runBlock, i](){ runBlock(i); });
             threadPool.parallelTasks(tasks);
         }else{
-            for(int i = 0; i < numModels; i++){
-                RandomVariable::setActiveInstance(models[i]->getRng());
-                lnProposalRatio[i] = models[i]->update();
-
-                if(lnProposalRatio[i] == -INFINITY){
-                    newLnL[i] = currLnL[i];
-                    newLnP[i] = currLnP[i];
-                    lnAcceptanceProbabilities[i] = -INFINITY;
-                    continue;
-                }
-
-                newLnL[i]          = models[i]->lnLikelihood();
-                newLnP[i]          = models[i]->lnPriorProbability();
-
-                lnLikelihoodRatio[i] = newLnL[i] - currLnL[i];
-                lnPriorRatio[i]      = newLnP[i] - currLnP[i];
-
-                int    chainIdx = indices[i];
-                double heat     = (chainIdx == 0) ? 1.0 : calcHeating(chainIdx);
-                lnAcceptanceProbabilities[i] = heat * (lnLikelihoodRatio[i] + lnPriorRatio[i])
-                                               + lnProposalRatio[i];
-            }
+            for(int i = 0; i < numModels; i++)
+                runBlock(i);
         }
-        if(canParallel && chainDecision < 0){
-            double dt = std::chrono::duration<double>(std::chrono::steady_clock::now() - cwT0).count();
-            if(parallelChains) chainParT += dt; else chainSeqT += dt;
-            if(++chainCalibGen >= 200)
-                chainDecision = (chainParT < chainSeqT) ? 1 : 0;
-        }
+        gen += blockLen;
 
-
-        // accept or reject the proposed state
-        coldModelIdx = -1;
-        for (int i = 0; i < numModels; i++) {
-            if (indices[i] == 0) coldModelIdx = i;
-            if (log(rng.uniformRv()) < lnAcceptanceProbabilities[i]) {
-                currLnL[i] = newLnL[i];
-                currLnP[i] = newLnP[i];
-                models[i]->updateForAcceptance();
-            } else {
-                models[i]->updateForRejection();
-            }
-        }
-        
-        if (verbose && n % thinning == 0){
+        if(verbose && tuning == false && gen % (unsigned long)thinning == 0){
             const size_t numAccepted = std::count(recentAcceptRej.begin(), recentAcceptRej.end(), true);
             const double acceptanceRate = recentAcceptRej.empty() ? 0.0 : static_cast<double>(numAccepted) / recentAcceptRej.size();
             std::ostringstream os;
-            os << std::fixed << std::setprecision(2) << "chain " << runLabel << "  " << n << " -- posterior "
+            os << std::fixed << std::setprecision(2) << "chain " << runLabel << "  " << gen << " -- posterior "
                << (currLnL[coldModelIdx] + currLnP[coldModelIdx]) << " likelihood " << currLnL[coldModelIdx]
                << " prior " << currLnP[coldModelIdx] << " | swap accept " << acceptanceRate << "\n";
             ChainRunner::logLine(os.str());
         }
-            
-        //choose two chains and swap
+
         int chain1 = (int)(rng.uniformRv() * numModels);
         int chain2 = -1;
         do{
             chain2 = (int)(rng.uniformRv() * numModels);
         }while(chain1 == chain2);
-    
+
         int idx1 = indices[chain1];
         int idx2 = indices[chain2];
-        
+
         double chain1LnPost = currLnL[chain1] + currLnP[chain1];
         double chain2LnPost = currLnL[chain2] + currLnP[chain2];
-        
+
         double chain1Heating = calcHeating(idx1);
         double chain2Heating = calcHeating(idx2);
-        
+
         double lnProbSwap = chain2Heating * chain1LnPost + chain1Heating * chain2LnPost;
         double lnProbStay = chain1Heating * chain1LnPost + chain2Heating * chain2LnPost;
-        double lnAcceptanceSwap =lnProbSwap - lnProbStay;
-        
-        //accept or reject swap
-        if(log(rng.uniformRv()) < lnAcceptanceSwap){
+        double lnAcceptanceSwap = lnProbSwap - lnProbStay;
+
+        bool swapAccepted = log(rng.uniformRv()) < lnAcceptanceSwap;
+        if(swapAccepted){
             indices[chain1] = idx2;
             indices[chain2] = idx1;
-            recentAcceptRej.push_back(true);
-        }else{
-            recentAcceptRej.push_back(false);
         }
-        
+        recentAcceptRej.push_back(swapAccepted);
+
         if (recentAcceptRej.size() > 10000)
             recentAcceptRej.pop_front();
-        
-        if (tuning == false && n % thinning == 0)
-            sample(n);
+
+        adaptDeltaT(swapAccepted);
+
+        if(tuning == false)
+            writeCheckpoint();
     }
 }
 
@@ -289,6 +271,11 @@ void MetropolisCoupledMcmc::sample(unsigned long n) {
         traceCols.assign(traceNms.size(), std::vector<double>());
     }
 
+    writeColdSample(n);
+    writeCheckpoint();
+}
+
+void MetropolisCoupledMcmc::writeColdSample(unsigned long n) {
     double cl = currLnL[coldModelIdx];
     double cp = currLnP[coldModelIdx];
     std::vector<double> dat = {(double)n, cl + cp, cl, cp};
@@ -312,8 +299,6 @@ void MetropolisCoupledMcmc::sample(unsigned long n) {
     tv.insert(tv.end(), parmStr.begin(), parmStr.end());
     for(size_t j = 0; j < traceCols.size() && j < tv.size(); j++)
         traceCols[j].push_back(tv[j]);
-
-    writeCheckpoint();
 }
 
 void MetropolisCoupledMcmc::writeCheckpoint(void) {
@@ -321,7 +306,7 @@ void MetropolisCoupledMcmc::writeCheckpoint(void) {
     std::string tmp = path + ".tmp";
     std::ofstream os(tmp);
     os << std::setprecision(17);
-    os << gen << ' ' << thinning << ' ' << deltaT << ' ' << numModels << '\n';
+    os << gen << ' ' << thinning << ' ' << deltaT << ' ' << numModels << ' ' << swapAdaptCount << ' ' << swapAdaptAcc << ' ' << swapAdaptAtt << '\n';
     for(int i = 0; i < numModels; i++)
         os << indices[i] << ' ';
     os << '\n';
@@ -341,7 +326,7 @@ bool MetropolisCoupledMcmc::loadCheckpoint(void) {
     std::string path = paramOut + ".ckp";
     std::ifstream is = openCheckpoint(path);
     int nm, storedSf;
-    is >> gen >> storedSf >> deltaT >> nm;
+    is >> gen >> storedSf >> deltaT >> nm >> swapAdaptCount >> swapAdaptAcc >> swapAdaptAtt;
     reconcileThinning(storedSf, thinning);
     indices.assign(nm, 0);
     coldModelIdx = -1;
@@ -375,18 +360,18 @@ std::vector<std::string> MetropolisCoupledMcmc::resumeLatentNames(void) {
     return models[coldModelIdx]->getLatentNames();
 }
 
-void MetropolisCoupledMcmc::updateDeltaT(void) {
-    if(recentAcceptRej.size() > 50){
-        const size_t numAccepted = std::count(recentAcceptRej.begin(), recentAcceptRej.end(), true);
-        const double acceptanceRate = static_cast<double>(numAccepted) / recentAcceptRej.size();
-        
-        constexpr double targetAcceptance = 0.23;
-        constexpr double lowerAcceptance = targetAcceptance - 0.1;
-        constexpr double upperAcceptance = targetAcceptance + 0.1;
-        if(acceptanceRate < lowerAcceptance){
-            deltaT *= 0.99;
-        }else if (acceptanceRate > upperAcceptance){
-            deltaT *= 1.01;
-        }
+void MetropolisCoupledMcmc::adaptDeltaT(bool swapAccepted) {
+    swapAdaptAtt++;
+    if(swapAccepted)
+        swapAdaptAcc++;
+    if(swapAdaptAtt >= 100){
+        double ar = (double)swapAdaptAcc / (double)swapAdaptAtt;
+        swapAdaptCount++;
+        double gain = 1.0 / std::sqrt((double)swapAdaptCount);
+        deltaT *= std::exp(gain * (ar - 0.234));
+        if(deltaT < 1e-4) deltaT = 1e-4;
+        if(deltaT > 10.0)  deltaT = 10.0;
+        swapAdaptAcc = 0;
+        swapAdaptAtt = 0;
     }
 }
