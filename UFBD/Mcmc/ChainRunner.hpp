@@ -26,6 +26,7 @@ class ChainRunner {
         void                                    setOutputPaths(const std::string& po, const std::string& to) { paramOut = po; treeOut = to; }
         const std::vector<std::vector<double>>& traceColumns(void) { return traceCols; }
         const std::vector<std::string>&         traceNames(void) { return traceNms; }
+        const std::vector<bool>&                fixedTraceMask(void) { return fixedMask; }
         const std::vector<std::vector<double>>& latentColumns(void) { return latentCols; }
         const std::vector<std::string>&         latentNames(void) { return latentNms; }
         virtual bool                            treeHasFossils(void) { return false; }
@@ -55,6 +56,7 @@ class ChainRunner {
         unsigned long                           gen;
         std::vector<std::vector<double>>        traceCols;
         std::vector<std::string>                traceNms;
+        std::vector<bool>                       fixedMask;
         std::vector<std::vector<double>>        latentCols;
         std::vector<std::string>                latentNms;
 };

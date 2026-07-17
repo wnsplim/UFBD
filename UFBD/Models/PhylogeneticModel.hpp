@@ -17,6 +17,7 @@ class PhylogeneticModel {
                                                ~PhylogeneticModel(void);
         virtual std::vector<std::string>        getParameterNames(void) = 0;
         virtual std::vector<double>             getParameterString(void) = 0;
+        virtual std::vector<bool>               getParameterFixedMask(void) { return std::vector<bool>(getParameterNames().size(), false); }
         virtual std::vector<std::string>        getLatentNames(void) { return {}; }
         virtual std::vector<double>             getLatentString(void) { return {}; }
         virtual bool                            treeIncludesFossils(void) { return false; }

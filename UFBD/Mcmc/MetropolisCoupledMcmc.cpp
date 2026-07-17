@@ -269,6 +269,9 @@ void MetropolisCoupledMcmc::sample(unsigned long n) {
         for(const std::string& s : headStr)
             traceNms.push_back(s);
         traceCols.assign(traceNms.size(), std::vector<double>());
+        fixedMask.assign(3, false);
+        for(bool fb : models[coldModelIdx]->getParameterFixedMask())
+            fixedMask.push_back(fb);
     }
 
     writeColdSample(n);

@@ -147,9 +147,13 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     originAge = nullptr;
     if(UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN){
         double floor = t->getCrown()->getTime();
-        for(Fossil& f : fossils)
+        double oldestFossil = 0.0;
+        for(Fossil& f : fossils){
             if(f.getMaxAge() > floor)
                 floor = f.getMaxAge();
+            if(f.getMaxAge() > oldestFossil)
+                oldestFossil = f.getMaxAge();
+        }
         double x0init = floor * 1.05;
         originAge = new ParameterDouble(1.0, this, "originAge", 0.0, std::numeric_limits<double>::max());
         UserSettings& us = UserSettings::userSettings();
@@ -167,7 +171,10 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
         }else{
             originAge->setPrior(Probability::PriorFamily::IMPROPER, 0.0, 0.0);
         }
-        originAge->setValue(x0init);
+        if(originAge->getProposalProbability() > 0.0)
+            originAge->setValue(x0init);
+        else if(originAge->getValue() < oldestFossil)
+            Msg::error("fixed origin age " + std::to_string(originAge->getValue()) + " is below the oldest fossil age " + std::to_string(oldestFossil) + ".");
     }
 
     if(isResolved){
@@ -179,6 +186,21 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
         delete working;
     }else{
         parameterTree->setTree(t);
+    }
+    if(UserSettings::userSettings().getConditioning() == Conditioning::CROWN &&
+       UserSettings::userSettings().getConditionAgePrior() == Probability::PriorFamily::FIXED){
+        double fixedCrown = UserSettings::userSettings().getConditionAgePriorP1();
+        double oldestFossil = 0.0;
+        for(Fossil& f : fossils)
+            if(f.getMaxAge() > oldestFossil)
+                oldestFossil = f.getMaxAge();
+        if(fixedCrown < oldestFossil)
+            Msg::error("fixed crown age " + std::to_string(fixedCrown) + " is below the oldest fossil age " + std::to_string(oldestFossil) + ".");
+        Tree* crownTree = parameterTree->getTree();
+        double curCrown = crownTree->getCrown()->getTime();
+        if(curCrown > 0.0 && curCrown != fixedCrown)
+            crownTree->scaleInternalAges(fixedCrown / curCrown);
+        crownTree->setCrownFixed(true);
     }
     for(BackboneFossil& bf : backboneFossils)
         bf.tip = parameterTree->getTree()->getNodeByOffset(bf.tip->getOffset());
@@ -374,9 +396,13 @@ std::string FBDTreeModel::getRateMap(void){
 
 double FBDTreeModel::lambdaAt(int i){
     int j = lambdaIdx[i];
-    if(lambdaField != nullptr)
-        return lambdaField->getRate(j);
-    return lambda[j]->getValue();
+    double v = (lambdaField != nullptr) ? lambdaField->getRate(j) : lambda[j]->getValue();
+    static const char* sc = std::getenv("FBD_LAMSCALE");
+    static const char* lo = std::getenv("FBD_LAMLO");
+    static const char* hi = std::getenv("FBD_LAMHI");
+    if(sc && intervalStart[i] >= (lo ? std::atof(lo) : -1e9) && intervalStart[i] < (hi ? std::atof(hi) : 1e9))
+        v *= std::atof(sc);
+    return v;
 }
 
 double FBDTreeModel::muAt(int i){
@@ -388,9 +414,10 @@ double FBDTreeModel::muAt(int i){
 
 double FBDTreeModel::psiOfTypeAt(int type, int i){
     int j = psiIdx[type][i];
-    if(psiField[type] != nullptr)
-        return psiField[type]->getRate(j);
-    return psi[type][j]->getValue();
+    double v = (psiField[type] != nullptr) ? psiField[type]->getRate(j) : psi[type][j]->getValue();
+    static const char* ps = std::getenv("FBD_PSISCALE");
+    if(ps) v *= std::atof(ps);
+    return v;
 }
 
 double FBDTreeModel::psiTotalAt(int i){
@@ -442,6 +469,25 @@ std::vector<std::string> FBDTreeModel::getParameterNames(void){
     for(size_t i = 0; i < getAgeLogNodes().size(); i++)
         names.push_back("x" + std::to_string(i + 1));
     return names;
+}
+
+std::vector<bool> FBDTreeModel::getParameterFixedMask(void){
+    std::vector<bool> m;
+    if(lambdaField != nullptr) for(size_t i = 0; i < lambdaName.size(); i++) m.push_back(false);
+    else for(ParameterDouble* p : lambda) m.push_back(p->getProposalProbability() == 0.0);
+    if(muField != nullptr) for(size_t i = 0; i < muName.size(); i++) m.push_back(false);
+    else for(ParameterDouble* p : mu) m.push_back(p->getProposalProbability() == 0.0);
+    for(int tp = 0; tp < numPsiTypes; tp++){
+        if(psiField[tp] != nullptr) for(size_t i = 0; i < psiName[tp].size(); i++) m.push_back(false);
+        else for(ParameterDouble* p : psi[tp]) m.push_back(p->getProposalProbability() == 0.0);
+    }
+    if(unresolvedFossils != nullptr || isResolved) m.push_back(false);
+    if(originAge != nullptr) m.push_back(originAge->getProposalProbability() == 0.0);
+    std::vector<Node*> logNodes = getAgeLogNodes();
+    Node* crownNode = parameterTree->getTree()->getCrown();
+    bool cf = parameterTree->getTree()->getCrownFixed();
+    for(size_t i = 0; i < logNodes.size(); i++) m.push_back(cf && logNodes[i] == crownNode);
+    return m;
 }
 
 int FBDTreeModel::countResolvedSA(void){
@@ -996,6 +1042,8 @@ double FBDTreeModel::calculateFBDProbability(void){
 
     bool useOrigin = (UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN);
     double fbdProb = 0.0;
+    static const bool fbdDbg = (std::getenv("FBD_DBG") != nullptr);
+    double dbgT1 = 0.0, dbgT12 = 0.0;
 
     //term 1: conditioning
     if(useOrigin){
@@ -1020,6 +1068,7 @@ double FBDTreeModel::calculateFBDProbability(void){
         fbdProb += lnD(crownAge) - std::log(4.0);
     }
 
+    dbgT1 = fbdProb;
     //term 2: main body
     int nDp = (int)dpseq.size();
     std::vector<double> termNode(nDp, 0.0);
@@ -1038,6 +1087,7 @@ double FBDTreeModel::calculateFBDProbability(void){
     for(int idx = 0; idx < nDp; idx++)
         fbdProb += termNode[idx];
     fbdProb += numExtantTips * std::log(rhoVal);
+    dbgT12 = fbdProb;
 
     //term 3: fossil attachment
     int numFossils = unresolvedFossils->getNumFossils();
@@ -1053,6 +1103,56 @@ double FBDTreeModel::calculateFBDProbability(void){
     for(const BackboneFossil& bf : backboneFossils){
         double y = bf.tip->getTime();
         fbdProb += std::log(psiOfTypeAt(bf.type, findIndex(y))) + std::log(calculateP0(y)) - lnD(y);
+    }
+    if(fbdDbg){
+        double t2 = dbgT12 - dbgT1;
+        double t3 = fbdProb - dbgT12;
+        int amax = 0; double vmax = -1e300;
+        for(int idx = 0; idx < nDp; idx++) if(termNode[idx] > vmax){ vmax = termNode[idx]; amax = idx; }
+        double fsum = 0.0, fmin = 1e300, fmax = -1e300;
+        for(int i = 0; i < numFossils; i++){ fsum += termFoss[i]; if(termFoss[i] < fmin) fmin = termFoss[i]; if(termFoss[i] > fmax) fmax = termFoss[i]; }
+        double tn = dpseq[amax]->getTime();
+        std::cout << "[FBD_DBG] total=" << fbdProb << " t1cond=" << dbgT1 << " t2spec=" << t2 << " t3foss=" << t3
+                  << " | maxNodeTerm=" << vmax << " @t=" << tn << " bin=" << findIndex(tn) << " lam=" << lambdaAt(findIndex(tn)) << " lnD=" << lnD(tn)
+                  << " | fossSum=" << fsum << " fossMin=" << fmin << " fossMax=" << fmax << "\n";
+        int fam = 0; double fv = -1e300;
+        for(int i = 0; i < numFossils; i++) if(termFoss[i] > fv){ fv = termFoss[i]; fam = i; }
+        double yy = unresolvedFossils->getFossilAge(fam), zz = unresolvedFossils->getAttachAge(fam);
+        int ty = fossilType[fam];
+        std::cout << "[FBD_DBG_FOSS] i=" << fam << " term=" << fv << " isSA=" << unresolvedFossils->isSA(fam) << " isUE=" << unresolvedFossils->isUE(fam)
+                  << " y=" << yy << " z=" << zz << " biny=" << findIndex(yy) << " binz=" << findIndex(zz)
+                  << " logPsiY=" << std::log(psiOfTypeAt(ty, findIndex(yy))) << " log2LamZ=" << std::log(2 * lambdaAt(findIndex(zz)))
+                  << " logP0Y=" << std::log(calculateP0(yy)) << " lnDz=" << lnD(zz) << " lnDy=" << lnD(yy) << " gammaLn=" << cachedGammaLn[fam] << "\n";
+        int ni = (int)intervalStart.size();
+        for(int i = 0; i < ni; i++){
+            double p0 = calculateP0At(i, (i + 1 < ni) ? intervalStart[i + 1] : intervalStart[i] + 1.0);
+            std::cout << "[FBD_DBG_IV] i=" << i << " start=" << intervalStart[i] << " lam=" << lambdaAt(i) << " mu=" << muAt(i) << " psi=" << psiTotalAt(i)
+                      << " c1=" << c1Vec[i] << " c2=" << c2Vec[i] << " P0end=" << p0 << " ePrev=" << (i < (int)ePrev.size() ? ePrev[i] : 0.0) << "\n";
+        }
+        std::vector<double> divc(ni, 0.0), stalk(ni, 0.0), fy(ni, 0.0);
+        double xtop = useOrigin ? originAge->getValue() : crownAge;
+        for(int idx = 0; idx < nDp; idx++){
+            Node* nn = dpseq[idx];
+            if(nn->getIsTip()) continue;
+            bool hc = false;
+            for(Node* c : nn->getNeighbors()) if(c != nn->getAncestor()){ hc = true; break; }
+            if(hc){ int bi = findIndex(nn->getTime()); if(bi < ni) divc[bi] += 1.0; }
+        }
+        for(int i = 0; i < numFossils; i++){
+            double yv = unresolvedFossils->getFossilAge(i);
+            int by = findIndex(yv); if(by < ni) fy[by] += 1.0;
+            if(unresolvedFossils->isSA(i)) continue;
+            double zv = unresolvedFossils->getAttachAge(i);
+            int bz = findIndex(zv); if(bz < ni) divc[bz] += 1.0;
+            for(int b = 0; b < ni; b++){
+                double blo = intervalStart[b], bhi = (b + 1 < ni) ? intervalStart[b + 1] : xtop;
+                double ov = std::min(zv, bhi) - std::max(yv, blo);
+                if(ov > 0.0) stalk[b] += ov;
+            }
+        }
+        for(int b = 0; b < ni; b++)
+            std::cout << "[FBD_BAL] i=" << b << " [" << intervalStart[b] << "," << ((b + 1 < ni) ? intervalStart[b + 1] : xtop) << ") lam=" << lambdaAt(b)
+                      << " nDiv=" << divc[b] << " stalkLen=" << stalk[b] << " nFossilY=" << fy[b] << "\n";
     }
     return fbdProb;
 }
@@ -2197,9 +2297,9 @@ double FBDTreeModel::doUpDownScale(void){
     double lnc = std::log(c);
 
     int nUp = 0;
-    for(ParameterDouble* l : lambda){ l->scaleProposed(c); nUp++; }
-    for(ParameterDouble* m : mu){ m->scaleProposed(c); nUp++; }
-    for(auto& pv : psi) for(ParameterDouble* p : pv){ p->scaleProposed(c); nUp++; }
+    for(ParameterDouble* l : lambda) if(l->getProposalProbability() > 0.0){ l->scaleProposed(c); nUp++; }
+    for(ParameterDouble* m : mu) if(m->getProposalProbability() > 0.0){ m->scaleProposed(c); nUp++; }
+    for(auto& pv : psi) for(ParameterDouble* p : pv) if(p->getProposalProbability() > 0.0){ p->scaleProposed(c); nUp++; }
     double h = nUp * lnc;
 
     Tree* t = parameterTree->getTree();
@@ -2212,7 +2312,7 @@ double FBDTreeModel::doUpDownScale(void){
     }
     int numScaledDown = t->scaleInternalAges(invc);
     h += numScaledDown * std::log(invc);
-    if(originAge != nullptr){
+    if(originAge != nullptr && originAge->getProposalProbability() > 0.0){
         originAge->scaleProposed(invc);
         h += std::log(invc);
     }

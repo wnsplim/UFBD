@@ -512,6 +512,11 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         numCoupledChains = 1;
     }
 
+    if (essThresholdSet == false) {
+        int nr = (numRuns > 0) ? numRuns : 1;
+        essThreshold = 200.0 / nr;
+    }
+
     if (deltaTemperatureProvided && numCoupledChains <= 1)
         Msg::warning("-delta_temperature has no effect without -coupled_chains > 1.");
 
@@ -705,7 +710,7 @@ MCMC
 
 CONVERGENCE  (used only with -chain_length auto)
   -max_gen <N>            hard generation cap
-  -min_ess <N>            target minimum per-chain ESS
+  -min_ess <N>            target minimum per-chain ESS (default 200 / parallel_chains)
   -rhat <x>               target maximum rank-normalized split R-hat
 
 FBD RATES

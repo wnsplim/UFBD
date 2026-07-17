@@ -200,9 +200,14 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
     double minBulkEss = -1.0;
     int nBelow = 0;
     std::vector<std::string> bad;
+    const std::vector<bool>& fixedMask = replicates[0]->fixedTraceMask();
+    int nFrozen = 0;
+    std::string frozenName;
 
     for(int p = 0; p < nP; p++){
         if(names[p] == "nSA")
+            continue;
+        if(p < (int)fixedMask.size() && fixedMask[p])
             continue;
         std::vector<std::vector<double>> chains;
         for(ChainRunner* c : replicates){
@@ -212,7 +217,13 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
         }
         Convergence::Diagnostic d = Convergence::diagnose(chains);
         bool isDensity = (names[p] == "posterior" || names[p] == "likelihood" || names[p] == "prior");
-        if(multiChain && isDensity == false && std::isnan(d.rhat) == false && d.rhat > worstRhat){ worstRhat = d.rhat; worstRhatName = names[p]; }
+        if(isDensity == false && std::isnan(d.rhat)){
+            nBelow++; nFrozen++;
+            if(frozenName.empty()) frozenName = names[p];
+            if((int)bad.size() < 8) bad.push_back(names[p] + " (frozen: R-hat NA)");
+            continue;
+        }
+        if(multiChain && isDensity == false && d.rhat > worstRhat){ worstRhat = d.rhat; worstRhatName = names[p]; }
         if(std::isnan(d.bulkEss) == false && (minBulkEss < 0.0 || d.bulkEss < minBulkEss)) minBulkEss = d.bulkEss;
         double worstChainEss = -1.0;
         for(const std::vector<double>& ch : chains){
@@ -224,7 +235,7 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
                 worstChainEss = ec;
         }
         if(worstChainEss >= 0.0 && (minEss < 0.0 || worstChainEss < minEss)){ minEss = worstChainEss; minEssName = names[p]; }
-        bool rhatOk = (multiChain == false) || isDensity || std::isnan(d.rhat) || d.rhat <= rhatMax;
+        bool rhatOk = (multiChain == false) || isDensity || d.rhat <= rhatMax;
         bool essOk = (worstChainEss < 0.0) || worstChainEss >= essMin;
         if(rhatOk == false || essOk == false){
             nBelow++;
@@ -239,7 +250,10 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
         std::cout << "gen " << gen;
         if(multiChain)
             std::cout << "  max R-hat " << std::setprecision(4) << worstRhat << " (" << worstRhatName << ")";
-        std::cout << "  min per-chain ESS " << std::setprecision(0) << minEss << " (" << minEssName << ")\n";
+        std::cout << "  min per-chain ESS " << std::setprecision(0) << minEss << " (" << minEssName << ")";
+        if(nFrozen > 0)
+            std::cout << "  FROZEN " << nFrozen << " (" << frozenName << ")";
+        std::cout << "\n";
         if(s.getArLog())
             for(size_t r = 0; r < replicates.size(); r++)
                 replicates[r]->printMoveDiagnostics((int)r);

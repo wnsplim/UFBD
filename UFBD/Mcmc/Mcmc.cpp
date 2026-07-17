@@ -205,6 +205,9 @@ void Mcmc::sample(unsigned long n, double lnL, double lnP) {
         for(const std::string& s : headStr)
             traceNms.push_back(s);
         traceCols.assign(traceNms.size(), std::vector<double>());
+        fixedMask.assign(3, false);
+        for(bool fb : model->getParameterFixedMask())
+            fixedMask.push_back(fb);
     }
 
     std::vector<double> dat = {(double)n, lnL + lnP, lnL, lnP};

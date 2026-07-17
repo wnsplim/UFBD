@@ -24,6 +24,7 @@ class FBDTreeModel : public PhylogeneticModel {
                                     FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, unsigned int seed);
         std::vector<std::string>    getParameterNames(void);
         std::vector<double>         getParameterString(void);
+        std::vector<bool>           getParameterFixedMask(void);
         std::vector<std::string>    getLatentNames(void);
         std::vector<double>         getLatentString(void);
         bool                        treeIncludesFossils(void) { return isResolved == false && backboneFossils.empty() == false; }

@@ -851,8 +851,9 @@ bool Tree::isFakeSplit(Node* n){
 
 int Tree::scaleInternalAges(double m){
     int numScaled = 0;
+    Node* fixedCrown = crownFixed ? crown : nullptr;
     for(Node* n : downPassSequence)
-        if(n->getIsTip() == false && isFakeSplit(n) == false){
+        if(n->getIsTip() == false && isFakeSplit(n) == false && n != fixedCrown){
             n->setTime(n->getTime() * m);
             numScaled++;
         }

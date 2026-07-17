@@ -61,6 +61,8 @@ class Tree {
         std::vector<Node*>                  getFossilTipAgeNodes(void);
         double                              updateFossilTipAge(Node* n);
         void                                setLastUpdateWasScale(bool b) { lastUpdateWasScale = b; }
+        void                                setCrownFixed(bool b) { crownFixed = b; }
+        bool                                getCrownFixed(void) { return crownFixed; }
         void                                assignStartingAges(const std::map<Node*,double>& minAges, double unit);
         Node*                               insertFossilTip(Node* attachChild, std::string name, double y, double z);
         void                                setAgeFloorsByOffset(const std::map<int,double>& f);
@@ -88,6 +90,7 @@ class Tree {
         Node*                               origin = nullptr;
         int                                 numTaxa;
         bool                                lastUpdateWasScale = false;
+        bool                                crownFixed = false;
         bool                                bbCacheValid = false;
         Node*                               bbRootNode = nullptr;
         std::vector<Node*>                  bbRateNodes;
