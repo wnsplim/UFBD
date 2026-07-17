@@ -396,13 +396,7 @@ std::string FBDTreeModel::getRateMap(void){
 
 double FBDTreeModel::lambdaAt(int i){
     int j = lambdaIdx[i];
-    double v = (lambdaField != nullptr) ? lambdaField->getRate(j) : lambda[j]->getValue();
-    static const char* sc = std::getenv("FBD_LAMSCALE");
-    static const char* lo = std::getenv("FBD_LAMLO");
-    static const char* hi = std::getenv("FBD_LAMHI");
-    if(sc && intervalStart[i] >= (lo ? std::atof(lo) : -1e9) && intervalStart[i] < (hi ? std::atof(hi) : 1e9))
-        v *= std::atof(sc);
-    return v;
+    return (lambdaField != nullptr) ? lambdaField->getRate(j) : lambda[j]->getValue();
 }
 
 double FBDTreeModel::muAt(int i){
@@ -414,10 +408,7 @@ double FBDTreeModel::muAt(int i){
 
 double FBDTreeModel::psiOfTypeAt(int type, int i){
     int j = psiIdx[type][i];
-    double v = (psiField[type] != nullptr) ? psiField[type]->getRate(j) : psi[type][j]->getValue();
-    static const char* ps = std::getenv("FBD_PSISCALE");
-    if(ps) v *= std::atof(ps);
-    return v;
+    return (psiField[type] != nullptr) ? psiField[type]->getRate(j) : psi[type][j]->getValue();
 }
 
 double FBDTreeModel::psiTotalAt(int i){
@@ -1383,7 +1374,12 @@ double FBDTreeModel::uePqLn(double z){
 double FBDTreeModel::calculateLnSurvival(double t){
     int k = findIndex(t);
     double lam = lambdaAt(k), mu = muAt(k), c1 = c1HatVec[k], c2 = c2HatVec[k];
-    double E = std::exp(-c1 * (t - intervalStart[k]));
+    double tau = t - intervalStart[k];
+    if(lam < 1e-9 * c1){ // lambda->0: log(N)-log(2*lam) is a removable 0/0; exact lambda=0 limit
+        double eb = (k == 0) ? (1.0 - rhoVal) : ePrevHat[k];
+        return -mu * tau + std::log(1.0 - eb);
+    }
+    double E = std::exp(-c1 * tau);
     double N  = E * (1.0 - c2) * ((lam - mu) - c1) + (1.0 + c2) * ((lam - mu) + c1);
     double Dp = E * (1.0 - c2) + (1.0 + c2);
     return std::log(N) - std::log(2.0 * lam) - std::log(Dp);
@@ -1392,10 +1388,19 @@ double FBDTreeModel::calculateLnSurvival(double t){
 double FBDTreeModel::calculateLnAnySample(double t){
     int k = findIndex(t);
     double lam = lambdaAt(k), mu = muAt(k), psi = psiTotalAt(k), c1 = c1Vec[k], c2 = c2Vec[k];
+    double tau = t - intervalStart[k];
+    if(lam < 1e-9 * c1){ // lambda->0: log(N)-log(2*lam) is a removable 0/0; exact lambda=0 limit
+        double s = mu + psi;
+        double eb = (k == 0) ? (1.0 - rhoVal) : ePrev[k];
+        if(s <= 0.0)
+            return std::log(1.0 - eb);
+        double E = std::exp(-s * tau);
+        return std::log((E * (1.0 - 2.0*eb) + (mu*E + psi*(2.0 - E)) / s) / 2.0);
+    }
     double beta = lam - mu - psi, bpc, bmc;
     if(beta >= 0.0){ bpc = beta + c1; bmc = -4.0*lam*psi/bpc; }
     else           { bmc = beta - c1; bpc = -4.0*lam*psi/bmc; }
-    double E = std::exp(-c1 * (t - intervalStart[k]));
+    double E = std::exp(-c1 * tau);
     double N  = E * (1.0 - c2) * bmc + (1.0 + c2) * bpc;
     double Dp = E * (1.0 - c2) + (1.0 + c2);
     return std::log(N) - std::log(2.0 * lam) - std::log(Dp);
@@ -1474,7 +1479,17 @@ double FBDTreeModel::calculateLnQtAt(int i, double t){
 double FBDTreeModel::calculateP0At(int i, double t){
     double tau = t - intervalStart[i];
     double li = lambdaAt(i);
-    double tmp = -li + muAt(i) + psiTotalAt(i);
+    double mi = muAt(i);
+    double pi = psiTotalAt(i);
+    if(li < 1e-7 * c1Vec[i]){ // lambda->0: tmp/(2*li) is an unstable 0/0; exact lambda=0 limit
+        double s = mi + pi;
+        double eb = (i == 0) ? (1.0 - rhoVal) : ePrev[i];
+        if(s <= 0.0)
+            return eb;
+        double a = mi / s;
+        return a + (eb - a) * std::exp(-s * tau);
+    }
+    double tmp = -li + mi + pi;
     tmp += c1Vec[i] * (std::exp(-c1Vec[i] * tau) * (1 - c2Vec[i]) - (1+c2Vec[i]) ) / ( std::exp(-c1Vec[i] * tau) * (1 - c2Vec[i]) + (1+c2Vec[i])  );
     tmp /= 2*li;
     return 1 + tmp;
@@ -1487,7 +1502,12 @@ double FBDTreeModel::calculateP0(double t){
 double FBDTreeModel::calculateP0HatAt(int i, double t){
     double tau = t - intervalStart[i];
     double li = lambdaAt(i);
-    double tmp = -li + muAt(i);
+    double mi = muAt(i);
+    if(li < 1e-7 * c1HatVec[i]){ // lambda->0: same 0/0 as P0At; exact lambda=0 limit (pure death)
+        double eb = (i == 0) ? (1.0 - rhoVal) : ePrevHat[i];
+        return 1.0 + (eb - 1.0) * std::exp(-mi * tau);
+    }
+    double tmp = -li + mi;
     tmp += c1HatVec[i] * (std::exp(-c1HatVec[i] * tau) * (1 - c2HatVec[i]) - (1+c2HatVec[i]) ) / ( std::exp(-c1HatVec[i] * tau) * (1 - c2HatVec[i]) + (1+c2HatVec[i])  );
     tmp /= 2*li;
     return 1 + tmp;
