@@ -11,7 +11,7 @@ class ParameterShrinkageField : public Parameter {
 
     public:
                                     ParameterShrinkageField(void) = delete;
-                                    ParameterShrinkageField(double prob, PhylogeneticModel* m, int nBins, Probability::PriorSpec anchorPrior, double priorNShifts, double shiftSize, double init0);
+                                    ParameterShrinkageField(double prob, PhylogeneticModel* m, int nBins, const std::vector<double>& gridSpacing, bool gmrfMode, Probability::PriorSpec anchorPrior, double priorNShifts, double shiftSize, double init0);
         double                      getRate(int i) { return rateVal[0][i]; }
         double                      shiftRates(double d);
         void                        commitProposed(void);
@@ -25,7 +25,7 @@ class ParameterShrinkageField : public Parameter {
         void                        updateForRejection(void);
         void                        writeState(std::ostream& os);
         void                        readState(std::istream& is);
-        static double               calibrateGlobalScale(int nBins, double priorNShifts, double shiftSize);
+        static double               calibrateGlobalScale(int nBins, bool gmrf, double priorNShifts, double shiftSize);
 
     private:
         double                      halfCauchyLnP(double x, double scale);
@@ -36,6 +36,8 @@ class ParameterShrinkageField : public Parameter {
         int                         nBins;
         int                         nDelta;
         double                      zeta;
+        std::vector<double>         grid;
+        bool                        gmrf;
         Probability::PriorSpec      anchorPrior;
         double                      anchor[2];
         double                      gamma[2];

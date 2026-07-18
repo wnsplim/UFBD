@@ -10,11 +10,13 @@
 #include "RandomVariable.hpp"
 #include "Serialize.hpp"
 
-ParameterShrinkageField::ParameterShrinkageField(double prob, PhylogeneticModel* m, int nB, Probability::PriorSpec ap, double priorNShifts, double shiftSize, double init0) : Parameter(prob, m, "shrinkageField"){
+ParameterShrinkageField::ParameterShrinkageField(double prob, PhylogeneticModel* m, int nB, const std::vector<double>& gridSpacing, bool gmrfMode, Probability::PriorSpec ap, double priorNShifts, double shiftSize, double init0) : Parameter(prob, m, "shrinkageField"){
     nBins = nB;
     nDelta = nB - 1;
+    grid = gridSpacing;
+    gmrf = gmrfMode;
     anchorPrior = ap;
-    zeta = calibrateGlobalScale(nB, priorNShifts, shiftSize);
+    zeta = calibrateGlobalScale(nB, gmrfMode, priorNShifts, shiftSize);
     lastMove = -1;
     for(int i = 0; i < 4; i++){
         acc[i] = 0;
@@ -39,20 +41,21 @@ ParameterShrinkageField::ParameterShrinkageField(double prob, PhylogeneticModel*
     rateVal[0].assign(nBins, present0);
     rateVal[1].assign(nBins, present0);
     for(int k = 0; k < nDelta; k++)
-        delta[0][k] = Probability::Normal::rv(&rng) * zeta;
+        delta[0][k] = Probability::Normal::rv(&rng) * zeta * std::sqrt(grid[k]);
     recomputeRates();
     delta[1] = delta[0];
     sigma[1] = sigma[0];
     rateVal[1] = rateVal[0];
 }
 
-double ParameterShrinkageField::calibrateGlobalScale(int nBins, double priorNShifts, double shiftSize){
+double ParameterShrinkageField::calibrateGlobalScale(int nBins, bool gmrf, double priorNShifts, double shiftSize){
     static std::mutex          cMtx;
     static std::vector<int>    cN;
+    static std::vector<char>   cG;
     static std::vector<double> cPn, cSs, cZ;
     std::lock_guard<std::mutex> cLock(cMtx);
     for(size_t i = 0; i < cN.size(); i++)
-        if(cN[i] == nBins && cPn[i] == priorNShifts && cSs[i] == shiftSize)
+        if(cN[i] == nBins && cG[i] == (char)gmrf && cPn[i] == priorNShifts && cSs[i] == shiftSize)
             return cZ[i];
     const int G = 2000;
     const double sqrt2 = std::sqrt(2.0);
@@ -74,6 +77,10 @@ double ParameterShrinkageField::calibrateGlobalScale(int nBins, double priorNShi
         double E = 0.0;
         for(int g = 0; g < G; g++){
             double gam = mid * bg[g];
+            if(gmrf){
+                E += std::erfc(shift / (gam * sqrt2)) * (double)(nBins - 1);
+                continue;
+            }
             double pt = 0.0;
             for(int i = 0; i < G; i++)
                 pt += 0.5 * std::erfc(shift / (gam * bs[i] * sqrt2));
@@ -87,6 +94,7 @@ double ParameterShrinkageField::calibrateGlobalScale(int nBins, double priorNShi
     }
     double zeta = 0.5 * (lo + hi);
     cN.push_back(nBins);
+    cG.push_back((char)gmrf);
     cPn.push_back(priorNShifts);
     cSs.push_back(shiftSize);
     cZ.push_back(zeta);
@@ -144,8 +152,9 @@ double ParameterShrinkageField::lnProbability(void){
         double s = sigma[0][k];
         if(s <= 0.0)
             return -INFINITY;
-        lnp += halfCauchyLnP(s, 1.0);
-        lnp += Probability::Normal::lnPdf(0.0, g2 * s * s, delta[0][k]);
+        if(gmrf == false)
+            lnp += halfCauchyLnP(s, 1.0);
+        lnp += Probability::Normal::lnPdf(0.0, g2 * s * s * grid[k], delta[0][k]);
     }
     return lnp;
 }
@@ -184,14 +193,16 @@ double ParameterShrinkageField::gibbsScales(void){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     double before = lnProbability();
     double g2 = gamma[0] * gamma[0];
-    for(int k = 0; k < nDelta; k++){
-        double s2 = sigma[0][k] * sigma[0][k];
-        double sigScale = Probability::Gamma::rv(&rng, 1.0, 1.0 + 1.0 / s2) + delta[0][k] * delta[0][k] / (2.0 * g2);
-        sigma[0][k] = std::sqrt(1.0 / Probability::Gamma::rv(&rng, 1.0, sigScale));
+    if(gmrf == false){
+        for(int k = 0; k < nDelta; k++){
+            double s2 = sigma[0][k] * sigma[0][k];
+            double sigScale = Probability::Gamma::rv(&rng, 1.0, 1.0 + 1.0 / s2) + delta[0][k] * delta[0][k] / (2.0 * g2 * grid[k]);
+            sigma[0][k] = std::sqrt(1.0 / Probability::Gamma::rv(&rng, 1.0, sigScale));
+        }
     }
     double gamScale = Probability::Gamma::rv(&rng, 1.0, 1.0 / (zeta * zeta) + 1.0 / g2);
     for(int k = 0; k < nDelta; k++)
-        gamScale += 0.5 * delta[0][k] * delta[0][k] / (sigma[0][k] * sigma[0][k]);
+        gamScale += 0.5 * delta[0][k] * delta[0][k] / (sigma[0][k] * sigma[0][k] * grid[k]);
     gamma[0] = std::sqrt(1.0 / Probability::Gamma::rv(&rng, (nDelta + 1.0) / 2.0, gamScale));
     double after = lnProbability();
     return before - after;
@@ -203,7 +214,7 @@ double ParameterShrinkageField::ellipticalSliceDelta(void){
     std::vector<double> f0 = delta[0];
     std::vector<double> nu(nDelta);
     for(int k = 0; k < nDelta; k++)
-        nu[k] = gamma[0] * sigma[0][k] * Probability::Normal::rv(&rng);
+        nu[k] = gamma[0] * sigma[0][k] * std::sqrt(grid[k]) * Probability::Normal::rv(&rng);
     double logy = lnL0 + std::log(rng.uniformRv());
     double theta = 2.0 * PI * rng.uniformRv();
     double tmin = theta - 2.0 * PI;

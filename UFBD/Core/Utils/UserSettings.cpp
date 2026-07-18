@@ -73,7 +73,7 @@ RateMode UserSettings::getPsiMode(int t){
     if(psiTypeNames.empty() == false){
         std::map<std::string, RateMode>::iterator it = psiModeByName.find(psiTypeNames[t]);
         if(it != psiModeByName.end()) return it->second;
-        return RateMode::IID;
+        return RateMode::INDEP;
     }
     return psiMode;
 }
@@ -142,9 +142,9 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     coresProvided   = false;
     rgeneGamma[0]   = 2.0;  rgeneGamma[1]  = 2000.0; rgeneGamma[2]  = 1.0;
     sigma2Gamma[0]  = 1.0;  sigma2Gamma[1] = 10.0;   sigma2Gamma[2] = 1.0;
-    lambdaMode      = RateMode::IID;
-    muMode          = RateMode::IID;
-    psiMode         = RateMode::IID;
+    lambdaMode      = RateMode::INDEP;
+    muMode          = RateMode::INDEP;
+    psiMode         = RateMode::INDEP;
     hsmrfShifts     = std::log(2.0);
     hsmrfShiftSize  = 2.0;
     cpuTime         = false;
@@ -338,10 +338,11 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
             } else if (arg == "-lambda_prior_mode" || arg == "-mu_prior_mode") {
                 std::string v = val;
                 for (char& ch : v) ch = std::tolower((unsigned char)ch);
-                RateMode rm = RateMode::IID;
-                if (v == "iid") rm = RateMode::IID;
+                RateMode rm = RateMode::INDEP;
+                if (v == "indep") rm = RateMode::INDEP;
                 else if (v == "smooth" || v == "hsmrf") rm = RateMode::SMOOTH;
-                else Msg::error("flag \"" + arg + "\" expects iid or smooth, but got \"" + val + "\".");
+                else if (v == "gmrf") rm = RateMode::GMRF;
+                else Msg::error("flag \"" + arg + "\" expects indep, hsmrf, or gmrf, but got \"" + val + "\".");
                 if (arg == "-lambda_prior_mode") lambdaMode = rm;
                 else muMode = rm;
             } else if (arg == "-psi_prior_mode") {
@@ -349,10 +350,11 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 size_t c = val.find(':');
                 if (c != std::string::npos) { nm = val.substr(0, c); ms = val.substr(c + 1); }
                 for (char& ch : ms) ch = std::tolower((unsigned char)ch);
-                RateMode rm = RateMode::IID;
-                if (ms == "iid") rm = RateMode::IID;
+                RateMode rm = RateMode::INDEP;
+                if (ms == "indep") rm = RateMode::INDEP;
                 else if (ms == "smooth" || ms == "hsmrf") rm = RateMode::SMOOTH;
-                else Msg::error("flag \"-psi_prior_mode\" expects iid or smooth, but got \"" + ms + "\".");
+                else if (ms == "gmrf") rm = RateMode::GMRF;
+                else Msg::error("flag \"-psi_prior_mode\" expects indep, hsmrf, or gmrf, but got \"" + ms + "\".");
                 if (nm.empty()) psiMode = rm; else psiModeByName[nm] = rm;
             } else if (arg == "-hsmrf_shifts") {
                 try { hsmrfShifts = std::stod(val); } catch (...) { Msg::error("flag \"-hsmrf_shifts\" expects a number, but got \"" + val + "\"."); }
@@ -560,11 +562,11 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     if (hessianFile.empty() == false && partitionFile.empty() == false)
         Msg::warning("-partition (NEXUS charset) applies to the sequence path only; ignoring it under -hessian.");
 
-    bool anySmooth = (lambdaMode == RateMode::SMOOTH || muMode == RateMode::SMOOTH || psiMode == RateMode::SMOOTH);
+    bool anySmooth = (lambdaMode != RateMode::INDEP || muMode != RateMode::INDEP || psiMode != RateMode::INDEP);
     for (std::map<std::string, RateMode>::iterator it = psiModeByName.begin(); it != psiModeByName.end(); ++it)
-        if (it->second == RateMode::SMOOTH) anySmooth = true;
+        if (it->second != RateMode::INDEP) anySmooth = true;
     if (hsmrfProvided && anySmooth == false)
-        Msg::warning("-hsmrf_shifts / -hsmrf_shift_size have no effect: no rate uses HSMRF smoothing.");
+        Msg::warning("-hsmrf_shifts / -hsmrf_shift_size have no effect: no rate uses HSMRF or GMRF smoothing.");
 
     if (sbcMode == false) {
         if (treeOut.empty())
@@ -723,7 +725,7 @@ SKYLINE  (piecewise-constant rates; write lambda, mu, or psi for <r>)
   -<r>_skyline_times <t,...>
                           interior time boundaries (k boundaries -> k+1 bins)
   -<r>_groups <g,...>     group id per bin; bins sharing an id share a rate
-  -<r>_prior_mode <iid|smooth>
+  -<r>_prior_mode <indep|hsmrf|gmrf>
                           independent rates, or a smooth (HSMRF) field
   -<r>_prior <gid>:<prior>
                           prior for one bin group (repeat once per group)

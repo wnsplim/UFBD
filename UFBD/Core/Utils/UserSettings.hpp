@@ -10,7 +10,7 @@
 enum class Conditioning { CROWN, ORIGIN };
 enum class ConditioningEvent { SURVIVAL, ANYSAMPLE, EXTINCT };
 enum class Model { RFBD, HEA14, UFBD };
-enum class RateMode { IID, SMOOTH };
+enum class RateMode { INDEP, SMOOTH, GMRF };
 enum class Sigma2Param { PNCP, C, NC };
 
 class UserSettings {
