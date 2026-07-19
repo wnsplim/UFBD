@@ -227,6 +227,12 @@ void BranchRateModel::print(void){
     std::cout << "SimpleDist (A/R): " << sdar << " [" << sdAcc << "/" << sdAtt << "]\n";
     if(spAtt > 0)
         std::cout << "SmallPulley (A/R): " << (double)spAcc / spAtt << " [" << spAcc << "/" << spAtt << "]\n";
+    if(cdAttTot > 0)
+        std::cout << "constantDistance (A/R): " << (double)cdAccTot / cdAttTot << " [" << cdAccTot << "/" << cdAttTot << "]\n";
+    if(rasAtt > 0)
+        std::cout << "rateAgeSubtree (A/R): " << (double)rasAcc / rasAtt << " [" << rasAcc << "/" << rasAtt << "]\n";
+    if(ncAtt > 0)
+        std::cout << "sigmaPncp (A/R): " << (double)ncAcc / ncAtt << " [" << ncAcc << "/" << ncAtt << "]\n";
     if(centeredness.empty() == false){
         std::cout << "sigma2 parameterization (1=centered, 0=non-centered):";
         for(int p = 0; p < (int)centeredness.size(); p++)
@@ -513,13 +519,15 @@ double BranchRateModel::smallPulleyMove(void){
 void BranchRateModel::updateForAcceptance(void){
     if(lastMove == 8){
         ncAccW++;
+        ncAcc++;
         sigma2[1][lastClockPartition] = sigma2[0][lastClockPartition];
         for(int b : branchNodes)
             rate[1][lastClockPartition][b] = rate[0][lastClockPartition][b];
         return;
     }
     if(lastMove == 4){
-        if(lastCdNode >= 0) cdAccNode[lastCdNode]++;
+        if(lastCdNode >= 0){ cdAccNode[lastCdNode]++; cdAccTot++; cdAttTot++; }
+        else { rasAcc++; rasAtt++; }
         for(int k = 0; k < (int)cdNodes.size(); k++)
             for(int p = 0; p < numClockPartitions; p++)
                 rate[1][p][cdNodes[k]] = rate[0][p][cdNodes[k]];
@@ -558,6 +566,7 @@ void BranchRateModel::updateForRejection(void){
         return;
     }
     if(lastMove == 4 || lastMove == 6 || lastMove == 7){
+        if(lastMove == 4){ if(lastCdNode >= 0) cdAttTot++; else rasAtt++; }
         for(int k = 0; k < (int)cdNodes.size(); k++)
             for(int p = 0; p < numClockPartitions; p++)
                 rate[0][p][cdNodes[k]] = rate[1][p][cdNodes[k]];

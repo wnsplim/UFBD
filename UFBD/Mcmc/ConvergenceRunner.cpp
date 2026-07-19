@@ -246,6 +246,8 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
     lastMaxRhat = worstRhat; lastMinChainEss = minEss; lastMinBulkEss = minBulkEss;
 
     if(verbose && (long)gen != lastReportedGen){
+        std::ios_base::fmtflags fmt = std::cout.flags();
+        std::streamsize prec = std::cout.precision();
         std::cout << std::fixed;
         std::cout << "gen " << gen;
         if(multiChain)
@@ -254,6 +256,8 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
         if(nFrozen > 0)
             std::cout << "  FROZEN " << nFrozen << " (" << frozenName << ")";
         std::cout << "\n";
+        std::cout.flags(fmt);
+        std::cout.precision(prec);
         if(s.getArLog())
             for(size_t r = 0; r < replicates.size(); r++)
                 replicates[r]->printMoveDiagnostics((int)r);

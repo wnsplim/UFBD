@@ -611,6 +611,12 @@ void FBDTreeModel::print(void){
         std::cout << " rateShift[A/R:" << (double)rsAcc / (double)rsTot
                   << " step:" << std::setprecision(5) << shiftStep << std::setprecision(3)
                   << " batch:" << saBatch << "]";
+    if(rvAtt > 0)
+        std::cout << " rateVecScale[A/R:" << (double)rvAcc / (double)rvAtt << " " << rvAcc << "/" << rvAtt << "]";
+    if(seAtt > 0)
+        std::cout << " rateShrinkExpand[A/R:" << (double)seAcc / (double)seAtt << " " << seAcc << "/" << seAtt << "]";
+    if(azAtt > 0)
+        std::cout << " azGibbs[A/R:" << (double)azAcc / (double)azAtt << " " << azAcc << "/" << azAtt << "]";
     std::cout << "\n";
     os.flags(f);
     os.precision(pr);
@@ -812,7 +818,7 @@ double FBDTreeModel::update(void){
         RandomVariable::setActiveInstance(prevRng);
         return r;
     }
-    if((lambdaField != nullptr || muField != nullptr) && rng.uniformRv() < 0.10){
+    if(rng.uniformRv() < 0.10){
         double r = doRateShift();
         RandomVariable::setActiveInstance(prevRng);
         return r;
@@ -939,7 +945,7 @@ void FBDTreeModel::updateForAcceptance(void){
     if(lastMoveKind == MK_RATEVEC){
         for(ParameterDouble* p : *lastRateVec)
             p->commitProposed();
-        if(lastRateVecScale) rvAccW++; else seAccW++;
+        if(lastRateVecScale){ rvAccW++; rvAcc++; } else { seAccW++; seAcc++; }
         return;
     }
     if(lastMoveKind == MK_UPDOWN){

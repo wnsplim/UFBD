@@ -163,6 +163,8 @@ class FBDTreeModel : public PhylogeneticModel {
         long                        seAccW;
         long                        seAttW;
         long                        seAtt;
+        long                        rvAcc = 0;
+        long                        seAcc = 0;
         enum TreeMove { TM_NONE = -1, TM_NE, TM_WB, TM_WE, TM_TREESCALE, TM_SARJ, TM_UPDOWN, TM_JOINTSCALE, TM_SUBTREE, TM_NODEAGE, TM_CROWN, TM_COUNT };
         int                         lastTreeMove;
         long                        tmAcc[TM_COUNT];

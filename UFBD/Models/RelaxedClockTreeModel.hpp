@@ -58,6 +58,8 @@ class RelaxedClockTreeModel : public PhylogeneticModel {
         double                      ageScaleStep = 0.5;
         int                         ageScaleAtt = 0;
         int                         ageScaleAcc = 0;
+        long                        naSweepAtt = 0;
+        long                        naSweepAcc = 0;
         AdaptiveMixSelector         naSel;
         std::vector<double>         naSnap;
         int                         naOp = 0;

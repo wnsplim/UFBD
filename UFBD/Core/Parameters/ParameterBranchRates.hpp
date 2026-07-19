@@ -167,6 +167,11 @@ class BranchRateModel : public Parameter {
         long                        ncAccW;
         long                        ncAttW;
         long                        ncAtt;
+        long                        ncAcc = 0;
+        long                        cdAccTot = 0;
+        long                        cdAttTot = 0;
+        long                        rasAcc = 0;
+        long                        rasAtt = 0;
         std::vector<std::vector<double>> sigTauL;
         std::vector<std::vector<double>> sigEllB;
         std::vector<long>           sigRefresh;

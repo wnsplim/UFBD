@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 #include <limits>
 #include "ApproxBranchLengthLikelihood.hpp"
 #include "FBDTreeModel.hpp"
@@ -155,10 +156,12 @@ double RelaxedClockTreeModel::nodeAgeSweep(void){
         double ratio = fbd->getTree()->updateNodeAgeOnNode(n);
         double newL = lnLikelihood();
         double newP = lnPriorProbability();
+        naSweepAtt++;
         if(std::log(r.uniformRv()) < (newL - curL) + (newP - curP) + ratio){
             curL = newL;
             curP = newP;
             fbd->getParameterTree()->updateForAcceptance();
+            naSweepAcc++;
         }else{
             fbd->getParameterTree()->updateForRejection();
         }
@@ -373,4 +376,8 @@ std::vector<double> RelaxedClockTreeModel::getLatentString(void){
 void RelaxedClockTreeModel::print(void){
     fbd->print();
     clock->print();
+    if(ageScaleAtt > 0)
+        std::cout << "ageScale (A/R): " << (double)ageScaleAcc / ageScaleAtt << " [" << ageScaleAcc << "/" << ageScaleAtt << "]\n";
+    if(naSweepAtt > 0)
+        std::cout << "nodeAgeSweep (per-node A/R): " << (double)naSweepAcc / naSweepAtt << " [" << naSweepAcc << "/" << naSweepAtt << "]\n";
 }
