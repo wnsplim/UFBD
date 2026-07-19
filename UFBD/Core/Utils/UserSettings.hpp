@@ -10,8 +10,14 @@
 enum class Conditioning { CROWN, ORIGIN };
 enum class ConditioningEvent { SURVIVAL, ANYSAMPLE, EXTINCT };
 enum class Model { RFBD, HEA14, UFBD };
-enum class RateMode { INDEP };
+enum class RateMode { INDEP, OU };
 enum class Sigma2Param { PNCP, C, NC };
+
+struct OUHyperSpec {
+    bool   thetaSet = false; double thetaMedian = 0.0, thetaSd = 0.0;
+    bool   sdSet    = false; double sdShape = 0.0, sdRate = 0.0;
+    bool   nuSet    = false; double nuShape = 0.0, nuRate = 0.0;
+};
 
 class UserSettings {
 
@@ -50,6 +56,9 @@ class UserSettings {
         Probability::PriorSpec      getMuPrior(void) { return muPrior; }
         RateMode                    getLambdaMode(void) { return lambdaMode; }
         RateMode                    getMuMode(void) { return muMode; }
+        const OUHyperSpec&          getLambdaOU(void) { return lambdaOU; }
+        const OUHyperSpec&          getMuOU(void) { return muOU; }
+        OUHyperSpec                 getPsiOU(int t);
         bool                        getCpuTime(void) { return cpuTime; }
         std::vector<double>         getSkylineTimes(void);
         std::vector<double>         getLambdaSkylineTimes(void) { return lambdaSkylineTimes; }
@@ -122,6 +131,9 @@ class UserSettings {
         RateMode                    lambdaMode;
         RateMode                    muMode;
         RateMode                    psiMode;
+        OUHyperSpec                 lambdaOU;
+        OUHyperSpec                 muOU;
+        OUHyperSpec                 psiOU;
         bool                        cpuTime;
         std::vector<double>         lambdaSkylineTimes;
         std::vector<double>         muSkylineTimes;
@@ -130,6 +142,7 @@ class UserSettings {
         std::map<std::string, Probability::PriorSpec> psiPriorByName;
         std::map<std::string, std::vector<double>> psiTimesByName;
         std::map<std::string, RateMode> psiModeByName;
+        std::map<std::string, OUHyperSpec> psiOUByName;
         std::vector<int>            lambdaGroups, muGroups, psiGroups;
         std::map<std::string, std::vector<int>> psiGroupsByName;
         std::map<int, Probability::PriorSpec> lambdaGroupPrior, muGroupPrior, psiGroupPrior;

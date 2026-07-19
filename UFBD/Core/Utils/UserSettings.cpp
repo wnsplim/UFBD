@@ -78,6 +78,15 @@ RateMode UserSettings::getPsiMode(int t){
     return psiMode;
 }
 
+OUHyperSpec UserSettings::getPsiOU(int t){
+    if(psiTypeNames.empty() == false){
+        std::map<std::string, OUHyperSpec>::iterator it = psiOUByName.find(psiTypeNames[t]);
+        if(it != psiOUByName.end()) return it->second;
+        return OUHyperSpec();
+    }
+    return psiOU;
+}
+
 std::vector<int> UserSettings::getPsiGroups(int t){
     if(psiTypeNames.empty() == false){
         std::map<std::string, std::vector<int>>::iterator it = psiGroupsByName.find(psiTypeNames[t]);
@@ -186,7 +195,9 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-tree_output", "-log_output", "-backbone_tree", "-clade_def", "-fossils", "-conditioning", "-rho", "-seed", "-chain_length", "-thinning", "-coupled_chains", "-cores", "-help", "-h",
         "-lambda_prior", "-mu_prior", "-psi_prior", "-psi_types",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_partitions",
-        "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-lambda_groups", "-mu_groups", "-psi_groups", "-cpu_time", "-age_offset",
+        "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode",
+        "-lambda_ou_theta", "-mu_ou_theta", "-psi_ou_theta", "-lambda_ou_sd", "-mu_ou_sd", "-psi_ou_sd", "-lambda_ou_nu", "-mu_ou_nu", "-psi_ou_nu",
+        "-lambda_groups", "-mu_groups", "-psi_groups", "-cpu_time", "-age_offset",
         "-hessian", "-clock_model", "-n_states", "-rgene_gamma", "-sigma2_gamma", "-sigma2_param", "-pncp_tuning",
         "-sequence", "-partition", "-ctmc_gamma_cat", "-datatype", "-ctmc_model", "-ctmc_inv", "-ctmc_freq",
         "-parallel_chains", "-burn_in", "-rhat", "-min_ess", "-max_gen", "-delta_temperature", "-swap_interval", "-resume", "-ar_log"
@@ -195,7 +206,9 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-tree_output", "-log_output", "-backbone_tree", "-clade_def", "-fossils", "-conditioning", "-rho", "-seed", "-chain_length", "-thinning", "-coupled_chains", "-cores",
         "-lambda_prior", "-mu_prior", "-psi_prior", "-psi_types",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_partitions",
-        "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-lambda_groups", "-mu_groups", "-psi_groups", "-cpu_time", "-age_offset",
+        "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode",
+        "-lambda_ou_theta", "-mu_ou_theta", "-psi_ou_theta", "-lambda_ou_sd", "-mu_ou_sd", "-psi_ou_sd", "-lambda_ou_nu", "-mu_ou_nu", "-psi_ou_nu",
+        "-lambda_groups", "-mu_groups", "-psi_groups", "-cpu_time", "-age_offset",
         "-hessian", "-clock_model", "-n_states", "-rgene_gamma", "-sigma2_gamma", "-sigma2_param", "-pncp_tuning",
         "-sequence", "-partition", "-ctmc_gamma_cat", "-datatype", "-ctmc_model", "-ctmc_inv", "-ctmc_freq",
         "-parallel_chains", "-burn_in", "-rhat", "-min_ess", "-max_gen", "-delta_temperature", "-swap_interval"
@@ -336,16 +349,56 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
             } else if (arg == "-lambda_prior_mode" || arg == "-mu_prior_mode") {
                 std::string v = val;
                 for (char& ch : v) ch = std::tolower((unsigned char)ch);
-                if (v != "indep") Msg::error("flag \"" + arg + "\" expects indep, but got \"" + val + "\".");
-                if (arg == "-lambda_prior_mode") lambdaMode = RateMode::INDEP;
-                else muMode = RateMode::INDEP;
+                if (v != "indep" && v != "ou") Msg::error("flag \"" + arg + "\" expects indep|ou, but got \"" + val + "\".");
+                RateMode m = (v == "ou") ? RateMode::OU : RateMode::INDEP;
+                if (arg == "-lambda_prior_mode") lambdaMode = m;
+                else muMode = m;
             } else if (arg == "-psi_prior_mode") {
                 std::string nm, ms = val;
                 size_t c = val.find(':');
                 if (c != std::string::npos) { nm = val.substr(0, c); ms = val.substr(c + 1); }
                 for (char& ch : ms) ch = std::tolower((unsigned char)ch);
-                if (ms != "indep") Msg::error("flag \"-psi_prior_mode\" expects indep, but got \"" + ms + "\".");
-                if (nm.empty()) psiMode = RateMode::INDEP; else psiModeByName[nm] = RateMode::INDEP;
+                if (ms != "indep" && ms != "ou") Msg::error("flag \"-psi_prior_mode\" expects indep|ou, but got \"" + ms + "\".");
+                RateMode m = (ms == "ou") ? RateMode::OU : RateMode::INDEP;
+                if (nm.empty()) psiMode = m; else psiModeByName[nm] = m;
+            } else if (arg == "-lambda_ou_theta" || arg == "-mu_ou_theta" || arg == "-psi_ou_theta") {
+                bool isPsi = (arg.rfind("-psi_", 0) == 0);
+                std::string nm, body = val;
+                if (isPsi) {
+                    size_t c = val.find(':');
+                    if (c != std::string::npos) { nm = val.substr(0, c); body = val.substr(c + 1); }
+                }
+                OUHyperSpec* target;
+                if (arg.rfind("-lambda_", 0) == 0)   target = &lambdaOU;
+                else if (arg.rfind("-mu_", 0) == 0)   target = &muOU;
+                else                                  target = nm.empty() ? &psiOU : &psiOUByName[nm];
+                double med, sd;
+                size_t comma = body.find(',');
+                if (comma == std::string::npos) Msg::error("flag \"" + arg + "\" expects median,sd, but got \"" + val + "\".");
+                try { med = std::stod(body.substr(0, comma)); sd = std::stod(body.substr(comma + 1)); }
+                catch (...) { Msg::error("flag \"" + arg + "\" expects median,sd, but got \"" + val + "\"."); }
+                if (med <= 0.0 || sd <= 0.0) Msg::error("flag \"" + arg + "\" median and sd must be > 0.");
+                target->thetaSet = true; target->thetaMedian = med; target->thetaSd = sd;
+            } else if (arg == "-lambda_ou_sd" || arg == "-mu_ou_sd" || arg == "-psi_ou_sd"
+                    || arg == "-lambda_ou_nu" || arg == "-mu_ou_nu" || arg == "-psi_ou_nu") {
+                bool isPsi = (arg.rfind("-psi_", 0) == 0);
+                std::string nm, body = val;
+                if (isPsi) {
+                    size_t c = val.find(':');
+                    if (c != std::string::npos) { nm = val.substr(0, c); body = val.substr(c + 1); }
+                }
+                OUHyperSpec* target;
+                if (arg.rfind("-lambda_", 0) == 0)   target = &lambdaOU;
+                else if (arg.rfind("-mu_", 0) == 0)   target = &muOU;
+                else                                  target = nm.empty() ? &psiOU : &psiOUByName[nm];
+                double shape, rate;
+                size_t comma = body.find(',');
+                if (comma == std::string::npos) Msg::error("flag \"" + arg + "\" expects shape,rate, but got \"" + val + "\".");
+                try { shape = std::stod(body.substr(0, comma)); rate = std::stod(body.substr(comma + 1)); }
+                catch (...) { Msg::error("flag \"" + arg + "\" expects shape,rate, but got \"" + val + "\"."); }
+                if (shape <= 0.0 || rate <= 0.0) Msg::error("flag \"" + arg + "\" shape and rate must be > 0.");
+                if (arg.find("_ou_sd") != std::string::npos) { target->sdSet = true; target->sdShape = shape; target->sdRate = rate; }
+                else                                          { target->nuSet = true; target->nuShape = shape; target->nuRate = rate; }
             } else if (arg == "-age_offset") {
                 try { ageOffset = std::stod(val); } catch (...) { Msg::error("flag \"-age_offset\" expects a number, but got \"" + val + "\"."); }
                 if (ageOffset < 0.0) Msg::error("flag \"-age_offset\" must be >= 0.");
@@ -683,7 +736,7 @@ REQUIRED
   -conditioning <event> [prior]
                           event = crown | origin | anysample | extinct;
                           the optional prior is the root-age prior
-                          (default: improper)
+                          (default improper)
 
 INPUT
   -backbone_tree <file>   rooted binary NEWICK or NEXUS tree; if not given,
@@ -702,36 +755,40 @@ OUTPUT  (prefixes: the engine appends .log/.trees/.tree, _chainN per chain)
 MCMC
   -chain_length <N|auto>  number of generations, or 'auto' to stop on the
                           convergence targets below
-  -thinning <N>           sample every N generations
+  -thinning <N>           sample every N generations (default 1000)
   -burn_in <frac>         burn-in fraction (default 0.25)
-  -parallel_chains <N>    independent replicate runs (needed for split R-hat)
-  -coupled_chains <N>     Metropolis-coupled chains per run (>1 enables MC3)
+  -parallel_chains <N>    independent replicate runs (needed for split R-hat) (default 4)
+  -coupled_chains <N>     Metropolis-coupled chains per run (>1 enables MC3) (default 1)
   -delta_temperature <x>  MC3 initial temperature spacing (default 0.1); the range
-                          self-tunes toward ~0.40 adjacent DEO swap acceptance;
-                          interior rungs self-place by barrier equidistribution
+                          self-tunes toward ~0.40 adjacent DEO swap acceptance
   -swap_interval <N>      MC3 generations between chain-swap attempts (default 1000)
-  -cores <N>              number of threads
-  -seed <N>               random number seed
+  -cores <N>              number of threads (default 1)
+  -seed <N>               random number seed (default random)
 
 CONVERGENCE  (used only with -chain_length auto)
-  -max_gen <N>            hard generation cap
+  -max_gen <N>            hard generation cap (default 1000000000)
   -min_ess <N>            target minimum per-chain ESS (default 200 / parallel_chains)
-  -rhat <x>               target maximum rank-normalized split R-hat
+  -rhat <x>               target maximum rank-normalized split R-hat (default 1.01)
 
 FBD RATES
-  -rho <frac>             extant sampling fraction
-  -lambda_prior <prior>   speciation rate prior
-  -mu_prior <prior>       extinction rate prior
-  -psi_prior <prior>      fossil-sampling rate prior
+  -rho <frac>             extant sampling fraction (default 1)
+  -lambda_prior <prior>   speciation rate prior (default exp:5)
+  -mu_prior <prior>       extinction rate prior (default exp:5)
+  -psi_prior <prior>      fossil-sampling rate prior (default exp:5)
 
 SKYLINE  (piecewise-constant rates; write lambda, mu, or psi for <r>)
   -<r>_skyline_times <t,...>
                           interior time boundaries (k boundaries -> k+1 bins)
   -<r>_groups <g,...>     group id per bin; bins sharing an id share a rate
-  -<r>_prior_mode <indep>
-                          independent rates
+  -<r>_prior_mode <indep|ou>
+                          independent rates, or log-OU smoothing across bins (default indep)
   -<r>_prior <gid>:<prior>
-                          prior for one bin group (repeat once per group)
+                          per-bin prior for one bin group (mode indep only)
+  -<r>_ou_theta <med,sd>  OU level: theta ~ Normal(log(med), sd) (mode ou) (default 0.2,0.5)
+  -<r>_ou_sd <shape,rate> gamma prior on the OU log-SD (mode ou) (default 6,5)
+  -<r>_ou_nu <shape,rate> gamma prior on the OU reversion rate /Myr (mode ou)
+                          (default 4, rate ~11.2*median_bin_width)
+  -age_offset <t_min>     shift the skyline support to [t_min, inf) (default 0)
 
 MULTIPLE PRESERVATION TYPES  (split psi by type)
   -psi_types <name,...>   declare types; names must match the fossil table's
@@ -745,35 +802,29 @@ CLOCK & SUBSTITUTION MODEL
   -sequence <file>        alignment (FASTA / PHYLIP / NEXUS)
   -hessian <file>         Hessian for approximate dating (PAML in.BV format)
   -partition <file>       NEXUS partition file (-sequence path only)
-  -datatype <nt|aa>       sequence data type
-  -n_states <N>           substitution state count (-hessian path only)
-  -ctmc_model <gtr|file>  'gtr', or a PAML matrix file for amino acids
-  -ctmc_gamma_cat <N>     number of discrete gamma rate categories
-  -ctmc_inv <on|off>      add a proportion of invariant sites
+  -datatype <nt|aa>       sequence data type (default nt)
+  -n_states <N>           substitution state count (-hessian path only) (default 4)
+  -ctmc_model <gtr|file>  'gtr', or a PAML matrix file for amino acids (default gtr)
+  -ctmc_gamma_cat <N>     number of discrete gamma rate categories (default 4)
+  -ctmc_inv <on|off>      add a proportion of invariant sites (default off)
   -ctmc_freq <model|empirical|estimated>
-                          equilibrium frequencies
-  -clock_model <ucln|gbm> uncorrelated lognormal, or geometric Brownian motion
+                          equilibrium frequencies (default model)
+  -clock_model <ucln|gbm> uncorrelated lognormal, or geometric Brownian motion (default ucln)
   -clock_partitions <g,...>
                           clock group id per partition (omit = single clock)
-  -rgene_gamma <a,b,c>    gamma prior on the mean clock rate
-  -sigma2_gamma <a,b,c>   gamma prior on the clock rate variance
+  -rgene_gamma <a,b,c>    gamma prior on the mean clock rate (default 2,2000,1)
+  -sigma2_gamma <a,b,c>   gamma prior on the clock rate variance (default 1,10,1)
   -sigma2_param <pncp|c|nc>
                           parameterization of the sigma2. pncp (default) adapts per branch to
                           how much the data constrain that branch; c is fully centered and nc fully
-                          non-centered. Both fixed choices mix badly when the data disagree with
-                          them, so change this only if you know which regime your data are in.
+                          non-centered.
 
 OTHER
   -config <file>          read a config file (its format is in README.md)
-  -help, -h               show this help
+  -help, -h               show this help message
 
 RESUME
   -resume                 Continue an interrupted run by re-running the SAME
-                          command with -resume added. A checkpoint is saved
-                          every -thinning samples to <log_output>.log.ckp; on
-                          resume the engine restores each chain's state, trims
-                          .log/.trees back to that checkpoint, and continues
-                          the run. Use the same output prefix as the original
-                          run.
+                          command with -resume added.
 )HELP";
 }

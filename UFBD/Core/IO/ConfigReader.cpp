@@ -172,6 +172,15 @@ void translateRateSection(const std::string& ratePrefix, const std::string& type
     std::string md = getVal(kv, "mode");
     if(md.empty() == false)
         emit(out, "-" + ratePrefix + "_prior_mode", typeLabel.empty() ? md : typeLabel + ":" + md);
+    std::string ot = getVal(kv, "ou_theta");
+    if(ot.empty() == false)
+        emit(out, "-" + ratePrefix + "_ou_theta", typeLabel.empty() ? ot : typeLabel + ":" + ot);
+    std::string os = getVal(kv, "ou_sd");
+    if(os.empty() == false)
+        emit(out, "-" + ratePrefix + "_ou_sd", typeLabel.empty() ? os : typeLabel + ":" + os);
+    std::string on = getVal(kv, "ou_nu");
+    if(on.empty() == false)
+        emit(out, "-" + ratePrefix + "_ou_nu", typeLabel.empty() ? on : typeLabel + ":" + on);
 }
 
 } // namespace
@@ -224,7 +233,7 @@ std::vector<std::string> ConfigReader::translate(const std::string& path){
     static const std::set<std::string> clockKeys = {
         "clock_partitions","clock_model","rgene_gamma","sigma2_gamma","sigma2_param","pncp_tuning"
     };
-    static const std::set<std::string> rateKeys = { "time_bins","prior","mode" };
+    static const std::set<std::string> rateKeys = { "time_bins","prior","mode","ou_theta","ou_sd","ou_nu" };
 
     std::vector<std::string> out;
     for(std::map<std::string,std::string>::iterator it = global.begin(); it != global.end(); ++it){
