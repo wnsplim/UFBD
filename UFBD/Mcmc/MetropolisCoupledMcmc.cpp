@@ -52,9 +52,11 @@ MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int thin, std::ve
     swapAdaptAtt = 0;
     numSwapSweeps = 0;
     roundTrips = 0;
-    pairAtt.assign(std::max(0, numModels - 1), 0);
-    pairRej.assign(std::max(0, numModels - 1), 0);
     lastEnd.assign(numModels, -1);
+    emaAcc.assign(std::max(0, numModels - 1), 0.5);
+    betas.assign(numModels, 1.0);
+    for(int k = 1; k < numModels; k++)
+        betas[k] = 1.0 / (1.0 + deltaT * k);
 }
 
 MetropolisCoupledMcmc::~MetropolisCoupledMcmc(void){
@@ -63,11 +65,31 @@ MetropolisCoupledMcmc::~MetropolisCoupledMcmc(void){
 }
 
 void MetropolisCoupledMcmc::printMoveDiagnostics(int rep){
+    std::ios_base::fmtflags fmt = std::cout.flags();
+    std::streamsize prec = std::cout.precision();
+    std::cout << std::defaultfloat << std::setprecision(6);
     for(size_t i = 0; i < models.size(); i++){
         std::cout << "  run " << rep << " chain " << i
                   << ((int)i == coldModelIdx ? " [cold]  " : " [heated]  ");
         models[i]->print();
     }
+    double Ehat = 0.0, Lhat = 0.0;
+    for(size_t k = 0; k < emaAcc.size(); k++){
+        double r = 1.0 - emaAcc[k];
+        Lhat += r;
+        Ehat += r / std::max(emaAcc[k], 1e-9);
+    }
+    std::cout << "  run " << rep << " PT: roundTrips " << roundTrips
+              << " Lambda " << Lhat << " tauDEO " << (1.0 / (2.0 + 2.0 * Ehat))
+              << " | beta";
+    for(int k = 0; k < numModels; k++)
+        std::cout << " " << betas[k];
+    std::cout << " | adjAccept";
+    for(size_t k = 0; k < emaAcc.size(); k++)
+        std::cout << " " << emaAcc[k];
+    std::cout << "\n";
+    std::cout.flags(fmt);
+    std::cout.precision(prec);
 }
 
 Tree* MetropolisCoupledMcmc::getTree(void){
@@ -81,9 +103,7 @@ bool MetropolisCoupledMcmc::treeHasFossils(void){
 }
 
 double MetropolisCoupledMcmc::calcHeating(int idx){
-    if(idx == 0)
-        return 1.0;
-    return (1 / (1 + deltaT * idx));
+    return betas[idx];
 }
 
 void MetropolisCoupledMcmc::init(void) {
@@ -134,6 +154,9 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
         chainDecision = 1;
         for(int i = 0; i < numModels; i++)
             lastEnd[i] = (indices[i] == 0) ? 0 : (indices[i] == numModels - 1 ? 1 : -1);
+        betas[0] = 1.0;
+        for(int k = 1; k < numModels; k++)
+            betas[k] = 1.0 / (1.0 + deltaT * k);
     }
     RandomVariable::setActiveInstance(&swapRng);
     RandomVariable& rng = RandomVariable::randomVariableInstance();
@@ -198,20 +221,10 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
         if(verbose && tuning == false && gen % (unsigned long)thinning == 0){
             const size_t numAccepted = std::count(recentAcceptRej.begin(), recentAcceptRej.end(), true);
             const double acceptanceRate = recentAcceptRej.empty() ? 0.0 : static_cast<double>(numAccepted) / recentAcceptRej.size();
-            double Ehat = 0.0, Lhat = 0.0;
-            for(size_t k = 0; k < pairRej.size(); k++)
-                if(pairAtt[k] > 0){
-                    double r = (double)pairRej[k] / (double)pairAtt[k];
-                    Lhat += r;
-                    Ehat += r / std::max(1.0 - r, 1e-9);
-                }
-            double tauDEO = 1.0 / (2.0 + 2.0 * Ehat);
             std::ostringstream os;
             os << std::fixed << std::setprecision(2) << "chain " << runLabel << "  " << gen << " -- posterior "
                << (currLnL[coldModelIdx] + currLnP[coldModelIdx]) << " likelihood " << currLnL[coldModelIdx]
-               << " prior " << currLnP[coldModelIdx] << " | swap accept " << acceptanceRate
-               << " roundtrips " << roundTrips << " Lambda " << Lhat << " tauDEO " << tauDEO
-               << " Nopt " << (2.0 * Lhat + 1.0) << "\n";
+               << " prior " << currLnP[coldModelIdx] << " | swap accept " << acceptanceRate << "\n";
             ChainRunner::logLine(os.str());
         }
 
@@ -224,17 +237,15 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
             double lnAcc = (calcHeating(k) - calcHeating(k + 1)) *
                            ((currLnL[b] + currLnP[b]) - (currLnL[a] + currLnP[a]));
             bool acc = std::log(rng.uniformRv()) < lnAcc;
-            pairAtt[k]++;
             if(acc){
                 indices[a] = k + 1;
                 indices[b] = k;
-            }else{
-                pairRej[k]++;
             }
+            emaAcc[k] = 0.98 * emaAcc[k] + 0.02 * (acc ? 1.0 : 0.0);
             recentAcceptRej.push_back(acc);
             if(recentAcceptRej.size() > 10000)
                 recentAcceptRej.pop_front();
-            adaptDeltaT(acc);
+            adaptLadder(acc);
         }
         numSwapSweeps++;
         int topRung = numModels - 1;
@@ -382,7 +393,7 @@ std::vector<std::string> MetropolisCoupledMcmc::resumeLatentNames(void) {
     return models[coldModelIdx]->getLatentNames();
 }
 
-void MetropolisCoupledMcmc::adaptDeltaT(bool swapAccepted) {
+void MetropolisCoupledMcmc::adaptLadder(bool swapAccepted) {
     swapAdaptAtt++;
     if(swapAccepted)
         swapAdaptAcc++;
@@ -390,11 +401,42 @@ void MetropolisCoupledMcmc::adaptDeltaT(bool swapAccepted) {
         double ar = (double)swapAdaptAcc / (double)swapAdaptAtt;
         swapAdaptCount++;
         double gain = 1.0 / std::sqrt((double)swapAdaptCount);
-        // 0.40 = round-trip optimum for the DEO kernel (Lingenheil 2009; Roberts-Rosenthal 2025)
         deltaT *= std::exp(gain * (ar - 0.40));
         if(deltaT < 1e-4) deltaT = 1e-4;
         if(deltaT > 10.0)  deltaT = 10.0;
+        rebuildLadder();
         swapAdaptAcc = 0;
         swapAdaptAtt = 0;
+    }
+}
+
+void MetropolisCoupledMcmc::rebuildLadder(void){
+    if(numModels <= 2)
+        return;
+    const int G = numModels - 1;
+    const double betaFloor = 1.0 / (1.0 + deltaT * G);
+    std::vector<double> oldB = betas;
+    std::vector<double> cum(numModels, 0.0);
+    for(int k = 0; k < G; k++)
+        cum[k + 1] = cum[k] + (1.0 - emaAcc[k]);
+    const double Lam = cum[G];
+    betas[0] = 1.0;
+    betas[G] = betaFloor;
+    if(Lam <= 1e-9){
+        for(int k = 1; k < G; k++)
+            betas[k] = 1.0 - (1.0 - betaFloor) * (double)k / (double)G;
+        return;
+    }
+    int m = 0;
+    for(int k = 1; k < G; k++){
+        const double want = Lam * (double)k / (double)G;
+        while(m < G - 1 && cum[m + 1] < want)
+            m++;
+        const double seg = cum[m + 1] - cum[m];
+        const double frac = (seg > 1e-12) ? (want - cum[m]) / seg : 0.0;
+        double b = oldB[m] + (oldB[m + 1] - oldB[m]) * frac;
+        const double hi = betas[k - 1] - 1e-9;
+        const double lo = betaFloor + 1e-9 * (double)(G - k);
+        betas[k] = (b > hi) ? hi : (b < lo ? lo : b);
     }
 }
