@@ -15,7 +15,7 @@
 
 enum { OU_BIN = 0, OU_THETA = 1, OU_SDEQ = 2, OU_NU = 3 };
 
-ParameterOUField::ParameterOUField(double prob, PhylogeneticModel* m, int nB, const std::vector<double>& lo, ParameterDouble* orig, double thetaMedianOv, double thetaSdOv, double sdShapeOv, double sdRateOv, double nuShapeOv, double nuRateOv) : Parameter(prob, m, "rateField"){
+ParameterOUField::ParameterOUField(double prob, PhylogeneticModel* m, int nB, const std::vector<double>& lo, double init0, ParameterDouble* orig, double thetaMedianOv, double thetaSdOv, double sdShapeOv, double sdRateOv, double nuShapeOv, double nuRateOv) : Parameter(prob, m, "rateField"){
     nBins = nB;
     loEdges = lo;
     originAge = orig;
@@ -25,8 +25,9 @@ ParameterOUField::ParameterOUField(double prob, PhylogeneticModel* m, int nB, co
     thetaSd = std::isnan(thetaSdOv) ? 0.5 : thetaSdOv;
     theta[0] = theta[1] = thetaMean;
 
-    rateVal[0].assign(nBins, thMed);
-    rateVal[1].assign(nBins, thMed);
+    double r0 = (init0 > 0.0) ? init0 : thMed;
+    rateVal[0].assign(nBins, r0);
+    rateVal[1].assign(nBins, r0);
 
     if(std::isnan(sdShapeOv)){ sdShape = 6.0; sdRate = sdShape / 1.2; }
     else { sdShape = sdShapeOv; sdRate = sdRateOv; }

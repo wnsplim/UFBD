@@ -11,7 +11,7 @@ class ParameterOUField : public Parameter {
 
     public:
                                     ParameterOUField(void) = delete;
-                                    ParameterOUField(double prob, PhylogeneticModel* m, int nBins, const std::vector<double>& loEdges, ParameterDouble* originAge, double thetaMedianOv, double thetaSdOv, double sdShapeOv, double sdRateOv, double nuShapeOv, double nuRateOv);
+                                    ParameterOUField(double prob, PhylogeneticModel* m, int nBins, const std::vector<double>& loEdges, double init0, ParameterDouble* originAge, double thetaMedianOv, double thetaSdOv, double sdShapeOv, double sdRateOv, double nuShapeOv, double nuRateOv);
         double                      getRate(int i) { return rateVal[0][i]; }
         double                      shiftRates(double d);
         void                        commitProposed(void);

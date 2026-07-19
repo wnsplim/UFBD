@@ -353,7 +353,7 @@ std::vector<int> FBDTreeModel::buildSkylineRates(const std::string& prefix, cons
         for(int c = 0; c < nChunks; c++)
             loEdges[c] = times[chunkMinBin[c]];
         double na = std::numeric_limits<double>::quiet_NaN();
-        outField = new ParameterOUField(1.0, this, nChunks, loEdges, originAge,
+        outField = new ParameterOUField(1.0, this, nChunks, loEdges, rate0, originAge,
             ou.thetaSet ? ou.thetaMedian : na, ou.thetaSet ? ou.thetaSd : na,
             ou.sdSet ? ou.sdShape : na, ou.sdSet ? ou.sdRate : na,
             ou.nuSet ? ou.nuShape : na, ou.nuSet ? ou.nuRate : na);
