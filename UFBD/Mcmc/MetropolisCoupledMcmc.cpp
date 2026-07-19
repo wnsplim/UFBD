@@ -50,6 +50,11 @@ MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int thin, std::ve
     swapAdaptCount = 0;
     swapAdaptAcc = 0;
     swapAdaptAtt = 0;
+    numSwapSweeps = 0;
+    roundTrips = 0;
+    pairAtt.assign(std::max(0, numModels - 1), 0);
+    pairRej.assign(std::max(0, numModels - 1), 0);
+    lastEnd.assign(numModels, -1);
 }
 
 MetropolisCoupledMcmc::~MetropolisCoupledMcmc(void){
@@ -127,6 +132,8 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
             chainPools.push_back(new ThreadPool(per));
         }
         chainDecision = 1;
+        for(int i = 0; i < numModels; i++)
+            lastEnd[i] = (indices[i] == 0) ? 0 : (indices[i] == numModels - 1 ? 1 : -1);
     }
     RandomVariable::setActiveInstance(&swapRng);
     RandomVariable& rng = RandomVariable::randomVariableInstance();
@@ -191,43 +198,55 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
         if(verbose && tuning == false && gen % (unsigned long)thinning == 0){
             const size_t numAccepted = std::count(recentAcceptRej.begin(), recentAcceptRej.end(), true);
             const double acceptanceRate = recentAcceptRej.empty() ? 0.0 : static_cast<double>(numAccepted) / recentAcceptRej.size();
+            double Ehat = 0.0, Lhat = 0.0;
+            for(size_t k = 0; k < pairRej.size(); k++)
+                if(pairAtt[k] > 0){
+                    double r = (double)pairRej[k] / (double)pairAtt[k];
+                    Lhat += r;
+                    Ehat += r / std::max(1.0 - r, 1e-9);
+                }
+            double tauDEO = 1.0 / (2.0 + 2.0 * Ehat);
             std::ostringstream os;
             os << std::fixed << std::setprecision(2) << "chain " << runLabel << "  " << gen << " -- posterior "
                << (currLnL[coldModelIdx] + currLnP[coldModelIdx]) << " likelihood " << currLnL[coldModelIdx]
-               << " prior " << currLnP[coldModelIdx] << " | swap accept " << acceptanceRate << "\n";
+               << " prior " << currLnP[coldModelIdx] << " | swap accept " << acceptanceRate
+               << " roundtrips " << roundTrips << " Lambda " << Lhat << " tauDEO " << tauDEO
+               << " Nopt " << (2.0 * Lhat + 1.0) << "\n";
             ChainRunner::logLine(os.str());
         }
 
-        int chain1 = (int)(rng.uniformRv() * numModels);
-        int chain2 = -1;
-        do{
-            chain2 = (int)(rng.uniformRv() * numModels);
-        }while(chain1 == chain2);
-
-        int idx1 = indices[chain1];
-        int idx2 = indices[chain2];
-
-        double chain1LnPost = currLnL[chain1] + currLnP[chain1];
-        double chain2LnPost = currLnL[chain2] + currLnP[chain2];
-
-        double chain1Heating = calcHeating(idx1);
-        double chain2Heating = calcHeating(idx2);
-
-        double lnProbSwap = chain2Heating * chain1LnPost + chain1Heating * chain2LnPost;
-        double lnProbStay = chain1Heating * chain1LnPost + chain2Heating * chain2LnPost;
-        double lnAcceptanceSwap = lnProbSwap - lnProbStay;
-
-        bool swapAccepted = log(rng.uniformRv()) < lnAcceptanceSwap;
-        if(swapAccepted){
-            indices[chain1] = idx2;
-            indices[chain2] = idx1;
+        std::vector<int> slotOf(numModels);
+        for(int s = 0; s < numModels; s++)
+            slotOf[indices[s]] = s;
+        int parity = (int)(numSwapSweeps & 1ul);
+        for(int k = parity; k + 1 < numModels; k += 2){
+            int a = slotOf[k], b = slotOf[k + 1];
+            double lnAcc = (calcHeating(k) - calcHeating(k + 1)) *
+                           ((currLnL[b] + currLnP[b]) - (currLnL[a] + currLnP[a]));
+            bool acc = std::log(rng.uniformRv()) < lnAcc;
+            pairAtt[k]++;
+            if(acc){
+                indices[a] = k + 1;
+                indices[b] = k;
+            }else{
+                pairRej[k]++;
+            }
+            recentAcceptRej.push_back(acc);
+            if(recentAcceptRej.size() > 10000)
+                recentAcceptRej.pop_front();
+            adaptDeltaT(acc);
         }
-        recentAcceptRej.push_back(swapAccepted);
-
-        if (recentAcceptRej.size() > 10000)
-            recentAcceptRej.pop_front();
-
-        adaptDeltaT(swapAccepted);
+        numSwapSweeps++;
+        int topRung = numModels - 1;
+        for(int s = 0; s < numModels; s++){
+            if(indices[s] == topRung && lastEnd[s] == 0)
+                lastEnd[s] = 1;
+            else if(indices[s] == 0){
+                if(lastEnd[s] == 1)
+                    roundTrips++;
+                lastEnd[s] = 0;
+            }
+        }
 
         if(tuning == false)
             writeCheckpoint();
@@ -371,7 +390,8 @@ void MetropolisCoupledMcmc::adaptDeltaT(bool swapAccepted) {
         double ar = (double)swapAdaptAcc / (double)swapAdaptAtt;
         swapAdaptCount++;
         double gain = 1.0 / std::sqrt((double)swapAdaptCount);
-        deltaT *= std::exp(gain * (ar - 0.234));
+        // 0.40 = round-trip optimum for the DEO kernel (Lingenheil 2009; Roberts-Rosenthal 2025)
+        deltaT *= std::exp(gain * (ar - 0.40));
         if(deltaT < 1e-4) deltaT = 1e-4;
         if(deltaT > 10.0)  deltaT = 10.0;
         swapAdaptAcc = 0;

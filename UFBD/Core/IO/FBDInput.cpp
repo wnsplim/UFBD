@@ -210,7 +210,10 @@ void FBDInput::readFossils(std::string path){
         }
 
         std::string typeName = (row.size() >= 6) ? row[5] : "";
-        fossils.push_back(Fossil(taxon, minAge, maxAge, cladeName, assignment, typeName));
+        double off = UserSettings::userSettings().getAgeOffset();
+        if(off > 0.0 && minAge < off)
+            Msg::error("fossil '" + taxon + "' youngest age " + std::to_string(minAge) + " is below the youngest rate-bin edge " + std::to_string(off) + ".");
+        fossils.push_back(Fossil(taxon, minAge - off, maxAge - off, cladeName, assignment, typeName));
     }
 }
 

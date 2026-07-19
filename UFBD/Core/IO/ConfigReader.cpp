@@ -62,7 +62,7 @@ std::string getVal(const std::map<std::string,std::string>& kv, const std::strin
 
 // grammar: name:(lo,hi)[+(lo,hi)...] | name:(lo,hi) | ...
 void translateTimeBins(const std::string& spec, std::map<std::string,int>& nameToGid,
-                       std::vector<double>& cuts, std::vector<int>& groups){
+                       std::vector<double>& cuts, std::vector<int>& groups, double& outTmin){
     struct Iv { double lo, hi; int gid; };
     std::vector<Iv> ivs;
     for(std::string bt : splitChar(spec, '|')){
@@ -90,14 +90,19 @@ void translateTimeBins(const std::string& spec, std::map<std::string,int>& nameT
             ivs.push_back({lo, hi, gid});
         }
     }
+    double tmin = std::numeric_limits<double>::infinity();
+    for(const Iv& iv : ivs)
+        if(iv.lo < tmin) tmin = iv.lo;
+    if(std::isinf(tmin)) tmin = 0.0;
+    outTmin = tmin;
     std::set<double> cutSet;
     for(const Iv& iv : ivs){
-        if(iv.lo > 0.0) cutSet.insert(iv.lo);
+        if(iv.lo > tmin) cutSet.insert(iv.lo);
         if(std::isinf(iv.hi) == false) cutSet.insert(iv.hi);
     }
     cuts.assign(cutSet.begin(), cutSet.end());
     std::vector<double> los, his;
-    double prev = 0.0;
+    double prev = tmin;
     for(double cc : cuts){ los.push_back(prev); his.push_back(cc); prev = cc; }
     los.push_back(prev); his.push_back(std::numeric_limits<double>::infinity());
     groups.clear();
@@ -107,7 +112,7 @@ void translateTimeBins(const std::string& spec, std::map<std::string,int>& nameT
         for(const Iv& iv : ivs)
             if(iv.lo <= mid && mid < iv.hi){ found = iv.gid; count++; }
         if(count == 0)
-            Msg::error("config time_bins leave a gap on [" + fmtNum(los[b]) + ", " + fmtNum(his[b]) + "); bins must tile [0, inf).");
+            Msg::error("config time_bins leave a gap on [" + fmtNum(los[b]) + ", " + fmtNum(his[b]) + "); bins must tile [" + fmtNum(tmin) + ", inf).");
         if(count > 1)
             Msg::error("config time_bins overlap on [" + fmtNum(los[b]) + ", " + fmtNum(his[b]) + "); bins must be disjoint.");
         groups.push_back(found);
@@ -146,12 +151,13 @@ void translatePrior(const std::string& ratePrefix, const std::string& typeLabel,
 }
 
 void translateRateSection(const std::string& ratePrefix, const std::string& typeLabel,
-                          const std::map<std::string,std::string>& kv, std::vector<std::string>& out){
+                          const std::map<std::string,std::string>& kv, std::vector<std::string>& out, double& outTmin){
     std::map<std::string,int> nameToGid;
+    outTmin = -1.0;
     std::string tb = getVal(kv, "time_bins");
     if(tb.empty() == false){
         std::vector<double> cuts; std::vector<int> groups;
-        translateTimeBins(tb, nameToGid, cuts, groups);
+        translateTimeBins(tb, nameToGid, cuts, groups, outTmin);
         if(cuts.empty() == false){
             std::string cutStr, grpStr;
             for(size_t i = 0; i < cuts.size(); i++){ if(i) cutStr += ","; cutStr += fmtNum(cuts[i]); }
@@ -237,21 +243,33 @@ std::vector<std::string> ConfigReader::translate(const std::string& path){
         if(rateKeys.count(it->first) == 0) Msg::error("config: unknown key '" + it->first + "' in [lambda]");
     for(std::map<std::string,std::string>::iterator it = mu.begin(); it != mu.end(); ++it)
         if(rateKeys.count(it->first) == 0) Msg::error("config: unknown key '" + it->first + "' in [mu]");
-    translateRateSection("lambda", "", lambda, out);
-    translateRateSection("mu", "", mu, out);
+    std::vector<double> sectionTmins;
+    double secTmin = -1.0;
+    translateRateSection("lambda", "", lambda, out, secTmin); if(secTmin >= 0.0) sectionTmins.push_back(secTmin);
+    translateRateSection("mu", "", mu, out, secTmin); if(secTmin >= 0.0) sectionTmins.push_back(secTmin);
 
     std::vector<std::string> psiTypeOrder;
     for(size_t s = 0; s < psiSections.size(); s++){
         std::map<std::string,std::string>& kv = psiSections[s].second;
         for(std::map<std::string,std::string>::iterator it = kv.begin(); it != kv.end(); ++it)
             if(rateKeys.count(it->first) == 0) Msg::error("config: unknown key '" + it->first + "' in [psi " + psiSections[s].first + "]");
-        translateRateSection("psi", psiSections[s].first, kv, out);
+        secTmin = -1.0;
+        translateRateSection("psi", psiSections[s].first, kv, out, secTmin);
+        if(secTmin >= 0.0) sectionTmins.push_back(secTmin);
         if(psiSections[s].first.empty() == false) psiTypeOrder.push_back(psiSections[s].first);
     }
     if(psiTypeOrder.empty() == false){
         std::string joined;
         for(size_t i = 0; i < psiTypeOrder.size(); i++){ if(i) joined += ","; joined += psiTypeOrder[i]; }
         emit(out, "-psi_types", joined);
+    }
+    if(sectionTmins.empty() == false){
+        double g = sectionTmins[0];
+        for(double t : sectionTmins)
+            if(t != g)
+                Msg::error("all rate sections with time_bins must share the same youngest edge; got " + fmtNum(g) + " and " + fmtNum(t) + ".");
+        if(g > 0.0)
+            emit(out, "-age_offset", fmtNum(g));
     }
     return out;
 }

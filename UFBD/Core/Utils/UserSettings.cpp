@@ -147,6 +147,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     psiMode         = RateMode::INDEP;
     hsmrfShifts     = std::log(2.0);
     hsmrfShiftSize  = 2.0;
+    ageOffset       = 0.0;
     cpuTime         = false;
 
     std::vector<std::string> arguments;
@@ -187,7 +188,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-tree_output", "-log_output", "-backbone_tree", "-clade_def", "-fossils", "-conditioning", "-rho", "-seed", "-chain_length", "-thinning", "-coupled_chains", "-cores", "-help", "-h",
         "-lambda_prior", "-mu_prior", "-psi_prior", "-psi_types",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_partitions",
-        "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-lambda_groups", "-mu_groups", "-psi_groups", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
+        "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-lambda_groups", "-mu_groups", "-psi_groups", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time", "-age_offset",
         "-hessian", "-clock_model", "-n_states", "-rgene_gamma", "-sigma2_gamma", "-sigma2_param", "-pncp_tuning",
         "-sequence", "-partition", "-ctmc_gamma_cat", "-datatype", "-ctmc_model", "-ctmc_inv", "-ctmc_freq",
         "-parallel_chains", "-burn_in", "-rhat", "-min_ess", "-max_gen", "-delta_temperature", "-swap_interval", "-resume", "-ar_log"
@@ -196,7 +197,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-tree_output", "-log_output", "-backbone_tree", "-clade_def", "-fossils", "-conditioning", "-rho", "-seed", "-chain_length", "-thinning", "-coupled_chains", "-cores",
         "-lambda_prior", "-mu_prior", "-psi_prior", "-psi_types",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_partitions",
-        "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-lambda_groups", "-mu_groups", "-psi_groups", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time",
+        "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-lambda_groups", "-mu_groups", "-psi_groups", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time", "-age_offset",
         "-hessian", "-clock_model", "-n_states", "-rgene_gamma", "-sigma2_gamma", "-sigma2_param", "-pncp_tuning",
         "-sequence", "-partition", "-ctmc_gamma_cat", "-datatype", "-ctmc_model", "-ctmc_inv", "-ctmc_freq",
         "-parallel_chains", "-burn_in", "-rhat", "-min_ess", "-max_gen", "-delta_temperature", "-swap_interval"
@@ -362,6 +363,9 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
             } else if (arg == "-hsmrf_shift_size") {
                 try { hsmrfShiftSize = std::stod(val); } catch (...) { Msg::error("flag \"-hsmrf_shift_size\" expects a number, but got \"" + val + "\"."); }
                 hsmrfProvided = true;
+            } else if (arg == "-age_offset") {
+                try { ageOffset = std::stod(val); } catch (...) { Msg::error("flag \"-age_offset\" expects a number, but got \"" + val + "\"."); }
+                if (ageOffset < 0.0) Msg::error("flag \"-age_offset\" must be >= 0.");
             } else if (arg == "-cpu_time") {
                 std::string v = val;
                 for (char& ch : v) ch = std::tolower((unsigned char)ch);
@@ -562,6 +566,26 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     if (hessianFile.empty() == false && partitionFile.empty() == false)
         Msg::warning("-partition (NEXUS charset) applies to the sequence path only; ignoring it under -hessian.");
 
+    if (ageOffset > 0.0) {
+        double minCut = 0.0;
+        bool haveCut = false;
+        std::vector<std::vector<double>*> cutVecs = { &lambdaSkylineTimes, &muSkylineTimes, &psiSkylineTimes };
+        for (std::map<std::string, std::vector<double>>::iterator it = psiTimesByName.begin(); it != psiTimesByName.end(); ++it)
+            cutVecs.push_back(&it->second);
+        for (std::vector<double>* v : cutVecs)
+            for (double t : *v) { if (haveCut == false || t < minCut) { minCut = t; haveCut = true; } }
+        if (haveCut && ageOffset >= minCut)
+            Msg::error("-age_offset (" + std::to_string(ageOffset) + ") must be younger than the youngest rate change-time (" + std::to_string(minCut) + ").");
+        for (std::vector<double>* v : cutVecs)
+            for (double& t : *v) t -= ageOffset;
+        if (conditionAgePriorSet) {
+            if (conditionAgePrior == Probability::PriorFamily::FIXED) conditionAgePriorP1 -= ageOffset;
+            else if (conditionAgePrior == Probability::PriorFamily::UNIFORM) { conditionAgePriorP1 -= ageOffset; conditionAgePriorP2 -= ageOffset; }
+            else if (conditionAgePrior == Probability::PriorFamily::TRUNCATED_NORMAL) { conditionAgePriorP1 -= ageOffset; conditionAgePriorP3 -= ageOffset; }
+            else conditionAgePriorP3 -= ageOffset;
+        }
+    }
+
     bool anySmooth = (lambdaMode != RateMode::INDEP || muMode != RateMode::INDEP || psiMode != RateMode::INDEP);
     for (std::map<std::string, RateMode>::iterator it = psiModeByName.begin(); it != psiModeByName.end(); ++it)
         if (it->second != RateMode::INDEP) anySmooth = true;
@@ -704,8 +728,9 @@ MCMC
   -burn_in <frac>         burn-in fraction (default 0.25)
   -parallel_chains <N>    independent replicate runs (needed for split R-hat)
   -coupled_chains <N>     Metropolis-coupled chains per run (>1 enables MC3)
-  -delta_temperature <x>  MC3 initial temperature spacing (default 0.1); the
-                          ladder self-tunes toward ~0.234 swap acceptance
+  -delta_temperature <x>  MC3 initial temperature spacing (default 0.1); the range
+                          self-tunes toward ~0.40 adjacent DEO swap acceptance;
+                          interior rungs self-place by barrier equidistribution
   -swap_interval <N>      MC3 generations between chain-swap attempts (default 1000)
   -cores <N>              number of threads
   -seed <N>               random number seed

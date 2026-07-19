@@ -359,6 +359,11 @@ std::vector<int> FBDTreeModel::buildSkylineRates(const std::string& prefix, cons
         std::vector<double> gridSpacing;
         for(int k = 0; k + 1 < nChunks; k++)
             gridSpacing.push_back(chunkMid[k + 1] - chunkMid[k]);
+        int nd = (int)gridSpacing.size();
+        if(nd >= 2){
+            if(gridSpacing[nd - 1] > gridSpacing[nd - 2]) gridSpacing[nd - 1] = gridSpacing[nd - 2];
+            if(gridSpacing[0] > gridSpacing[1])           gridSpacing[0]      = gridSpacing[1];
+        }
         std::vector<double> sorted = gridSpacing;
         std::sort(sorted.begin(), sorted.end());
         double med = sorted.empty() ? 1.0 : (sorted.size() % 2 ? sorted[sorted.size() / 2] : 0.5 * (sorted[sorted.size() / 2 - 1] + sorted[sorted.size() / 2]));

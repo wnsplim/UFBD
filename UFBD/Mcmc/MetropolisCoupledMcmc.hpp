@@ -67,6 +67,11 @@ class MetropolisCoupledMcmc : public ChainRunner {
         long                                swapAdaptCount;
         int                                 swapAdaptAcc;
         int                                 swapAdaptAtt;
+        unsigned long                       numSwapSweeps;
+        long                                roundTrips;
+        std::vector<long>                   pairAtt;
+        std::vector<long>                   pairRej;
+        std::vector<int>                    lastEnd;
         int                                 coldModelIdx;
         int                                 numModels;
         int                                 thinning;

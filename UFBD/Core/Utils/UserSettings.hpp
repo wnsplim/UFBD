@@ -45,6 +45,7 @@ class UserSettings {
         double                      getConditionAgePriorP2(void) { return conditionAgePriorP2; }
         double                      getConditionAgePriorP3(void) { return conditionAgePriorP3; }
         bool                        getConditionAgePriorSet(void) { return conditionAgePriorSet; }
+        double                      getAgeOffset(void) { return ageOffset; }
         Probability::PriorSpec      getLambdaPrior(void) { return lambdaPrior; }
         Probability::PriorSpec      getMuPrior(void) { return muPrior; }
         RateMode                    getLambdaMode(void) { return lambdaMode; }
@@ -90,6 +91,7 @@ class UserSettings {
         const double*               getRgeneGamma(void) { return rgeneGamma; }
         const double*               getSigma2Gamma(void) { return sigma2Gamma; }
         Sigma2Param                 getSigma2Param(void) { return sigma2Param; }
+        static constexpr long       pncpRefreshInterval = 20;
         unsigned long               getPncpTuningGens(void) { return pncpTuningGens; }
         double                      getDeltaTemperature(void) { return deltaTemperature; }
         unsigned long               getResampleEvery(void) { return resampleEvery; }
@@ -115,6 +117,7 @@ class UserSettings {
         double                      conditionAgePriorP1;
         double                      conditionAgePriorP2;
         double                      conditionAgePriorP3;
+        double                      ageOffset;
         Probability::PriorSpec      lambdaPrior;
         Probability::PriorSpec      muPrior;
         Probability::PriorSpec      psiPrior;
@@ -158,7 +161,7 @@ class UserSettings {
         std::string                 invocation;
         std::string                 clockModelName;
         Sigma2Param                 sigma2Param = Sigma2Param::PNCP;
-        unsigned long               pncpTuningGens = 50000;
+        unsigned long               pncpTuningGens = 2500 * pncpRefreshInterval;
         double                      deltaTemperature = 0.1;
         bool                        deltaTemperatureProvided = false;
         unsigned long               resampleEvery = 1000;

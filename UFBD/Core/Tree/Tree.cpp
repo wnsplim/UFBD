@@ -4,6 +4,7 @@
 #include "Probability.hpp"
 #include "RandomVariable.hpp"
 #include "Tree.hpp"
+#include "UserSettings.hpp"
 
 #include <cmath>
 #include <cstdio>
@@ -298,7 +299,7 @@ static void writeBackbone(Node* p, std::set<Node*>& keep, std::map<Node*,std::st
         strm << nm;
         if(p->getIsFossil()){
             char buf[64];
-            std::snprintf(buf, sizeof(buf), "[&age=%.17g]", p->getTime());
+            std::snprintf(buf, sizeof(buf), "[&age=%.17g]", p->getTime() + UserSettings::userSettings().getAgeOffset());
             strm << buf;
         }
         return;
@@ -364,7 +365,7 @@ std::vector<Node*> Tree::getAllAgeNodes(void) {
 
 static double ageOf(Node* n, const std::map<Node*,double>& age){
     std::map<Node*,double>::const_iterator it = age.find(n);
-    return it != age.end() ? it->second : n->getTime();
+    return it != age.end() ? it->second : (n->getTime() + UserSettings::userSettings().getAgeOffset());
 }
 
 static std::pair<double,double> hpd95(std::vector<double> s){
@@ -480,7 +481,7 @@ bool writeSummaryTree(Tree* tree, const std::vector<std::string>& names, const s
     for(Node* n : tree->getDownPassSequence()){
         if(n->getIsTip() == false) continue;
         std::map<Node*,double>::iterator it = age.find(n);
-        double ta = (it != age.end()) ? it->second : n->getTime();
+        double ta = (it != age.end()) ? it->second : (n->getTime() + UserSettings::userSettings().getAgeOffset());
         if(ta < y0) y0 = ta;
     }
     if(std::isinf(y0)) y0 = 0.0;
