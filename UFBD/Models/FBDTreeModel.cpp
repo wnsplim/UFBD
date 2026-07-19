@@ -4,7 +4,7 @@
 #include "Node.hpp"
 #include "Parameter.hpp"
 #include "ParameterDouble.hpp"
-#include "ParameterShrinkageField.hpp"
+#include "ParameterOUField.hpp"
 #include "FBDTreeModel.hpp"
 #include "PhylogeneticModel.hpp"
 #include "RandomVariable.hpp"
@@ -243,26 +243,18 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     if(!mp.set) mp = defRate;
     int nLambda = (int)lambdaTimes.size();
     int nMu = (int)muTimes.size();
-    bool lamSmooth = (rateUs.getLambdaMode() != RateMode::INDEP);
-    bool muSmooth  = (rateUs.getMuMode() != RateMode::INDEP);
-    bool lamGmrf = (rateUs.getLambdaMode() == RateMode::GMRF);
-    bool muGmrf  = (rateUs.getMuMode() == RateMode::GMRF);
-    if(lamSmooth && nLambda < 2){ Msg::warning("smoothing set for speciation rate (lambda) but only single rate interval."); lamSmooth = false; }
-    if(muSmooth && nMu < 2){ Msg::warning("smoothing set for extinction rate (mu) but only single rate interval."); muSmooth = false; }
-    double nShifts = rateUs.getHsmrfShifts();
-    double shiftSize = rateUs.getHsmrfShiftSize();
     double lam0 = Probability::priorMean(lp.family, lp.p1, lp.p2, lp.p3);
     if(!(lam0 > 0.0 && std::isfinite(lam0))) lam0 = 0.1;
     double mu0 = Probability::priorMean(mp.family, mp.p1, mp.p2, mp.p3);
     if(!(mu0 > 0.0 && std::isfinite(mu0))) mu0 = 0.1;
     mu0 = offsetFromLambda(mu0, lam0, mp);
     {
-        std::vector<int> b2c = buildSkylineRates("lambda", "", nLambda, lambdaTimes, topAge, lp, lam0, lamSmooth, lamGmrf, rateUs.getLambdaGroups(), rateUs.getLambdaGroupPrior(), nShifts, shiftSize, lambda, lambdaField, lambdaName);
+        std::vector<int> b2c = buildSkylineRates("lambda", "", nLambda, lambdaTimes, topAge, lp, lam0, rateUs.getLambdaGroups(), rateUs.getLambdaGroupPrior(), lambda, lambdaField, lambdaName);
         for(int& u : lambdaIdx) u = b2c[u];
         appendRateMap(lambdaTimes, b2c, lambdaName);
     }
     {
-        std::vector<int> b2c = buildSkylineRates("mu", "", nMu, muTimes, topAge, mp, mu0, muSmooth, muGmrf, rateUs.getMuGroups(), rateUs.getMuGroupPrior(), nShifts, shiftSize, mu, muField, muName);
+        std::vector<int> b2c = buildSkylineRates("mu", "", nMu, muTimes, topAge, mp, mu0, rateUs.getMuGroups(), rateUs.getMuGroupPrior(), mu, muField, muName);
         for(int& u : muIdx) u = b2c[u];
         appendRateMap(muTimes, b2c, muName);
     }
@@ -276,12 +268,9 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
         if(!(psi0 > 0.0 && std::isfinite(psi0))) psi0 = 0.1;
         psi0 = offsetFromLambda(psi0, lam0, pp);
         int nPsi = (int)psiTimes[tp].size();
-        bool tpSmooth = (rateUs.getPsiMode(tp) != RateMode::INDEP);
-        bool tpGmrf = (rateUs.getPsiMode(tp) == RateMode::GMRF);
-        if(tpSmooth && nPsi < 2){ Msg::warning("smoothing set for sampling rate " + ((numPsiTypes > 1) ? ("psi type '" + rateUs.getPsiTypeNames()[tp] + "'") : std::string("(psi)")) + " but only single rate interval."); tpSmooth = false; }
         std::string prefix = (numPsiTypes > 1) ? ("psi_" + rateUs.getPsiTypeNames()[tp]) : "psi";
         std::string sep = (numPsiTypes > 1) ? "_" : "";
-        std::vector<int> b2c = buildSkylineRates(prefix, sep, nPsi, psiTimes[tp], topAge, pp, psi0, tpSmooth, tpGmrf, rateUs.getPsiGroups(tp), rateUs.getPsiGroupPrior(tp), nShifts, shiftSize, psi[tp], psiField[tp], psiName[tp]);
+        std::vector<int> b2c = buildSkylineRates(prefix, sep, nPsi, psiTimes[tp], topAge, pp, psi0, rateUs.getPsiGroups(tp), rateUs.getPsiGroupPrior(tp), psi[tp], psiField[tp], psiName[tp]);
         for(int& u : psiIdx[tp]) u = b2c[u];
         appendRateMap(psiTimes[tp], b2c, psiName[tp]);
     }
@@ -332,7 +321,8 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     RandomVariable::setActiveInstance(prevRng);
 }
 
-std::vector<int> FBDTreeModel::buildSkylineRates(const std::string& prefix, const std::string& sep, int nBins, const std::vector<double>& times, double topAge, const Probability::PriorSpec& basePrior, double rate0, bool smooth, bool gmrf, const std::vector<int>& groupIds, const std::map<int,Probability::PriorSpec>& groupPrior, double nShifts, double shiftSize, std::vector<ParameterDouble*>& outVec, ParameterShrinkageField*& outField, std::vector<std::string>& outNames){
+std::vector<int> FBDTreeModel::buildSkylineRates(const std::string& prefix, const std::string& sep, int nBins, const std::vector<double>& times, double topAge, const Probability::PriorSpec& basePrior, double rate0, const std::vector<int>& groupIds, const std::map<int,Probability::PriorSpec>& groupPrior, std::vector<ParameterDouble*>& outVec, ParameterOUField*& outField, std::vector<std::string>& outNames){
+    (void)times; (void)topAge; (void)outField;
     std::vector<int> binToChunk(nBins, 0);
     std::map<int,int> gidToChunk;
     std::vector<int> chunkGid, chunkMinBin;
@@ -346,42 +336,15 @@ std::vector<int> FBDTreeModel::buildSkylineRates(const std::string& prefix, cons
     outNames.clear();
     for(int c = 0; c < nChunks; c++)
         outNames.push_back(prefix + ((nChunks > 1) ? (sep + std::to_string(chunkMinBin[c])) : ""));
-    if(smooth){
-        for(int i = 1; i < nBins; i++)
-            if(binToChunk[i] < binToChunk[i - 1])
-                Msg::error("HSMRF cannot use non-consecutive " + prefix + " groups.");
-        std::vector<double> chunkMid(nChunks);
-        for(int c = 0; c < nChunks; c++){
-            double lo = times[chunkMinBin[c]];
-            double hi = (c + 1 < nChunks) ? times[chunkMinBin[c + 1]] : topAge;
-            chunkMid[c] = 0.5 * (lo + hi);
-        }
-        std::vector<double> gridSpacing;
-        for(int k = 0; k + 1 < nChunks; k++)
-            gridSpacing.push_back(chunkMid[k + 1] - chunkMid[k]);
-        int nd = (int)gridSpacing.size();
-        if(nd >= 2){
-            if(gridSpacing[nd - 1] > gridSpacing[nd - 2]) gridSpacing[nd - 1] = gridSpacing[nd - 2];
-            if(gridSpacing[0] > gridSpacing[1])           gridSpacing[0]      = gridSpacing[1];
-        }
-        std::vector<double> sorted = gridSpacing;
-        std::sort(sorted.begin(), sorted.end());
-        double med = sorted.empty() ? 1.0 : (sorted.size() % 2 ? sorted[sorted.size() / 2] : 0.5 * (sorted[sorted.size() / 2 - 1] + sorted[sorted.size() / 2]));
-        for(double& g : gridSpacing)
-            g /= med;
-        outField = new ParameterShrinkageField(1.0, this, nChunks, gridSpacing, gmrf, basePrior, nShifts, shiftSize, rate0);
-        parameters.push_back(outField);
-    }else{
-        for(int c = 0; c < nChunks; c++){
-            ParameterDouble* p = new ParameterDouble(1.0, this, outNames[c], 0.0, std::numeric_limits<double>::max());
-            std::map<int,Probability::PriorSpec>::const_iterator pit = groupPrior.find(chunkGid[c]);
-            bool ov = (pit != groupPrior.end() && pit->second.set);
-            const Probability::PriorSpec& sp = ov ? pit->second : basePrior;
-            p->setPrior(sp.family, sp.p1, sp.p2);
-            p->setValue(ov ? Probability::priorMean(sp.family, sp.p1, sp.p2, sp.p3) : rate0);
-            outVec.push_back(p);
-            parameters.push_back(p);
-        }
+    for(int c = 0; c < nChunks; c++){
+        ParameterDouble* p = new ParameterDouble(1.0, this, outNames[c], 0.0, std::numeric_limits<double>::max());
+        std::map<int,Probability::PriorSpec>::const_iterator pit = groupPrior.find(chunkGid[c]);
+        bool ov = (pit != groupPrior.end() && pit->second.set);
+        const Probability::PriorSpec& sp = ov ? pit->second : basePrior;
+        p->setPrior(sp.family, sp.p1, sp.p2);
+        p->setValue(ov ? Probability::priorMean(sp.family, sp.p1, sp.p2, sp.p3) : rate0);
+        outVec.push_back(p);
+        parameters.push_back(p);
     }
     return binToChunk;
 }
@@ -533,10 +496,11 @@ std::vector<double> FBDTreeModel::getParameterString(void){
         vals.push_back((double)unresolvedFossils->getNumSampledAncestors());
     else if(isResolved)
         vals.push_back((double)countResolvedSA());
+    double off = UserSettings::userSettings().getAgeOffset();
     if(originAge != nullptr)
-        vals.push_back(originAge->getValue());
+        vals.push_back(originAge->getValue() + off);
     for(Node* n : getAgeLogNodes())
-        vals.push_back(n->getTime());
+        vals.push_back(n->getTime() + off);
     return vals;
 }
 
@@ -560,15 +524,16 @@ std::vector<std::string> FBDTreeModel::getLatentNames(void){
 
 std::vector<double> FBDTreeModel::getLatentString(void){
     std::vector<double> vals;
+    double off = UserSettings::userSettings().getAgeOffset();
     int nUnr = (unresolvedFossils != nullptr) ? unresolvedFossils->getNumFossils() : 0;
     for(int i = 0; i < nUnr; i++)
         if(unresolvedFossils->isUE(i) == false && unresolvedFossils->getYMin(i) < unresolvedFossils->getYMax(i))
-            vals.push_back(unresolvedFossils->getFossilAge(i));
+            vals.push_back(unresolvedFossils->getFossilAge(i) + off);
     for(const BackboneFossil& bf : backboneFossils)
         if(bf.yMin < bf.yMax)
-            vals.push_back(bf.tip->getTime());
+            vals.push_back(bf.tip->getTime() + off);
     for(int i = 0; i < nUnr; i++)
-        vals.push_back(unresolvedFossils->getAttachAge(i));
+        vals.push_back(unresolvedFossils->getAttachAge(i) + off);
     for(int i = 0; i < nUnr; i++)
         if(unresolvedFossils->isUE(i) == false)
             vals.push_back(unresolvedFossils->isSA(i) ? 1.0 : 0.0);

@@ -145,8 +145,6 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     lambdaMode      = RateMode::INDEP;
     muMode          = RateMode::INDEP;
     psiMode         = RateMode::INDEP;
-    hsmrfShifts     = std::log(2.0);
-    hsmrfShiftSize  = 2.0;
     ageOffset       = 0.0;
     cpuTime         = false;
 
@@ -188,7 +186,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-tree_output", "-log_output", "-backbone_tree", "-clade_def", "-fossils", "-conditioning", "-rho", "-seed", "-chain_length", "-thinning", "-coupled_chains", "-cores", "-help", "-h",
         "-lambda_prior", "-mu_prior", "-psi_prior", "-psi_types",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_partitions",
-        "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-lambda_groups", "-mu_groups", "-psi_groups", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time", "-age_offset",
+        "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-lambda_groups", "-mu_groups", "-psi_groups", "-cpu_time", "-age_offset",
         "-hessian", "-clock_model", "-n_states", "-rgene_gamma", "-sigma2_gamma", "-sigma2_param", "-pncp_tuning",
         "-sequence", "-partition", "-ctmc_gamma_cat", "-datatype", "-ctmc_model", "-ctmc_inv", "-ctmc_freq",
         "-parallel_chains", "-burn_in", "-rhat", "-min_ess", "-max_gen", "-delta_temperature", "-swap_interval", "-resume", "-ar_log"
@@ -197,7 +195,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-tree_output", "-log_output", "-backbone_tree", "-clade_def", "-fossils", "-conditioning", "-rho", "-seed", "-chain_length", "-thinning", "-coupled_chains", "-cores",
         "-lambda_prior", "-mu_prior", "-psi_prior", "-psi_types",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_partitions",
-        "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-lambda_groups", "-mu_groups", "-psi_groups", "-hsmrf_shifts", "-hsmrf_shift_size", "-cpu_time", "-age_offset",
+        "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode", "-lambda_groups", "-mu_groups", "-psi_groups", "-cpu_time", "-age_offset",
         "-hessian", "-clock_model", "-n_states", "-rgene_gamma", "-sigma2_gamma", "-sigma2_param", "-pncp_tuning",
         "-sequence", "-partition", "-ctmc_gamma_cat", "-datatype", "-ctmc_model", "-ctmc_inv", "-ctmc_freq",
         "-parallel_chains", "-burn_in", "-rhat", "-min_ess", "-max_gen", "-delta_temperature", "-swap_interval"
@@ -207,7 +205,6 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         valueFlags.insert("-fbd_model");
     }
 
-    bool hsmrfProvided = false;
     bool coupledChainsProvided = false;
     for (int i = 1; i < (int)arguments.size(); i++) {
         std::string arg = arguments[i];
@@ -339,30 +336,16 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
             } else if (arg == "-lambda_prior_mode" || arg == "-mu_prior_mode") {
                 std::string v = val;
                 for (char& ch : v) ch = std::tolower((unsigned char)ch);
-                RateMode rm = RateMode::INDEP;
-                if (v == "indep") rm = RateMode::INDEP;
-                else if (v == "smooth" || v == "hsmrf") rm = RateMode::SMOOTH;
-                else if (v == "gmrf") rm = RateMode::GMRF;
-                else Msg::error("flag \"" + arg + "\" expects indep, hsmrf, or gmrf, but got \"" + val + "\".");
-                if (arg == "-lambda_prior_mode") lambdaMode = rm;
-                else muMode = rm;
+                if (v != "indep") Msg::error("flag \"" + arg + "\" expects indep, but got \"" + val + "\".");
+                if (arg == "-lambda_prior_mode") lambdaMode = RateMode::INDEP;
+                else muMode = RateMode::INDEP;
             } else if (arg == "-psi_prior_mode") {
                 std::string nm, ms = val;
                 size_t c = val.find(':');
                 if (c != std::string::npos) { nm = val.substr(0, c); ms = val.substr(c + 1); }
                 for (char& ch : ms) ch = std::tolower((unsigned char)ch);
-                RateMode rm = RateMode::INDEP;
-                if (ms == "indep") rm = RateMode::INDEP;
-                else if (ms == "smooth" || ms == "hsmrf") rm = RateMode::SMOOTH;
-                else if (ms == "gmrf") rm = RateMode::GMRF;
-                else Msg::error("flag \"-psi_prior_mode\" expects indep, hsmrf, or gmrf, but got \"" + ms + "\".");
-                if (nm.empty()) psiMode = rm; else psiModeByName[nm] = rm;
-            } else if (arg == "-hsmrf_shifts") {
-                try { hsmrfShifts = std::stod(val); } catch (...) { Msg::error("flag \"-hsmrf_shifts\" expects a number, but got \"" + val + "\"."); }
-                hsmrfProvided = true;
-            } else if (arg == "-hsmrf_shift_size") {
-                try { hsmrfShiftSize = std::stod(val); } catch (...) { Msg::error("flag \"-hsmrf_shift_size\" expects a number, but got \"" + val + "\"."); }
-                hsmrfProvided = true;
+                if (ms != "indep") Msg::error("flag \"-psi_prior_mode\" expects indep, but got \"" + ms + "\".");
+                if (nm.empty()) psiMode = RateMode::INDEP; else psiModeByName[nm] = RateMode::INDEP;
             } else if (arg == "-age_offset") {
                 try { ageOffset = std::stod(val); } catch (...) { Msg::error("flag \"-age_offset\" expects a number, but got \"" + val + "\"."); }
                 if (ageOffset < 0.0) Msg::error("flag \"-age_offset\" must be >= 0.");
@@ -586,11 +569,6 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         }
     }
 
-    bool anySmooth = (lambdaMode != RateMode::INDEP || muMode != RateMode::INDEP || psiMode != RateMode::INDEP);
-    for (std::map<std::string, RateMode>::iterator it = psiModeByName.begin(); it != psiModeByName.end(); ++it)
-        if (it->second != RateMode::INDEP) anySmooth = true;
-    if (hsmrfProvided && anySmooth == false)
-        Msg::warning("-hsmrf_shifts / -hsmrf_shift_size have no effect: no rate uses HSMRF or GMRF smoothing.");
 
     if (sbcMode == false) {
         if (treeOut.empty())
@@ -750,12 +728,10 @@ SKYLINE  (piecewise-constant rates; write lambda, mu, or psi for <r>)
   -<r>_skyline_times <t,...>
                           interior time boundaries (k boundaries -> k+1 bins)
   -<r>_groups <g,...>     group id per bin; bins sharing an id share a rate
-  -<r>_prior_mode <indep|hsmrf|gmrf>
-                          independent rates, or a smooth (HSMRF) field
+  -<r>_prior_mode <indep>
+                          independent rates
   -<r>_prior <gid>:<prior>
                           prior for one bin group (repeat once per group)
-  -hsmrf_shifts <x>       HSMRF hyperparameters (only when a rate is smooth)
-  -hsmrf_shift_size <x>
 
 MULTIPLE PRESERVATION TYPES  (split psi by type)
   -psi_types <name,...>   declare types; names must match the fossil table's
@@ -763,7 +739,7 @@ MULTIPLE PRESERVATION TYPES  (split psi by type)
   Give per-type flags a 'name:' prefix, e.g.
     -psi_prior type1:unif:0.01,0.04
     -psi_skyline_times type1:20,40
-    -psi_prior_mode type1:smooth
+    -psi_prior_mode type1:indep
 
 CLOCK & SUBSTITUTION MODEL
   -sequence <file>        alignment (FASTA / PHYLIP / NEXUS)

@@ -10,7 +10,7 @@
 enum class Conditioning { CROWN, ORIGIN };
 enum class ConditioningEvent { SURVIVAL, ANYSAMPLE, EXTINCT };
 enum class Model { RFBD, HEA14, UFBD };
-enum class RateMode { INDEP, SMOOTH, GMRF };
+enum class RateMode { INDEP };
 enum class Sigma2Param { PNCP, C, NC };
 
 class UserSettings {
@@ -50,8 +50,6 @@ class UserSettings {
         Probability::PriorSpec      getMuPrior(void) { return muPrior; }
         RateMode                    getLambdaMode(void) { return lambdaMode; }
         RateMode                    getMuMode(void) { return muMode; }
-        double                      getHsmrfShifts(void) { return hsmrfShifts; }
-        double                      getHsmrfShiftSize(void) { return hsmrfShiftSize; }
         bool                        getCpuTime(void) { return cpuTime; }
         std::vector<double>         getSkylineTimes(void);
         std::vector<double>         getLambdaSkylineTimes(void) { return lambdaSkylineTimes; }
@@ -124,8 +122,6 @@ class UserSettings {
         RateMode                    lambdaMode;
         RateMode                    muMode;
         RateMode                    psiMode;
-        double                      hsmrfShifts;
-        double                      hsmrfShiftSize;
         bool                        cpuTime;
         std::vector<double>         lambdaSkylineTimes;
         std::vector<double>         muSkylineTimes;

@@ -785,7 +785,6 @@ void BranchRateModel::freezePncp(void){
 }
 
 void ParameterBranchRates::branchLikePrecision(int p, std::vector<double>& tauL, std::vector<double>& ellB){
-    const long K = 20;
     if((int)sigTauL.size() != numClockPartitions){
         sigTauL.assign(numClockPartitions, std::vector<double>());
         sigEllB.assign(numClockPartitions, std::vector<double>());
@@ -793,7 +792,7 @@ void ParameterBranchRates::branchLikePrecision(int p, std::vector<double>& tauL,
         sigRefresh.assign(numClockPartitions, 0);
     }
     bool frozen = pncpFrozen;
-    bool stale = sigTauL[p].empty() || (frozen == false && sigRefresh[p] % K == 0);
+    bool stale = sigTauL[p].empty() || (frozen == false && sigRefresh[p] % UserSettings::pncpRefreshInterval == 0);
     sigRefresh[p]++;
     if(stale){
         std::vector<double> tl(numNodes, 0.0), el(numNodes, 0.0);
@@ -838,7 +837,7 @@ void ParameterBranchRates::branchLikePrecision(int p, std::vector<double>& tauL,
         }
         centeredness[p] = acc / (double)branchNodes.size();
         pncpMeanTau[p] = tacc / (double)branchNodes.size();
-        if(frozen == false && sigCount[p] % 20 == 0)
+        if(frozen == false && sigCount[p] % UserSettings::pncpRefreshInterval == 0)
             std::cout << "[tuning] chain " << chainLabel << " clockPartition " << p << " refresh " << sigCount[p]
                       << "  meanCenteredness " << centeredness[p]
                       << "  meanTau " << pncpMeanTau[p] << "\n";

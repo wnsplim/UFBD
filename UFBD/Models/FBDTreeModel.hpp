@@ -15,7 +15,7 @@
 
 class Parameter;
 class ParameterDouble;
-class ParameterShrinkageField;
+class ParameterOUField;
 
 class FBDTreeModel : public PhylogeneticModel {
 
@@ -102,7 +102,7 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      muAt(int i);
         double                      psiTotalAt(int i);
         double                      psiOfTypeAt(int type, int i);
-        std::vector<int>            buildSkylineRates(const std::string& prefix, const std::string& sep, int nBins, const std::vector<double>& times, double topAge, const Probability::PriorSpec& basePrior, double rate0, bool smooth, bool gmrf, const std::vector<int>& groupIds, const std::map<int,Probability::PriorSpec>& groupPrior, double nShifts, double shiftSize, std::vector<ParameterDouble*>& outVec, ParameterShrinkageField*& outField, std::vector<std::string>& outNames);
+        std::vector<int>            buildSkylineRates(const std::string& prefix, const std::string& sep, int nBins, const std::vector<double>& times, double topAge, const Probability::PriorSpec& basePrior, double rate0, const std::vector<int>& groupIds, const std::map<int,Probability::PriorSpec>& groupPrior, std::vector<ParameterDouble*>& outVec, ParameterOUField*& outField, std::vector<std::string>& outNames);
         void                        appendRateMap(const std::vector<double>& times, const std::vector<int>& binToChunk, const std::vector<std::string>& names);
         //ordered by memory footprint
         std::vector<ParameterDouble*> lambda;
@@ -111,9 +111,9 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<std::string>    lambdaName, muName;
         std::vector<std::vector<std::string>> psiName;
         std::vector<std::pair<std::string,std::string>> rateMapRows;
-        ParameterShrinkageField*    lambdaField;
-        ParameterShrinkageField*    muField;
-        std::vector<ParameterShrinkageField*> psiField;
+        ParameterOUField*           lambdaField;
+        ParameterOUField*           muField;
+        std::vector<ParameterOUField*> psiField;
         int                         numPsiTypes;
         int                         numExtantTips;
         std::vector<int>            fossilType;
