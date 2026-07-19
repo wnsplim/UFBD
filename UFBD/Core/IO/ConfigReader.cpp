@@ -216,7 +216,7 @@ std::vector<std::string> ConfigReader::translate(const std::string& path){
     static const std::set<std::string> globalKeys = {
         "backbone_tree","fossils","clade_def","sequence","hessian","log_output","tree_output",
         "chain_length","parallel_chains","thinning","burn_in","coupled_chains","cores","seed",
-        "max_gen","min_ess","rhat","conditioning","rho","hsmrf_shifts","hsmrf_shift_size","delta_temperature","swap_interval"
+        "max_gen","min_ess","rhat","conditioning","rho","delta_temperature","swap_interval"
     };
     static const std::set<std::string> substKeys = {
         "partition","datatype","n_states","ctmc_model","ctmc_gamma_cat","ctmc_inv","ctmc_freq"
