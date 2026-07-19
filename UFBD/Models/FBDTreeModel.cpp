@@ -376,14 +376,15 @@ std::vector<int> FBDTreeModel::buildSkylineRates(const std::string& prefix, cons
 
 void FBDTreeModel::appendRateMap(const std::vector<double>& times, const std::vector<int>& binToChunk, const std::vector<std::string>& names){
     int nBins = (int)binToChunk.size();
+    double off = UserSettings::userSettings().getAgeOffset();
     for(int c = 0; c < (int)names.size(); c++){
         std::string iv;
         bool first = true;
         for(int i = 0; i < nBins; i++){
             if(binToChunk[i] != c) continue;
             char buf[64];
-            if(i + 1 < nBins) std::snprintf(buf, sizeof(buf), "[%g, %g)", times[i], times[i + 1]);
-            else              std::snprintf(buf, sizeof(buf), "[%g, inf)", times[i]);
+            if(i + 1 < nBins) std::snprintf(buf, sizeof(buf), "[%g, %g)", times[i] + off, times[i + 1] + off);
+            else              std::snprintf(buf, sizeof(buf), "[%g, inf)", times[i] + off);
             iv += (first ? "" : " + ");
             iv += buf;
             first = false;

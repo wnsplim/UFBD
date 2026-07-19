@@ -789,7 +789,7 @@ SKYLINE  (piecewise-constant rates; write lambda, mu, or psi for <r>)
   -<r>_ou_nu <shape,rate> gamma prior on the OU reversion rate /Myr (mode ou)
                           (default 4, rate ~11.2*median_bin_width)
   -age_offset <t_min>     shift the skyline support to [t_min, inf); using this implies
-                          that you assume that the clade went extinct by t_min if t_min>0 (default 0)
+                          assuming that the clade went extinct by t_min if t_min>0 (default 0)
 
 MULTIPLE PRESERVATION TYPES  (split psi by type)
   -psi_types <name,...>   declare types; names must match the fossil table's
