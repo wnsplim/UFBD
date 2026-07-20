@@ -86,7 +86,13 @@ int main(int argc, const char* argv[]) {
     std::atexit(restoreConsoleStreams);
 
     auto runStart = std::chrono::system_clock::now();
-    std::cout << "Run started:  " << clockString(runStart) << "\n";
+    bool wantsHelp = false;
+    for(int i = 1; i < argc; i++){
+        std::string a = argv[i];
+        if(a == "-h" || a == "-help"){ wantsHelp = true; break; }
+    }
+    if(wantsHelp == false)
+        std::cout << "Run started:  " << clockString(runStart) << "\n";
 
     UserSettings& settings = UserSettings::userSettings();
     Msg::setDeferWarnings(true);

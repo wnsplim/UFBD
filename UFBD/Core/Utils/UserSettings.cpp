@@ -132,7 +132,9 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     autoChainLength = false;
     burninFraction  = 0.25;
     rhatThreshold   = 1.01;
-    essThreshold    = 50.0;
+    essThreshold    = 0.0;
+    essThresholdSet = false;
+    rhatThresholdSet = false;
     maxGen          = 1000000000;
     numCores        = 1;
     thinning        = 1000;
@@ -555,6 +557,9 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         maxNumThreads = 1;
     }
 
+    if (essThresholdSet == false)
+        essThreshold = 100.0 * (double)numRuns;
+
     if (numCoupledChains < 1) {
         Msg::warning("chains must be >= 1; setting to 1.");
         numCoupledChains = 1;
@@ -770,7 +775,7 @@ MCMC
 
 CONVERGENCE  (used only with -chain_length auto)
   -max_gen <N>            hard generation cap (default 1000000000)
-  -min_ess <N>            per-split-chain ESS floor; pooled bulk-ESS and tail-ESS must each reach N x 2 x parallel_chains (default 50, i.e. 400 at 4 chains)
+  -min_ess <N>            pooled bulk-ESS and tail-ESS floor (default 100 x parallel_chains)
   -rhat <x>               target maximum rank-normalized split R-hat (default 1.01)
 
 FBD RATES

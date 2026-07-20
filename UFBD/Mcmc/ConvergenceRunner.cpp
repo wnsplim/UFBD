@@ -48,11 +48,11 @@ bool ConvergenceRunner::run(void){
         }
     bool autoStop = s.getAutoChainLength();
     unsigned long maxGen = autoStop ? s.getMaxGen() : s.getChainLength();
-    long blockGens = (long)s.getEssThreshold() * (long)s.getThinning();
+    long blockGens = 50L * (long)s.getThinning();
     if(blockGens < 1) blockGens = 1;
 
     if(verbose && autoStop){
-        int essFloor = (int)(s.getEssThreshold() * 2.0 * (double)replicates.size());
+        int essFloor = (int)s.getEssThreshold();
         std::cout << "Auto-stop targets: ";
         if(replicates.size() >= 2)
             std::cout << "max R-hat <= " << std::fixed << std::setprecision(2) << s.getRhatThreshold() << " and ";
@@ -194,7 +194,7 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
         return false;
 
     bool multiChain = replicates.size() >= 2;
-    double essFloor = essMin * 2.0 * (double)replicates.size();
+    double essFloor = essMin;
     double worstRhat = 1.0;
     std::string worstRhatName;
     double minBulkEss = -1.0;
