@@ -1,3 +1,4 @@
+#include <iostream>
 #include <string>
 
 #include "AlignmentReader.hpp"
@@ -130,6 +131,19 @@ void SequenceCTMCModel::updateForAcceptance(void){
 
 void SequenceCTMCModel::updateForRejection(void){
     lastSubstParm->updateForRejection();
+}
+
+void SequenceCTMCModel::print(void){
+    int nP = seqLik->getNumPartitions();
+    for(int p = 0; p < nP; p++){
+        std::string suf = (nP > 1) ? std::to_string(p) : "";
+        std::cout << "ctmc" << suf << " (A/R,step):";
+        if(empirical == false) std::cout << " exch:" << exch[p]->getAcceptanceRatio() << "/" << exch[p]->getStep();
+        if(freqEstimated)      std::cout << " freq:" << freq[p]->getAcceptanceRatio() << "/" << freq[p]->getStep();
+        if(useGammaHet)        std::cout << " alpha:" << alpha[p]->getAcceptanceRatio() << "/" << alpha[p]->getStep();
+        if(useInvariant)       std::cout << " pinv:" << pinv[p]->getAcceptanceRatio() << "/" << pinv[p]->getStep();
+        std::cout << "\n";
+    }
 }
 
 void SequenceCTMCModel::appendParameterNames(std::vector<std::string>& names){

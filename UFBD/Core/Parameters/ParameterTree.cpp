@@ -1,3 +1,4 @@
+#include <cmath>
 #include <iomanip>
 #include <iostream>
 #include "Msg.hpp"
@@ -38,7 +39,22 @@ void ParameterTree::setTree(Tree* t){
 
 double ParameterTree::update(void) {
     //By convention: Tree class is responsible for ALL topology and branch length moves; responsible for nodes
-    return trees[0]->update(scaleLambda);
+    return trees[0]->update(scaleLambda, nodeAgeStep);
+}
+
+void ParameterTree::recordNodeAgeMove(bool accepted) {
+    naAttW++;
+    if(accepted) naAccW++;
+    if(naAttW >= 200){
+        naAdapt++;
+        double ar = (double)naAccW / (double)naAttW;
+        double gain = 1.0 / std::sqrt((double)naAdapt);
+        nodeAgeStep *= std::exp(gain * (ar - 0.3));
+        if(nodeAgeStep < 1e-3) nodeAgeStep = 1e-3;
+        if(nodeAgeStep > 2.0)  nodeAgeStep = 2.0;
+        naAccW = 0;
+        naAttW = 0;
+    }
 }
 
 void ParameterTree::setAgeFloors(const std::map<Node*,double>& f) {
@@ -67,6 +83,7 @@ void ParameterTree::writeState(std::ostream& os) {
     trees[1]->writeState(os);
     os << scaleLambda << ' ' << numAcceptances << ' ' << numRejections << ' ' << numScaleMoves << '\n';
     Serialize::writeBoolDeque(os, recentScaleAcceptRej);
+    os << nodeAgeStep << ' ' << naAdapt << '\n';
 }
 
 void ParameterTree::readState(std::istream& is) {
@@ -74,6 +91,7 @@ void ParameterTree::readState(std::istream& is) {
     *(trees[0]) = *(trees[1]);
     is >> scaleLambda >> numAcceptances >> numRejections >> numScaleMoves;
     Serialize::readBoolDeque(is, recentScaleAcceptRej);
+    is >> nodeAgeStep >> naAdapt;
 }
 
 void ParameterTree::tuneScale(bool accepted) {

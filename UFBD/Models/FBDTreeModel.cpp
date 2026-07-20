@@ -39,6 +39,7 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
 
     lastMoveKind = MK_PARAM;
     lastRateVec = nullptr;
+    lastRateField = nullptr;
     rateVecStep = 0.2;
     shrinkStep = 0.2;
     rvAccW = rvAttW = rvAtt = seAccW = seAttW = seAtt = 0;
@@ -451,18 +452,22 @@ static bool nodeOnStalk(Node* n, Node* crown, Node* origin){
 
 std::vector<std::string> FBDTreeModel::getParameterNames(void){
     std::vector<std::string> names;
-    if(lambdaField != nullptr)
+    if(lambdaField != nullptr){
         for(const std::string& n : lambdaName) names.push_back(n);
-    else
+        names.push_back("ou_lambda_theta"); names.push_back("ou_lambda_sdEq"); names.push_back("ou_lambda_nu");
+    }else
         for(ParameterDouble* p : lambda) names.push_back(p->getName());
-    if(muField != nullptr)
+    if(muField != nullptr){
         for(const std::string& n : muName) names.push_back(n);
-    else
+        names.push_back("ou_mu_theta"); names.push_back("ou_mu_sdEq"); names.push_back("ou_mu_nu");
+    }else
         for(ParameterDouble* p : mu) names.push_back(p->getName());
     for(int tp = 0; tp < numPsiTypes; tp++){
-        if(psiField[tp] != nullptr)
+        if(psiField[tp] != nullptr){
             for(const std::string& n : psiName[tp]) names.push_back(n);
-        else
+            std::string pf = "ou_psi" + (numPsiTypes > 1 ? std::to_string(tp) : std::string(""));
+            names.push_back(pf + "_theta"); names.push_back(pf + "_sdEq"); names.push_back(pf + "_nu");
+        }else
             for(ParameterDouble* p : psi[tp]) names.push_back(p->getName());
     }
     if(unresolvedFossils != nullptr || isResolved)
@@ -504,18 +509,21 @@ int FBDTreeModel::countResolvedSA(void){
 
 std::vector<double> FBDTreeModel::getParameterString(void){
     std::vector<double> vals;
-    if(lambdaField != nullptr)
+    if(lambdaField != nullptr){
         for(int i = 0; i < lambdaField->getNumBins(); i++) vals.push_back(lambdaField->getRate(i));
-    else
+        vals.push_back(lambdaField->getTheta()); vals.push_back(lambdaField->getSdEq()); vals.push_back(lambdaField->getNu());
+    }else
         for(ParameterDouble* p : lambda) vals.push_back(p->getValue());
-    if(muField != nullptr)
+    if(muField != nullptr){
         for(int i = 0; i < muField->getNumBins(); i++) vals.push_back(muField->getRate(i));
-    else
+        vals.push_back(muField->getTheta()); vals.push_back(muField->getSdEq()); vals.push_back(muField->getNu());
+    }else
         for(ParameterDouble* p : mu) vals.push_back(p->getValue());
     for(int tp = 0; tp < numPsiTypes; tp++){
-        if(psiField[tp] != nullptr)
+        if(psiField[tp] != nullptr){
             for(int i = 0; i < psiField[tp]->getNumBins(); i++) vals.push_back(psiField[tp]->getRate(i));
-        else
+            vals.push_back(psiField[tp]->getTheta()); vals.push_back(psiField[tp]->getSdEq()); vals.push_back(psiField[tp]->getNu());
+        }else
             for(ParameterDouble* p : psi[tp]) vals.push_back(p->getValue());
     }
     if(unresolvedFossils != nullptr)
@@ -605,8 +613,9 @@ void FBDTreeModel::print(void){
     std::cout << "tree[";
     for(int i = 0; i < TM_COUNT; i++)
         if(tmAtt[i] > 0)
-            std::cout << tmName[i] << ":" << (double)tmAcc[i] / (double)tmAtt[i] << " ";
-    std::cout << "] treeScaleStep: " << parameterTree->getScaleLambda();
+            std::cout << tmName[i] << ":" << (double)tmAcc[i] / (double)tmAtt[i] << "[" << tmAcc[i] << "/" << tmAtt[i] << "] ";
+    std::cout << "] treeScaleStep: " << parameterTree->getScaleLambda()
+              << " subtreeStep: " << subtreeStep << " jointScaleStep: " << jointScaleStep;
     if(rsTot > 0)
         std::cout << " rateShift[A/R:" << (double)rsAcc / (double)rsTot
                   << " step:" << std::setprecision(5) << shiftStep << std::setprecision(3)
@@ -622,26 +631,39 @@ void FBDTreeModel::print(void){
     os.precision(pr);
 }
 
-std::vector<ParameterDouble*>* FBDTreeModel::pickIidRateVector(void){
-    std::vector<std::vector<ParameterDouble*>*> cands;
-    if(lambdaField == nullptr && lambda.size() >= 2) cands.push_back(&lambda);
-    if(muField == nullptr && mu.size() >= 2)         cands.push_back(&mu);
-    for(int tp = 0; tp < numPsiTypes; tp++) if(psiField[tp] == nullptr && psi[tp].size() >= 2) cands.push_back(&psi[tp]);
-    if(cands.empty())
-        return nullptr;
-    return cands[(int)(rng.uniformRv() * cands.size())];
+void FBDTreeModel::pickRateTarget(std::vector<ParameterDouble*>*& outVec, ParameterOUField*& outFld){
+    outVec = nullptr;
+    outFld = nullptr;
+    std::vector<std::vector<ParameterDouble*>*> vcands;
+    std::vector<ParameterOUField*> fcands;
+    if(lambdaField == nullptr && lambda.size() >= 2) vcands.push_back(&lambda);
+    if(muField == nullptr && mu.size() >= 2) vcands.push_back(&mu);
+    for(int tp = 0; tp < numPsiTypes; tp++){
+        if(psiField[tp] == nullptr && psi[tp].size() >= 2) vcands.push_back(&psi[tp]);
+    }
+    int n = (int)(vcands.size() + fcands.size());
+    if(n == 0) return;
+    int idx = (int)(rng.uniformRv() * n);
+    if(idx < (int)vcands.size()) outVec = vcands[idx];
+    else outFld = fcands[idx - (int)vcands.size()];
 }
 
 double FBDTreeModel::doRateVectorScale(void){
     lastMoveKind = MK_RATEVEC;
     lastRateVecScale = true;
-    lastRateVec = pickIidRateVector();
+    pickRateTarget(lastRateVec, lastRateField);
     double mB = 0.95;
     double d = mB + Probability::Normal::rv(&rng) * std::sqrt(1.0 - mB * mB);
     if(rng.uniformRv() < 0.5) d = -d;
     double c = std::exp(rateVecStep * d);
-    for(ParameterDouble* p : *lastRateVec)
-        p->scaleProposed(c);
+    double h;
+    if(lastRateField != nullptr){
+        h = lastRateField->scaleAllProposed(c);
+    }else{
+        for(ParameterDouble* p : *lastRateVec)
+            p->scaleProposed(c);
+        h = (double)lastRateVec->size() * std::log(c);
+    }
     rvAttW++;
     rvAtt++;
     if(rvAttW >= 200){
@@ -652,26 +674,35 @@ double FBDTreeModel::doRateVectorScale(void){
         rvAccW = 0;
         rvAttW = 0;
     }
-    return (double)lastRateVec->size() * std::log(c);
+    return h;
 }
 
 double FBDTreeModel::doRateShrinkExpand(void){
     lastMoveKind = MK_RATEVEC;
     lastRateVecScale = false;
-    lastRateVec = pickIidRateVector();
-    int n = (int)lastRateVec->size();
+    pickRateTarget(lastRateVec, lastRateField);
+    int n = 0;
     double logMean = 0.0;
-    for(ParameterDouble* p : *lastRateVec)
-        logMean += std::log(p->getValue());
-    logMean /= (double)n;
+    if(lastRateField == nullptr){
+        n = (int)lastRateVec->size();
+        for(ParameterDouble* p : *lastRateVec)
+            logMean += std::log(p->getValue());
+        logMean /= (double)n;
+    }
     double mB = 0.95;
     double d = mB + Probability::Normal::rv(&rng) * std::sqrt(1.0 - mB * mB);
     if(rng.uniformRv() < 0.5) d = -d;
     double a = std::exp(shrinkStep * d);
-    for(ParameterDouble* p : *lastRateVec){
-        double cur = p->getValue();
-        double target = std::exp(logMean + a * (std::log(cur) - logMean));
-        p->scaleProposed(target / cur);
+    double h;
+    if(lastRateField != nullptr){
+        h = lastRateField->shrinkExpandProposed(a);
+    }else{
+        for(ParameterDouble* p : *lastRateVec){
+            double cur = p->getValue();
+            double target = std::exp(logMean + a * (std::log(cur) - logMean));
+            p->scaleProposed(target / cur);
+        }
+        h = (double)(n - 1) * std::log(a);
     }
     seAttW++;
     seAtt++;
@@ -683,7 +714,7 @@ double FBDTreeModel::doRateShrinkExpand(void){
         seAccW = 0;
         seAttW = 0;
     }
-    return (double)(n - 1) * std::log(a);
+    return h;
 }
 
 double FBDTreeModel::doRateShift(void){
@@ -812,13 +843,14 @@ double FBDTreeModel::update(void){
                 || (muField == nullptr && mu.size() >= 2);
     for(int tp = 0; tp < numPsiTypes && !haveIid; tp++)
         if(psiField[tp] == nullptr && psi[tp].size() >= 2) haveIid = true;
+    bool haveLMField = (lambdaField != nullptr || muField != nullptr);
     lastTreeMove = TM_NONE;
     if(haveIid && rng.uniformRv() < 0.20){
         double r = (rng.uniformRv() < 0.5) ? doRateVectorScale() : doRateShrinkExpand();
         RandomVariable::setActiveInstance(prevRng);
         return r;
     }
-    if(rng.uniformRv() < 0.10){
+    if(haveLMField && rng.uniformRv() < 0.10){
         double r = doRateShift();
         RandomVariable::setActiveInstance(prevRng);
         return r;
@@ -851,8 +883,9 @@ double FBDTreeModel::update(void){
         double blockUnit = 0.1 * numSlideable;
         if(blockUnit < fixedWeight) blockUnit = fixedWeight;
         double slideAndCrown = numSlideable + fixedWeight;
-        double uMove = rng.uniformRv() * (slideAndCrown + 3.0 * blockUnit);
-        if(uMove >= slideAndCrown + 2.0 * blockUnit){
+        double subtreeW = (numSlideable > 0) ? blockUnit : 0.0;
+        double uMove = rng.uniformRv() * (slideAndCrown + 2.0 * blockUnit + subtreeW);
+        if(uMove >= slideAndCrown + blockUnit + subtreeW){
             lastTreeMove = TM_UPDOWN;
             double r = doUpDownScale();
             RandomVariable::setActiveInstance(prevRng);
@@ -927,6 +960,9 @@ double FBDTreeModel::update(void){
 
 void FBDTreeModel::updateForAcceptance(void){
     if(lastTreeMove != TM_NONE){ tmAtt[lastTreeMove]++; tmAcc[lastTreeMove]++; }
+    if(lastTreeMove == TM_SUBTREE) subtreeAccW++;
+    else if(lastTreeMove == TM_JOINTSCALE) jointScaleAccW++;
+    else if(lastTreeMove == TM_NODEAGE) parameterTree->recordNodeAgeMove(true);
     if(lastMoveKind == MK_AZGIBBS){
         unresolvedFossils->updateForAcceptance();
         azAcc++;
@@ -943,8 +979,8 @@ void FBDTreeModel::updateForAcceptance(void){
         return;
     }
     if(lastMoveKind == MK_RATEVEC){
-        for(ParameterDouble* p : *lastRateVec)
-            p->commitProposed();
+        if(lastRateField != nullptr) lastRateField->commitProposed();
+        else for(ParameterDouble* p : *lastRateVec) p->commitProposed();
         if(lastRateVecScale){ rvAccW++; rvAcc++; } else { seAccW++; seAcc++; }
         return;
     }
@@ -970,6 +1006,7 @@ void FBDTreeModel::updateForAcceptance(void){
 
 void FBDTreeModel::updateForRejection(void){
     if(lastTreeMove != TM_NONE) tmAtt[lastTreeMove]++;
+    if(lastTreeMove == TM_NODEAGE) parameterTree->recordNodeAgeMove(false);
     if(lastMoveKind == MK_AZGIBBS){
         unresolvedFossils->updateForRejection();
         rebuildStalkIndex();
@@ -987,8 +1024,8 @@ void FBDTreeModel::updateForRejection(void){
         return;
     }
     if(lastMoveKind == MK_RATEVEC){
-        for(ParameterDouble* p : *lastRateVec)
-            p->restoreProposed();
+        if(lastRateField != nullptr) lastRateField->restoreProposed();
+        else for(ParameterDouble* p : *lastRateVec) p->restoreProposed();
         return;
     }
     if(lastMoveKind == MK_UPDOWN){
@@ -1020,6 +1057,7 @@ void FBDTreeModel::writeState(std::ostream& os){
     Serialize::writeBoolDeque(os, upDownRecent);
     for(int i = 0; i < TM_COUNT; i++) os << tmAcc[i] << ' ' << tmAtt[i] << ' ';
     os << '\n';
+    os << subtreeStep << ' ' << subtreeAdapt << ' ' << jointScaleStep << ' ' << jointScaleAdapt << '\n';
 }
 
 void FBDTreeModel::readState(std::istream& is){
@@ -1030,6 +1068,7 @@ void FBDTreeModel::readState(std::istream& is){
     is >> rsAcc >> rsTot >> rsAdapt >> azAcc >> azAtt;
     Serialize::readBoolDeque(is, upDownRecent);
     for(int i = 0; i < TM_COUNT; i++) is >> tmAcc[i] >> tmAtt[i];
+    is >> subtreeStep >> subtreeAdapt >> jointScaleStep >> jointScaleAdapt;
     cacheInit = false;
     zoneInit = true;
 }
@@ -2375,7 +2414,18 @@ void FBDTreeModel::setupNodeAgeFloors(void){
 
 double FBDTreeModel::doJointScale(void){
     Tree* tree = parameterTree->getTree();
-    double m = std::exp(parameterTree->getScaleLambda() * (rng.uniformRv() - 0.5));
+    jointScaleAttW++;
+    if(jointScaleAttW >= 200){
+        jointScaleAdapt++;
+        double ar = (double)jointScaleAccW / (double)jointScaleAttW;
+        double gain = 1.0 / std::sqrt((double)jointScaleAdapt);
+        jointScaleStep *= std::exp(gain * (ar - 0.3));
+        if(jointScaleStep < 1e-4) jointScaleStep = 1e-4;
+        if(jointScaleStep > 5.0)  jointScaleStep = 5.0;
+        jointScaleAccW = 0;
+        jointScaleAttW = 0;
+    }
+    double m = std::exp(jointScaleStep * (rng.uniformRv() - 0.5));
     tree->setLastUpdateWasScale(true);
     double zJac = unresolvedFossils->scaleAllAttachAges(m);
     if(zJac == -INFINITY)
@@ -2407,7 +2457,23 @@ double FBDTreeModel::doSubtreeScale(void){
     for(Node* d : tree->getAllDescendants(node))
         if(d->getIsTip() && d->getTime() > oldestTip)
             oldestTip = d->getTime();
-    double sf = (oldestTip + rng.uniformRv() * (parentAge - oldestTip)) / oldAge;
+    subtreeAttW++;
+    if(subtreeAttW >= 200){
+        subtreeAdapt++;
+        double ar = (double)subtreeAccW / (double)subtreeAttW;
+        double gain = 1.0 / std::sqrt((double)subtreeAdapt);
+        subtreeStep *= std::exp(gain * (ar - 0.3));
+        if(subtreeStep < 1e-2) subtreeStep = 1e-2;
+        if(subtreeStep > 2.0)  subtreeStep = 2.0;
+        subtreeAccW = 0;
+        subtreeAttW = 0;
+    }
+    double newAge = oldAge + subtreeStep * (parentAge - oldestTip) * (rng.uniformRv() - 0.5);
+    while(newAge <= oldestTip || newAge >= parentAge){
+        if(newAge <= oldestTip) newAge = 2.0 * oldestTip - newAge;
+        if(newAge >= parentAge) newAge = 2.0 * parentAge - newAge;
+    }
+    double sf = newAge / oldAge;
 
     std::vector<int> insideZ;
     int nf = unresolvedFossils->getNumFossils();

@@ -16,6 +16,8 @@ class ParameterTree : public Parameter {
                                     ParameterTree(double prob, PhylogeneticModel* m);
         double                      getAcceptanceRatio(void) { return ((double) numAcceptances) /( (double)numAcceptances + (double)numRejections ) ;}
         double                      getScaleLambda(void) { return scaleLambda; }
+        double                      getNodeAgeStep(void) { return nodeAgeStep; }
+        void                        recordNodeAgeMove(bool accepted);
         Tree*                       getTree(void) { return trees[0]; }
         void                        setAgeFloors(const std::map<Node*,double>& f);
         double                      lnProbability(void);
@@ -36,6 +38,10 @@ class ParameterTree : public Parameter {
         double                      scaleLambda;
         std::deque<bool>            recentScaleAcceptRej;
         int                         numScaleMoves;
+        double                      nodeAgeStep = 0.5;
+        long                        naAccW = 0;
+        long                        naAttW = 0;
+        long                        naAdapt = 0;
 };
 
 #endif

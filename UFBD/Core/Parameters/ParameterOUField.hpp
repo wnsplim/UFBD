@@ -14,9 +14,14 @@ class ParameterOUField : public Parameter {
                                     ParameterOUField(double prob, PhylogeneticModel* m, int nBins, const std::vector<double>& loEdges, double init0, ParameterDouble* originAge, double thetaMedianOv, double thetaSdOv, double sdShapeOv, double sdRateOv, double nuShapeOv, double nuRateOv);
         double                      getRate(int i) { return rateVal[0][i]; }
         double                      shiftRates(double d);
+        double                      scaleAllProposed(double c);
+        double                      shrinkExpandProposed(double a);
         void                        commitProposed(void);
         void                        restoreProposed(void);
         int                         getNumBins(void) { return nBins; }
+        double                      getTheta(void) { return theta[0]; }
+        double                      getSdEq(void) { return sdEq[0]; }
+        double                      getNu(void) { return nu[0]; }
         double                      getAcceptanceRatio(void) { return (numAcc + numRej > 0) ? (double)numAcc / (double)(numAcc + numRej) : 0.0; }
         double                      lnProbability(void);
         void                        print(void) {}

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <iostream>
 #include <limits>
 #include "ApproxBranchLengthLikelihood.hpp"
@@ -153,7 +154,7 @@ double RelaxedClockTreeModel::nodeAgeSweep(void){
     double curL = lnLikelihood();
     double curP = lnPriorProbability();
     for(Node* n : nodes){
-        double ratio = fbd->getTree()->updateNodeAgeOnNode(n);
+        double ratio = fbd->getTree()->updateNodeAgeOnNode(n, fbd->getParameterTree()->getNodeAgeStep());
         double newL = lnLikelihood();
         double newP = lnPriorProbability();
         naSweepAtt++;
@@ -161,9 +162,11 @@ double RelaxedClockTreeModel::nodeAgeSweep(void){
             curL = newL;
             curP = newP;
             fbd->getParameterTree()->updateForAcceptance();
+            fbd->getParameterTree()->recordNodeAgeMove(true);
             naSweepAcc++;
         }else{
             fbd->getParameterTree()->updateForRejection();
+            fbd->getParameterTree()->recordNodeAgeMove(false);
         }
     }
     return std::numeric_limits<double>::infinity(); // each node already MH-accepted above; force outer accept
@@ -380,4 +383,7 @@ void RelaxedClockTreeModel::print(void){
         std::cout << "ageScale (A/R): " << (double)ageScaleAcc / ageScaleAtt << " [" << ageScaleAcc << "/" << ageScaleAtt << "]\n";
     if(naSweepAtt > 0)
         std::cout << "nodeAgeSweep (per-node A/R): " << (double)naSweepAcc / naSweepAtt << " [" << naSweepAcc << "/" << naSweepAtt << "]\n";
+    std::cout << "nodeAgeStep: " << fbd->getParameterTree()->getNodeAgeStep() << "\n";
+    if(ctmc != nullptr)
+        ctmc->print();
 }

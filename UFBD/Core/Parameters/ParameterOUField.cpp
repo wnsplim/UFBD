@@ -169,6 +169,22 @@ void ParameterOUField::updateForRejection(void){
     adaptStep(lastMove, false);
 }
 
+double ParameterOUField::scaleAllProposed(double c){
+    for(int k = 0; k < nBins; k++)
+        rateVal[0][k] = rateVal[1][k] * c;
+    return (double)nBins * std::log(c);
+}
+
+double ParameterOUField::shrinkExpandProposed(double a){
+    double logMean = 0.0;
+    for(int k = 0; k < nBins; k++)
+        logMean += std::log(rateVal[1][k]);
+    logMean /= (double)nBins;
+    for(int k = 0; k < nBins; k++)
+        rateVal[0][k] = std::exp(logMean + a * (std::log(rateVal[1][k]) - logMean));
+    return (double)(nBins - 1) * std::log(a);
+}
+
 double ParameterOUField::shiftRates(double d){
     double rBar = 0.0;
     for(int k = 0; k < nBins; k++)

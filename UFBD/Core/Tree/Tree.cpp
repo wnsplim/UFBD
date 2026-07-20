@@ -816,7 +816,7 @@ void Tree::showNode(Node* p, int indent) {
         }
 }
 
-double Tree::update(double scaleLambda){
+double Tree::update(double scaleLambda, double nodeAgeStep){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     int numSlideable = 0;
     for(Node* n : downPassSequence)
@@ -829,11 +829,11 @@ double Tree::update(double scaleLambda){
         return updateCrownAge(scaleLambda);
     lastUpdateWasScale = false;
     if(fossilTips.empty())
-        return updateNodeAge();
+        return updateNodeAge(nodeAgeStep);
     std::vector<Node*> internal = getInternalAgeNodes();
     int pick = (int)(rng.uniformRv() * (internal.size() + fossilTips.size()));
     if(pick < (int)internal.size())
-        return updateNodeAgeOnNode(internal[pick]);
+        return updateNodeAgeOnNode(internal[pick], nodeAgeStep);
     return updateFossilTipAge(fossilTips[pick - (int)internal.size()]);
 }
 
@@ -889,7 +889,7 @@ void Tree::setAgeFloorsByOffset(const std::map<int,double>& f)
         ageFloors[nodes[it->first]] = it->second;
 }
 
-double Tree::updateNodeAgeOnNode(Node* n){
+double Tree::updateNodeAgeOnNode(Node* n, double nodeAgeStep){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     double parentAge = n->getAncestor()->getTime();
     double maxChildAge = 0.0;
@@ -901,18 +901,23 @@ double Tree::updateNodeAgeOnNode(Node* n){
     if(it != ageFloors.end() && it->second > maxChildAge)
         maxChildAge = it->second;
 
-    n->setTime(maxChildAge + rng.uniformRv() * (parentAge - maxChildAge));
+    double proposed = n->getTime() + nodeAgeStep * (parentAge - maxChildAge) * (rng.uniformRv() - 0.5);
+    while(proposed <= maxChildAge || proposed >= parentAge){
+        if(proposed <= maxChildAge) proposed = 2.0 * maxChildAge - proposed;
+        if(proposed >= parentAge)   proposed = 2.0 * parentAge - proposed;
+    }
+    n->setTime(proposed);
 
     return 0.0;
 }
 
-double Tree::updateNodeAge(void){
+double Tree::updateNodeAge(double nodeAgeStep){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     std::vector<Node*> candidates = getInternalAgeNodes();
     if(candidates.size() == 0)
         return 0.0;
     Node* n = candidates[(int)(rng.uniformRv() * candidates.size())];
-    return updateNodeAgeOnNode(n);
+    return updateNodeAgeOnNode(n, nodeAgeStep);
 }
 
 std::vector<Node*> Tree::getFossilTipAgeNodes(void){

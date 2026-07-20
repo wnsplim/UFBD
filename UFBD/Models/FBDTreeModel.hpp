@@ -95,7 +95,7 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      doRateVectorScale(void);
         double                      doRateShrinkExpand(void);
         double                      doRateShift(void);
-        std::vector<ParameterDouble*>* pickIidRateVector(void);
+        void                        pickRateTarget(std::vector<ParameterDouble*>*& outVec, ParameterOUField*& outFld);
         void                        enumeratePrunableRoots(Tree* t, std::vector<Node*>& roots);
         void                        enumerateSubtreeAttachEdges(Tree* t, std::vector<Node*>& crowns, std::vector<char>& isCrowns, std::vector<Node*>& origins, double rAge, double ceilingS, std::vector<Node*>& attachEdges, std::vector<double>& los, std::vector<double>& his);
         bool                        subtreeFossilsValidAt(Tree* t, Node* s, Node* g);
@@ -155,6 +155,7 @@ class FBDTreeModel : public PhylogeneticModel {
         long                        rsAdapt;
         bool                        lastRateVecScale;
         std::vector<ParameterDouble*>* lastRateVec;
+        ParameterOUField*           lastRateField;
         double                      rateVecStep;
         double                      shrinkStep;
         long                        rvAccW;
@@ -172,6 +173,14 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      upDownStep;
         int                         upDownTotal;
         std::deque<bool>            upDownRecent;
+        double                      subtreeStep = 0.5;
+        long                        subtreeAccW = 0;
+        long                        subtreeAttW = 0;
+        long                        subtreeAdapt = 0;
+        double                      jointScaleStep = 0.1;
+        long                        jointScaleAccW = 0;
+        long                        jointScaleAttW = 0;
+        long                        jointScaleAdapt = 0;
         std::vector<double>         cachedGammaLn;
         std::vector<char>           gammaStale;
         std::vector<double>         prevY;

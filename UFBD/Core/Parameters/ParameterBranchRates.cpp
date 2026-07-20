@@ -230,7 +230,7 @@ void BranchRateModel::print(void){
     if(cdAttTot > 0)
         std::cout << "constantDistance (A/R): " << (double)cdAccTot / cdAttTot << " [" << cdAccTot << "/" << cdAttTot << "]\n";
     if(rasAtt > 0)
-        std::cout << "rateAgeSubtree (A/R): " << (double)rasAcc / rasAtt << " [" << rasAcc << "/" << rasAtt << "]\n";
+        std::cout << "rateAgeSubtree (A/R): " << (double)rasAcc / rasAtt << " [" << rasAcc << "/" << rasAtt << "] step: " << rasStep << "\n";
     if(ncAtt > 0)
         std::cout << "sigmaPncp (A/R): " << (double)ncAcc / ncAtt << " [" << ncAcc << "/" << ncAtt << "]\n";
     if(centeredness.empty() == false){
@@ -262,6 +262,7 @@ void BranchRateModel::writeState(std::ostream& os){
     Serialize::write2D(os, sigTauL);
     Serialize::write2D(os, sigEllB);
     os << pncpFrozen << '\n';
+    os << rasStep << ' ' << rasAccW << ' ' << rasAttW << '\n';
 }
 
 void BranchRateModel::readState(std::istream& is){
@@ -286,6 +287,7 @@ void BranchRateModel::readState(std::istream& is){
     Serialize::read2D(is, sigTauL);
     Serialize::read2D(is, sigEllB);
     is >> pncpFrozen;
+    is >> rasStep >> rasAccW >> rasAttW;
 }
 
 double BranchRateModel::constantDistanceMove(void){
@@ -371,9 +373,21 @@ double BranchRateModel::rateAgeSubtreeMove(void){
         if(d->getIsTip()){ if(d->getTime() > minAge) minAge = d->getTime(); }
         else nInternal++;
     }
-    double newAge = minAge + (parentAge - minAge) * rng.uniformRv();
-    if(newAge <= minAge || newAge >= parentAge)
-        return -INFINITY;
+    rasAttW++;
+    if(rasAttW >= 200){
+        double ar = (double)rasAccW / (double)rasAttW;
+        double gain = 1.0 / std::sqrt((double)(rasAtt / 200 + 1));
+        rasStep *= std::exp(gain * (ar - 0.3));
+        if(rasStep < 1e-2) rasStep = 1e-2;
+        if(rasStep > 2.0)  rasStep = 2.0;
+        rasAccW = 0;
+        rasAttW = 0;
+    }
+    double newAge = myAge + rasStep * (parentAge - minAge) * (rng.uniformRv() - 0.5);
+    while(newAge <= minAge || newAge >= parentAge){
+        if(newAge <= minAge) newAge = 2.0 * minAge - newAge;
+        if(newAge >= parentAge) newAge = 2.0 * parentAge - newAge;
+    }
     double sf = newAge / myAge;
     double zJac = 0.0;
     if(uf != nullptr){
@@ -527,7 +541,7 @@ void BranchRateModel::updateForAcceptance(void){
     }
     if(lastMove == 4){
         if(lastCdNode >= 0){ cdAccNode[lastCdNode]++; cdAccTot++; cdAttTot++; }
-        else { rasAcc++; rasAtt++; }
+        else { rasAcc++; rasAtt++; rasAccW++; }
         for(int k = 0; k < (int)cdNodes.size(); k++)
             for(int p = 0; p < numClockPartitions; p++)
                 rate[1][p][cdNodes[k]] = rate[0][p][cdNodes[k]];

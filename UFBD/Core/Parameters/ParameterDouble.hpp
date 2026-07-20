@@ -15,6 +15,7 @@ class ParameterDouble : public Parameter {
                                     ParameterDouble(void) = delete;
                                     ParameterDouble(double prob, PhylogeneticModel* m, std::string n, double lb, double up); //for "unbounded RVs" pass in std::numeric_limits<double>::max() / 2 and std::numeric_limits<double>::min() / 2
         double                      getAcceptanceRatio(void) { return ((double)numAcceptances)/((double)(numAcceptances+numRejections));}
+        double                      getStep(void) { return windowSize; }
         double                      getValue(void) { return value[0]; } // 0 is the one we update, 1 is the one we don't (last currently accepted value)
         void                        setValue(double v) { value[0] = v; value[1] = v; }
         void                        scaleProposed(double c) { value[0] = value[1] * c; }

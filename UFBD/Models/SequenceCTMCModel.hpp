@@ -24,6 +24,7 @@ class SequenceCTMCModel {
         double                          update(void);
         void                            updateForAcceptance(void);
         void                            updateForRejection(void);
+        void                            print(void);
         void                            appendParameterNames(std::vector<std::string>& names);
         void                            appendParameterValues(std::vector<double>& values);
         void                            writeState(std::ostream& os);

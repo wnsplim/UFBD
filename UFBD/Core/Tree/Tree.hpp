@@ -52,11 +52,11 @@ class Tree {
         Node*                               getMRCA(const std::vector<std::string>& taxonNames);
         void                                initializeDownPassSequence(void);
         void                                initializeTimes(void); //starting node ages from topology; extant tips at 0
-        double                              update(double scaleLambda);
+        double                              update(double scaleLambda, double nodeAgeStep);
         int                                 scaleInternalAges(double m);
         int                                 scaleSubtreeAges(Node* subtreeCrown, double m);
-        double                              updateNodeAge(void);
-        double                              updateNodeAgeOnNode(Node* n);
+        double                              updateNodeAge(double nodeAgeStep);
+        double                              updateNodeAgeOnNode(Node* n, double nodeAgeStep);
         std::vector<Node*>                  getInternalAgeNodes(void);
         std::vector<Node*>                  getFossilTipAgeNodes(void);
         double                              updateFossilTipAge(Node* n);

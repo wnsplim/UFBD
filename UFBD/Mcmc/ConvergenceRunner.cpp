@@ -52,10 +52,11 @@ bool ConvergenceRunner::run(void){
     if(blockGens < 1) blockGens = 1;
 
     if(verbose && autoStop){
+        int essFloor = (int)(s.getEssThreshold() * 2.0 * (double)replicates.size());
         std::cout << "Auto-stop targets: ";
         if(replicates.size() >= 2)
             std::cout << "max R-hat <= " << std::fixed << std::setprecision(2) << s.getRhatThreshold() << " and ";
-        std::cout << "min per-chain ESS >= " << (int)s.getEssThreshold() << ".\n";
+        std::cout << "min bulk-ESS and tail-ESS >= " << essFloor << ".\n";
     }
 
     int M = (int)replicates.size();
@@ -193,11 +194,13 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
         return false;
 
     bool multiChain = replicates.size() >= 2;
+    double essFloor = essMin * 2.0 * (double)replicates.size();
     double worstRhat = 1.0;
     std::string worstRhatName;
-    double minEss = -1.0;
-    std::string minEssName;
     double minBulkEss = -1.0;
+    std::string minBulkEssName;
+    double minTailEss = -1.0;
+    std::string minTailEssName;
     int nBelow = 0;
     std::vector<std::string> bad;
     const std::vector<bool>& fixedMask = replicates[0]->fixedTraceMask();
@@ -224,26 +227,17 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
             continue;
         }
         if(multiChain && isDensity == false && d.rhat > worstRhat){ worstRhat = d.rhat; worstRhatName = names[p]; }
-        if(std::isnan(d.bulkEss) == false && (minBulkEss < 0.0 || d.bulkEss < minBulkEss)) minBulkEss = d.bulkEss;
-        double worstChainEss = -1.0;
-        for(const std::vector<double>& ch : chains){
-            Convergence::Diagnostic dc = Convergence::diagnose(std::vector<std::vector<double>>(1, ch));
-            double ec = std::fmin(dc.bulkEss, dc.tailEss);
-            if(std::isnan(ec))
-                continue;
-            if(worstChainEss < 0.0 || ec < worstChainEss)
-                worstChainEss = ec;
-        }
-        if(worstChainEss >= 0.0 && (minEss < 0.0 || worstChainEss < minEss)){ minEss = worstChainEss; minEssName = names[p]; }
+        if(std::isnan(d.bulkEss) == false && (minBulkEss < 0.0 || d.bulkEss < minBulkEss)){ minBulkEss = d.bulkEss; minBulkEssName = names[p]; }
+        if(std::isnan(d.tailEss) == false && (minTailEss < 0.0 || d.tailEss < minTailEss)){ minTailEss = d.tailEss; minTailEssName = names[p]; }
         bool rhatOk = (multiChain == false) || isDensity || d.rhat <= rhatMax;
-        bool essOk = (worstChainEss < 0.0) || worstChainEss >= essMin;
+        bool essOk = d.bulkEss >= essFloor && d.tailEss >= essFloor;
         if(rhatOk == false || essOk == false){
             nBelow++;
             if((int)bad.size() < 8) bad.push_back(names[p]);
         }
     }
 
-    lastMaxRhat = worstRhat; lastMinChainEss = minEss; lastMinBulkEss = minBulkEss;
+    lastMaxRhat = worstRhat; lastMinBulkEss = minBulkEss; lastMinTailEss = minTailEss;
 
     if(verbose && (long)gen != lastReportedGen){
         std::ios_base::fmtflags fmt = std::cout.flags();
@@ -252,7 +246,8 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
         std::cout << "gen " << gen;
         if(multiChain)
             std::cout << "  max R-hat " << std::setprecision(4) << worstRhat << " (" << worstRhatName << ")";
-        std::cout << "  min per-chain ESS " << std::setprecision(0) << minEss << " (" << minEssName << ")";
+        std::cout << "  min bulk-ESS " << std::setprecision(0) << minBulkEss << " (" << minBulkEssName << ")";
+        std::cout << "  min tail-ESS " << std::setprecision(0) << minTailEss << " (" << minTailEssName << ")";
         if(nFrozen > 0)
             std::cout << "  FROZEN " << nFrozen << " (" << frozenName << ")";
         std::cout << "\n";
@@ -265,8 +260,8 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
     }
 
     if(verbose && finalPass && nBelow > 0 && s.getAutoChainLength()){
-        std::string crit = multiChain ? ("R-hat > " + std::to_string(rhatMax) + " or per-chain ESS < " + std::to_string((int)essMin))
-                                      : ("per-chain ESS < " + std::to_string((int)essMin));
+        std::string crit = multiChain ? ("R-hat > " + std::to_string(rhatMax) + " or bulk/tail ESS < " + std::to_string((int)essFloor))
+                                      : ("bulk/tail ESS < " + std::to_string((int)essFloor));
         std::string msg = std::to_string(nBelow) + " of " + std::to_string(nP) + " metrics have " + crit + " : ";
         for(size_t i = 0; i < bad.size(); i++){ msg += bad[i]; if(i + 1 < bad.size()) msg += ", "; }
         if((int)bad.size() < nBelow) msg += ", ...";

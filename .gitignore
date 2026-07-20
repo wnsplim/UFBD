@@ -3,7 +3,7 @@ UFBD.xcodeproj/project.xcworkspace/xcuserdata/levir.xcuserdatad/UserInterfaceSta
 .DS_Store
 
 # Playground
-output/
+output*/
 Examples/raw
 Examples/config_reference.cfg
 
