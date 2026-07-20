@@ -3,6 +3,7 @@
 #include "ChainRunner.hpp"
 #include "Msg.hpp"
 #include "RandomVariable.hpp"
+#include "UserSettings.hpp"
 
 std::ifstream ChainRunner::openCheckpoint(const std::string& path) {
     std::ifstream is(path);
@@ -96,7 +97,7 @@ void ChainRunner::resumeOutputs(void) {
 
 void ChainRunner::resumeLatentOutput(void) {
     std::vector<std::string> latNames = resumeLatentNames();
-    if(latNames.empty())
+    if(latNames.empty() || UserSettings::userSettings().getWriteLatentLog() == false)
         return;
 
     latentOut = paramOut;

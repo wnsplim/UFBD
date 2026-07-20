@@ -128,6 +128,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     numRuns         = 4;
     resume          = false;
     arLog           = false;
+    noLatentLog     = false;
     autoChainLength = false;
     burninFraction  = 0.25;
     rhatThreshold   = 1.01;
@@ -200,7 +201,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-lambda_groups", "-mu_groups", "-psi_groups", "-cpu_time", "-age_offset",
         "-hessian", "-clock_model", "-n_states", "-rgene_gamma", "-sigma2_gamma", "-sigma2_param", "-pncp_tuning",
         "-sequence", "-partition", "-ctmc_gamma_cat", "-datatype", "-ctmc_model", "-ctmc_inv", "-ctmc_freq",
-        "-parallel_chains", "-burn_in", "-rhat", "-min_ess", "-max_gen", "-delta_temperature", "-swap_interval", "-resume", "-ar_log"
+        "-parallel_chains", "-burn_in", "-rhat", "-min_ess", "-max_gen", "-delta_temperature", "-swap_interval", "-resume", "-ar_log", "-no_latent_log"
     };
     std::set<std::string> valueFlags = {
         "-tree_output", "-log_output", "-backbone_tree", "-clade_def", "-fossils", "-conditioning", "-rho", "-seed", "-chain_length", "-thinning", "-coupled_chains", "-cores",
@@ -236,6 +237,11 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
 
         if (arg == "-ar_log") {
             arLog = true;
+            continue;
+        }
+
+        if (arg == "-no_latent_log") {
+            noLatentLog = true;
             continue;
         }
 
@@ -745,7 +751,9 @@ OUTPUT  (prefixes: the engine appends .log/.trees/.tree, _chainN per chain)
   -tree_output <prefix>   per-sample trees (same naming) plus the posterior
                           mean tree <prefix>.tree
                           The full console is also saved to
-                          <prefix>.console.txt.
+                          <prefix>.console.txt
+  -no_latent_log          suppress the <prefix>_latent.log per-sample latent
+                          trace log
 
 MCMC
   -chain_length <N|auto>  number of generations, or 'auto' to stop on the

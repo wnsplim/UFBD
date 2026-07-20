@@ -33,6 +33,7 @@ class UserSettings {
         int                         getNumRuns(void) { return numRuns; }
         bool                        getResume(void) { return resume; }
         bool                        getArLog(void) { return arLog; }
+        bool                        getWriteLatentLog(void) { return !noLatentLog; }
         bool                        getAutoChainLength(void) { return autoChainLength; }
         double                      getBurninFraction(void) { return burninFraction; }
         double                      getRhatThreshold(void) { return rhatThreshold; }
@@ -156,6 +157,7 @@ class UserSettings {
         int                         numRuns;
         bool                        resume;
         bool                        arLog;
+        bool                        noLatentLog;
         bool                        autoChainLength;
         double                      burninFraction;
         double                      rhatThreshold;

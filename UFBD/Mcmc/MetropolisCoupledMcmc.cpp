@@ -273,7 +273,7 @@ void MetropolisCoupledMcmc::sample(unsigned long n) {
         params.addColumnNamesTSV(cn);
 
         std::vector<std::string> latNames = models[coldModelIdx]->getLatentNames();
-        if(latNames.empty() == false){
+        if(latNames.empty() == false && UserSettings::userSettings().getWriteLatentLog()){
             latentOut = paramOut;
             size_t dp = latentOut.rfind(".log");
             latentOut.insert(dp != std::string::npos ? dp : latentOut.size(), "_latent");
