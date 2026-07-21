@@ -36,6 +36,7 @@ class ParameterOUField : public Parameter {
         double                      bactrianDelta(void);
         double                      topAge(void);
         void                        adaptStep(int m, bool accepted);
+        void                        adaptStepBin(int k, bool accepted);
 
         int                         nBins;
         std::vector<double>         loEdges;
@@ -52,9 +53,14 @@ class ParameterOUField : public Parameter {
         int                         lastMove;
         double                      step[4];
         long                        attW[4], accW[4], adaptN[4];
+        long                        moveAtt[4], moveAcc[4];
         long                        numAcc, numRej;
         int                         lastBin;
         std::vector<long>           binAtt, binAcc;
+
+        bool                        perBinStep;
+        std::vector<double>         stepBin;
+        std::vector<long>           attWBin, accWBin, adaptNBin;
 };
 
 #endif

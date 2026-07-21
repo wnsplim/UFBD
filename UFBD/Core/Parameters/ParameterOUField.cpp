@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <limits>
 #include <vector>
 
@@ -48,7 +49,7 @@ ParameterOUField::ParameterOUField(double prob, PhylogeneticModel* m, int nB, co
     else { nuShape = nuShapeOv; nuRate = nuRateOv; }
     nu[0] = nu[1] = nuShape / nuRate;
 
-    for(int k = 0; k < 4; k++){ step[k] = 0.3; attW[k] = 0; accW[k] = 0; adaptN[k] = 0; }
+    for(int k = 0; k < 4; k++){ step[k] = 0.3; attW[k] = 0; accW[k] = 0; adaptN[k] = 0; moveAtt[k] = 0; moveAcc[k] = 0; }
     step[OU_BIN] = 0.5;
     lastMove = OU_BIN;
     lastBin = -1;
@@ -56,6 +57,12 @@ ParameterOUField::ParameterOUField(double prob, PhylogeneticModel* m, int nB, co
     binAcc.assign(nBins, 0);
     numAcc = 0;
     numRej = 0;
+
+    perBinStep = (getenv("FBD_OU_PERBIN_STEP") != nullptr);
+    stepBin.assign(nBins, step[OU_BIN]);
+    attWBin.assign(nBins, 0);
+    accWBin.assign(nBins, 0);
+    adaptNBin.assign(nBins, 0);
 }
 
 double ParameterOUField::topAge(void){
@@ -111,7 +118,8 @@ double ParameterOUField::update(void){
         int k = (int)(rng.uniformRv() * (double)nBins);
         if(k >= nBins) k = nBins - 1;
         lastBin = k;
-        double c = std::exp(step[OU_BIN] * bactrianDelta());
+        double s = perBinStep ? stepBin[k] : step[OU_BIN];
+        double c = std::exp(s * bactrianDelta());
         rateVal[0][k] = rateVal[1][k] * c;
         return std::log(c);
     }
@@ -148,6 +156,20 @@ void ParameterOUField::adaptStep(int m, bool accepted){
     }
 }
 
+void ParameterOUField::adaptStepBin(int k, bool accepted){
+    attWBin[k]++;
+    if(accepted) accWBin[k]++;
+    if(attWBin[k] >= 100){
+        adaptNBin[k]++;
+        double gain = 1.0 / std::sqrt((double)adaptNBin[k]);
+        stepBin[k] *= std::exp(gain * ((double)accWBin[k] / (double)attWBin[k] - 0.3));
+        if(stepBin[k] < 1e-4) stepBin[k] = 1e-4;
+        if(stepBin[k] > 10.0)  stepBin[k] = 10.0;
+        attWBin[k] = 0;
+        accWBin[k] = 0;
+    }
+}
+
 void ParameterOUField::commitProposed(void){
     rateVal[1] = rateVal[0];
     theta[1] = theta[0];
@@ -165,14 +187,23 @@ void ParameterOUField::restoreProposed(void){
 void ParameterOUField::updateForAcceptance(void){
     commitProposed();
     numAcc++;
-    adaptStep(lastMove, true);
+    moveAtt[lastMove]++;
+    moveAcc[lastMove]++;
+    if(perBinStep && lastMove == OU_BIN && lastBin >= 0)
+        adaptStepBin(lastBin, true);
+    else
+        adaptStep(lastMove, true);
     if(lastMove == OU_BIN && lastBin >= 0){ binAtt[lastBin]++; binAcc[lastBin]++; }
 }
 
 void ParameterOUField::updateForRejection(void){
     restoreProposed();
     numRej++;
-    adaptStep(lastMove, false);
+    moveAtt[lastMove]++;
+    if(perBinStep && lastMove == OU_BIN && lastBin >= 0)
+        adaptStepBin(lastBin, false);
+    else
+        adaptStep(lastMove, false);
     if(lastMove == OU_BIN && lastBin >= 0) binAtt[lastBin]++;
 }
 
@@ -180,7 +211,16 @@ void ParameterOUField::printPerBinAccept(std::ostream& os, const char* label) co
     os << " " << label << "_binAR[";
     for(int k = 0; k < nBins; k++)
         os << k << ":" << (binAtt[k] > 0 ? (double)binAcc[k] / (double)binAtt[k] : 0.0)
-           << "(" << binAcc[k] << "/" << binAtt[k] << ") ";
+           << "(" << binAcc[k] << "/" << binAtt[k] << ",step " << (perBinStep ? stepBin[k] : step[OU_BIN]) << ") ";
+    os << "]";
+    static const char* hyName[3] = {"theta", "sdEq", "nu"};
+    static const int hyMove[3] = {OU_THETA, OU_SDEQ, OU_NU};
+    os << " " << label << "_hyper[";
+    for(int h = 0; h < 3; h++){
+        int m = hyMove[h];
+        os << hyName[h] << ":" << (moveAtt[m] > 0 ? (double)moveAcc[m] / (double)moveAtt[m] : 0.0)
+           << "(" << moveAcc[m] << "/" << moveAtt[m] << ",step " << step[m] << ") ";
+    }
     os << "]";
 }
 

@@ -604,8 +604,12 @@ void FBDTreeModel::print(void){
     std::streamsize pr = os.precision();
     os << std::fixed << std::setprecision(3);
     for(Parameter* p : parameters){
-        if(p != parameterTree)
-            std::cout << p->getName() << " (A/R): " << p->getAcceptanceRatio() << "\t";
+        if(p != parameterTree){
+            std::cout << p->getName() << " (A/R): " << p->getAcceptanceRatio();
+            double st = p->getStep();
+            if(st >= 0.0) std::cout << " step: " << st;
+            std::cout << "\t";
+        }
     }
     if(lambdaField) lambdaField->printPerBinAccept(std::cout, "lambda");
     if(muField) muField->printPerBinAccept(std::cout, "mu");
@@ -625,9 +629,9 @@ void FBDTreeModel::print(void){
                   << " step:" << std::setprecision(5) << shiftStep << std::setprecision(3)
                   << " batch:" << saBatch << "]";
     if(rvAtt > 0)
-        std::cout << " rateVecScale[A/R:" << (double)rvAcc / (double)rvAtt << " " << rvAcc << "/" << rvAtt << "]";
+        std::cout << " rateVecScale[A/R:" << (double)rvAcc / (double)rvAtt << " " << rvAcc << "/" << rvAtt << " step:" << rateVecStep << "]";
     if(seAtt > 0)
-        std::cout << " rateShrinkExpand[A/R:" << (double)seAcc / (double)seAtt << " " << seAcc << "/" << seAtt << "]";
+        std::cout << " rateShrinkExpand[A/R:" << (double)seAcc / (double)seAtt << " " << seAcc << "/" << seAtt << " step:" << shrinkStep << "]";
     if(azAtt > 0)
         std::cout << " azGibbs[A/R:" << (double)azAcc / (double)azAtt << " " << azAcc << "/" << azAtt << "]";
     std::cout << "\n";

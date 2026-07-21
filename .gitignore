@@ -6,6 +6,7 @@ UFBD.xcodeproj/project.xcworkspace/xcuserdata/levir.xcuserdatad/UserInterfaceSta
 output*/
 Examples/raw
 Examples/config_reference.cfg
+ufbd
 
 # Coding agent configurations
 CLAUDE.md

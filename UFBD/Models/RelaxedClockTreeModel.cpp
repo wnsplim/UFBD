@@ -380,7 +380,7 @@ void RelaxedClockTreeModel::print(void){
     fbd->print();
     clock->print();
     if(ageScaleAtt > 0)
-        std::cout << "ageScale (A/R): " << (double)ageScaleAcc / ageScaleAtt << " [" << ageScaleAcc << "/" << ageScaleAtt << "]\n";
+        std::cout << "ageScale (A/R): " << (double)ageScaleAcc / ageScaleAtt << " [" << ageScaleAcc << "/" << ageScaleAtt << "] step: " << ageScaleStep << "\n";
     if(naSweepAtt > 0)
         std::cout << "nodeAgeSweep (per-node A/R): " << (double)naSweepAcc / naSweepAtt << " [" << naSweepAcc << "/" << naSweepAtt << "]\n";
     std::cout << "nodeAgeStep: " << fbd->getParameterTree()->getNodeAgeStep() << "\n";

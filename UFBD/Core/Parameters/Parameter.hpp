@@ -11,6 +11,7 @@ class Parameter {
                             Parameter(void) = delete;
                             Parameter(double prob, PhylogeneticModel* m, std::string n);
         virtual double      getAcceptanceRatio(void) = 0;
+        virtual double      getStep(void) { return -1.0; }
         std::string         getName(void) { return parmName; }
         double              getProposalProbability(void) { return proposalProbability; }
         virtual double      lnProbability(void) = 0;

@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstdio>
 #include <cmath>
 #include <cstdlib>
@@ -223,16 +224,30 @@ void BranchRateModel::restoreAll(void){
 }
 
 void BranchRateModel::print(void){
+    static const char* mvName[4] = {"clockMu", "clockSigma2", "branchRate", "cirTheta"};
+    for(int mt = 0; mt < 4; mt++){
+        long tot = acc[mt] + rej[mt];
+        if(tot > 0)
+            std::cout << mvName[mt] << " (A/R): " << (double)acc[mt] / (double)tot
+                      << " [" << acc[mt] << "/" << tot << "] step: " << step[mt] << "\n";
+    }
     double sdar = (sdAtt > 0) ? (double)sdAcc / sdAtt : 0.0;
-    std::cout << "SimpleDist (A/R): " << sdar << " [" << sdAcc << "/" << sdAtt << "]\n";
+    std::cout << "SimpleDist (A/R): " << sdar << " [" << sdAcc << "/" << sdAtt << "] step: " << sdStep << "\n";
     if(spAtt > 0)
-        std::cout << "SmallPulley (A/R): " << (double)spAcc / spAtt << " [" << spAcc << "/" << spAtt << "]\n";
-    if(cdAttTot > 0)
-        std::cout << "constantDistance (A/R): " << (double)cdAccTot / cdAttTot << " [" << cdAccTot << "/" << cdAttTot << "]\n";
+        std::cout << "SmallPulley (A/R): " << (double)spAcc / spAtt << " [" << spAcc << "/" << spAtt << "] step: " << spStep << "\n";
+    if(cdAttTot > 0){
+        std::cout << "constantDistance (A/R): " << (double)cdAccTot / cdAttTot << " [" << cdAccTot << "/" << cdAttTot << "]";
+        if(cdStepNode.empty() == false){
+            std::vector<double> s = cdStepNode;
+            std::sort(s.begin(), s.end());
+            std::cout << " step[min/med/max]: " << s.front() << "/" << s[s.size() / 2] << "/" << s.back();
+        }
+        std::cout << "\n";
+    }
     if(rasAtt > 0)
         std::cout << "rateAgeSubtree (A/R): " << (double)rasAcc / rasAtt << " [" << rasAcc << "/" << rasAtt << "] step: " << rasStep << "\n";
     if(ncAtt > 0)
-        std::cout << "sigmaPncp (A/R): " << (double)ncAcc / ncAtt << " [" << ncAcc << "/" << ncAtt << "]\n";
+        std::cout << "sigmaPncp (A/R): " << (double)ncAcc / ncAtt << " [" << ncAcc << "/" << ncAtt << "] step: " << ncStep << "\n";
     if(centeredness.empty() == false){
         std::cout << "sigma2 parameterization (1=centered, 0=non-centered):";
         for(int p = 0; p < (int)centeredness.size(); p++)
