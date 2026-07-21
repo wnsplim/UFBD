@@ -30,6 +30,7 @@ class ParameterOUField : public Parameter {
         void                        updateForRejection(void);
         void                        writeState(std::ostream& os);
         void                        readState(std::istream& is);
+        void                        printPerBinAccept(std::ostream& os, const char* label) const;
 
     private:
         double                      bactrianDelta(void);
@@ -52,6 +53,8 @@ class ParameterOUField : public Parameter {
         double                      step[4];
         long                        attW[4], accW[4], adaptN[4];
         long                        numAcc, numRej;
+        int                         lastBin;
+        std::vector<long>           binAtt, binAcc;
 };
 
 #endif

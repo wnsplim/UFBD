@@ -51,6 +51,9 @@ ParameterOUField::ParameterOUField(double prob, PhylogeneticModel* m, int nB, co
     for(int k = 0; k < 4; k++){ step[k] = 0.3; attW[k] = 0; accW[k] = 0; adaptN[k] = 0; }
     step[OU_BIN] = 0.5;
     lastMove = OU_BIN;
+    lastBin = -1;
+    binAtt.assign(nBins, 0);
+    binAcc.assign(nBins, 0);
     numAcc = 0;
     numRej = 0;
 }
@@ -107,11 +110,13 @@ double ParameterOUField::update(void){
         lastMove = OU_BIN;
         int k = (int)(rng.uniformRv() * (double)nBins);
         if(k >= nBins) k = nBins - 1;
+        lastBin = k;
         double c = std::exp(step[OU_BIN] * bactrianDelta());
         rateVal[0][k] = rateVal[1][k] * c;
         return std::log(c);
     }
     double v = rng.uniformRv();
+    lastBin = -1;
     if(v < 1.0 / 3.0){
         lastMove = OU_THETA;
         theta[0] = theta[1] + step[OU_THETA] * bactrianDelta();
@@ -161,12 +166,22 @@ void ParameterOUField::updateForAcceptance(void){
     commitProposed();
     numAcc++;
     adaptStep(lastMove, true);
+    if(lastMove == OU_BIN && lastBin >= 0){ binAtt[lastBin]++; binAcc[lastBin]++; }
 }
 
 void ParameterOUField::updateForRejection(void){
     restoreProposed();
     numRej++;
     adaptStep(lastMove, false);
+    if(lastMove == OU_BIN && lastBin >= 0) binAtt[lastBin]++;
+}
+
+void ParameterOUField::printPerBinAccept(std::ostream& os, const char* label) const {
+    os << " " << label << "_binAR[";
+    for(int k = 0; k < nBins; k++)
+        os << k << ":" << (binAtt[k] > 0 ? (double)binAcc[k] / (double)binAtt[k] : 0.0)
+           << "(" << binAcc[k] << "/" << binAtt[k] << ") ";
+    os << "]";
 }
 
 double ParameterOUField::scaleAllProposed(double c){

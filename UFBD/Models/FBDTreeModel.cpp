@@ -607,6 +607,10 @@ void FBDTreeModel::print(void){
         if(p != parameterTree)
             std::cout << p->getName() << " (A/R): " << p->getAcceptanceRatio() << "\t";
     }
+    if(lambdaField) lambdaField->printPerBinAccept(std::cout, "lambda");
+    if(muField) muField->printPerBinAccept(std::cout, "mu");
+    for(size_t t = 0; t < psiField.size(); t++)
+        if(psiField[t]) psiField[t]->printPerBinAccept(std::cout, "psi");
     if(unresolvedFossils != nullptr)
         unresolvedFossils->print();
     static const char* tmName[TM_COUNT] = {"NE","WB","WE","treeScale","SARJ","upDown","jointScale","subtree","nodeAge","crown"};
