@@ -29,6 +29,7 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<bool>           getParameterFixedMask(void);
         std::vector<std::string>    getLatentNames(void);
         std::vector<double>         getLatentString(void);
+        std::vector<std::string>    getZoneLegend(void);
         bool                        treeIncludesFossils(void) { return isResolved == false && backboneFossils.empty() == false; }
         std::vector<Node*>          getAgeLogNodes(void) { return isResolved ? parameterTree->getTree()->getBackboneAgeNodes() : parameterTree->getTree()->getAllAgeNodes(); }
         double                      lnLikelihood(void);
@@ -212,6 +213,8 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<StalkBucket>    zoneStalks;
         bool                        zoneIndexBuilt = false;
         std::vector<int>            prevAttachmentZone;
+        std::vector<std::string>    zoneCladeName;
+        std::vector<char>           zoneType;
         std::vector<int>            azGibbsIdx;
         long                        azAcc;
         long                        azAtt;

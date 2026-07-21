@@ -553,6 +553,9 @@ std::vector<std::string> FBDTreeModel::getLatentNames(void){
     for(int i = 0; i < nUnr; i++)
         if(unresolvedFossils->isUE(i) == false)
             names.push_back("sa_" + unrName(i));
+    for(int i = 0; i < nUnr; i++)
+        if(unresolvedFossils->getAttachmentZoneDomain(i).size() > 1)
+            names.push_back("az_" + unrName(i));
     return names;
 }
 
@@ -571,7 +574,28 @@ std::vector<double> FBDTreeModel::getLatentString(void){
     for(int i = 0; i < nUnr; i++)
         if(unresolvedFossils->isUE(i) == false)
             vals.push_back(unresolvedFossils->isSA(i) ? 1.0 : 0.0);
+    for(int i = 0; i < nUnr; i++)
+        if(unresolvedFossils->getAttachmentZoneDomain(i).size() > 1)
+            vals.push_back((double)unresolvedFossils->getAttachmentZone(i));
     return vals;
+}
+
+std::vector<std::string> FBDTreeModel::getZoneLegend(void){
+    std::vector<std::string> lines;
+    if(unresolvedFossils == nullptr || zoneCladeName.empty())
+        return lines;
+    int nUnr = unresolvedFossils->getNumFossils();
+    bool anyVar = false;
+    for(int i = 0; i < nUnr; i++)
+        if(unresolvedFossils->getAttachmentZoneDomain(i).size() > 1){ anyVar = true; break; }
+    if(anyVar == false)
+        return lines;
+    lines.push_back("zone_index\tclade\ttype");
+    for(int z = 0; z < (int)zoneCladeName.size(); z++){
+        const char* ty = (zoneType[z] == 'C') ? "crown" : (zoneType[z] == 'S' ? "stem" : "total");
+        lines.push_back(std::to_string(z) + "\t" + zoneCladeName[z] + "\t" + ty);
+    }
+    return lines;
 }
 
 double FBDTreeModel::lnLikelihood(void){
@@ -1627,6 +1651,8 @@ void FBDTreeModel::buildZoneIndex(void){
     std::vector<Node*> zCrown;
     std::vector<char>  zIsCrown, zIsStem;
     std::vector<int>   zoneOfFossil(nf, -1);
+    zoneCladeName.clear();
+    zoneType.clear();
     for(int i = 0; i < nf; i++){
         Node* c = unresolvedFossils->getCrownNode(i);
         char cr = unresolvedFossils->getIsCrown(i) ? 1 : 0;
@@ -1641,6 +1667,8 @@ void FBDTreeModel::buildZoneIndex(void){
             zCrown.push_back(c);
             zIsCrown.push_back(cr);
             zIsStem.push_back(st);
+            zoneCladeName.push_back(unresolvedFossils->getCladeName(i));
+            zoneType.push_back(cr ? 'C' : (st ? 'S' : 'T'));
         }
     }
     numZones = (int)zCrown.size();

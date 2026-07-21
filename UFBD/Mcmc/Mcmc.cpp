@@ -47,7 +47,7 @@ void Mcmc::init(void) {
     gen = 0;
 
     UserSettings& settings = UserSettings::userSettings();
-    if(settings.getSigma2Param() == Sigma2Param::PNCP && settings.getPncpTuningGens() > 0){
+    if(settings.clockPresent() && settings.getSigma2Param() == Sigma2Param::PNCP && settings.getPncpTuningGens() > 0){
         model->setChainLabel(runLabel);
         tuning = true;
         advance(settings.getPncpTuningGens());
@@ -190,6 +190,15 @@ void Mcmc::sample(unsigned long n, double lnL, double lnP) {
             writeLatent = true;
             latentNms = latNames;
             latentCols.assign(latNames.size(), std::vector<double>());
+            std::vector<std::string> zleg = model->getZoneLegend();
+            if(zleg.empty() == false){
+                std::string zp = paramOut;
+                size_t zdp = zp.rfind(".log");
+                if(zdp != std::string::npos) zp = zp.substr(0, zdp);
+                zp += "_zones.tsv";
+                std::ofstream zf(zp);
+                for(const std::string& line : zleg) zf << line << "\n";
+            }
         }
 
         if(writeTrees){

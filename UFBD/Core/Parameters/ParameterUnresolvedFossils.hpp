@@ -35,6 +35,7 @@ class ParameterUnresolvedFossils : public Parameter {
         void                        beginAttachmentZoneMove(int i) { lastFossil = i; lastMove = SINGLE; }
         void                        setAttachmentZoneDomain(std::vector<std::vector<int> >& domain);
         Node*                       getCrownNode(int i) { return crownNode[i]; }
+        std::string                 getCladeName(int i) { return cladeName[i]; }
         Node*                       getMaxAttachNode(int i) { return isCrown[i] ? crownNode[i] : originNode[i]; }
         bool                        getIsCrown(int i) { return isCrown[i]; }
         bool                        getIsStem(int i) { return isStem[i]; }
@@ -84,6 +85,7 @@ class ParameterUnresolvedFossils : public Parameter {
         std::vector<char>           sa[2];
         std::vector<int>            az[2];
         std::vector<std::vector<int> > azDomain;
+        std::vector<std::string>    cladeName;
         int                         lastFossil;
         int                         spineIdx;
         MoveKind                    lastMove;

@@ -39,6 +39,7 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
     az[0].assign(numFossils, 0);
     az[1].assign(numFossils, 0);
     azDomain.assign(numFossils, std::vector<int>(1, 0));
+    cladeName.resize(numFossils);
 
     for(int i = 0; i < numFossils; i++){
         Fossil& f = fossils[i];
@@ -53,6 +54,7 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
         originNode[i] = cr->getAncestor();
         isCrown[i]    = (f.getAssignment() == Assignment::CROWN);
         isStem[i]     = (f.getAssignment() == Assignment::STEM);
+        cladeName[i]  = f.getClade();
         ue[i]         = (f.getMaxAge() == 0.0);
         yMin[i]       = f.getMinAge();
         yMax[i]       = f.getMaxAge();

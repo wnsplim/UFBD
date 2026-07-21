@@ -26,6 +26,7 @@ class RelaxedClockTreeModel : public PhylogeneticModel {
         std::vector<double>         getParameterString(void);
         std::vector<std::string>    getLatentNames(void);
         std::vector<double>         getLatentString(void);
+        std::vector<std::string>    getZoneLegend(void);
         bool                        treeIncludesFossils(void);
         std::string                 getRateMap(void);
         double                      lnLikelihood(void);

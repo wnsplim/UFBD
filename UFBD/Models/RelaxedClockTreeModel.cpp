@@ -367,6 +367,10 @@ std::vector<std::string> RelaxedClockTreeModel::getLatentNames(void){
     return n;
 }
 
+std::vector<std::string> RelaxedClockTreeModel::getZoneLegend(void){
+    return fbd->getZoneLegend();
+}
+
 std::vector<double> RelaxedClockTreeModel::getLatentString(void){
     std::vector<double> v = fbd->getLatentString();
     std::vector<std::vector<double>> ar = clock->getAbsoluteRates();

@@ -20,6 +20,7 @@ class PhylogeneticModel {
         virtual std::vector<bool>               getParameterFixedMask(void) { return std::vector<bool>(getParameterNames().size(), false); }
         virtual std::vector<std::string>        getLatentNames(void) { return {}; }
         virtual std::vector<double>             getLatentString(void) { return {}; }
+        virtual std::vector<std::string>        getZoneLegend(void) { return {}; }
         virtual bool                            treeIncludesFossils(void) { return false; }
         Tree*                                   getTree(void);
         RandomVariable*                         getRng(void) { return &rng; }

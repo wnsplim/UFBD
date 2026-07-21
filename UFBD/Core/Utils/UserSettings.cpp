@@ -716,7 +716,7 @@ void UserSettings::print(void) {
         std::cout << "MC3 swap interval (gens):     " << resampleEvery << std::endl;
     std::cout << "Number of parallel chains:    " << numRuns << std::endl;
     std::cout << "Thinning:                     " << thinning << std::endl;
-    if (sigma2Param == Sigma2Param::PNCP)
+    if (sigma2Param == Sigma2Param::PNCP && clockPresent())
         std::cout << "PNCP tuning iterations:       " << pncpTuningGens << std::endl;
     std::cout << "Number of cores:              " << numCores << std::endl;
     std::cout << "-----------------------------------------------------------------------" << std::endl;

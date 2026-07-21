@@ -91,6 +91,7 @@ class UserSettings {
                                         return datatypeProvided ? (seqDataType == "aa" ? 20 : 4) : nStates;
                                     }
         std::string                 getSequenceFile(void) { return sequenceFile; }
+        bool                        clockPresent(void) { return sequenceFile.empty() == false || hessianFile.empty() == false; }
         std::string                 getPartitionFile(void) { return partitionFile; }
         int                         getNumCats(void) { return numCats; }
         std::string                 getSubstModel(void) { return substModel; }
