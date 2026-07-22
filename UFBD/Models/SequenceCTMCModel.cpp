@@ -54,7 +54,7 @@ void SequenceCTMCModel::buildParameters(void){
         exch.push_back(new ParameterSimplex(1.0, owner, "exch" + suf, nExch, 1.0, 0.1));
         freq.push_back(new ParameterSimplex(1.0, owner, "freq" + suf, nStates, 1.0, 0.1));
         ParameterDouble* a = new ParameterDouble(1.0, owner, "alpha" + suf, 0.0, 1.0e8);
-        a->setPrior(Probability::PriorFamily::UNIFORM, 0.0, 1.0e8);
+        a->setPrior(Probability::PriorFamily::EXPONENTIAL, 1.0, 0.0);
         a->setValue(0.5);
         ParameterDouble* pv = new ParameterDouble(1.0, owner, "pinv" + suf, 0.0, 1.0);
         pv->setPrior(Probability::PriorFamily::UNIFORM, 0.0, 1.0);
