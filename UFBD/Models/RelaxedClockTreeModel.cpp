@@ -174,7 +174,11 @@ double RelaxedClockTreeModel::nodeAgeSweep(void){
 
 double RelaxedClockTreeModel::update(void){
     RandomVariable& r = RandomVariable::randomVariableInstance();
-    if(ctmc != nullptr && r.uniformRv() < 0.05){ lastMoveType = 6; return ctmc->update(); }
+    if(ctmc != nullptr){
+        double pCtmc = 0.05 * ctmc->getNumPartitions();
+        if(pCtmc > 0.20) pCtmc = 0.20;
+        if(r.uniformRv() < pCtmc){ lastMoveType = 6; return ctmc->update(); }
+    }
     double u = r.uniformRv();
     if(u < 0.20){ lastMoveType = 0; return clock->update(); }
     if(u < 0.516){

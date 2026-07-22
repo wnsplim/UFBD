@@ -51,8 +51,8 @@ void SequenceCTMCModel::buildParameters(void){
     int nExch = nStates * (nStates - 1) / 2;
     for(int p = 0; p < nClockPartitions; p++){
         std::string suf = (nClockPartitions > 1) ? std::to_string(p) : "";
-        exch.push_back(new ParameterSimplex(1.0, owner, "exch" + suf, nExch, 1.0, 500.0));
-        freq.push_back(new ParameterSimplex(1.0, owner, "freq" + suf, nStates, 1.0, 300.0));
+        exch.push_back(new ParameterSimplex(1.0, owner, "exch" + suf, nExch, 1.0, 0.1));
+        freq.push_back(new ParameterSimplex(1.0, owner, "freq" + suf, nStates, 1.0, 0.1));
         ParameterDouble* a = new ParameterDouble(1.0, owner, "alpha" + suf, 0.0, 1.0e8);
         a->setPrior(Probability::PriorFamily::UNIFORM, 0.0, 1.0e8);
         a->setValue(0.5);

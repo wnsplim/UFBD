@@ -2,6 +2,7 @@
 #define ParameterSimplex_hpp
 
 #include "Parameter.hpp"
+#include <deque>
 #include <iosfwd>
 #include <string>
 #include <vector>
@@ -29,6 +30,7 @@ class ParameterSimplex : public Parameter {
         double                           tuning;
         int                              numAcceptances;
         int                              numRejections;
+        std::deque<bool>                 recentAcceptRej;
 };
 
 #endif
