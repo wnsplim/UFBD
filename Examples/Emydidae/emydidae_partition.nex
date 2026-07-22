@@ -1,0 +1,19 @@
+#NEXUS
+begin sets;
+    charset AHR = 1-679;
+    charset AIING = 680-1498;
+    charset BDNF = 1499-2196;
+    charset BMP2 = 2197-2842;
+    charset HMGB2 = 2843-3531;
+    charset HNFL = 3532-4473;
+    charset NB22519 = 4474-5497;
+    charset PSMC1 = 5498-6603;
+    charset PAX1P1 = 6604-8131;
+    charset R35 = 8132-9357;
+    charset RAG1 = 9358-10212;
+    charset TB01 = 10213-11314;
+    charset TB29 = 11315-11907;
+    charset TB73 = 11908-12717;
+    charset ZFHX1B = 12718-13659;
+    partition byLocus = 15: AHR, AIING, BDNF, BMP2, HMGB2, HNFL, NB22519, PSMC1, PAX1P1, R35, RAG1, TB01, TB29, TB73, ZFHX1B;
+end;
