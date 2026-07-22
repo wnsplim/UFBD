@@ -391,6 +391,8 @@ Node* ApproxBranchLengthLikelihood::findNodeByBipartition(const std::set<std::st
     return nullptr;
 }
 
+static const int HESS_REFRESH = 64;
+
 double ApproxBranchLengthLikelihood::computeLnL(Tree* tree, const std::vector<std::vector<double>>& branchRates){
     tree->ensureBackboneCache();
     Node* curRoot = tree->getRoot();
@@ -413,6 +415,11 @@ double ApproxBranchLengthLikelihood::computeLnL(Tree* tree, const std::vector<st
 
     const double ninf = -std::numeric_limits<double>::infinity();
     std::vector<double> partLnL(nPartitions, 0.0);
+    if((int)zCache.size() != nPartitions){
+        zCache.assign(nPartitions, std::vector<double>());
+        wCache.assign(nPartitions, std::vector<double>());
+        refreshCtr.assign(nPartitions, 0);
+    }
     ThreadPool::current().parallelFor(OP_CTMC, nPartitions, [&](int q0, int q1){
         std::vector<double> z(nb);
         for(int p = q0; p < q1; p++){
@@ -433,12 +440,32 @@ double ApproxBranchLengthLikelihood::computeLnL(Tree* tree, const std::vector<st
                 z[i] = 2.0 * std::asin(std::sqrt(cJc - cJc * std::exp(-predBl / cJc))) - blMle[p][i];
             }
             if(bad){ partLnL[p] = ninf; continue; }
+            std::vector<double>& zc = zCache[p];
+            std::vector<double>& wc = wCache[p];
+            const double* H = hessian[p].data();
+            if((int)zc.size() != nb || refreshCtr[p] >= HESS_REFRESH){
+                zc.assign(z.begin(), z.end());
+                wc.assign(nb, 0.0);
+                for(int i = 0; i < nb; i++){
+                    double wi = 0.0;
+                    for(int j = 0; j < nb; j++)
+                        wi += H[i*nb+j] * z[j];
+                    wc[i] = wi;
+                }
+                refreshCtr[p] = 0;
+            }else{
+                for(int k = 0; k < nb; k++){
+                    if(z[k] == zc[k]) continue;
+                    double dz = z[k] - zc[k];
+                    zc[k] = z[k];
+                    for(int i = 0; i < nb; i++)
+                        wc[i] += H[i*nb+k] * dz;
+                }
+                refreshCtr[p]++;
+            }
             double pl = 0.0;
             for(int i = 0; i < nb; i++)
-                pl += z[i] * gradient[p][i];
-            for(int i = 0; i < nb; i++)
-                for(int j = 0; j < nb; j++)
-                    pl += 0.5 * z[i] * hessian[p][i*nb+j] * z[j];
+                pl += z[i] * gradient[p][i] + 0.5 * z[i] * wc[i];
             partLnL[p] = pl;
         }
     });

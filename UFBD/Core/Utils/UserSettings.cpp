@@ -543,6 +543,9 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     if (sbcMode == false && (sequenceFile.empty() == false || hessianFile.empty() == false) && treeFile.empty())
         Msg::error("when -sequence or -hessian is set, a backbone tree is required (-backbone_tree).");
 
+    if ((sequenceFile.empty() == false || hessianFile.empty() == false) && sigma2Param == Sigma2Param::PNCP && pncpTuningGens == 0)
+        Msg::error("sigma2_param=pncp requires pncp_tuning > 0");
+
     if (seedSet == false)
         seed = std::random_device{}();
 

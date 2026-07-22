@@ -46,6 +46,7 @@ class SequenceLikelihood {
 
         Node*                                        mappedRoot;
         std::vector<std::vector<std::vector<int>>>   tipStateByOffset;
+        std::vector<std::vector<char>>               tipMissing;
 
         bool                                            cacheValid;
     public:

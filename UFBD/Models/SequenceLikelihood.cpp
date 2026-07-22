@@ -38,13 +38,20 @@ void SequenceLikelihood::mapTaxaToNodes(Tree* tree){
     if(tree->getRoot() == mappedRoot)
         return;
     int numNodes = tree->getNumNodes();
+    int full = (1 << numStates) - 1;
     tipStateByOffset.assign(numPartitions, std::vector<std::vector<int>>(numNodes));
+    tipMissing.assign(numPartitions, std::vector<char>(numNodes, 0));
     for(int p = 0; p < numPartitions; p++)
         for(int t = 0; t < (int)taxonNames[p].size(); t++){
             Node* nd = tree->getTaxonNode(taxonNames[p][t]);
             if(nd == nullptr)
                 Msg::error("taxon '" + taxonNames[p][t] + "' not found in the tree");
-            tipStateByOffset[p][nd->getOffset()] = patternState[p][t];
+            int off = nd->getOffset();
+            tipStateByOffset[p][off] = patternState[p][t];
+            bool allGap = true;
+            for(int m : patternState[p][t])
+                if(m != full){ allGap = false; break; }
+            tipMissing[p][off] = allGap ? 1 : 0;
         }
     mappedRoot = tree->getRoot();
 }
@@ -155,6 +162,7 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
             bool nd = substDirty;
             for(Node* c : children){
                 int coff = c->getOffset();
+                if(c->getIsTip() && tipMissing[p][coff]) continue;
                 if(dirty[coff] || curBl[coff] != lastBl[p][coff] || branchMGF[p][coff] != lastMGF[p][coff]) nd = true;
             }
             if(nd == false) continue;
@@ -165,6 +173,7 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
             cumScale[p][off].assign(npat, 0.0);
             for(Node* c : children){
                 int coff = c->getOffset();
+                if(c->getIsTip() && tipMissing[p][coff]) continue;
                 Pcache[coff].assign(K * n * n, 0.0);
                 for(int k = 0; k < K; k++)
                     rateModel[p].transitionProbabilities(curBl[coff], cat[k], branchMGF[p][coff], &Pcache[coff][k * n * n]);
@@ -184,6 +193,7 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
                 const std::vector<Node*>& children = dirtyChildren[di];
                 for(Node* c : children){
                     int coff = c->getOffset();
+                    if(c->getIsTip() && tipMissing[p][coff]) continue;
                     const double* Pm = Pcache[coff].data();
                     if(c->getIsTip()){
                         const std::vector<int>& st = tipStateByOffset[p][coff];
@@ -273,6 +283,7 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
                 const std::vector<Node*>& children = dirtyChildren[di];
                 for(Node* c : children){
                     int coff = c->getOffset();
+                    if(c->getIsTip() && tipMissing[p][coff]) continue;
                     const std::vector<double>& ccp = conP[p][coff];
                     const double* Pm = Pcache[coff].data();
                     for(int k = 0; k < K; k++){

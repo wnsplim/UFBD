@@ -153,8 +153,8 @@ void SequenceCTMCModel::appendParameterNames(std::vector<std::string>& names){
             names.push_back("exch" + suf + "_" + std::to_string(i));
         for(int i = 0; i < (int)freq[p]->getValue().size(); i++)
             names.push_back("freq" + suf + "_" + std::to_string(i));
-        names.push_back("alpha" + suf);
-        names.push_back("pinv" + suf);
+        if(useGammaHet) names.push_back("alpha" + suf);
+        if(useInvariant) names.push_back("pinv" + suf);
     }
 }
 
@@ -164,8 +164,8 @@ void SequenceCTMCModel::appendParameterValues(std::vector<double>& values){
             values.push_back(x);
         for(double x : freq[p]->getValue())
             values.push_back(x);
-        values.push_back(alpha[p]->getValue());
-        values.push_back(pinv[p]->getValue());
+        if(useGammaHet) values.push_back(alpha[p]->getValue());
+        if(useInvariant) values.push_back(pinv[p]->getValue());
     }
 }
 
