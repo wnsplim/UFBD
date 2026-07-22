@@ -26,6 +26,7 @@ class SequenceLikelihood {
 
     private:
         void                mapTaxaToNodes(Tree* tree);
+        void                buildRepeats(Tree* tree);
         double              computePartitionLnL(int p, Tree* tree,
                                        const std::vector<std::vector<double>>& branchRates,
                                        const std::vector<std::vector<double>>& exchangeability,
@@ -47,6 +48,8 @@ class SequenceLikelihood {
         Node*                                        mappedRoot;
         std::vector<std::vector<std::vector<int>>>   tipStateByOffset;
         std::vector<std::vector<char>>               tipMissing;
+        std::vector<std::vector<std::vector<int>>>   clsId;
+        std::vector<std::vector<std::vector<int>>>   clsRep;
 
         bool                                            cacheValid;
     public:
