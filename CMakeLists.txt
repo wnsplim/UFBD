@@ -33,9 +33,14 @@ target_include_directories(fbdcore PUBLIC
 
 find_package(Threads REQUIRED)
 target_link_libraries(fbdcore PUBLIC Threads::Threads)
+target_compile_options(fbdcore PUBLIC $<$<NOT:$<CONFIG:Debug>>:-march=x86-64-v3>)
 
 add_executable(ufbd ${FBD_MAIN})
 target_link_libraries(ufbd PRIVATE fbdcore)
+find_library(JEMALLOC_LIB NAMES jemalloc)
+if(JEMALLOC_LIB)
+    target_link_libraries(ufbd PRIVATE ${JEMALLOC_LIB})
+endif()
 
 add_executable(sbc ${SBC_MAIN})
 target_compile_definitions(sbc PRIVATE BUILD_SBC)

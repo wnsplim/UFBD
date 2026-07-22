@@ -60,8 +60,6 @@ MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int thin, std::ve
 }
 
 MetropolisCoupledMcmc::~MetropolisCoupledMcmc(void){
-    for(ThreadPool* p : chainPools)
-        delete p;
 }
 
 void MetropolisCoupledMcmc::printMoveDiagnostics(int rep){
@@ -142,15 +140,7 @@ void MetropolisCoupledMcmc::finalize(void) {
 }
 
 void MetropolisCoupledMcmc::advance(unsigned long nGens) {
-    if(chainPools.empty()){
-        UserSettings& s = UserSettings::userSettings();
-        int nRuns = std::max(1, s.getNumRuns());
-        int budget = s.getNumCores() / nRuns + ((runLabel < s.getNumCores() % nRuns) ? 1 : 0);
-        for(int i = 0; i < numModels; i++){
-            int per = budget / numModels + ((i < budget % numModels) ? 1 : 0);
-            if(per < 1) per = 1;
-            chainPools.push_back(new ThreadPool(per));
-        }
+    if(chainDecision < 0){
         chainDecision = 1;
         for(int i = 0; i < numModels; i++)
             lastEnd[i] = (indices[i] == 0) ? 0 : (indices[i] == numModels - 1 ? 1 : -1);
@@ -180,7 +170,7 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
 
         auto runBlock = [this, blockLen, gen0](int i){
             RandomVariable::setActiveInstance(models[i]->getRng());
-            ThreadPool::setCurrent(chainPools[i]);
+            ThreadPool::setCurrent(&ThreadPool::shared());
             RandomVariable* r = models[i]->getRng();
             double heat = calcHeating(indices[i]);
             bool cold = (i == coldModelIdx);

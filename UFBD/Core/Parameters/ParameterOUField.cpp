@@ -1,6 +1,5 @@
 #include <algorithm>
 #include <cmath>
-#include <cstdlib>
 #include <limits>
 #include <vector>
 
@@ -58,7 +57,7 @@ ParameterOUField::ParameterOUField(double prob, PhylogeneticModel* m, int nB, co
     numAcc = 0;
     numRej = 0;
 
-    perBinStep = (getenv("FBD_OU_PERBIN_STEP") != nullptr);
+    perBinStep = (model->getTree()->getNumBackbone() == 0);
     stepBin.assign(nBins, step[OU_BIN]);
     attWBin.assign(nBins, 0);
     accWBin.assign(nBins, 0);

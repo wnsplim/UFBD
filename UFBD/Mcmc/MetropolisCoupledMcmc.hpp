@@ -53,7 +53,6 @@ class MetropolisCoupledMcmc : public ChainRunner {
         std::vector<double>                 lnAcceptanceProbabilities;
         std::vector<int>                    indices;
         ThreadPool                          threadPool;
-        std::vector<ThreadPool*>            chainPools;
         long                                chainCalibGen;
         double                              chainSeqT;
         double                              chainParT;

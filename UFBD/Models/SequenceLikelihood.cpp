@@ -175,7 +175,96 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
         const std::vector<double>& rootConP = conP[p][croff];
         std::vector<double> siteLn(npat);
         const double ninf = -std::numeric_limits<double>::infinity();
-        auto patBody = [&](int h0, int h1){
+        auto patBody4 = [&](int h0, int h1){
+            for(size_t di = 0; di < dirtyNodes.size(); di++){
+                Node* node = dirtyNodes[di];
+                int noff = node->getOffset();
+                double* cp = conP[p][noff].data();
+                std::vector<double>& cs = cumScale[p][noff];
+                const std::vector<Node*>& children = dirtyChildren[di];
+                for(Node* c : children){
+                    int coff = c->getOffset();
+                    const double* Pm = Pcache[coff].data();
+                    if(c->getIsTip()){
+                        const std::vector<int>& st = tipStateByOffset[p][coff];
+                        for(int k = 0; k < K; k++){
+                            const double* Pk = Pm + k * 16;
+                            for(int h = h0; h < h1; h++){
+                                int m = st.empty() ? 15 : st[h];
+                                double* o = cp + (k * npat + h) * 4;
+                                if((m & (m - 1)) == 0){
+                                    int s = (m == 1) ? 0 : (m == 2) ? 1 : (m == 4) ? 2 : 3;
+                                    o[0] *= Pk[s]; o[1] *= Pk[4 + s]; o[2] *= Pk[8 + s]; o[3] *= Pk[12 + s];
+                                }else{
+                                    double s0 = 0, s1 = 0, s2 = 0, s3 = 0;
+                                    if(m & 1){ s0 += Pk[0];  s1 += Pk[4];  s2 += Pk[8];  s3 += Pk[12]; }
+                                    if(m & 2){ s0 += Pk[1];  s1 += Pk[5];  s2 += Pk[9];  s3 += Pk[13]; }
+                                    if(m & 4){ s0 += Pk[2];  s1 += Pk[6];  s2 += Pk[10]; s3 += Pk[14]; }
+                                    if(m & 8){ s0 += Pk[3];  s1 += Pk[7];  s2 += Pk[11]; s3 += Pk[15]; }
+                                    o[0] *= s0; o[1] *= s1; o[2] *= s2; o[3] *= s3;
+                                }
+                            }
+                        }
+                    }else{
+                        const double* ccp = conP[p][coff].data();
+                        for(int k = 0; k < K; k++){
+                            const double* Pk = Pm + k * 16;
+                            for(int h = h0; h < h1; h++){
+                                const double* in = ccp + (k * npat + h) * 4;
+                                double b0 = in[0], b1 = in[1], b2 = in[2], b3 = in[3];
+                                double* o = cp + (k * npat + h) * 4;
+                                o[0] *= Pk[0]  * b0 + Pk[1]  * b1 + Pk[2]  * b2 + Pk[3]  * b3;
+                                o[1] *= Pk[4]  * b0 + Pk[5]  * b1 + Pk[6]  * b2 + Pk[7]  * b3;
+                                o[2] *= Pk[8]  * b0 + Pk[9]  * b1 + Pk[10] * b2 + Pk[11] * b3;
+                                o[3] *= Pk[12] * b0 + Pk[13] * b1 + Pk[14] * b2 + Pk[15] * b3;
+                            }
+                        }
+                    }
+                }
+                for(int h = h0; h < h1; h++){
+                    double mx = 0.0;
+                    for(int k = 0; k < K; k++){
+                        const double* o = cp + (k * npat + h) * 4;
+                        if(o[0] > mx) mx = o[0]; if(o[1] > mx) mx = o[1];
+                        if(o[2] > mx) mx = o[2]; if(o[3] > mx) mx = o[3];
+                    }
+                    double s = 0.0;
+                    if(mx > 0.0){
+                        double inv = 1.0 / mx;
+                        for(int k = 0; k < K; k++){
+                            double* o = cp + (k * npat + h) * 4;
+                            o[0] *= inv; o[1] *= inv; o[2] *= inv; o[3] *= inv;
+                        }
+                        s = std::log(mx);
+                    }
+                    for(Node* c : children)
+                        s += cumScale[p][c->getOffset()][h];
+                    cs[h] = s;
+                }
+            }
+            const double* rootP = conP[p][croff].data();
+            const std::vector<double>& csRoot = cumScale[p][croff];
+            const double* fr = frequency[p].data();
+            for(int h = h0; h < h1; h++){
+                double gammaLk = 0.0;
+                for(int k = 0; k < K; k++){
+                    const double* rp = rootP + (k * npat + h) * 4;
+                    gammaLk += (fr[0] * rp[0] + fr[1] * rp[1] + fr[2] * rp[2] + fr[3] * rp[3]) / K;
+                }
+                double pinvLk = 0.0;
+                if(pinv > 0.0){
+                    int mask = constantState[p][h];
+                    if(mask & 1) pinvLk += fr[0]; if(mask & 2) pinvLk += fr[1];
+                    if(mask & 4) pinvLk += fr[2]; if(mask & 8) pinvLk += fr[3];
+                }
+                double lnInv = (pinv > 0.0 && pinvLk > 0.0) ? std::log(pinv) + std::log(pinvLk) : ninf;
+                double lnVar = (pinv < 1.0 && gammaLk > 0.0) ? std::log(1.0 - pinv) + std::log(gammaLk) + csRoot[h] : ninf;
+                if(lnInv == ninf && lnVar == ninf){ siteLn[h] = ninf; continue; }
+                double mx = (lnInv > lnVar) ? lnInv : lnVar;
+                siteLn[h] = patternWeight[p][h] * (mx + std::log(std::exp(lnInv - mx) + std::exp(lnVar - mx)));
+            }
+        };
+        auto patBodyGeneric = [&](int h0, int h1){
             for(size_t di = 0; di < dirtyNodes.size(); di++){
                 Node* node = dirtyNodes[di];
                 int noff = node->getOffset();
@@ -197,7 +286,6 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
                             }
                     }
                 }
-                static const bool noScale = (getenv("FBD_NOSCALE") != nullptr);
                 for(int h = h0; h < h1; h++){
                     double mx = 0.0;
                     for(int k = 0; k < K; k++)
@@ -206,7 +294,7 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
                             if(v > mx) mx = v;
                         }
                     double s = 0.0;
-                    if(mx > 0.0 && noScale == false){
+                    if(mx > 0.0){
                         double inv = 1.0 / mx;
                         for(int k = 0; k < K; k++)
                             for(int a = 0; a < n; a++)
@@ -243,6 +331,7 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
                 siteLn[h] = patternWeight[p][h] * (mx + std::log(std::exp(lnInv - mx) + std::exp(lnVar - mx)));
             }
         };
+        auto patBody = [&](int h0, int h1){ if(n == 4) patBody4(h0, h1); else patBodyGeneric(h0, h1); };
         if(parallelPatterns)
             ThreadPool::current().parallelFor(OP_CTMC, npat, patBody);
         else
