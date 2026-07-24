@@ -35,6 +35,10 @@ find_package(Threads REQUIRED)
 target_link_libraries(fbdcore PUBLIC Threads::Threads)
 target_compile_options(fbdcore PUBLIC $<$<NOT:$<CONFIG:Debug>>:-march=x86-64-v3>)
 
+# -ffp-contract=off; ApproxLik. computeLnL compensated summation may break under contraction/fast-math
+set_source_files_properties(${FBD_SRC}/Models/ApproxBranchLengthLikelihood.cpp
+    PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+
 add_executable(ufbd ${FBD_MAIN})
 target_link_libraries(ufbd PRIVATE fbdcore)
 if(CMAKE_EXE_LINKER_FLAGS MATCHES "-static( |$)")

@@ -43,7 +43,7 @@ class ApproxBranchLengthLikelihood {
         Node*                       cachedRoot;
         std::vector<std::vector<double>>    zCache;
         std::vector<std::vector<double>>    wCache;
-        std::vector<int>                    refreshCtr;
+        std::vector<std::vector<double>>    compCache;
 };
 
 #endif

@@ -391,8 +391,6 @@ Node* ApproxBranchLengthLikelihood::findNodeByBipartition(const std::set<std::st
     return nullptr;
 }
 
-static const int HESS_REFRESH = 64;
-
 double ApproxBranchLengthLikelihood::computeLnL(Tree* tree, const std::vector<std::vector<double>>& branchRates){
     tree->ensureBackboneCache();
     Node* curRoot = tree->getRoot();
@@ -418,7 +416,7 @@ double ApproxBranchLengthLikelihood::computeLnL(Tree* tree, const std::vector<st
     if((int)zCache.size() != nPartitions){
         zCache.assign(nPartitions, std::vector<double>());
         wCache.assign(nPartitions, std::vector<double>());
-        refreshCtr.assign(nPartitions, 0);
+        compCache.assign(nPartitions, std::vector<double>());
     }
     ThreadPool::current().parallelFor(OP_CTMC, nPartitions, [&](int q0, int q1){
         std::vector<double> z(nb);
@@ -442,30 +440,42 @@ double ApproxBranchLengthLikelihood::computeLnL(Tree* tree, const std::vector<st
             if(bad){ partLnL[p] = ninf; continue; }
             std::vector<double>& zc = zCache[p];
             std::vector<double>& wc = wCache[p];
+            std::vector<double>& cc = compCache[p];
             const double* H = hessian[p].data();
-            if((int)zc.size() != nb || refreshCtr[p] >= HESS_REFRESH){
+            if((int)zc.size() != nb){
                 zc.assign(z.begin(), z.end());
                 wc.assign(nb, 0.0);
+                cc.assign(nb, 0.0);
                 for(int i = 0; i < nb; i++){
                     double wi = 0.0;
                     for(int j = 0; j < nb; j++)
                         wi += H[i*nb+j] * z[j];
                     wc[i] = wi;
                 }
-                refreshCtr[p] = 0;
             }else{
+                double* wcp = wc.data();
+                double* ccp = cc.data();
                 for(int k = 0; k < nb; k++){
                     if(z[k] == zc[k]) continue;
                     double dz = z[k] - zc[k];
                     zc[k] = z[k];
-                    for(int i = 0; i < nb; i++)
-                        wc[i] += H[i*nb+k] * dz;
+                    for(int i = 0; i < nb; i++){
+                        double a = H[i*nb+k];
+                        double pr = a * dz;
+                        double er = std::fma(a, dz, -pr);
+                        double w = wcp[i];
+                        double t = w + pr;
+                        ccp[i] += (std::fabs(w) >= std::fabs(pr)) ? ((w - t) + pr) : ((pr - t) + w);
+                        w = t;
+                        double t2 = w + er;
+                        ccp[i] += (std::fabs(w) >= std::fabs(er)) ? ((w - t2) + er) : ((er - t2) + w);
+                        wcp[i] = t2;
+                    }
                 }
-                refreshCtr[p]++;
             }
             double pl = 0.0;
             for(int i = 0; i < nb; i++)
-                pl += z[i] * gradient[p][i] + 0.5 * z[i] * wc[i];
+                pl += z[i] * gradient[p][i] + 0.5 * z[i] * (wc[i] + cc[i]);
             partLnL[p] = pl;
         }
     });
