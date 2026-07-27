@@ -70,7 +70,7 @@ Awamokoa_tokarahi	25.0000	27.3000	Odontoceti	TOTAL
 Babiacetus_indicus	37.7100	42.0000	whole	STEM
 Babiacetus_mishrai	37.7100	42.0000	whole	STEM
 Balaena_meneghinii	2.5800	5.3330	Balaenidae	TOTAL
-Balaena_montalionis	2.5800	3.6000	Balaenidae	TOTAL
+Balaena_montalionis	2.5800	5.3300	Balaenidae	TOTAL
 Balaena_ricei	3.1500	3.3000	Balaenidae	TOTAL
 Balaenella_brachyrhynus	4.4000	5.0000	Balaenidae	TOTAL
 Balaenoptera_cephalus	13.0000	14.6000	Balaenopteroidea	TOTAL
@@ -111,7 +111,7 @@ Cetorhynchus_atavus	7.6000	9.5000	Ziphiidae	TOTAL
 Cetorhynchus_christoli	5.3330	23.0400	Ziphiidae	TOTAL
 Cetotheriophanes_capellinii	2.5800	5.3330	Mysticeti	TOTAL
 Cetotheriopsis_lintianus	23.0400	27.3000	Mysticeti	TOTAL
-Cetotherium_(Plesiocetopsis)_gervaisii	5.3330	23.0400	Mysticeti	TOTAL
+Cetotherium_gervaisii	5.3330	23.0400	Mysticeti	TOTAL
 Cetotherium_crassangulum	2.7400	4.9000	Mysticeti	TOTAL
 Cetotherium_furlongi	15.9800	20.4500	Mysticeti	TOTAL
 Cetotherium_megalophysum	8.7000	11.9000	Mysticeti	TOTAL
@@ -197,7 +197,7 @@ Furcacetus_flexirostrum	18.0000	19.3000	Odontoceti	CROWN
 Gandakasia_potens	46.0000	49.0000	whole	STEM
 Gaviacetus_razai	42.5000	46.0000	whole	STEM
 Georgiacetus_vogtlensis	37.7100	41.0300	whole	STEM
-Glaucabalaena_inopinata	3.0000	4.0000	Balaenopteroidea	TOTAL
+Glaucobalaena_inopinata	3.0000	4.0000	Balaenopteroidea	TOTAL
 Globicephala_etruriae	2.5800	5.3330	Delphinidae	TOTAL
 Goedertius_oregonensis	20.4500	23.0400	Odontoceti	CROWN
 Goniodelphis_hudsoni	4.7500	5.7000	Inioidea	TOTAL
@@ -264,7 +264,6 @@ Kentriodon_schneideri	13.8200	20.4400	Delphinida	TOTAL
 Kentriodon_sugawarai	15.9000	16.3000	Delphinida	TOTAL
 Kharodacetus_sahnii	37.7100	42.0000	whole	STEM
 Kogia_danomurai	5.7000	5.9000	Kogiidae	TOTAL
-Kogia_prisca	3.6000	5.3330	Kogiidae	TOTAL
 Kogia_pusilla	2.5800	3.6000	Kogiidae	TOTAL
 Kogiopsis_floridana	8.5000	11.0000	Physeteroidea	TOTAL
 Koristocetus_pescei	7.9000	8.8000	Kogiidae	TOTAL
@@ -304,7 +303,8 @@ Medocinia_tetragorhina	15.9800	20.4500	Odontoceti	CROWN
 Megabalaena_sapporoensis	8.6000	9.4000	Balaenidae	TOTAL
 Meherrinia_isoni	2.5800	11.6300	Inioidea	TOTAL
 Mesocetus_agrami	11.6000	12.8000	Mysticeti	TOTAL
-Mesocetus_aquitanicus	15.9800	20.4500	Mysticeti	TOTALMesocetus_siphunculus	13.0000	22.0000	Mysticeti	TOTAL
+Mesocetus_aquitanicus	15.9800	20.4500	Mysticeti	TOTAL
+Mesocetus_siphunculus	13.0000	22.0000	Mysticeti	TOTAL
 Mesokentriodon_protohumboldti	12.4000	14.8000	Delphinida	TOTAL
 Mesoplodon_blasiusi	7.6500	12.6500	Ziphiidae	TOTAL
 Mesoplodon_posti	3.6000	5.3330	Mesoplodon	TOTAL
@@ -457,7 +457,6 @@ Scaphokogia_cochlearis	7.9000	8.8000	Kogiidae	TOTAL
 Scaphokogia_totajpe	6.6000	7.9000	Kogiidae	TOTAL
 Schizodelphis_barnesi	14.0000	14.5000	Odontoceti	TOTAL
 Schizodelphis_bogatshowi	7.6500	9.6000	Odontoceti	TOTAL
-Schizodelphis_compressus	5.3330	11.6300	Odontoceti	TOTAL
 Schizodelphis_morckhoviensis	14.0000	19.0000	Odontoceti	TOTAL
 Schizodelphis_planus	15.9800	20.4500	Odontoceti	TOTAL
 Schizodelphis_squalodontoides	15.9800	20.4500	Odontoceti	TOTAL
@@ -527,8 +526,8 @@ Zarhachis_tysonii	8.7000	11.9000	Odontoceti	CROWN
 Zarhachis_velox	19.5000	20.8000	Odontoceti	CROWN
 Zarhinocetus_donnamatsonae	15.2000	19.2000	Odontoceti	CROWN
 Zarhinocetus_errabundus	15.2000	16.0000	Odontoceti	CROWN
-Ziphiodelphis_abeli	19.0000	22.0000	Odontoceti	CROWN
-Ziphiodelphis_sigmoideus	15.9800	22.0000	Odontoceti	CROWN
+Ziphiodelphis_abeli	19.0000	22.0000	Odontoceti	TOTAL
+Ziphiodelphis_sigmoideus	15.9800	22.0000	Odontoceti	TOTAL
 Ziphirostrum_marginatum	7.6000	9.5000	Ziphiidae	TOTAL
 Ziphirostrum_recurvus	4.4000	15.9800	Ziphiidae	TOTAL
 Ziphirostrum_turniense	4.4000	11.6300	Ziphiidae	TOTAL
