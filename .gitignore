@@ -7,6 +7,7 @@ output*/
 Examples/raw
 Examples/config_reference.cfg
 ufbd
+lab/
 
 # Coding agent configurations
 CLAUDE.md

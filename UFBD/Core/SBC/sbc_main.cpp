@@ -26,7 +26,7 @@ SBC FLAGS
                           engine mode
   -sbc_reps <N>           number of replicate datasets
   -sbc_bb <frac>          fraction of extant tips kept as backbone (default 1;
-                          a value < 1 requires origin conditioning)
+                          a value < 1 is incompatible with crown conditioning)
   -sbc_out <prefix>       output prefix (required for -sbc_mode emit)
   -fbd_model <UFBD|RFBD|HEA14>
                           model variant
@@ -98,7 +98,7 @@ int main(int argc, const char* argv[]){
     cfg.rho = s.getRho();
     cfg.bb = bb;
     if(cfg.originConditioning == false && cfg.bb < 1.0)
-        Msg::error("crown conditioning requires bb=1. Use origin conditioning for bb<1.");
+        Msg::error("crown conditioning requires bb=1.");
     cfg.intervalStart.push_back(0.0);
     for(double t : s.getSkylineTimes())
         cfg.intervalStart.push_back(t);
