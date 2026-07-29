@@ -1,6 +1,6 @@
 taxon	min_age	max_age	clade	assignment
 Abaptilon_sibiricum	277.0000	283.5000	whole	TOTAL
-Actinohymen_russelli	252.0000	254.1400	whole	TOTAL
+Actinohymen_russelli	273.0000	298.9000	whole	TOTAL
 Adiaphtharsia_ferrea	306.0000	311.0000	whole	TOTAL
 Adolarryia_bairdi	306.0000	311.0000	whole	TOTAL
 Aenigmatidia_kaltanica	266.9000	277.0000	whole	TOTAL
@@ -9,7 +9,7 @@ Agaeoleptoptera_uniotempla	315.2000	319.0000	whole	TOTAL
 Alectoneura_europaea	283.3000	293.5200	whole	TOTAL
 Alexahymen_aestatis	307.5000	310.7000	whole	TOTAL
 Alexahymen_maruska	283.3000	293.5200	whole	TOTAL
-Alexrasnitsynia_permiana	282.9000	284.6000	whole	TOTAL
+Alexrasnitsynia_permiana	272.9500	282.8600	whole	TOTAL
 Althansia_sahneri	307.5000	319.2000	whole	TOTAL
 Ametretus_laevis	306.0000	311.0000	whole	TOTAL
 Amousus_mazonus	306.0000	311.0000	whole	TOTAL
@@ -147,10 +147,6 @@ Eubleptus_maculosus	306.0000	311.0000	whole	TOTAL
 Eubrodia_dabasinskasi	306.0000	311.0000	whole	TOTAL
 Euchoroptera_longipennis	303.9000	306.0000	whole	TOTAL
 Eugereon_boeckingi	293.5000	298.9000	whole	TOTAL
-Eukuloja_atrosumma	266.9000	277.0000	whole	TOTAL
-Eukuloja_cubitalis	266.9000	277.0000	whole	TOTAL
-Eukuloja_rotundata	266.9000	277.0000	whole	TOTAL
-Eukuloja_uralica	273.0000	283.5000	whole	TOTAL
 Eumartynovia_raaschi	279.0000	286.0000	whole	TOTAL
 Eumecoptera_laxa	310.7000	313.7000	whole	TOTAL
 Eurydictyella_richteri	307.5000	319.2000	whole	TOTAL
@@ -220,8 +216,8 @@ Lithoptilus_boulei	298.9000	303.7000	whole	TOTAL
 Lithosialis_brongniarti	310.7000	313.7000	whole	TOTAL
 Lithosialis_daviesii	313.7000	316.5000	whole	TOTAL
 Lithosialis_truemani	316.5000	319.2000	whole	TOTAL
-Lodetiella_magnifica	282.9000	284.6000	whole	TOTAL
-Lodevohymen_lapeyriei	282.9000	284.6000	whole	TOTAL
+Lodetiella_magnifica	272.9500	282.8600	whole	TOTAL
+Lodevohymen_lapeyriei	272.9500	282.8600	whole	TOTAL
 Lusiella_fariai	300.5000	303.7000	whole	TOTAL
 Lusiella_greberi	313.7000	316.5000	whole	TOTAL
 Lycocercus_goldenbergi	298.9000	303.7000	whole	TOTAL
@@ -294,7 +290,7 @@ Paruralia_rohdendorfi	273.0000	283.5000	whole	TOTAL
 Patteiskya_bouckaerti	319.5000	320.5000	whole	TOTAL
 Patteiskya_volmensis	319.0000	320.5000	whole	TOTAL
 Pauciramus_demoulini	273.0000	283.5000	whole	TOTAL
-Permelmoa_magnifica	282.9000	284.6000	whole	TOTAL
+Permelmoa_magnifica	272.9500	282.8600	whole	TOTAL
 Permiakovia_quinquefasciata	273.0000	283.5000	whole	TOTAL
 Permodiapha_carpenteri	283.3000	293.5200	whole	TOTAL
 Permodiapha_lata	283.3000	293.5200	whole	TOTAL
@@ -326,7 +322,7 @@ Polioptenus_elegans	310.7000	313.7000	whole	TOTAL
 Polioptenus_mancomediali	307.5000	310.7000	whole	TOTAL
 Polycreagra_elegans	300.0000	315.0000	whole	TOTAL
 Prochoroptera_calopteryx	306.0000	311.0000	whole	TOTAL
-Propalingenia_feistmanteli	300.5000	303.7000	whole	TOTAL
+Propalingenia_feistmanteli	313.6000	314.5000	whole	TOTAL
 Protagrion_audouini	298.9000	303.7000	whole	TOTAL
 Protodiapha_lineata	283.3000	293.5200	whole	TOTAL
 Protodiapha_maculifera	283.3000	293.5200	whole	TOTAL
@@ -375,7 +371,7 @@ Sharovia_sojanica	266.9000	277.0000	whole	TOTAL
 Sharovia_tshekardica	273.0000	283.5000	whole	TOTAL
 Siberiodictya_gigas	290.1000	293.5200	whole	TOTAL
 Siberiohymen_asiaticus	298.9000	303.7000	whole	TOTAL
-Sinitshenkovae_gallica	282.9000	284.6000	whole	TOTAL
+Sinitshenkovae_gallica	272.9500	282.8600	whole	TOTAL
 Sinitshenkovae_huenickeni	295.0000	303.7000	whole	TOTAL
 Sinodiapha_ramosa	309.0000	316.0000	whole	TOTAL
 Sinodunbaria_jarmilae	309.0000	316.0000	whole	TOTAL
@@ -425,7 +421,7 @@ Sylvohymen_ingens	279.0000	286.0000	whole	TOTAL
 Sylvohymen_marginatus	273.0000	283.5000	whole	TOTAL
 Sylvohymen_peckae	319.0000	320.5000	whole	TOTAL
 Sylvohymen_robustus	273.0000	283.5000	whole	TOTAL
-Sylvohymen_sibiricus	273.0000	283.5000	whole	TOTAL
+Sylvohymen_sibiricus	273.0000	298.9000	whole	TOTAL
 Synaptoneura_champyi	313.7000	316.5000	whole	TOTAL
 Synarmoge_ferrarii	313.7000	316.5000	whole	TOTAL
 Taigahymen_borealis	273.0000	283.5000	whole	TOTAL
