@@ -90,6 +90,14 @@ double ParameterUnresolvedFossils::getMinAttachAge(int i){
     return y[0][i];
 }
 
+bool ParameterUnresolvedFossils::maxAttachIsNodeBounded(int i){
+    if(isCrown[i])
+        return true;
+    if(crownNode[i] == backbone->getCrown())
+        return originAge == nullptr;
+    return true;
+}
+
 double ParameterUnresolvedFossils::getMaxAttachAge(int i){
     if(isCrown[i])
         return crownNode[i]->getTime();

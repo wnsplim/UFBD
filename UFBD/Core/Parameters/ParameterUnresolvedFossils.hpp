@@ -37,6 +37,7 @@ class ParameterUnresolvedFossils : public Parameter {
         Node*                       getCrownNode(int i) { return crownNode[i]; }
         std::string                 getCladeName(int i) { return cladeName[i]; }
         Node*                       getMaxAttachNode(int i) { return isCrown[i] ? crownNode[i] : originNode[i]; }
+        bool                        maxAttachIsNodeBounded(int i);
         bool                        getIsCrown(int i) { return isCrown[i]; }
         bool                        getIsStem(int i) { return isStem[i]; }
         double                      getMinAttachAge(int i);

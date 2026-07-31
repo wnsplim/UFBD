@@ -2168,6 +2168,8 @@ void FBDTreeModel::computeAgeFloors(std::map<Node*,double>& floors){
     for(int i = 0; i < numFossils; i++){
         if(unresolvedFossils->isSA(i))
             continue;
+        if(unresolvedFossils->maxAttachIsNodeBounded(i) == false)
+            continue;
         Node* node = unresolvedFossils->getMaxAttachNode(i);
         double bound = unresolvedFossils->getAttachAge(i);
         if(unresolvedFossils->getFossilAge(i) > bound)
