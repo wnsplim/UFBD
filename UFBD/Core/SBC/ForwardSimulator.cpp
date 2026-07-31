@@ -3,6 +3,8 @@
 #include "Probability.hpp"
 #include "RandomVariable.hpp"
 
+#include <map>
+#include <set>
 #include <sstream>
 
 namespace {
@@ -16,6 +18,7 @@ struct SimNode {
     bool      extantSampled;
     bool      inBackbone;
     bool      keep;
+    bool      retain;
     int       label;
     int       type;
 };
@@ -30,10 +33,67 @@ SimNode* newNode(double age, std::vector<SimNode*>& all){
     n->extantSampled = false;
     n->inBackbone = false;
     n->keep = false;
+    n->retain = false;
     n->label = 0;
     n->type = 0;
     all.push_back(n);
     return n;
+}
+
+bool markRetain(SimNode* n){
+    bool r = n->isFossil || n->extantSampled;
+    if(n->left != nullptr)  { bool l = markRetain(n->left);  r = l || r; }
+    if(n->right != nullptr) { bool q = markRetain(n->right); r = q || r; }
+    n->retain = r;
+    return r;
+}
+
+bool markOnTrunk(SimNode* n, const std::set<SimNode*>& est, std::map<SimNode*,bool>& onTrunk){
+    bool t = (est.count(n) > 0);
+    if(n->left != nullptr && n->left->retain)  { bool l = markOnTrunk(n->left, est, onTrunk);  t = l || t; }
+    if(n->right != nullptr && n->right->retain){ bool q = markOnTrunk(n->right, est, onTrunk); t = q || t; }
+    onTrunk[n] = t;
+    return t;
+}
+
+SimNode* assignAttachAges(SimNode* v, const std::map<SimNode*,bool>& onTrunk, std::map<SimNode*,double>& z){
+    std::vector<SimNode*> ch;
+    if(v->left != nullptr && v->left->retain)   ch.push_back(v->left);
+    if(v->right != nullptr && v->right->retain) ch.push_back(v->right);
+    if(ch.empty())
+        return v;
+    if(ch.size() == 1)
+        return assignAttachAges(ch[0], onTrunk, z);
+    for(int k = 0; k < 2; k++){
+        SimNode* f = ch[k];
+        if(f->isFossil && f->left == nullptr && f->right == nullptr){
+            z[f] = v->age;
+            return assignAttachAges(ch[1 - k], onTrunk, z);
+        }
+    }
+    SimNode* r0 = assignAttachAges(ch[0], onTrunk, z);
+    SimNode* r1 = assignAttachAges(ch[1], onTrunk, z);
+    bool t0 = onTrunk.at(ch[0]), t1 = onTrunk.at(ch[1]);
+    if(t0 && t1)
+        return r0;
+    if(t1){
+        z[r0] = v->age;
+        return r1;
+    }
+    z[r1] = v->age;
+    return r0;
+}
+
+void collectBackboneAges(SimNode* n, std::vector<double>& out){
+    SimNode* kl = (n->left != nullptr && n->left->keep) ? n->left : nullptr;
+    SimNode* kr = (n->right != nullptr && n->right->keep) ? n->right : nullptr;
+    if(kl == nullptr && kr == nullptr)
+        return;
+    if(kr == nullptr){ collectBackboneAges(kl, out); return; }
+    if(kl == nullptr){ collectBackboneAges(kr, out); return; }
+    out.push_back(n->age);
+    collectBackboneAges(kl, out);
+    collectBackboneAges(kr, out);
 }
 
 void markKeep(SimNode* n, bool useBackbone){
@@ -216,13 +276,43 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
         }
         ok = true;
 
+        markRetain(root);
+        std::set<SimNode*> est;
+        if(inBB > 0){
+            for(SimNode* n : extants)
+                if(n->inBackbone)
+                    est.insert(n);
+        }else{
+            SimNode* spine = nullptr;
+            for(SimNode* n : allNodes)
+                if(n->extantSampled){ spine = n; break; }
+            if(spine == nullptr)
+                for(SimNode* n : allNodes)
+                    if(n->isFossil && (spine == nullptr || n->age < spine->age))
+                        spine = n;
+            est.insert(spine);
+        }
+        std::map<SimNode*,bool> onTrunk;
+        std::map<SimNode*,double> zMap;
+        markOnTrunk(root, est, onTrunk);
+        assignAttachAges(root, onTrunk, zMap);
+
         for(SimNode* n : allNodes){
             if(n->isFossil){
                 res.fossilAges.push_back(n->age);
                 res.fossilTypes.push_back(n->type);
+                std::map<SimNode*,double>::iterator it = zMap.find(n);
+                double z = (it != zMap.end()) ? it->second : -1.0;
+                res.fossilAttachAge.push_back(z);
+                res.fossilIsSA.push_back((z == n->age) ? 1 : 0);
                 res.numFossils++;
             }
         }
+        for(SimNode* n : allNodes)
+            if(n->extantSampled && n->inBackbone == false){
+                std::map<SimNode*,double>::iterator it = zMap.find(n);
+                res.ueAttachAge.push_back((it != zMap.end()) ? it->second : -1.0);
+            }
         res.numExtantSampled = (int)extants.size();
         res.numUE = res.numExtantSampled - inBB;
 
@@ -236,6 +326,7 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
             writeNewick(mrca, s);
             s << ";";
             res.backboneNewick = s.str();
+            collectBackboneAges(mrca, res.backboneNodeAges);
         }else{
             res.backboneNewick = "";
         }

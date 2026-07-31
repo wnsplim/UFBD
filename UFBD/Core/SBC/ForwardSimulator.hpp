@@ -31,6 +31,10 @@ struct SimResult {
     int                 numBackbone = 0;
     int                 numUE = 0;
     int                 numFossils = 0;
+    std::vector<double> fossilAttachAge;
+    std::vector<char>   fossilIsSA;
+    std::vector<double> ueAttachAge;
+    std::vector<double> backboneNodeAges;
 };
 
 class ForwardSimulator {

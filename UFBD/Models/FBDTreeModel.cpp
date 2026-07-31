@@ -605,6 +605,58 @@ double FBDTreeModel::lnLikelihood(void){
     return v;
 }
 
+double FBDTreeModel::evaluateAtGeneratingState(const std::vector<double>& lam, const std::vector<double>& muV,
+                                               const std::vector<std::vector<double>>& psiV, double x0,
+                                               const std::vector<double>& nodeAges, const std::vector<double>& z,
+                                               const std::vector<char>& sa, double& lnPriorOut){
+    for(size_t i = 0; i < lambda.size(); i++)
+        lambda[i]->setValue(lam[i]);
+    for(size_t i = 0; i < mu.size(); i++)
+        mu[i]->setValue(muV[i]);
+    for(size_t t = 0; t < psi.size(); t++)
+        for(size_t i = 0; i < psi[t].size(); i++)
+            psi[t][i]->setValue(psiV[t][i]);
+
+    Tree* tr = parameterTree->getTree();
+    if(originAge != nullptr){
+        originAge->setValue(x0);
+        Node* rt = tr->getRoot();
+        if(rt->getDescendants().size() == 1)
+            rt->setTime(x0);
+    }
+    std::vector<Node*> stack, order;
+    stack.push_back(tr->getRoot());
+    while(stack.empty() == false){
+        Node* n = stack.back();
+        stack.pop_back();
+        std::vector<Node*>& ch = n->getDescendants();
+        if(ch.size() >= 2)
+            order.push_back(n);
+        for(int k = (int)ch.size() - 1; k >= 0; k--)
+            stack.push_back(ch[k]);
+    }
+    for(size_t i = 0; i < order.size(); i++)
+        order[i]->setTime(nodeAges[i]);
+
+    if(unresolvedFossils != nullptr){
+        int nf = unresolvedFossils->getNumFossils();
+        for(int i = 0; i < nf; i++){
+            if(sa[i])
+                unresolvedFossils->flipSA(i, true);
+            else
+                unresolvedFossils->setAttachAge(i, z[i]);
+            unresolvedFossils->acceptFossil(i);
+        }
+    }
+    cacheInit = false;
+    zoneInit = false;
+    zoneIndexBuilt = false;
+    eulerBuilt = false;
+
+    lnPriorOut = lnPriorProbability();
+    return lnLikelihood();
+}
+
 double FBDTreeModel::lnPriorProbability(void){
     double lnP = 0.0;
     for(Parameter* p : parameters)

@@ -48,7 +48,7 @@ double drawChunk(const std::vector<int>& groups, const std::map<int,Probability:
     return v;
 }
 
-double truthForName(const std::string& name, const SimParams& p, bool origin, const std::vector<std::string>& psiTypeNames){
+double truthForName(const std::string& name, const SimParams& p, const std::vector<std::string>& psiTypeNames){
     auto idxOf = [](const std::string& rest) -> int { return rest.empty() ? 0 : std::stoi(rest); };
     if(name.rfind("lambda", 0) == 0)  return p.lambda[idxOf(name.substr(6))];
     if(name.rfind("mu", 0) == 0)      return p.mu[idxOf(name.substr(2))];
@@ -62,7 +62,6 @@ double truthForName(const std::string& name, const SimParams& p, bool origin, co
         return std::numeric_limits<double>::quiet_NaN();
     }
     if(name.rfind("psi", 0) == 0)     return p.psi[0][idxOf(name.substr(3))];
-    if(name == "originAge" && origin) return p.startAge;
     return std::numeric_limits<double>::quiet_NaN();
 }
 
@@ -283,6 +282,23 @@ void Sbc::runInference(void){
         if(r.numBackbone > 0)
             initAges(tree, fossils, cfg.originConditioning, cfg.startAgePrior);
 
+        std::vector<double> zTrue;
+        std::vector<char> saTrue;
+        for(size_t i = 0; i < r.fossilAttachAge.size(); i++){
+            zTrue.push_back(r.fossilAttachAge[i]);
+            saTrue.push_back(r.fossilIsSA[i]);
+        }
+        for(size_t i = 0; i < r.ueAttachAge.size(); i++){
+            zTrue.push_back(r.ueAttachAge[i]);
+            saTrue.push_back(0);
+        }
+        double truthLnPrior = std::numeric_limits<double>::quiet_NaN();
+        unsigned int truthSeed = (unsigned int)(rng->uniformRv() * 4294967295.0);
+        FBDTreeModel* truthModel = new FBDTreeModel(tree, clades, fossils, truthSeed);
+        double truthLnL = truthModel->evaluateAtGeneratingState(truth.lambda, truth.mu, truth.psi, truth.startAge,
+                                                                r.backboneNodeAges, zTrue, saTrue, truthLnPrior);
+        delete truthModel;
+
         std::vector<ChainRunner*> chains;
         std::vector<FBDTreeModel*> models;
         for(int m = 0; m < nRuns; m++){
@@ -301,19 +317,18 @@ void Sbc::runInference(void){
         }
 
         const std::vector<std::string>& names = chains[0]->traceNames();
-        std::map<std::string, double> thisRep;
-        for(size_t c = 0; c < names.size(); c++){
-            double t = truthForName(names[c], truth, cfg.originConditioning, cfg.psiTypeNames);
-            if(std::isnan(t))
-                continue;
-            std::vector<double> s;
+        std::vector<std::vector<double>> post(names.size());
+        for(size_t c = 0; c < names.size(); c++)
             for(ChainRunner* ch : chains){
                 const std::vector<double>& col = ch->traceColumns()[c];
                 size_t bIdx = (size_t)(burnFrac * col.size());
-                s.insert(s.end(), col.begin() + bIdx, col.end());
+                post[c].insert(post[c].end(), col.begin() + bIdx, col.end());
             }
-            if(s.empty())
-                continue;
+
+        std::map<std::string, double> thisRep;
+        auto addQuantity = [&](const std::string& nm, std::vector<double> s, double t){
+            if(std::isnan(t))
+                return;
             std::sort(s.begin(), s.end());
             long below = 0, equal = 0;
             for(double x : s){
@@ -321,27 +336,38 @@ void Sbc::runInference(void){
                 else if(x == t) equal++;
             }
             double rank = ((double)below + rng->uniformRv() * (double)equal) / (double)s.size();
-            ranks[names[c]].push_back(rank);
-            thisRep[names[c]] = rank;
-            if(t >= quantile(s, 0.25) && t <= quantile(s, 0.75)) cov50[names[c]]++;
-            if(t >= quantile(s, 0.05) && t <= quantile(s, 0.95)) cov90[names[c]]++;
+            ranks[nm].push_back(rank);
+            thisRep[nm] = rank;
+            if(t >= quantile(s, 0.25) && t <= quantile(s, 0.75)) cov50[nm]++;
+            if(t >= quantile(s, 0.05) && t <= quantile(s, 0.95)) cov90[nm]++;
+            if(rep == 0) outCols.push_back(nm);
+        };
+
+        int iLik = -1, iPri = -1;
+        for(size_t c = 0; c < names.size(); c++){
+            if(names[c] == "likelihood") iLik = (int)c;
+            if(names[c] == "prior")      iPri = (int)c;
         }
-        if(outCols.empty())
-            for(size_t c = 0; c < names.size(); c++)
-                if(thisRep.count(names[c])) outCols.push_back(names[c]);
+        for(size_t c = 0; c < names.size(); c++)
+            addQuantity(names[c], post[c], truthForName(names[c], truth, cfg.psiTypeNames));
+        addQuantity("logLik", post[iLik], truthLnL);
+        addQuantity("logPrior", post[iPri], truthLnPrior);
         if(cfg.dumpPrefix.empty() == false){
             if(liveHeader == false){
                 rankOut.open(cfg.dumpPrefix + "_ranks.tsv");
+                rankOut.precision(17);
                 for(size_t c = 0; c < outCols.size(); c++)
                     rankOut << (c ? "\t" : "") << outCols[c];
-                rankOut << "\tbulkESS\ttailESS\tmaxRhat\n";
+                rankOut << "\tbulkESS\ttailESS\tmaxRhat\tt_lambda\tt_mu\tt_psi\tt_logLik\tt_logPrior\n";
                 liveHeader = true;
             }
             for(size_t c = 0; c < outCols.size(); c++){
                 std::map<std::string, double>::iterator f = thisRep.find(outCols[c]);
                 rankOut << (c ? "\t" : "") << (f != thisRep.end() ? f->second : std::numeric_limits<double>::quiet_NaN());
             }
-            rankOut << "\t" << repBulkEss << "\t" << repTailEss << "\t" << repMaxRhat << "\n";
+            rankOut << "\t" << repBulkEss << "\t" << repTailEss << "\t" << repMaxRhat
+                    << "\t" << truth.lambda[0] << "\t" << truth.mu[0] << "\t" << truth.psi[0][0]
+                    << "\t" << truthLnL << "\t" << truthLnPrior << "\n";
             rankOut.flush();
         }
         for(ChainRunner* ch : chains) delete ch;
