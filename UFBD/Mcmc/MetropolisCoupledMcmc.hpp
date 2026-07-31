@@ -40,6 +40,10 @@ class MetropolisCoupledMcmc : public ChainRunner {
         void                                writeColdSample(unsigned long n);
         void                                adaptLadder(bool swapAccepted);
         void                                rebuildLadder(void);
+        void                                runStateChecks(int i, unsigned long g, bool cold);
+        static const bool                   chkState;
+        static const bool                   chkCache;
+        static const bool                   chkPrior;
         //objects ordered by memory footprint
         std::deque<bool>                    recentAcceptRej;
         std::vector<PhylogeneticModel*>     models;

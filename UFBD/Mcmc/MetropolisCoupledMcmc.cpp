@@ -10,13 +10,16 @@
 #include "WriteTSV.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <chrono>
 #include <future>
 #include <iomanip>
 #include <iostream>
+#include <mutex>
 #include <sstream>
 
 MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int thin, std::vector<PhylogeneticModel*> m, unsigned int masterSeed) : numCycles(ng), thinning(thin),
@@ -139,6 +142,73 @@ void MetropolisCoupledMcmc::finalize(void) {
         latent.closeTSV();
 }
 
+namespace {
+std::atomic<long> chkStateBad(0), chkCacheBad(0), chkPriorBad(0);
+std::atomic<long> chkCacheWorstBits(0);
+std::mutex chkMutex;
+}
+
+const bool MetropolisCoupledMcmc::chkState = (getenv("FBD_CHK_STATE") != nullptr);
+const bool MetropolisCoupledMcmc::chkCache = (getenv("FBD_CHK_CACHE") != nullptr);
+const bool MetropolisCoupledMcmc::chkPrior = (getenv("FBD_CHK_PRIOR") != nullptr);
+
+void MetropolisCoupledMcmc::runStateChecks(int i, unsigned long g, bool cold){
+    if(chkState){
+        double rl = models[i]->lnLikelihood(), rp = models[i]->lnPriorProbability();
+        if(std::fabs(rl - currLnL[i]) > 1e-6 || std::fabs(rp - currLnP[i]) > 1e-6){
+            if(++chkStateBad <= 3){
+                std::lock_guard<std::mutex> lk(chkMutex);
+                std::cout << "[state] VIOLATION run " << runLabel << " chain " << i << " gen " << g
+                          << "  lnL " << currLnL[i] << " vs " << rl
+                          << "  lnP " << currLnP[i] << " vs " << rp << "\n" << std::flush;
+            }
+        }
+        if(cold && g % 20000 == 0){
+            std::lock_guard<std::mutex> lk(chkMutex);
+            std::cout << "[state] gen " << g << "  violations " << chkStateBad.load() << "\n" << std::flush;
+        }
+    }
+    if(chkCache){
+        double cached = models[i]->lnLikelihood();
+        models[i]->invalidateLikelihoodCache();
+        double fresh = models[i]->lnLikelihood();
+        double e = std::fabs(cached - fresh);
+        if(std::isfinite(cached) == false && std::isfinite(fresh) == false)
+            e = 0.0;
+        long bits = (long)(e * 1e12);
+        long prev = chkCacheWorstBits.load();
+        while(bits > prev && chkCacheWorstBits.compare_exchange_weak(prev, bits) == false)
+            ;
+        if(e > 1e-6 && ++chkCacheBad <= 3){
+            std::lock_guard<std::mutex> lk(chkMutex);
+            std::cout << "[cache] CORRUPT run " << runLabel << " chain " << i << " gen " << g
+                      << "  cached " << cached << "  fresh " << fresh << "  diff " << e << "\n" << std::flush;
+        }
+        if(cold && g % 20000 == 0){
+            std::lock_guard<std::mutex> lk(chkMutex);
+            std::cout << "[cache] gen " << g << "  corrupt " << chkCacheBad.load()
+                      << " (worst " << (chkCacheWorstBits.load() / 1e12) << ")\n" << std::flush;
+        }
+    }
+    if(chkPrior){
+        double cached = models[i]->lnPriorProbability();
+        models[i]->invalidatePriorCache();
+        double fresh = models[i]->lnPriorProbability();
+        double e = std::fabs(cached - fresh);
+        if(std::isfinite(cached) == false && std::isfinite(fresh) == false)
+            e = 0.0;
+        if((e > 1e-6 || (std::isfinite(cached) != std::isfinite(fresh))) && ++chkPriorBad <= 3){
+            std::lock_guard<std::mutex> lk(chkMutex);
+            std::cout << "[prior] STALE run " << runLabel << " chain " << i << " gen " << g
+                      << "  cached " << cached << "  fresh " << fresh << "\n" << std::flush;
+        }
+        if(cold && g % 20000 == 0){
+            std::lock_guard<std::mutex> lk(chkMutex);
+            std::cout << "[prior] gen " << g << "  stale " << chkPriorBad.load() << "\n" << std::flush;
+        }
+    }
+}
+
 void MetropolisCoupledMcmc::advance(unsigned long nGens) {
     if(chainDecision < 0){
         chainDecision = 1;
@@ -175,6 +245,8 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
             double heat = calcHeating(indices[i]);
             bool cold = (i == coldModelIdx);
             for(unsigned long b = 1; b <= blockLen; b++){
+                if(chkState || chkCache || chkPrior)
+                    runStateChecks(i, gen0 + b, cold);
                 double lnProp = models[i]->update();
                 if(lnProp == -INFINITY){
                     models[i]->updateForRejection();
