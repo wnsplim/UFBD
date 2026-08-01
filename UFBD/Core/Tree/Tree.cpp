@@ -854,7 +854,7 @@ int Tree::scaleInternalAges(double m){
     int numScaled = 0;
     Node* fixedCrown = crownFixed ? crown : nullptr;
     for(Node* n : downPassSequence)
-        if(n->getIsTip() == false && isFakeSplit(n) == false && n != fixedCrown){
+        if(n->getIsTip() == false && isFakeSplit(n) == false && n != fixedCrown && n->getDescendants().empty() == false){
             n->setTime(n->getTime() * m);
             numScaled++;
         }
