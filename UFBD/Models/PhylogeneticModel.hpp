@@ -36,6 +36,7 @@ class PhylogeneticModel {
         virtual void                            updateForRejection(void) = 0;
         virtual void                            writeState(std::ostream& os) {}
         virtual void                            readState(std::istream& is) {}
+        virtual int                             getNumSequencePartitions(void) { return 1; }
         virtual void                            freezePncpTuning(void) {}
         virtual void                            setChainLabel(int) {}
         std::vector<Parameter*>                 parameters;

@@ -872,7 +872,7 @@ void ParameterBranchRates::branchLikePrecision(int p, std::vector<double>& tauL,
         }
         centeredness[p] = acc / (double)branchNodes.size();
         pncpMeanTau[p] = tacc / (double)branchNodes.size();
-        if(frozen == false && sigCount[p] % UserSettings::pncpRefreshInterval == 0)
+        if(frozen == false && numPartitions == 1 && sigCount[p] % UserSettings::pncpRefreshInterval == 0)
             std::cout << "[tuning] chain " << chainLabel << " partition " << p << " refresh " << sigCount[p]
                       << "  meanCenteredness " << centeredness[p]
                       << "  meanTau " << pncpMeanTau[p] << "\n";

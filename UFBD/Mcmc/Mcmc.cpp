@@ -49,8 +49,15 @@ void Mcmc::init(void) {
     UserSettings& settings = UserSettings::userSettings();
     if(settings.clockPresent() && settings.getSigma2Param() == Sigma2Param::PNCP && settings.getPncpTuningGens() > 0){
         model->setChainLabel(runLabel);
+        unsigned long perPartition = settings.getPncpTuningGens();
+        int numPartitions = model->getNumSequencePartitions();
+        unsigned long total = perPartition * (unsigned long)numPartitions;
+        std::ostringstream os;
+        os << "[tuning] run " << runLabel << " PNCP: " << total << " generations ("
+           << perPartition << " x " << numPartitions << " sequence partitions)\n";
+        ChainRunner::logLine(os.str());
         tuning = true;
-        advance(settings.getPncpTuningGens());
+        advance(total);
         model->freezePncpTuning();
         tuning = false;
         gen = 0;

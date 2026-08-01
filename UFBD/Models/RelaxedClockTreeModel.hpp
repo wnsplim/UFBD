@@ -39,6 +39,7 @@ class RelaxedClockTreeModel : public PhylogeneticModel {
         void                        updateForRejection(void);
         void                        writeState(std::ostream& os);
         void                        readState(std::istream& is);
+        int                         getNumSequencePartitions(void) { return clock->getNumPartitions(); }
         void                        freezePncpTuning(void) { clock->freezePncp(); }
         void                        setChainLabel(int c) { clock->setChainLabel(c); }
 

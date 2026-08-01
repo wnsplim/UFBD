@@ -124,8 +124,15 @@ void MetropolisCoupledMcmc::init(void) {
     if(settings.clockPresent() && settings.getSigma2Param() == Sigma2Param::PNCP && settings.getPncpTuningGens() > 0){
         for(PhylogeneticModel* m : models)
             m->setChainLabel(runLabel);
+        unsigned long perPartition = settings.getPncpTuningGens();
+        int numPartitions = models[0]->getNumSequencePartitions();
+        unsigned long total = perPartition * (unsigned long)numPartitions;
+        std::ostringstream os;
+        os << "[tuning] run " << runLabel << " PNCP: " << total << " generations per coupled chain ("
+           << perPartition << " x " << numPartitions << " sequence partitions)\n";
+        ChainRunner::logLine(os.str());
         tuning = true;
-        advance(settings.getPncpTuningGens());
+        advance(total);
         for(PhylogeneticModel* m : models)
             m->freezePncpTuning();
         tuning = false;
