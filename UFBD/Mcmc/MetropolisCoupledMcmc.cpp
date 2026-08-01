@@ -3,6 +3,7 @@
 #include "PhylogeneticModel.hpp"
 #include "Probability.hpp"
 #include "RandomVariable.hpp"
+#include "RelaxedClockTreeModel.hpp"
 #include "Serialize.hpp"
 #include "ThreadPool.hpp"
 #include "Tree.hpp"
@@ -122,17 +123,14 @@ void MetropolisCoupledMcmc::init(void) {
 
     UserSettings& settings = UserSettings::userSettings();
     if(settings.clockPresent() && settings.getSigma2Param() == Sigma2Param::PNCP && settings.getPncpTuningGens() > 0){
-        for(PhylogeneticModel* m : models)
-            m->setChainLabel(runLabel);
-        unsigned long perPartition = settings.getPncpTuningGens();
-        int numPartitions = models[0]->getNumSequencePartitions();
-        unsigned long total = perPartition * (unsigned long)numPartitions;
-        std::ostringstream os;
-        os << "[tuning] run " << runLabel << " PNCP: " << total << " generations per coupled chain ("
-           << perPartition << " x " << numPartitions << " sequence partitions)\n";
-        ChainRunner::logLine(os.str());
+        for(int i = 0; i < numModels; i++){
+            models[i]->setChainLabel(runLabel);
+            models[i]->setPncpReporter(i == 0);
+        }
         tuning = true;
-        advance(total);
+        advance(settings.getPncpTuningGens());
+        for(int i = 0; i < numModels; i++)
+            models[i]->setPncpReporter(indices[i] == 0);
         for(PhylogeneticModel* m : models)
             m->freezePncpTuning();
         tuning = false;
@@ -251,6 +249,7 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
             RandomVariable* r = models[i]->getRng();
             double heat = calcHeating(indices[i]);
             bool cold = (i == coldModelIdx);
+            RelaxedClockTreeModel* relaxed = tuning ? dynamic_cast<RelaxedClockTreeModel*>(models[i]) : nullptr;
             for(unsigned long b = 1; b <= blockLen; b++){
                 if(chkState || chkCache || chkPrior)
                     runStateChecks(i, gen0 + b, cold);
@@ -267,6 +266,31 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
                         models[i]->updateForAcceptance();
                     }else{
                         models[i]->updateForRejection();
+                    }
+                }
+                if(relaxed != nullptr){
+                    int firstPartition = relaxed->getLastPncpPartition();
+                    if(firstPartition >= 0){
+                        int numPartitions = relaxed->getNumSequencePartitions();
+                        for(int partition = 0; partition < numPartitions; partition++){
+                            if(partition == firstPartition)
+                                continue;
+                            double pncpProposalRatio = relaxed->updatePncpPartition(partition);
+                            if(pncpProposalRatio == -INFINITY){
+                                relaxed->updateForRejection();
+                                continue;
+                            }
+                            double pncpLnL = relaxed->lnLikelihood();
+                            double pncpLnP = relaxed->lnPriorProbability();
+                            double pncpLnR = heat * (pncpLnL - currLnL[i] + pncpLnP - currLnP[i]) + pncpProposalRatio;
+                            if(std::log(r->uniformRv()) < pncpLnR){
+                                currLnL[i] = pncpLnL;
+                                currLnP[i] = pncpLnP;
+                                relaxed->updateForAcceptance();
+                            }else{
+                                relaxed->updateForRejection();
+                            }
+                        }
                     }
                 }
                 if(cold && tuning == false && (gen0 + b) % (unsigned long)thinning == 0)

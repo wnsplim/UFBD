@@ -811,7 +811,7 @@ std::vector<std::vector<BranchMGF>> ParameterBranchRates::getBranchMGF(void){
 
 void BranchRateModel::freezePncp(void){
     pncpFrozen = true;
-    if((int)centeredness.size() != numPartitions)
+    if(pncpReporter == false || (int)centeredness.size() != numPartitions)
         return;
     for(int p = 0; p < numPartitions; p++)
         std::cout << "[tuning] chain " << chainLabel << " partition " << p
@@ -872,10 +872,8 @@ void ParameterBranchRates::branchLikePrecision(int p, std::vector<double>& tauL,
         }
         centeredness[p] = acc / (double)branchNodes.size();
         pncpMeanTau[p] = tacc / (double)branchNodes.size();
-        if(frozen == false && numPartitions == 1 && sigCount[p] % UserSettings::pncpRefreshInterval == 0)
-            std::cout << "[tuning] chain " << chainLabel << " partition " << p << " refresh " << sigCount[p]
-                      << "  meanCenteredness " << centeredness[p]
-                      << "  meanTau " << pncpMeanTau[p] << "\n";
+        if(frozen == false && pncpReporter && p == 0 && sigCount[p] % UserSettings::pncpRefreshInterval == 0)
+            std::cout << "[tuning] chain " << chainLabel << " refresh " << sigCount[p] << "\n";
     }
     tauL = sigTauL[p];
     ellB = sigEllB[p];
@@ -1111,6 +1109,16 @@ double ParameterBranchRates::sigmaPncpMoveWN(int p){
     return lnH;
 }
 
+double ParameterBranchRates::updatePncpPartition(int p){
+    if(clockModel == ClockModel::UCLN)
+        return sigmaPncpMove(p);
+    if(clockModel == ClockModel::GBMC)
+        return sigmaPncpMoveGBMC(p);
+    if(clockModel == ClockModel::WN)
+        return sigmaPncpMoveWN(p);
+    return sigmaPncpMoveGBM(p);
+}
+
 double ParameterBranchRates::update(void){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastPartition = (int)(rng.uniformRv() * numPartitions);
@@ -1132,11 +1140,7 @@ double ParameterBranchRates::update(void){
         lastMove = 1;
         return scalePartitionSigma2(lastPartition);
     }
-    if(clockModel == ClockModel::UCLN)
-        return sigmaPncpMove(lastPartition);
-    if(clockModel == ClockModel::GBMC)
-        return sigmaPncpMoveGBMC(lastPartition);
-    return sigmaPncpMoveGBM(lastPartition);
+    return updatePncpPartition(lastPartition);
 }
 
 // CIR clock: halt — detached dead code (kept, never constructed)

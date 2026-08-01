@@ -117,6 +117,7 @@ class BranchRateModel : public Parameter {
         void                        readState(std::istream& is);
         void                        freezePncp(void);
         void                        setChainLabel(int c) { chainLabel = c; }
+        void                        setPncpReporter(bool b) { pncpReporter = b; }
         virtual std::vector<std::vector<double>> getAbsoluteRates(void) = 0;
         virtual std::vector<std::vector<BranchMGF>> getBranchMGF(void){ return std::vector<std::vector<BranchMGF>>(numPartitions, std::vector<BranchMGF>(numNodes, BranchMGF{0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0})); }
 
@@ -181,6 +182,7 @@ class BranchRateModel : public Parameter {
         std::vector<double>         centeredness;
         std::vector<double>         pncpMeanTau;
         bool                        pncpFrozen = false;
+        bool                        pncpReporter = true;
         int                         chainLabel = 0;
 };
 
@@ -193,6 +195,8 @@ class ParameterBranchRates : public BranchRateModel {
         std::vector<std::vector<BranchMGF>> getBranchMGF(void);
         double                      lnProbability(void);
         double                      update(void);
+        double                      updatePncpPartition(int p);
+        int                         getLastPncpPartition(void) { return lastMove == 8 ? lastPartition : -1; }
         ClockModel                  getClockModel(void) { return clockModel; }
 
     private:

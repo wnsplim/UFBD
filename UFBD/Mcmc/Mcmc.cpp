@@ -3,6 +3,7 @@
 #include "PhylogeneticModel.hpp"
 #include "SequenceLikelihood.hpp"
 #include "RandomVariable.hpp"
+#include "RelaxedClockTreeModel.hpp"
 #include "Node.hpp"
 #include "Tree.hpp"
 #include "UserSettings.hpp"
@@ -49,15 +50,8 @@ void Mcmc::init(void) {
     UserSettings& settings = UserSettings::userSettings();
     if(settings.clockPresent() && settings.getSigma2Param() == Sigma2Param::PNCP && settings.getPncpTuningGens() > 0){
         model->setChainLabel(runLabel);
-        unsigned long perPartition = settings.getPncpTuningGens();
-        int numPartitions = model->getNumSequencePartitions();
-        unsigned long total = perPartition * (unsigned long)numPartitions;
-        std::ostringstream os;
-        os << "[tuning] run " << runLabel << " PNCP: " << total << " generations ("
-           << perPartition << " x " << numPartitions << " sequence partitions)\n";
-        ChainRunner::logLine(os.str());
         tuning = true;
-        advance(total);
+        advance(settings.getPncpTuningGens());
         model->freezePncpTuning();
         tuning = false;
         gen = 0;
@@ -67,6 +61,7 @@ void Mcmc::init(void) {
 void Mcmc::advance(unsigned long nGens) {
     RandomVariable::setActiveInstance(model->getRng());
     RandomVariable& rng = RandomVariable::randomVariableInstance();
+    RelaxedClockTreeModel* relaxed = tuning ? dynamic_cast<RelaxedClockTreeModel*>(model) : nullptr;
 
     unsigned long target = gen + nGens;
     if(gen == 0 && tuning == false)
@@ -148,6 +143,28 @@ void Mcmc::advance(unsigned long nGens) {
             {
             model->updateForRejection();
             }
+
+        if(relaxed != nullptr){
+            int firstPartition = relaxed->getLastPncpPartition();
+            if(firstPartition >= 0){
+                int numPartitions = relaxed->getNumSequencePartitions();
+                for(int partition = 0; partition < numPartitions; partition++){
+                    if(partition == firstPartition)
+                        continue;
+                    double pncpProposalRatio = relaxed->updatePncpPartition(partition);
+                    double pncpLnL = relaxed->lnLikelihood();
+                    double pncpLnP = relaxed->lnPriorProbability();
+                    double pncpLnR = pncpLnL - curLnL + pncpLnP - curLnP + pncpProposalRatio;
+                    if(std::log(rng.uniformRv()) < pncpLnR){
+                        curLnL = pncpLnL;
+                        curLnP = pncpLnP;
+                        relaxed->updateForAcceptance();
+                    }else{
+                        relaxed->updateForRejection();
+                    }
+                }
+            }
+        }
 
         static const bool trc = (getenv("FBD_TRACE") != nullptr);
         if(trc)

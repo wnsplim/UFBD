@@ -720,7 +720,7 @@ void UserSettings::print(void) {
     std::cout << "Number of parallel chains:    " << numRuns << std::endl;
     std::cout << "Thinning:                     " << thinning << std::endl;
     if (sigma2Param == Sigma2Param::PNCP && clockPresent())
-        std::cout << "PNCP tuning gens/partition:   " << pncpTuningGens << std::endl;
+        std::cout << "PNCP tuning generations:     " << pncpTuningGens << std::endl;
     std::cout << "Number of cores:              " << numCores << std::endl;
     std::cout << "-----------------------------------------------------------------------" << std::endl;
 
@@ -833,8 +833,8 @@ CLOCK & SUBSTITUTION MODEL
                           parameterization of the sigma2. pncp (default) adapts per branch to
                           how much the data constrain that branch; c is fully centered and nc fully
                           non-centered.
-  -pncp_tuning <N>        tuning generations per sequence partition across all clock partitions
-                          before sampling (default 50000)
+  -pncp_tuning <N>        tuning generations before sampling; each PNCP tuning event updates
+                          every sequence partition separately (default 50000)
 
 OTHER
   -config <file>          read a config file (its format is in README.md)

@@ -39,6 +39,7 @@ class PhylogeneticModel {
         virtual int                             getNumSequencePartitions(void) { return 1; }
         virtual void                            freezePncpTuning(void) {}
         virtual void                            setChainLabel(int) {}
+        virtual void                            setPncpReporter(bool) {}
         std::vector<Parameter*>                 parameters;
         Parameter*                              updatedParameter;
         RandomVariable                          rng;
