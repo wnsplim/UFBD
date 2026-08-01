@@ -45,7 +45,6 @@ class MetropolisCoupledMcmc : public ChainRunner {
         static const bool                   chkCache;
         static const bool                   chkPrior;
         //objects ordered by memory footprint
-        std::deque<bool>                    recentAcceptRej;
         std::vector<PhylogeneticModel*>     models;
         std::vector<double>                 currLnL;
         std::vector<double>                 newLnL;

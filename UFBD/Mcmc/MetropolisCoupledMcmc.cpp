@@ -312,8 +312,11 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
         gen += blockLen;
 
         if(verbose && tuning == false && gen % (unsigned long)thinning == 0){
-            const size_t numAccepted = std::count(recentAcceptRej.begin(), recentAcceptRej.end(), true);
-            const double acceptanceRate = recentAcceptRej.empty() ? 0.0 : static_cast<double>(numAccepted) / recentAcceptRej.size();
+            double acceptanceRate = 0.0;
+            for(double e : emaAcc)
+                acceptanceRate += e;
+            if(emaAcc.empty() == false)
+                acceptanceRate /= (double)emaAcc.size();
             std::ostringstream os;
             os << std::fixed << std::setprecision(2) << "chain " << runLabel << "  " << gen << " -- posterior "
                << (currLnL[coldModelIdx] + currLnP[coldModelIdx]) << " likelihood " << currLnL[coldModelIdx]
@@ -335,9 +338,6 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
                 indices[b] = k;
             }
             emaAcc[k] = 0.98 * emaAcc[k] + 0.02 * (acc ? 1.0 : 0.0);
-            recentAcceptRej.push_back(acc);
-            if(recentAcceptRej.size() > 10000)
-                recentAcceptRej.pop_front();
             adaptLadder(acc);
         }
         numSwapSweeps++;
@@ -450,7 +450,6 @@ void MetropolisCoupledMcmc::writeCheckpoint(void) {
     Serialize::writeVec(os, betas);
     Serialize::writeVec(os, emaAcc);
     swapRng.writeState(os);
-    Serialize::writeBoolDeque(os, recentAcceptRej);
     for(int i = 0; i < numModels; i++){
         os << currLnL[i] << ' ' << currLnP[i] << '\n';
         models[i]->getRng()->writeState(os);
@@ -481,7 +480,6 @@ bool MetropolisCoupledMcmc::loadCheckpoint(void) {
     Serialize::readVec(is, betas);
     Serialize::readVec(is, emaAcc);
     swapRng.readState(is);
-    Serialize::readBoolDeque(is, recentAcceptRej);
     currLnL.assign(nm, 0.0);
     currLnP.assign(nm, 0.0);
     for(int i = 0; i < nm; i++){
@@ -510,10 +508,15 @@ void MetropolisCoupledMcmc::adaptLadder(bool swapAccepted) {
     if(swapAccepted)
         swapAdaptAcc++;
     if(swapAdaptAtt >= 100){
+        static const double sTarget = -2.0 * Probability::Normal::invCdfStandardNormal(0.5 * 0.40);
         double ar = (double)swapAdaptAcc / (double)swapAdaptAtt;
+        double edge = 0.5 / (double)swapAdaptAtt;
+        if(ar < edge) ar = edge;
+        if(ar > 1.0 - edge) ar = 1.0 - edge;
+        double sObs = -2.0 * Probability::Normal::invCdfStandardNormal(0.5 * ar);
         swapAdaptCount++;
         double gain = 1.0 / std::sqrt((double)swapAdaptCount);
-        deltaT *= std::exp(gain * (ar - 0.40));
+        deltaT *= std::exp(gain * std::log(sTarget / sObs));
         if(deltaT < 1e-4) deltaT = 1e-4;
         if(deltaT > 10.0)  deltaT = 10.0;
         rebuildLadder();
@@ -547,6 +550,7 @@ void MetropolisCoupledMcmc::rebuildLadder(void){
         const double seg = cum[m + 1] - cum[m];
         const double frac = (seg > 1e-12) ? (want - cum[m]) / seg : 0.0;
         double b = oldB[m] + (oldB[m + 1] - oldB[m]) * frac;
+        b = 1.0 - (1.0 - b) * (1.0 - betaFloor) / (1.0 - oldB[G]);
         const double hi = betas[k - 1] - 1e-9;
         const double lo = betaFloor + 1e-9 * (double)(G - k);
         betas[k] = (b > hi) ? hi : (b < lo ? lo : b);

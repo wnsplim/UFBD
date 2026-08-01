@@ -102,19 +102,18 @@ BranchRateModel::BranchRateModel(double prob, PhylogeneticModel* m, Tree* t, int
     sdAtt = 0;
     spAcc = 0;
     spAtt = 0;
-    ncStep = 0.5;
-    ncAccW = 0;
-    ncAttW = 0;
-    ncAtt = 0;
+    ncStep.assign(numPartitions, 0.5);
+    ncAtt.assign(numPartitions, 0);
+    ncAcc.assign(numPartitions, 0);
     sigRefresh.assign(numPartitions, 0);
     for(int i = 0; i < 3; i++){
         rgeneParam[i] = rg[i];
         sigma2Param[i] = s2[i];
     }
     for(int i = 0; i < 4; i++){
-        step[i] = 1.0;
-        acc[i] = 0;
-        rej[i] = 0;
+        step[i].assign(numPartitions, 1.0);
+        acc[i].assign(numPartitions, 0);
+        rej[i].assign(numPartitions, 0);
     }
     for(Node* n : t->getBackboneRateNodes())
         branchNodes.push_back(n->getOffset());
@@ -128,8 +127,7 @@ BranchRateModel::BranchRateModel(double prob, PhylogeneticModel* m, Tree* t, int
 double BranchRateModel::getAcceptanceRatio(void){
     int a = 0, r = 0;
     for(int i = 0; i < 4; i++){
-        a += acc[i];
-        r += rej[i];
+        for(int q = 0; q < numPartitions; q++){ a += acc[i][q]; r += rej[i][q]; }
     }
     return ((double)a) / ((double)a + (double)r);
 }
@@ -158,47 +156,53 @@ double BranchRateModel::gammaLnPdf(double a, double b, double x){
     return a * std::log(b) - Probability::Helper::lnGamma(a) + (a - 1.0) * std::log(x) - b * x;
 }
 
-double BranchRateModel::bactrianMultiplier(int mt){
+double BranchRateModel::bactrianMultiplier(int mt, int p){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
-    double ar = 0.0;
-    for(bool b : recentAR[mt])
-        if(b)
-            ar++;
-    if(recentAR[mt].empty() == false)
-        ar /= recentAR[mt].size();
-    int total = acc[mt] + rej[mt];
-    if(total > 0 && total % 100 == 0){
-        double gain = 1.0 / std::sqrt((double)(total / 100));
-        step[mt] *= std::exp(gain * (ar - 0.3));
-    }
     double m = 0.95;
-    double s = std::sqrt(1.0 - m * m);
-    double delta = m + Probability::Normal::rv(&rng) * s;
+    double sd = std::sqrt(1.0 - m * m);
+    double delta = m + Probability::Normal::rv(&rng) * sd;
     if(Probability::Uniform::rv(&rng, 0.0, 1.0) < 0.5)
         delta = -delta;
-    return std::exp(step[mt] * delta);
+    return std::exp(step[mt][p] * delta);
+}
+
+void BranchRateModel::adaptStep(int mt, int p, bool accepted){
+    double y = accepted ? 1.0 : 0.0;
+    long k = acc[mt][p] + rej[mt][p];
+    double g = 1.0 / std::pow((double)(k + 5), 0.6);
+    step[mt][p] *= std::exp(g * (y - 0.3));
+    if(step[mt][p] < 1e-4) step[mt][p] = 1e-4;
+    if(step[mt][p] > 20.0) step[mt][p] = 20.0;
+}
+
+void BranchRateModel::adaptNcStep(int p, bool accepted){
+    double y = accepted ? 1.0 : 0.0;
+    double g = 1.0 / std::pow((double)(ncAtt[p] + 5), 0.6);
+    ncStep[p] *= std::exp(g * (y - 0.3));
+    if(ncStep[p] < 1e-3) ncStep[p] = 1e-3;
+    if(ncStep[p] > 10.0) ncStep[p] = 10.0;
 }
 
 double BranchRateModel::scalePartitionRate(int p){
-    double c = bactrianMultiplier(0);
+    double c = bactrianMultiplier(0, p);
     mu[0][p] *= c;
     return std::log(c);
 }
 
 double BranchRateModel::scalePartitionSigma2(int p){
-    double c = bactrianMultiplier(1);
+    double c = bactrianMultiplier(1, p);
     sigma2[0][p] *= c;
     return std::log(c);
 }
 
 double BranchRateModel::scaleBranchRate(int p, int b){
-    double c = bactrianMultiplier(2);
+    double c = bactrianMultiplier(2, p);
     rate[0][p][b] *= c;
     return std::log(c);
 }
 
 double BranchRateModel::globalRateBranchRatesScale(int p){
-    double sf = bactrianMultiplier(0);
+    double sf = bactrianMultiplier(3, p);
     mu[0][p] *= sf;
     for(int b : branchNodes)
         rate[0][p][b] *= sf;
@@ -230,12 +234,26 @@ void BranchRateModel::restoreAll(void){
 }
 
 void BranchRateModel::print(void){
-    static const char* mvName[4] = {"clockMu", "clockSigma2", "branchRate", "cirTheta"};
+    static const char* mvName[4] = {"clockMu", "clockSigma2", "branchRate", "clockMuRates"};
     for(int mt = 0; mt < 4; mt++){
-        long tot = acc[mt] + rej[mt];
-        if(tot > 0)
-            std::cout << mvName[mt] << " (A/R): " << (double)acc[mt] / (double)tot
-                      << " [" << acc[mt] << "/" << tot << "] step: " << step[mt] << "\n";
+        long a = 0, r = 0;
+        double lo = 1e300, hi = -1e300, arLo = 1.0, arHi = 0.0;
+        for(int p = 0; p < numPartitions; p++){
+            a += acc[mt][p];
+            r += rej[mt][p];
+            if(step[mt][p] < lo) lo = step[mt][p];
+            if(step[mt][p] > hi) hi = step[mt][p];
+            long t = acc[mt][p] + rej[mt][p];
+            if(t > 0){
+                double ar = (double)acc[mt][p] / (double)t;
+                if(ar < arLo) arLo = ar;
+                if(ar > arHi) arHi = ar;
+            }
+        }
+        if(a + r > 0)
+            std::cout << mvName[mt] << " (A/R): " << (double)a / (double)(a + r)
+                      << " [" << a << "/" << (a + r) << "] A/R[min/max]: " << arLo << "/" << arHi
+                      << " step[min/max]: " << lo << "/" << hi << "\n";
     }
     double sdar = (sdAtt > 0) ? (double)sdAcc / sdAtt : 0.0;
     std::cout << "SimpleDist (A/R): " << sdar << " [" << sdAcc << "/" << sdAtt << "] step: " << sdStep << "\n";
@@ -252,8 +270,23 @@ void BranchRateModel::print(void){
     }
     if(rasAtt > 0)
         std::cout << "rateAgeSubtree (A/R): " << (double)rasAcc / rasAtt << " [" << rasAcc << "/" << rasAtt << "] step: " << rasStep << "\n";
-    if(ncAtt > 0)
-        std::cout << "sigmaPncp (A/R): " << (double)ncAcc / ncAtt << " [" << ncAcc << "/" << ncAtt << "] step: " << ncStep << "\n";
+    long ncA = 0, ncT = 0;
+    double ncLo = 1e300, ncHi = -1e300, ncArLo = 1.0, ncArHi = 0.0;
+    for(int p = 0; p < numPartitions; p++){
+        ncA += ncAcc[p];
+        ncT += ncAtt[p];
+        if(ncStep[p] < ncLo) ncLo = ncStep[p];
+        if(ncStep[p] > ncHi) ncHi = ncStep[p];
+        if(ncAtt[p] > 0){
+            double ar = (double)ncAcc[p] / (double)ncAtt[p];
+            if(ar < ncArLo) ncArLo = ar;
+            if(ar > ncArHi) ncArHi = ar;
+        }
+    }
+    if(ncT > 0)
+        std::cout << "sigmaPncp (A/R): " << (double)ncA / ncT << " [" << ncA << "/" << ncT
+                  << "] A/R[min/max]: " << ncArLo << "/" << ncArHi
+                  << " step[min/max]: " << ncLo << "/" << ncHi << "\n";
     if(centeredness.empty() == false){
         std::cout << "sigma2 parameterization (1=centered, 0=non-centered):";
         for(int p = 0; p < (int)centeredness.size(); p++)
@@ -266,16 +299,18 @@ void BranchRateModel::writeState(std::ostream& os){
     Serialize::writeVec(os, mu[1]);
     Serialize::writeVec(os, sigma2[1]);
     Serialize::write2D(os, rate[1]);
-    for(int k = 0; k < 4; k++) os << step[k] << ' ';
-    os << '\n';
-    for(int k = 0; k < 4; k++) os << acc[k] << ' ' << rej[k] << ' ';
-    os << '\n';
-    for(int k = 0; k < 4; k++) Serialize::writeBoolDeque(os, recentAR[k]);
+    for(int k = 0; k < 4; k++){
+        Serialize::writeVec(os, step[k]);
+        Serialize::writeIVec(os, acc[k]);
+        Serialize::writeIVec(os, rej[k]);
+    }
     Serialize::writeVec(os, cdStepNode);
     Serialize::writeLVec(os, cdAccNode);
     Serialize::writeLVec(os, cdAttNode);
     Serialize::writeLVec(os, cdTotNode);
-    os << ncStep << ' ' << ncAccW << ' ' << ncAttW << ' ' << ncAtt << '\n';
+    Serialize::writeVec(os, ncStep);
+    Serialize::writeLVec(os, ncAtt);
+    Serialize::writeLVec(os, ncAcc);
     os << sdStep << ' ' << sdAccW << ' ' << sdAttW << ' ' << spStep << ' ' << spAccW << ' ' << spAttW << '\n';
     os << sdAcc << ' ' << sdAtt << ' ' << spAcc << ' ' << spAtt << '\n';
     Serialize::writeLVec(os, sigRefresh);
@@ -293,14 +328,18 @@ void BranchRateModel::readState(std::istream& is){
     sigma2[0] = sigma2[1];
     Serialize::read2D(is, rate[1]);
     rate[0] = rate[1];
-    for(int k = 0; k < 4; k++) is >> step[k];
-    for(int k = 0; k < 4; k++) is >> acc[k] >> rej[k];
-    for(int k = 0; k < 4; k++) Serialize::readBoolDeque(is, recentAR[k]);
+    for(int k = 0; k < 4; k++){
+        Serialize::readVec(is, step[k]);
+        Serialize::readIVec(is, acc[k]);
+        Serialize::readIVec(is, rej[k]);
+    }
     Serialize::readVec(is, cdStepNode);
     Serialize::readLVec(is, cdAccNode);
     Serialize::readLVec(is, cdAttNode);
     Serialize::readLVec(is, cdTotNode);
-    is >> ncStep >> ncAccW >> ncAttW >> ncAtt;
+    Serialize::readVec(is, ncStep);
+    Serialize::readLVec(is, ncAtt);
+    Serialize::readLVec(is, ncAcc);
     is >> sdStep >> sdAccW >> sdAttW >> spStep >> spAccW >> spAttW;
     is >> sdAcc >> sdAtt >> spAcc >> spAtt;
     Serialize::readLVec(is, sigRefresh);
@@ -553,8 +592,8 @@ double BranchRateModel::smallPulleyMove(void){
 
 void BranchRateModel::updateForAcceptance(void){
     if(lastMove == 8){
-        ncAccW++;
-        ncAcc++;
+        ncAcc[lastPartition]++;
+        adaptNcStep(lastPartition, true);
         sigma2[1][lastPartition] = sigma2[0][lastPartition];
         for(int b : branchNodes)
             rate[1][lastPartition][b] = rate[0][lastPartition][b];
@@ -576,15 +615,15 @@ void BranchRateModel::updateForAcceptance(void){
         return;
     }
     if(lastMove == 5){
+        acc[3][lastPartition]++;
+        adaptStep(3, lastPartition, true);
         mu[1][lastPartition] = mu[0][lastPartition];
         for(int b : branchNodes)
             rate[1][lastPartition][b] = rate[0][lastPartition][b];
         return;
     }
-    acc[lastMove]++;
-    recentAR[lastMove].push_back(true);
-    if(recentAR[lastMove].size() > 1000)
-        recentAR[lastMove].pop_front();
+    acc[lastMove][lastPartition]++;
+    adaptStep(lastMove, lastPartition, true);
     if(lastMove == 0)
         mu[1][lastPartition] = mu[0][lastPartition];
     else if(lastMove == 1)
@@ -595,6 +634,7 @@ void BranchRateModel::updateForAcceptance(void){
 
 void BranchRateModel::updateForRejection(void){
     if(lastMove == 8){
+        adaptNcStep(lastPartition, false);
         sigma2[0][lastPartition] = sigma2[1][lastPartition];
         for(int b : branchNodes)
             rate[0][lastPartition][b] = rate[1][lastPartition][b];
@@ -608,15 +648,15 @@ void BranchRateModel::updateForRejection(void){
         return;
     }
     if(lastMove == 5){
+        rej[3][lastPartition]++;
+        adaptStep(3, lastPartition, false);
         mu[0][lastPartition] = mu[1][lastPartition];
         for(int b : branchNodes)
             rate[0][lastPartition][b] = rate[1][lastPartition][b];
         return;
     }
-    rej[lastMove]++;
-    recentAR[lastMove].push_back(false);
-    if(recentAR[lastMove].size() > 1000)
-        recentAR[lastMove].pop_front();
+    rej[lastMove][lastPartition]++;
+    adaptStep(lastMove, lastPartition, false);
     if(lastMove == 0)
         mu[0][lastPartition] = mu[1][lastPartition];
     else if(lastMove == 1)
@@ -905,7 +945,7 @@ double ParameterBranchRates::sigmaPncpMove(int p){
     double d = mB + Probability::Normal::rv(&rng) * sB;
     if(Probability::Uniform::rv(&rng, 0.0, 1.0) < 0.5)
         d = -d;
-    double lnc = ncStep * d;
+    double lnc = ncStep[p] * d;
     double s2new = s2 * std::exp(lnc);
     sigma2[0][p] = s2new;
     double lnH = lnc;
@@ -917,17 +957,7 @@ double ParameterBranchRates::sigmaPncpMove(int p){
         lnH += std::log(rNew / rate[0][p][b]) + 0.5 * std::log(Vnew / Vold[i]);
         rate[0][p][b] = rNew;
     }
-    ncAttW++;
-    ncAtt++;
-    if(ncAttW >= 200){
-        double ar = (double)ncAccW / ncAttW;
-        double gain = 1.0 / std::sqrt((double)(ncAtt / 200));
-        ncStep *= std::exp(gain * (ar - 0.3));
-        if(ncStep < 1e-3) ncStep = 1e-3;
-        if(ncStep > 10.0) ncStep = 10.0;
-        ncAccW = 0;
-        ncAttW = 0;
-    }
+    ncAtt[p]++;
     return lnH;
 }
 
@@ -950,7 +980,7 @@ double ParameterBranchRates::sigmaPncpMoveGBMC(int p){
     double d = mB + Probability::Normal::rv(&rng) * sB;
     if(Probability::Uniform::rv(&rng, 0.0, 1.0) < 0.5)
         d = -d;
-    double lnc = ncStep * d;
+    double lnc = ncStep[p] * d;
     double s2new = s2 * std::exp(lnc);
     sigma2[0][p] = s2new;
     std::vector<double> xnew = x;
@@ -976,17 +1006,7 @@ double ParameterBranchRates::sigmaPncpMoveGBMC(int p){
         lnH += (xdNew - x[off]) + 0.5 * std::log(Vnew / Vold);
         rate[0][p][off] = std::exp(xdNew);
     }
-    ncAttW++;
-    ncAtt++;
-    if(ncAttW >= 200){
-        double ar = (double)ncAccW / ncAttW;
-        double gain = 1.0 / std::sqrt((double)(ncAtt / 200));
-        ncStep *= std::exp(gain * (ar - 0.3));
-        if(ncStep < 1e-3) ncStep = 1e-3;
-        if(ncStep > 10.0) ncStep = 10.0;
-        ncAccW = 0;
-        ncAttW = 0;
-    }
+    ncAtt[p]++;
     return lnH;
 }
 
@@ -1008,7 +1028,7 @@ double ParameterBranchRates::sigmaPncpMoveGBM(int p){
     double d = mB + Probability::Normal::rv(&rng) * sB;
     if(Probability::Uniform::rv(&rng, 0.0, 1.0) < 0.5)
         d = -d;
-    double lnc = ncStep * d;
+    double lnc = ncStep[p] * d;
     double s2new = s2 * std::exp(lnc);
     sigma2[0][p] = s2new;
     std::vector<double> xnew = x;
@@ -1042,17 +1062,7 @@ double ParameterBranchRates::sigmaPncpMoveGBM(int p){
             rate[0][p][off] = std::exp(xbNew);
         }
     }
-    ncAttW++;
-    ncAtt++;
-    if(ncAttW >= 200){
-        double ar = (double)ncAccW / ncAttW;
-        double gain = 1.0 / std::sqrt((double)(ncAtt / 200));
-        ncStep *= std::exp(gain * (ar - 0.3));
-        if(ncStep < 1e-3) ncStep = 1e-3;
-        if(ncStep > 10.0) ncStep = 10.0;
-        ncAccW = 0;
-        ncAttW = 0;
-    }
+    ncAtt[p]++;
     return lnH;
 }
 
@@ -1081,7 +1091,7 @@ double ParameterBranchRates::sigmaPncpMoveWN(int p){
     double d = mB + Probability::Normal::rv(&rng) * sB;
     if(Probability::Uniform::rv(&rng, 0.0, 1.0) < 0.5)
         d = -d;
-    double lnc = ncStep * d;
+    double lnc = ncStep[p] * d;
     double s2new = s2 * std::exp(lnc);
     sigma2[0][p] = s2new;
     double lnH = lnc;
@@ -1095,17 +1105,7 @@ double ParameterBranchRates::sigmaPncpMoveWN(int p){
         lnH += gammaLnPdf(aOld, bOld, rOld) - gammaLnPdf(aNew, bNew, rNew);
         rate[0][p][branchNodes[i]] = rNew;
     }
-    ncAttW++;
-    ncAtt++;
-    if(ncAttW >= 200){
-        double ar = (double)ncAccW / ncAttW;
-        double gain = 1.0 / std::sqrt((double)(ncAtt / 200));
-        ncStep *= std::exp(gain * (ar - 0.3));
-        if(ncStep < 1e-3) ncStep = 1e-3;
-        if(ncStep > 10.0) ncStep = 10.0;
-        ncAccW = 0;
-        ncAttW = 0;
-    }
+    ncAtt[p]++;
     return lnH;
 }
 
@@ -1243,13 +1243,13 @@ double ParameterBranchRatesCIR::getMeanTau(double rho, double rhoUp, double t, d
 }
 
 double ParameterBranchRatesCIR::scaleClockPartitionTheta(int p){
-    double c = bactrianMultiplier(3);
+    double c = bactrianMultiplier(3, p);
     theta[0][p] *= c;
     return std::log(c);
 }
 
 double ParameterBranchRatesCIR::scaleMuRates(int p){
-    double c = bactrianMultiplier(0);
+    double c = bactrianMultiplier(0, p);
     mu[0][p] *= c;
     for(int b : branchNodes)
         rate[0][p][b] /= c;
@@ -1329,7 +1329,7 @@ double ParameterBranchRatesCIR::sigmaPncpMoveCIR(int p){
     double d = mB + Probability::Normal::rv(&rng) * sB;
     if(Probability::Uniform::rv(&rng, 0.0, 1.0) < 0.5)
         d = -d;
-    double lnc = ncStep * d;
+    double lnc = ncStep[p] * d;
     double s2new = s2 * std::exp(lnc);
     if(s2new <= 1.0 / 500.0 || s2new >= 1.0)
         return -INFINITY;
@@ -1352,17 +1352,7 @@ double ParameterBranchRatesCIR::sigmaPncpMoveCIR(int p){
         lnH += fOld[off] - gammaLnPdf(aNew, bNew, rNew);
         rate[0][p][off] = rNew;
     }
-    ncAttW++;
-    ncAtt++;
-    if(ncAttW >= 200){
-        double ar = (double)ncAccW / ncAttW;
-        double gain = 1.0 / std::sqrt((double)(ncAtt / 200));
-        ncStep *= std::exp(gain * (ar - 0.3));
-        if(ncStep < 1e-3) ncStep = 1e-3;
-        if(ncStep > 10.0) ncStep = 10.0;
-        ncAccW = 0;
-        ncAttW = 0;
-    }
+    ncAtt[p]++;
     return lnH;
 }
 
@@ -1389,20 +1379,16 @@ double ParameterBranchRatesCIR::update(void){
 
 void ParameterBranchRatesCIR::updateForAcceptance(void){
     if(lastMove == 6){
-        acc[0]++;
-        recentAR[0].push_back(true);
-        if(recentAR[0].size() > 1000)
-            recentAR[0].pop_front();
+        acc[0][lastPartition]++;
+        adaptStep(0, lastPartition, true);
         mu[1][lastPartition] = mu[0][lastPartition];
         for(int b : branchNodes)
             rate[1][lastPartition][b] = rate[0][lastPartition][b];
         return;
     }
     if(lastMove == 3){
-        acc[3]++;
-        recentAR[3].push_back(true);
-        if(recentAR[3].size() > 1000)
-            recentAR[3].pop_front();
+        acc[3][lastPartition]++;
+        adaptStep(3, lastPartition, true);
         theta[1][lastPartition] = theta[0][lastPartition];
         return;
     }
@@ -1411,20 +1397,16 @@ void ParameterBranchRatesCIR::updateForAcceptance(void){
 
 void ParameterBranchRatesCIR::updateForRejection(void){
     if(lastMove == 6){
-        rej[0]++;
-        recentAR[0].push_back(false);
-        if(recentAR[0].size() > 1000)
-            recentAR[0].pop_front();
+        rej[0][lastPartition]++;
+        adaptStep(0, lastPartition, false);
         mu[0][lastPartition] = mu[1][lastPartition];
         for(int b : branchNodes)
             rate[0][lastPartition][b] = rate[1][lastPartition][b];
         return;
     }
     if(lastMove == 3){
-        rej[3]++;
-        recentAR[3].push_back(false);
-        if(recentAR[3].size() > 1000)
-            recentAR[3].pop_front();
+        rej[3][lastPartition]++;
+        adaptStep(3, lastPartition, false);
         theta[0][lastPartition] = theta[1][lastPartition];
         return;
     }
