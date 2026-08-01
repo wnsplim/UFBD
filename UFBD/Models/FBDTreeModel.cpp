@@ -1141,7 +1141,7 @@ void FBDTreeModel::writeState(std::ostream& os){
     Serialize::writeBoolDeque(os, upDownRecent);
     for(int i = 0; i < TM_COUNT; i++) os << tmAcc[i] << ' ' << tmAtt[i] << ' ';
     os << '\n';
-    os << subtreeStep << ' ' << subtreeAdapt << ' ' << jointScaleStep << ' ' << jointScaleAdapt << '\n';
+    os << subtreeStep << ' ' << subtreeAccW << ' ' << subtreeAttW << ' ' << subtreeAdapt << ' ' << jointScaleStep << ' ' << jointScaleAccW << ' ' << jointScaleAttW << ' ' << jointScaleAdapt << '\n';
 }
 
 void FBDTreeModel::readState(std::istream& is){
@@ -1152,7 +1152,7 @@ void FBDTreeModel::readState(std::istream& is){
     is >> rsAcc >> rsTot >> rsAdapt >> azAcc >> azAtt;
     Serialize::readBoolDeque(is, upDownRecent);
     for(int i = 0; i < TM_COUNT; i++) is >> tmAcc[i] >> tmAtt[i];
-    is >> subtreeStep >> subtreeAdapt >> jointScaleStep >> jointScaleAdapt;
+    is >> subtreeStep >> subtreeAccW >> subtreeAttW >> subtreeAdapt >> jointScaleStep >> jointScaleAccW >> jointScaleAttW >> jointScaleAdapt;
     cacheInit = false;
     zoneInit = true;
 }

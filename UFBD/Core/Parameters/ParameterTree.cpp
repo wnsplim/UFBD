@@ -83,7 +83,7 @@ void ParameterTree::writeState(std::ostream& os) {
     trees[1]->writeState(os);
     os << scaleLambda << ' ' << numAcceptances << ' ' << numRejections << ' ' << numScaleMoves << '\n';
     Serialize::writeBoolDeque(os, recentScaleAcceptRej);
-    os << nodeAgeStep << ' ' << naAdapt << '\n';
+    os << nodeAgeStep << ' ' << naAccW << ' ' << naAttW << ' ' << naAdapt << '\n';
 }
 
 void ParameterTree::readState(std::istream& is) {
@@ -91,7 +91,7 @@ void ParameterTree::readState(std::istream& is) {
     *(trees[0]) = *(trees[1]);
     is >> scaleLambda >> numAcceptances >> numRejections >> numScaleMoves;
     Serialize::readBoolDeque(is, recentScaleAcceptRej);
-    is >> nodeAgeStep >> naAdapt;
+    is >> nodeAgeStep >> naAccW >> naAttW >> naAdapt;
 }
 
 void ParameterTree::tuneScale(bool accepted) {

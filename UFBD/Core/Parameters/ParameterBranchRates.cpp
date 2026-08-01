@@ -75,13 +75,16 @@ void AdaptiveMixSelector::readState(std::istream& is){
 BranchRateModel::BranchRateModel(double prob, PhylogeneticModel* m, Tree* t, int numPart, const std::vector<int>& pg, const double* rg, const double* s2) : Parameter(prob, m, "branchRates"){
     tree = t;
     numPartitions = numPart;
-    partitionGroup = pg.empty() ? std::vector<int>(numPart, 0) : pg;
-    numClockPartitions = 0;
-    for(int gi : partitionGroup)
-        if(gi + 1 > numClockPartitions) numClockPartitions = gi + 1;
+    clockPartitions.resize(1);
+    for(int p = 0; p < numPartitions; p++){
+        int group = pg.empty() ? 0 : pg[p];
+        if(group >= (int)clockPartitions.size())
+            clockPartitions.resize(group + 1);
+        clockPartitions[group].push_back(p);
+    }
     numNodes = t->getNumNodes();
     lastMove = -1;
-    lastClockPartition = -1;
+    lastPartition = -1;
     lastNode = -1;
     uf = nullptr;
     cdStepNode.assign(numNodes, 1.0);
@@ -103,7 +106,7 @@ BranchRateModel::BranchRateModel(double prob, PhylogeneticModel* m, Tree* t, int
     ncAccW = 0;
     ncAttW = 0;
     ncAtt = 0;
-    sigRefresh.assign(numClockPartitions, 0);
+    sigRefresh.assign(numPartitions, 0);
     for(int i = 0; i < 3; i++){
         rgeneParam[i] = rg[i];
         sigma2Param[i] = s2[i];
@@ -116,9 +119,9 @@ BranchRateModel::BranchRateModel(double prob, PhylogeneticModel* m, Tree* t, int
     for(Node* n : t->getBackboneRateNodes())
         branchNodes.push_back(n->getOffset());
     for(int s = 0; s < 2; s++){
-        mu[s].assign(numClockPartitions, 1.0);
-        sigma2[s].assign(numClockPartitions, 1.0);
-        rate[s].assign(numClockPartitions, std::vector<double>(numNodes, 1.0));
+        mu[s].assign(numPartitions, 1.0);
+        sigma2[s].assign(numPartitions, 1.0);
+        rate[s].assign(numPartitions, std::vector<double>(numNodes, 1.0));
     }
 }
 
@@ -131,18 +134,21 @@ double BranchRateModel::getAcceptanceRatio(void){
     return ((double)a) / ((double)a + (double)r);
 }
 
-double BranchRateModel::gammaDirichletLnP(const std::vector<double>& v, const double* param){
+double BranchRateModel::groupedGammaDirichletLnP(const std::vector<double>& v, const double* param){
     double a = param[0], b = param[1], conc = param[2];
-    int L = (int)v.size();
-    double sum = 0.0, lnprod = 0.0;
-    for(double x : v){
-        if(x <= 0.0)
-            return -INFINITY;
-        sum += x;
-        lnprod += std::log(x);
+    double lnp = 0.0;
+    for(const std::vector<int>& partitions : clockPartitions){
+        int L = (int)partitions.size();
+        double sum = 0.0, lnprod = 0.0;
+        for(int p : partitions){
+            if(v[p] <= 0.0)
+                return -INFINITY;
+            sum += v[p];
+            lnprod += std::log(v[p]);
+        }
+        lnp += (a - conc * L) * std::log(sum) - (b / L) * sum + (conc - 1.0) * lnprod;
+        lnp += a * std::log(b / L) - Probability::Helper::lnGamma(a) + Probability::Helper::lnGamma(conc * L) - L * Probability::Helper::lnGamma(conc);
     }
-    double lnp = (a - conc * L) * std::log(sum) - (b / L) * sum + (conc - 1.0) * lnprod;
-    lnp += a * std::log(b / L) - Probability::Helper::lnGamma(a) + Probability::Helper::lnGamma(conc * L) - L * Probability::Helper::lnGamma(conc);
     return lnp;
 }
 
@@ -173,13 +179,13 @@ double BranchRateModel::bactrianMultiplier(int mt){
     return std::exp(step[mt] * delta);
 }
 
-double BranchRateModel::scaleClockPartitionRate(int p){
+double BranchRateModel::scalePartitionRate(int p){
     double c = bactrianMultiplier(0);
     mu[0][p] *= c;
     return std::log(c);
 }
 
-double BranchRateModel::scaleClockPartitionSigma2(int p){
+double BranchRateModel::scalePartitionSigma2(int p){
     double c = bactrianMultiplier(1);
     sigma2[0][p] *= c;
     return std::log(c);
@@ -200,7 +206,7 @@ double BranchRateModel::globalRateBranchRatesScale(int p){
 }
 
 void BranchRateModel::scaleAll(double sf){
-    for(int p = 0; p < numClockPartitions; p++){
+    for(int p = 0; p < numPartitions; p++){
         mu[0][p] *= sf;
         for(int b : branchNodes)
             rate[0][p][b] *= sf;
@@ -208,7 +214,7 @@ void BranchRateModel::scaleAll(double sf){
 }
 
 void BranchRateModel::commitAll(void){
-    for(int p = 0; p < numClockPartitions; p++){
+    for(int p = 0; p < numPartitions; p++){
         mu[1][p] = mu[0][p];
         for(int b : branchNodes)
             rate[1][p][b] = rate[0][p][b];
@@ -216,7 +222,7 @@ void BranchRateModel::commitAll(void){
 }
 
 void BranchRateModel::restoreAll(void){
-    for(int p = 0; p < numClockPartitions; p++){
+    for(int p = 0; p < numPartitions; p++){
         mu[0][p] = mu[1][p];
         for(int b : branchNodes)
             rate[0][p][b] = rate[1][p][b];
@@ -341,7 +347,7 @@ double BranchRateModel::constantDistanceMove(void){
     double bbParentAge = tree->getBackboneParent(node)->getTime();
     double lnNum = std::log(bbParentAge - myAge);
     double lnDen = std::log(bbParentAge - newAge);
-    for(int p = 0; p < numClockPartitions; p++)
+    for(int p = 0; p < numPartitions; p++)
         rate[0][p][node->getOffset()] *= (bbParentAge - myAge) / (bbParentAge - newAge);
     for(Node* c : tree->getBackboneChildren(node)){
         double prevC = myAge - c->getTime();
@@ -349,7 +355,7 @@ double BranchRateModel::constantDistanceMove(void){
         cdNodes.push_back(c->getOffset());
         lnNum += std::log(prevC);
         lnDen += std::log(newC);
-        for(int p = 0; p < numClockPartitions; p++)
+        for(int p = 0; p < numPartitions; p++)
             rate[0][p][c->getOffset()] *= prevC / newC;
     }
     cdAttNode[cdIdx]++;
@@ -364,7 +370,7 @@ double BranchRateModel::constantDistanceMove(void){
         cdAttNode[cdIdx] = 0;
     }
     tree->setLastUpdateWasScale(false);
-    return numClockPartitions * (lnNum - lnDen) + (ynew - y);
+    return numPartitions * (lnNum - lnDen) + (ynew - y);
 }
 
 double BranchRateModel::rateAgeSubtreeMove(void){
@@ -438,10 +444,10 @@ double BranchRateModel::rateAgeSubtreeMove(void){
         Node* a = rateN[i];
         double newD = tree->getBackboneParent(a)->getTime() - a->getTime();
         double factor = oldDur[i] / newD;
-        for(int p = 0; p < numClockPartitions; p++)
+        for(int p = 0; p < numPartitions; p++)
             rate[0][p][a->getOffset()] *= factor;
         cdNodes.push_back(a->getOffset());
-        lnH += numClockPartitions * std::log(factor);
+        lnH += numPartitions * std::log(factor);
     }
     tree->setLastUpdateWasScale(false);
     return lnH + zJac;
@@ -485,12 +491,12 @@ double BranchRateModel::simpleDistanceMove(void){
     double fk = (tx - tk) / (txn - tk);
     cdNodes.push_back(L->getOffset());
     cdNodes.push_back(R->getOffset());
-    for(int p = 0; p < numClockPartitions; p++){
+    for(int p = 0; p < numPartitions; p++){
         rate[0][p][L->getOffset()] *= fj;
         rate[0][p][R->getOffset()] *= fk;
     }
     tree->setLastUpdateWasScale(false);
-    return numClockPartitions * (std::log(fj) + std::log(fk));
+    return numPartitions * (std::log(fj) + std::log(fk));
 }
 
 double BranchRateModel::smallPulleyMove(void){
@@ -519,7 +525,7 @@ double BranchRateModel::smallPulleyMove(void){
     }
     cdNodes.push_back(L->getOffset());
     cdNodes.push_back(R->getOffset());
-    for(int p = 0; p < numClockPartitions; p++){
+    for(int p = 0; p < numPartitions; p++){
         double d = rate[0][p][L->getOffset()] * durL;
         double D = rate[0][p][R->getOffset()] * durR + d;
         double m = 0.95;
@@ -549,30 +555,30 @@ void BranchRateModel::updateForAcceptance(void){
     if(lastMove == 8){
         ncAccW++;
         ncAcc++;
-        sigma2[1][lastClockPartition] = sigma2[0][lastClockPartition];
+        sigma2[1][lastPartition] = sigma2[0][lastPartition];
         for(int b : branchNodes)
-            rate[1][lastClockPartition][b] = rate[0][lastClockPartition][b];
+            rate[1][lastPartition][b] = rate[0][lastPartition][b];
         return;
     }
     if(lastMove == 4){
         if(lastCdNode >= 0){ cdAccNode[lastCdNode]++; cdAccTot++; cdAttTot++; }
         else { rasAcc++; rasAtt++; rasAccW++; }
         for(int k = 0; k < (int)cdNodes.size(); k++)
-            for(int p = 0; p < numClockPartitions; p++)
+            for(int p = 0; p < numPartitions; p++)
                 rate[1][p][cdNodes[k]] = rate[0][p][cdNodes[k]];
         return;
     }
     if(lastMove == 6 || lastMove == 7){
         if(lastMove == 6){ sdAccW++; sdAcc++; } else { spAccW++; spAcc++; }
         for(int k = 0; k < (int)cdNodes.size(); k++)
-            for(int p = 0; p < numClockPartitions; p++)
+            for(int p = 0; p < numPartitions; p++)
                 rate[1][p][cdNodes[k]] = rate[0][p][cdNodes[k]];
         return;
     }
     if(lastMove == 5){
-        mu[1][lastClockPartition] = mu[0][lastClockPartition];
+        mu[1][lastPartition] = mu[0][lastPartition];
         for(int b : branchNodes)
-            rate[1][lastClockPartition][b] = rate[0][lastClockPartition][b];
+            rate[1][lastPartition][b] = rate[0][lastPartition][b];
         return;
     }
     acc[lastMove]++;
@@ -580,31 +586,31 @@ void BranchRateModel::updateForAcceptance(void){
     if(recentAR[lastMove].size() > 1000)
         recentAR[lastMove].pop_front();
     if(lastMove == 0)
-        mu[1][lastClockPartition] = mu[0][lastClockPartition];
+        mu[1][lastPartition] = mu[0][lastPartition];
     else if(lastMove == 1)
-        sigma2[1][lastClockPartition] = sigma2[0][lastClockPartition];
+        sigma2[1][lastPartition] = sigma2[0][lastPartition];
     else
-        rate[1][lastClockPartition][lastNode] = rate[0][lastClockPartition][lastNode];
+        rate[1][lastPartition][lastNode] = rate[0][lastPartition][lastNode];
 }
 
 void BranchRateModel::updateForRejection(void){
     if(lastMove == 8){
-        sigma2[0][lastClockPartition] = sigma2[1][lastClockPartition];
+        sigma2[0][lastPartition] = sigma2[1][lastPartition];
         for(int b : branchNodes)
-            rate[0][lastClockPartition][b] = rate[1][lastClockPartition][b];
+            rate[0][lastPartition][b] = rate[1][lastPartition][b];
         return;
     }
     if(lastMove == 4 || lastMove == 6 || lastMove == 7){
         if(lastMove == 4){ if(lastCdNode >= 0) cdAttTot++; else rasAtt++; }
         for(int k = 0; k < (int)cdNodes.size(); k++)
-            for(int p = 0; p < numClockPartitions; p++)
+            for(int p = 0; p < numPartitions; p++)
                 rate[0][p][cdNodes[k]] = rate[1][p][cdNodes[k]];
         return;
     }
     if(lastMove == 5){
-        mu[0][lastClockPartition] = mu[1][lastClockPartition];
+        mu[0][lastPartition] = mu[1][lastPartition];
         for(int b : branchNodes)
-            rate[0][lastClockPartition][b] = rate[1][lastClockPartition][b];
+            rate[0][lastPartition][b] = rate[1][lastPartition][b];
         return;
     }
     rej[lastMove]++;
@@ -612,17 +618,17 @@ void BranchRateModel::updateForRejection(void){
     if(recentAR[lastMove].size() > 1000)
         recentAR[lastMove].pop_front();
     if(lastMove == 0)
-        mu[0][lastClockPartition] = mu[1][lastClockPartition];
+        mu[0][lastPartition] = mu[1][lastPartition];
     else if(lastMove == 1)
-        sigma2[0][lastClockPartition] = sigma2[1][lastClockPartition];
+        sigma2[0][lastPartition] = sigma2[1][lastPartition];
     else
-        rate[0][lastClockPartition][lastNode] = rate[1][lastClockPartition][lastNode];
+        rate[0][lastPartition][lastNode] = rate[1][lastPartition][lastNode];
 }
 
 ParameterBranchRates::ParameterBranchRates(double prob, PhylogeneticModel* m, Tree* t, int numPart, const std::vector<int>& pg, ClockModel cm, const double* rg, const double* s2) : BranchRateModel(prob, m, t, numPart, pg, rg, s2){
     clockModel = cm;
     RandomVariable& rng = RandomVariable::randomVariableInstance();
-    for(int p = 0; p < numClockPartitions; p++){
+    for(int p = 0; p < numPartitions; p++){
         mu[0][p] = mu[1][p] = Probability::Gamma::rv(&rng, rgeneParam[0], rgeneParam[1]);
         sigma2[0][p] = sigma2[1][p] = Probability::Gamma::rv(&rng, sigma2Param[0], sigma2Param[1]);
         for(int b : branchNodes)
@@ -655,7 +661,7 @@ double ParameterBranchRates::gbmLnP(void){
     for(int idx = 0; idx < M; idx++)
         sonsCache[idx] = tree->getBackboneChildren(dp[idx]);
     std::vector<double> terms(M);
-    for(int p = 0; p < numClockPartitions; p++){
+    for(int p = 0; p < numPartitions; p++){
         double s2 = sigma2[0][p];
         if(s2 <= 0.0)
             return -INFINITY;
@@ -696,8 +702,8 @@ double ParameterBranchRates::gbmContinuousLnP(void){
     double lnp = 0.0;
     Node* root = tree->getRoot();
     int B = (int)branchNodes.size();
-    std::vector<double> terms((size_t)numClockPartitions * B);
-    ThreadPool::current().parallelFor(OP_CLOCK, numClockPartitions * B, [&](int lo, int hi){
+    std::vector<double> terms((size_t)numPartitions * B);
+    ThreadPool::current().parallelFor(OP_CLOCK, numPartitions * B, [&](int lo, int hi){
         for(int idx = lo; idx < hi; idx++){
             int p = idx / B;
             int b = branchNodes[idx % B];
@@ -726,15 +732,15 @@ double ParameterBranchRates::gbmContinuousLnP(void){
 
 double ParameterBranchRates::lnProbability(void){
     tree->ensureBackboneCache();
-    double lnp = gammaDirichletLnP(mu[0], rgeneParam) + gammaDirichletLnP(sigma2[0], sigma2Param);
+    double lnp = groupedGammaDirichletLnP(mu[0], rgeneParam) + groupedGammaDirichletLnP(sigma2[0], sigma2Param);
     if(clockModel == ClockModel::GBM)
         return lnp + gbmLnP();
     if(clockModel == ClockModel::GBMC)
         return lnp + gbmContinuousLnP();
     int B = (int)branchNodes.size();
     bool wn = (clockModel == ClockModel::WN);
-    std::vector<double> terms((size_t)numClockPartitions * B);
-    ThreadPool::current().parallelFor(OP_CLOCK, numClockPartitions * B, [&](int lo, int hi){
+    std::vector<double> terms((size_t)numPartitions * B);
+    ThreadPool::current().parallelFor(OP_CLOCK, numPartitions * B, [&](int lo, int hi){
         for(int idx = lo; idx < hi; idx++){
             int p = idx / B;
             int b = branchNodes[idx % B];
@@ -753,14 +759,11 @@ double ParameterBranchRates::lnProbability(void){
 
 std::vector<std::vector<double>> ParameterBranchRates::getAbsoluteRates(void){
     tree->ensureBackboneCache();
-    std::vector<std::vector<double>> g(numClockPartitions, std::vector<double>(numNodes, 0.0));
-    for(int p = 0; p < numClockPartitions; p++)
-        for(int b = 0; b < numNodes; b++)
-            g[p][b] = rate[0][p][b];
+    std::vector<std::vector<double>> absoluteRates = rate[0];
     if(clockModel == ClockModel::GBMC){
         Node* root = tree->getRoot();
         int B = (int)branchNodes.size();
-        for(int p = 0; p < numClockPartitions; p++){
+        for(int p = 0; p < numPartitions; p++){
             double u = std::sqrt(sigma2[0][p]);
             ThreadPool::current().parallelFor(OP_CLOCK, B, [&](int lo, int hi){
                 for(int idx = lo; idx < hi; idx++){
@@ -772,23 +775,20 @@ std::vector<std::vector<double>> ParameterBranchRates::getAbsoluteRates(void){
                     double dt = anc->getTime() - n->getTime();
                     double mavg, vavg;
                     gbmBridgeMoments(dt, ra, rd, u, &mavg, &vavg);
-                    g[p][b] = mavg;
+                    absoluteRates[p][b] = mavg;
                 }
             });
         }
     }
-    std::vector<std::vector<double>> a(numPartitions);
-    for(int part = 0; part < numPartitions; part++)
-        a[part] = g[partitionGroup[part]];
-    return a;
+    return absoluteRates;
 }
 
 std::vector<std::vector<BranchMGF>> ParameterBranchRates::getBranchMGF(void){
     if(clockModel != ClockModel::GBMC)
         return BranchRateModel::getBranchMGF();
-    std::vector<std::vector<BranchMGF>> g(numClockPartitions, std::vector<BranchMGF>(numNodes, BranchMGF{0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}));
+    std::vector<std::vector<BranchMGF>> branchMGF(numPartitions, std::vector<BranchMGF>(numNodes, BranchMGF{0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}));
     Node* root = tree->getRoot();
-    for(int p = 0; p < numClockPartitions; p++){
+    for(int p = 0; p < numPartitions; p++){
         double u = std::sqrt(sigma2[0][p]);
         for(int b : branchNodes){
             Node* n = tree->getNodeByOffset(b);
@@ -801,33 +801,30 @@ std::vector<std::vector<BranchMGF>> ParameterBranchRates::getBranchMGF(void){
             double mbl = mavg * dt;
             double vbl = vavg * dt * dt;
             if(vbl <= 1e-300 || mbl <= 0.0)
-                g[p][b] = BranchMGF{0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+                branchMGF[p][b] = BranchMGF{0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
             else
-                g[p][b] = BranchMGF{2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, mbl * mbl / vbl, vbl / mbl};
+                branchMGF[p][b] = BranchMGF{2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, mbl * mbl / vbl, vbl / mbl};
         }
     }
-    std::vector<std::vector<BranchMGF>> a(numPartitions);
-    for(int part = 0; part < numPartitions; part++)
-        a[part] = g[partitionGroup[part]];
-    return a;
+    return branchMGF;
 }
 
 void BranchRateModel::freezePncp(void){
     pncpFrozen = true;
-    if((int)centeredness.size() != numClockPartitions)
+    if((int)centeredness.size() != numPartitions)
         return;
-    for(int p = 0; p < numClockPartitions; p++)
-        std::cout << "[tuning] chain " << chainLabel << " clockPartition " << p
+    for(int p = 0; p < numPartitions; p++)
+        std::cout << "[tuning] chain " << chainLabel << " partition " << p
                   << " FROZEN  meanCenteredness " << centeredness[p]
                   << "  meanTau " << pncpMeanTau[p] << "\n";
 }
 
 void ParameterBranchRates::branchLikePrecision(int p, std::vector<double>& tauL, std::vector<double>& ellB){
-    if((int)sigTauL.size() != numClockPartitions){
-        sigTauL.assign(numClockPartitions, std::vector<double>());
-        sigEllB.assign(numClockPartitions, std::vector<double>());
-        sigCount.assign(numClockPartitions, 0);
-        sigRefresh.assign(numClockPartitions, 0);
+    if((int)sigTauL.size() != numPartitions){
+        sigTauL.assign(numPartitions, std::vector<double>());
+        sigEllB.assign(numPartitions, std::vector<double>());
+        sigCount.assign(numPartitions, 0);
+        sigRefresh.assign(numPartitions, 0);
     }
     bool frozen = pncpFrozen;
     bool stale = sigTauL[p].empty() || (frozen == false && sigRefresh[p] % UserSettings::pncpRefreshInterval == 0);
@@ -863,9 +860,9 @@ void ParameterBranchRates::branchLikePrecision(int p, std::vector<double>& tauL,
                 sigEllB[p][b] = (1.0 - w) * sigEllB[p][b] + w * el[b];
             }
         }
-        if((int)centeredness.size() != numClockPartitions){
-            centeredness.assign(numClockPartitions, 0.0);
-            pncpMeanTau.assign(numClockPartitions, 0.0);
+        if((int)centeredness.size() != numPartitions){
+            centeredness.assign(numPartitions, 0.0);
+            pncpMeanTau.assign(numPartitions, 0.0);
         }
         double s2 = sigma2[0][p];
         double acc = 0.0, tacc = 0.0;
@@ -876,7 +873,7 @@ void ParameterBranchRates::branchLikePrecision(int p, std::vector<double>& tauL,
         centeredness[p] = acc / (double)branchNodes.size();
         pncpMeanTau[p] = tacc / (double)branchNodes.size();
         if(frozen == false && sigCount[p] % UserSettings::pncpRefreshInterval == 0)
-            std::cout << "[tuning] chain " << chainLabel << " clockPartition " << p << " refresh " << sigCount[p]
+            std::cout << "[tuning] chain " << chainLabel << " partition " << p << " refresh " << sigCount[p]
                       << "  meanCenteredness " << centeredness[p]
                       << "  meanTau " << pncpMeanTau[p] << "\n";
     }
@@ -891,7 +888,7 @@ void ParameterBranchRates::branchLikePrecision(int p, std::vector<double>& tauL,
 double ParameterBranchRates::sigmaPncpMove(int p){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastMove = 8;
-    lastClockPartition = p;
+    lastPartition = p;
     double s2 = sigma2[0][p];
     double logm = std::log(mu[0][p]);
     int B = (int)branchNodes.size();
@@ -940,7 +937,7 @@ double ParameterBranchRates::sigmaPncpMove(int p){
 double ParameterBranchRates::sigmaPncpMoveGBMC(int p){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastMove = 8;
-    lastClockPartition = p;
+    lastPartition = p;
     Node* root = tree->getRoot();
     double s2 = sigma2[0][p];
     double logm = std::log(mu[0][p]);
@@ -998,7 +995,7 @@ double ParameterBranchRates::sigmaPncpMoveGBMC(int p){
 double ParameterBranchRates::sigmaPncpMoveGBM(int p){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastMove = 8;
-    lastClockPartition = p;
+    lastPartition = p;
     Node* root = tree->getRoot();
     double s2 = sigma2[0][p];
     double logm = std::log(mu[0][p]);
@@ -1065,7 +1062,7 @@ double ParameterBranchRates::sigmaPncpMoveGBM(int p){
 double ParameterBranchRates::sigmaPncpMoveWN(int p){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastMove = 8;
-    lastClockPartition = p;
+    lastPartition = p;
     double s2 = sigma2[0][p];
     double m = mu[0][p];
     int B = (int)branchNodes.size();
@@ -1116,30 +1113,30 @@ double ParameterBranchRates::sigmaPncpMoveWN(int p){
 
 double ParameterBranchRates::update(void){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
-    lastClockPartition = (int)(rng.uniformRv() * numClockPartitions);
+    lastPartition = (int)(rng.uniformRv() * numPartitions);
     double u = rng.uniformRv();
     if(u < 0.55){
         lastMove = 2;
         lastNode = branchNodes[(int)(rng.uniformRv() * branchNodes.size())];
-        return scaleBranchRate(lastClockPartition, lastNode);
+        return scaleBranchRate(lastPartition, lastNode);
     }
     if(u < 0.70){
         lastMove = 5;
-        return globalRateBranchRatesScale(lastClockPartition);
+        return globalRateBranchRatesScale(lastPartition);
     }
     if(u < 0.80){
         lastMove = 0;
-        return scaleClockPartitionRate(lastClockPartition);
+        return scalePartitionRate(lastPartition);
     }
     if(clockModel == ClockModel::WN || UserSettings::userSettings().getSigma2Param() == Sigma2Param::C){
         lastMove = 1;
-        return scaleClockPartitionSigma2(lastClockPartition);
+        return scalePartitionSigma2(lastPartition);
     }
     if(clockModel == ClockModel::UCLN)
-        return sigmaPncpMove(lastClockPartition);
+        return sigmaPncpMove(lastPartition);
     if(clockModel == ClockModel::GBMC)
-        return sigmaPncpMoveGBMC(lastClockPartition);
-    return sigmaPncpMoveGBM(lastClockPartition);
+        return sigmaPncpMoveGBMC(lastPartition);
+    return sigmaPncpMoveGBM(lastPartition);
 }
 
 // CIR clock: halt — detached dead code (kept, never constructed)
@@ -1148,9 +1145,9 @@ ParameterBranchRatesCIR::ParameterBranchRatesCIR(double prob, PhylogeneticModel*
     thetaParam[1] = 2.0;
     thetaParam[2] = 1.0;
     for(int s = 0; s < 2; s++)
-        theta[s].assign(numClockPartitions, 1.0);
+        theta[s].assign(numPartitions, 1.0);
     RandomVariable& rng = RandomVariable::randomVariableInstance();
-    for(int p = 0; p < numClockPartitions; p++){
+    for(int p = 0; p < numPartitions; p++){
         mu[0][p] = mu[1][p] = Probability::Gamma::rv(&rng, rgeneParam[0], rgeneParam[1]);
         sigma2[0][p] = sigma2[1][p] = Probability::Gamma::rv(&rng, sigma2Param[0], sigma2Param[1]);
         theta[0][p] = theta[1][p] = Probability::Gamma::rv(&rng, thetaParam[0], thetaParam[1]);
@@ -1165,7 +1162,7 @@ double ParameterBranchRatesCIR::cirLnP(void){
     int B = (int)branchNodes.size();
     std::vector<double> terms(B);
     const double s2Floor = 1.0 / 500.0;
-    for(int p = 0; p < numClockPartitions; p++){
+    for(int p = 0; p < numPartitions; p++){
         double s2 = sigma2[0][p];
         double th = theta[0][p];
         if(s2 <= s2Floor || s2 >= 1.0 || th <= 0.0)
@@ -1256,15 +1253,15 @@ double ParameterBranchRatesCIR::scaleMuRates(int p){
 }
 
 double ParameterBranchRatesCIR::lnProbability(void){
-    double lnp = gammaDirichletLnP(mu[0], rgeneParam) + gammaDirichletLnP(sigma2[0], sigma2Param);
-    return lnp + gammaDirichletLnP(theta[0], thetaParam) + cirLnP();
+    double lnp = groupedGammaDirichletLnP(mu[0], rgeneParam) + groupedGammaDirichletLnP(sigma2[0], sigma2Param);
+    return lnp + groupedGammaDirichletLnP(theta[0], thetaParam) + cirLnP();
 }
 
 std::vector<std::vector<double>> ParameterBranchRatesCIR::getAbsoluteRates(void){
-    std::vector<std::vector<double>> a(numClockPartitions, std::vector<double>(numNodes, 0.0));
+    std::vector<std::vector<double>> a(numPartitions, std::vector<double>(numNodes, 0.0));
     Node* root = tree->getRoot();
     double H = root->getTime();
-    for(int p = 0; p < numClockPartitions; p++){
+    for(int p = 0; p < numPartitions; p++){
         ThreadPool::current().parallelFor(OP_CLOCK, numNodes, [&](int lo, int hi){
             for(int b = lo; b < hi; b++){
                 Node* n = tree->getNodeByOffset(b);
@@ -1282,10 +1279,10 @@ std::vector<std::vector<double>> ParameterBranchRatesCIR::getAbsoluteRates(void)
 }
 
 std::vector<std::vector<BranchMGF>> ParameterBranchRatesCIR::getBranchMGF(void){
-    std::vector<std::vector<BranchMGF>> a(numClockPartitions, std::vector<BranchMGF>(numNodes, BranchMGF{0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}));
+    std::vector<std::vector<BranchMGF>> a(numPartitions, std::vector<BranchMGF>(numNodes, BranchMGF{0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}));
     Node* root = tree->getRoot();
     double H = root->getTime();
-    for(int p = 0; p < numClockPartitions; p++){
+    for(int p = 0; p < numPartitions; p++){
         double sigmaPB = 2.0 * theta[0][p] * sigma2[0][p];
         double muH = mu[0][p] * H;
         for(int b = 0; b < numNodes; b++){
@@ -1302,7 +1299,7 @@ std::vector<std::vector<BranchMGF>> ParameterBranchRatesCIR::getBranchMGF(void){
 double ParameterBranchRatesCIR::sigmaPncpMoveCIR(int p){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     lastMove = 8;
-    lastClockPartition = p;
+    lastPartition = p;
     Node* root = tree->getRoot();
     double H = root->getTime();
     double th = theta[0][p];
@@ -1367,23 +1364,23 @@ double ParameterBranchRatesCIR::sigmaPncpMoveCIR(int p){
 
 double ParameterBranchRatesCIR::update(void){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
-    lastClockPartition = (int)(rng.uniformRv() * numClockPartitions);
+    lastPartition = (int)(rng.uniformRv() * numPartitions);
     double u = rng.uniformRv();
     if(u < 0.50){
         lastMove = 2;
         lastNode = branchNodes[(int)(rng.uniformRv() * branchNodes.size())];
-        return scaleBranchRate(lastClockPartition, lastNode);
+        return scaleBranchRate(lastPartition, lastNode);
     }
     if(u < 0.75){
         lastMove = 6;
-        return scaleMuRates(lastClockPartition);
+        return scaleMuRates(lastPartition);
     }
     if(u < 0.88){
         lastMove = 1;
-        return scaleClockPartitionSigma2(lastClockPartition);
+        return scalePartitionSigma2(lastPartition);
     }
     lastMove = 3;
-    return scaleClockPartitionTheta(lastClockPartition);
+    return scaleClockPartitionTheta(lastPartition);
 }
 
 void ParameterBranchRatesCIR::updateForAcceptance(void){
@@ -1392,9 +1389,9 @@ void ParameterBranchRatesCIR::updateForAcceptance(void){
         recentAR[0].push_back(true);
         if(recentAR[0].size() > 1000)
             recentAR[0].pop_front();
-        mu[1][lastClockPartition] = mu[0][lastClockPartition];
+        mu[1][lastPartition] = mu[0][lastPartition];
         for(int b : branchNodes)
-            rate[1][lastClockPartition][b] = rate[0][lastClockPartition][b];
+            rate[1][lastPartition][b] = rate[0][lastPartition][b];
         return;
     }
     if(lastMove == 3){
@@ -1402,7 +1399,7 @@ void ParameterBranchRatesCIR::updateForAcceptance(void){
         recentAR[3].push_back(true);
         if(recentAR[3].size() > 1000)
             recentAR[3].pop_front();
-        theta[1][lastClockPartition] = theta[0][lastClockPartition];
+        theta[1][lastPartition] = theta[0][lastPartition];
         return;
     }
     BranchRateModel::updateForAcceptance();
@@ -1414,9 +1411,9 @@ void ParameterBranchRatesCIR::updateForRejection(void){
         recentAR[0].push_back(false);
         if(recentAR[0].size() > 1000)
             recentAR[0].pop_front();
-        mu[0][lastClockPartition] = mu[1][lastClockPartition];
+        mu[0][lastPartition] = mu[1][lastPartition];
         for(int b : branchNodes)
-            rate[0][lastClockPartition][b] = rate[1][lastClockPartition][b];
+            rate[0][lastPartition][b] = rate[1][lastPartition][b];
         return;
     }
     if(lastMove == 3){
@@ -1424,7 +1421,7 @@ void ParameterBranchRatesCIR::updateForRejection(void){
         recentAR[3].push_back(false);
         if(recentAR[3].size() > 1000)
             recentAR[3].pop_front();
-        theta[0][lastClockPartition] = theta[1][lastClockPartition];
+        theta[0][lastPartition] = theta[1][lastPartition];
         return;
     }
     BranchRateModel::updateForRejection();

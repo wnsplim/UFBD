@@ -3,6 +3,7 @@
 
 #include <cstdio>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 
 WriteTSV::WriteTSV(void){
@@ -12,6 +13,7 @@ WriteTSV::WriteTSV(std::string filepath, bool overwrite) : filepath(filepath), n
     if(overwrite == true)
         std::remove(filepath.c_str());
     fout.open(filepath, std::ios::out | std::ios::app);
+    fout << std::setprecision(17);
 }
 
 WriteTSV::~WriteTSV(void){
@@ -42,6 +44,7 @@ void WriteTSV::addFilepath(std::string fp, bool overwrite){
     if(overwrite == true)
         std::remove(filepath.c_str());
     fout.open(filepath, std::ios::out | std::ios::app);
+    fout << std::setprecision(17);
     numRows = 0;
     if (!fout.is_open())
         Msg::error("file stream is not open: " + filepath);

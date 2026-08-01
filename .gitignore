@@ -10,6 +10,7 @@ ufbd
 lab/
 
 # Coding agent configurations
+AGENTS.md
 CLAUDE.md
 .claude
 

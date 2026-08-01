@@ -823,9 +823,12 @@ CLOCK & SUBSTITUTION MODEL
                           equilibrium frequencies (default model)
   -clock_model <ucln|gbm> uncorrelated lognormal, or geometric Brownian motion (default ucln)
   -clock_partitions <g,...>
-                          clock group id per partition (omit = single clock)
-  -rgene_gamma <a,b,c>    gamma prior on the mean clock rate (default 2,2000,1)
-  -sigma2_gamma <a,b,c>   gamma prior on the clock rate variance (default 1,10,1)
+                          clock-group ID per sequence partition (omit = one group)
+  -rgene_gamma <a,b,c>    gamma-Dirichlet prior on partition mean rates within each clock group
+                          (default 2,2000,1)
+  -sigma2_gamma <a,b,c>   gamma-Dirichlet prior on partition rate variances within each clock group
+                          (default 1,10,1)
+                          a = shape, b = rate, c = Dirichlet concentration; singleton = gamma(a,b)
   -sigma2_param <pncp|c|nc>
                           parameterization of the sigma2. pncp (default) adapts per branch to
                           how much the data constrain that branch; c is fully centered and nc fully

@@ -97,9 +97,9 @@ class BranchRateModel : public Parameter {
     public:
                                     BranchRateModel(double prob, PhylogeneticModel* m, Tree* tree, int numPartitions, const std::vector<int>& partitionGroup, const double* rgeneParam, const double* sigma2Param);
         double                      getAcceptanceRatio(void);
-        int                         getNumClockPartitions(void) { return numClockPartitions; }
-        double                      getClockPartitionRate(int p) { return mu[0][p]; }
-        double                      getClockPartitionSigma2(int p) { return sigma2[0][p]; }
+        int                         getNumPartitions(void) { return numPartitions; }
+        double                      getPartitionRate(int p) { return mu[0][p]; }
+        double                      getPartitionSigma2(int p) { return sigma2[0][p]; }
         int                         getNumBranchNodes(void) { return (int)branchNodes.size(); }
         int                         getBranchNodeOffset(int i) { return branchNodes[i]; }
         void                        scaleAll(double sf);
@@ -121,17 +121,16 @@ class BranchRateModel : public Parameter {
         virtual std::vector<std::vector<BranchMGF>> getBranchMGF(void){ return std::vector<std::vector<BranchMGF>>(numPartitions, std::vector<BranchMGF>(numNodes, BranchMGF{0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0})); }
 
     protected:
-        double                      scaleClockPartitionRate(int p);
-        double                      scaleClockPartitionSigma2(int p);
+        double                      scalePartitionRate(int p);
+        double                      scalePartitionSigma2(int p);
         double                      scaleBranchRate(int p, int b);
         double                      globalRateBranchRatesScale(int p);
         double                      bactrianMultiplier(int moveType);
-        double                      gammaDirichletLnP(const std::vector<double>& v, const double* param);
+        double                      groupedGammaDirichletLnP(const std::vector<double>& v, const double* param);
         double                      gammaLnPdf(double a, double b, double x);
         Tree*                       tree;
-        int                         numClockPartitions;
         int                         numPartitions;
-        std::vector<int>            partitionGroup;
+        std::vector<std::vector<int>> clockPartitions;
         int                         numNodes;
         std::vector<int>            branchNodes;
         double                      rgeneParam[3];
@@ -144,7 +143,7 @@ class BranchRateModel : public Parameter {
         int                         acc[4];
         int                         rej[4];
         int                         lastMove;
-        int                         lastClockPartition;
+        int                         lastPartition;
         int                         lastNode;
         ParameterUnresolvedFossils* uf;
         std::vector<double>         cdStepNode;

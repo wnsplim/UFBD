@@ -255,6 +255,8 @@ void Mcmc::writeCheckpoint(void) {
     os << curLnL << ' ' << curLnP << '\n';
     model->getRng()->writeState(os);
     model->writeState(os);
+    model->invalidateLikelihoodCache();
+    model->invalidatePriorCache();
     os.flush();
     os.close();
     std::rename(tmp.c_str(), path.c_str());

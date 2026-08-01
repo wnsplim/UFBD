@@ -15,6 +15,7 @@ class ApproxBranchLengthLikelihood {
                                     ApproxBranchLengthLikelihood(void) = delete;
                                     ApproxBranchLengthLikelihood(const std::string& hessianFile, const std::string& mlTreeFile, const std::vector<std::string>& rogueTaxa, int nStates);
         double                      computeLnL(Tree* tree, const std::vector<std::vector<double>>& branchRates);
+        void                        invalidateCache(void) { cachedRoot = nullptr; zCache.clear(); wCache.clear(); compCache.clear(); }
         int                         getNumPartitions(void) { return nPartitions; }
         std::vector<int>            getPartitionGroups(void) { return std::vector<int>(); }
 

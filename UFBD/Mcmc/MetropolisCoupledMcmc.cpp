@@ -410,16 +410,22 @@ void MetropolisCoupledMcmc::writeCheckpoint(void) {
     std::string tmp = path + ".tmp";
     std::ofstream os(tmp);
     os << std::setprecision(17);
-    os << gen << ' ' << thinning << ' ' << deltaT << ' ' << numModels << ' ' << swapAdaptCount << ' ' << swapAdaptAcc << ' ' << swapAdaptAtt << '\n';
+    os << gen << ' ' << thinning << ' ' << deltaT << ' ' << numModels << ' ' << swapAdaptCount << ' ' << swapAdaptAcc << ' ' << swapAdaptAtt << ' '
+       << numSwapSweeps << ' ' << roundTrips << ' ' << chainDecision << '\n';
     for(int i = 0; i < numModels; i++)
         os << indices[i] << ' ';
     os << '\n';
+    Serialize::writeIVec(os, lastEnd);
+    Serialize::writeVec(os, betas);
+    Serialize::writeVec(os, emaAcc);
     swapRng.writeState(os);
     Serialize::writeBoolDeque(os, recentAcceptRej);
     for(int i = 0; i < numModels; i++){
         os << currLnL[i] << ' ' << currLnP[i] << '\n';
         models[i]->getRng()->writeState(os);
         models[i]->writeState(os);
+        models[i]->invalidateLikelihoodCache();
+        models[i]->invalidatePriorCache();
     }
     os.flush();
     os.close();
@@ -430,7 +436,8 @@ bool MetropolisCoupledMcmc::loadCheckpoint(void) {
     std::string path = paramOut + ".ckp";
     std::ifstream is = openCheckpoint(path);
     int nm, storedSf;
-    is >> gen >> storedSf >> deltaT >> nm >> swapAdaptCount >> swapAdaptAcc >> swapAdaptAtt;
+    is >> gen >> storedSf >> deltaT >> nm >> swapAdaptCount >> swapAdaptAcc >> swapAdaptAtt
+       >> numSwapSweeps >> roundTrips >> chainDecision;
     reconcileThinning(storedSf, thinning);
     indices.assign(nm, 0);
     coldModelIdx = -1;
@@ -439,6 +446,9 @@ bool MetropolisCoupledMcmc::loadCheckpoint(void) {
         if(indices[i] == 0)
             coldModelIdx = i;
     }
+    Serialize::readIVec(is, lastEnd);
+    Serialize::readVec(is, betas);
+    Serialize::readVec(is, emaAcc);
     swapRng.readState(is);
     Serialize::readBoolDeque(is, recentAcceptRej);
     currLnL.assign(nm, 0.0);
