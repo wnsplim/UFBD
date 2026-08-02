@@ -140,7 +140,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     thinning        = 1000;
     hessianFile     = "";
     clockModelName  = "ucln";
-    sigma2Param     = Sigma2Param::PNCP;
+    sigma2Param     = Sigma2Param::C;
     nStates         = 4;
     sequenceFile    = "";
     partitionFile   = "";
@@ -201,7 +201,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode",
         "-lambda_ou_theta", "-mu_ou_theta", "-psi_ou_theta", "-lambda_ou_sd", "-mu_ou_sd", "-psi_ou_sd", "-lambda_ou_nu", "-mu_ou_nu", "-psi_ou_nu",
         "-lambda_groups", "-mu_groups", "-psi_groups", "-cpu_time", "-age_offset",
-        "-hessian", "-clock_model", "-n_states", "-rgene_gamma", "-sigma2_gamma", "-sigma2_param", "-pncp_tuning",
+        "-hessian", "-clock_model", "-n_states", "-rgene_gamma", "-sigma2_gamma", "-sigma2_param",
         "-sequence", "-partition", "-ctmc_gamma_cat", "-datatype", "-ctmc_model", "-ctmc_inv", "-ctmc_freq",
         "-parallel_chains", "-burn_in", "-rhat", "-min_ess", "-max_gen", "-delta_temperature", "-swap_interval", "-resume", "-ar_log", "-no_latent_log"
     };
@@ -212,7 +212,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode",
         "-lambda_ou_theta", "-mu_ou_theta", "-psi_ou_theta", "-lambda_ou_sd", "-mu_ou_sd", "-psi_ou_sd", "-lambda_ou_nu", "-mu_ou_nu", "-psi_ou_nu",
         "-lambda_groups", "-mu_groups", "-psi_groups", "-cpu_time", "-age_offset",
-        "-hessian", "-clock_model", "-n_states", "-rgene_gamma", "-sigma2_gamma", "-sigma2_param", "-pncp_tuning",
+        "-hessian", "-clock_model", "-n_states", "-rgene_gamma", "-sigma2_gamma", "-sigma2_param",
         "-sequence", "-partition", "-ctmc_gamma_cat", "-datatype", "-ctmc_model", "-ctmc_inv", "-ctmc_freq",
         "-parallel_chains", "-burn_in", "-rhat", "-min_ess", "-max_gen", "-delta_temperature", "-swap_interval"
     };
@@ -457,12 +457,9 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
             } else if (arg == "-sigma2_param") {
                 std::string v = val;
                 for (char& ch : v) ch = std::tolower((unsigned char)ch);
-                if (v == "pncp") sigma2Param = Sigma2Param::PNCP;
-                else if (v == "c") sigma2Param = Sigma2Param::C;
+                if (v == "c") sigma2Param = Sigma2Param::C;
                 else if (v == "nc") sigma2Param = Sigma2Param::NC;
-                else Msg::error("flag \"-sigma2_param\" expects pncp, c or nc, but got \"" + val + "\".");
-            } else if (arg == "-pncp_tuning") {
-                pncpTuningGens = std::stoul(val);
+                else Msg::error("flag \"-sigma2_param\" expects c or nc, but got \"" + val + "\".");
             } else if (arg == "-datatype") {
                 datatypeProvided = true;
                 std::string v = val;
@@ -542,9 +539,6 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
 
     if (sbcMode == false && (sequenceFile.empty() == false || hessianFile.empty() == false) && treeFile.empty())
         Msg::error("when -sequence or -hessian is set, a backbone tree is required (-backbone_tree).");
-
-    if ((sequenceFile.empty() == false || hessianFile.empty() == false) && sigma2Param == Sigma2Param::PNCP && pncpTuningGens == 0)
-        Msg::error("sigma2_param=pncp requires pncp_tuning > 0");
 
     if (seedSet == false)
         seed = std::random_device{}();
@@ -719,8 +713,6 @@ void UserSettings::print(void) {
         std::cout << "MC3 swap interval (gens):     " << resampleEvery << std::endl;
     std::cout << "Number of parallel chains:    " << numRuns << std::endl;
     std::cout << "Thinning:                     " << thinning << std::endl;
-    if (sigma2Param == Sigma2Param::PNCP && clockPresent())
-        std::cout << "PNCP tuning generations:     " << pncpTuningGens << std::endl;
     std::cout << "Number of cores:              " << numCores << std::endl;
     std::cout << "-----------------------------------------------------------------------" << std::endl;
 
@@ -829,12 +821,8 @@ CLOCK & SUBSTITUTION MODEL
   -sigma2_gamma <a,b,c>   gamma-Dirichlet prior on partition rate variances within each clock group
                           (default 1,10,1)
                           a = shape, b = rate, c = Dirichlet concentration; singleton = gamma(a,b)
-  -sigma2_param <pncp|c|nc>
-                          parameterization of the sigma2. pncp (default) adapts per branch to
-                          how much the data constrain that branch; c is fully centered and nc fully
-                          non-centered.
-  -pncp_tuning <N>        tuning generations before sampling; each PNCP tuning event updates
-                          every sequence partition separately (default 50000)
+  -sigma2_param <c|nc>    parameterization of the sigma2. c (default) is fully centered;
+                          nc is fully non-centered.
 
 OTHER
   -config <file>          read a config file (its format is in README.md)

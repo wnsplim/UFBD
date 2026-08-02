@@ -849,6 +849,7 @@ std::vector<std::vector<BranchMGF>> ParameterBranchRates::getBranchMGF(void){
     return branchMGF;
 }
 
+// PNCP: halt — detached dead code (kept, never called)
 void BranchRateModel::freezePncp(void){
     pncpFrozen = true;
     if(pncpReporter == false || (int)centeredness.size() != numPartitions)
@@ -865,6 +866,7 @@ void ParameterBranchRates::branchLikePrecision(int p, std::vector<double>& tauL,
         ellB.assign(numNodes, 0.0);
         return;
     }
+    // PNCP: halt — everything past here is detached dead code (PNCP is not selectable)
     if((int)sigTauL.size() != numPartitions){
         sigTauL.assign(numPartitions, std::vector<double>());
         sigEllB.assign(numPartitions, std::vector<double>());

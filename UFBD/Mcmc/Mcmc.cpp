@@ -48,6 +48,7 @@ void Mcmc::init(void) {
     gen = 0;
 
     UserSettings& settings = UserSettings::userSettings();
+    // PNCP: halt — detached dead code (PNCP is not selectable, so this never runs)
     if(settings.clockPresent() && settings.getSigma2Param() == Sigma2Param::PNCP && settings.getPncpTuningGens() > 0){
         model->setChainLabel(runLabel);
         tuning = true;

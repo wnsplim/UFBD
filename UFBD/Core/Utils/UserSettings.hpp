@@ -11,7 +11,7 @@ enum class Conditioning { CROWN, ORIGIN };
 enum class ConditioningEvent { SURVIVAL, ANYSAMPLE, EXTINCT };
 enum class Model { RFBD, HEA14, UFBD };
 enum class RateMode { INDEP, OU };
-enum class Sigma2Param { PNCP, C, NC };
+enum class Sigma2Param { PNCP, C, NC }; // PNCP: halt — not selectable, detached dead code
 
 struct OUHyperSpec {
     bool   thetaSet = false; double thetaMedian = 0.0, thetaSd = 0.0;
@@ -100,11 +100,12 @@ class UserSettings {
         const double*               getRgeneGamma(void) { return rgeneGamma; }
         const double*               getSigma2Gamma(void) { return sigma2Gamma; }
         Sigma2Param                 getSigma2Param(void) { return sigma2Param; }
+        // PNCP: halt — detached dead code (kept, never reached)
         static constexpr long       pncpRefreshInterval = 20;
         unsigned long               getPncpTuningGens(void) { return pncpTuningGens; }
         double                      getDeltaTemperature(void) { return deltaTemperature; }
         unsigned long               getResampleEvery(void) { return resampleEvery; }
-        bool                        clockOrCtmcConfigured(void) { return clockModelName != "ucln" || substModel != "gtr" || datatypeProvided || nstatesProvided || partitionFile.empty() == false || useInvariant || numCats != 4 || freqMode != "model" || clockGroups.empty() == false || sigma2Param != Sigma2Param::PNCP; }
+        bool                        clockOrCtmcConfigured(void) { return clockModelName != "ucln" || substModel != "gtr" || datatypeProvided || nstatesProvided || partitionFile.empty() == false || useInvariant || numCats != 4 || freqMode != "model" || clockGroups.empty() == false || sigma2Param != Sigma2Param::C; }
         void                        print(void);
         void                        printHelp(void);
 
@@ -172,8 +173,8 @@ class UserSettings {
         std::string                 configFilePath;
         std::string                 invocation;
         std::string                 clockModelName;
-        Sigma2Param                 sigma2Param = Sigma2Param::PNCP;
-        unsigned long               pncpTuningGens = 2500 * pncpRefreshInterval;
+        Sigma2Param                 sigma2Param = Sigma2Param::C;
+        unsigned long               pncpTuningGens = 2500 * pncpRefreshInterval; // PNCP: halt
         double                      deltaTemperature = 0.1;
         bool                        deltaTemperatureProvided = false;
         unsigned long               resampleEvery = 1000;
