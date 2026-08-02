@@ -140,7 +140,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     thinning        = 1000;
     hessianFile     = "";
     clockModelName  = "ucln";
-    sigma2Param     = Sigma2Param::C;
+    sigma2ParamList.assign(1, Sigma2Param::C);
     nStates         = 4;
     sequenceFile    = "";
     partitionFile   = "";
@@ -457,9 +457,16 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
             } else if (arg == "-sigma2_param") {
                 std::string v = val;
                 for (char& ch : v) ch = std::tolower((unsigned char)ch);
-                if (v == "c") sigma2Param = Sigma2Param::C;
-                else if (v == "nc") sigma2Param = Sigma2Param::NC;
-                else Msg::error("flag \"-sigma2_param\" expects c or nc, but got \"" + val + "\".");
+                sigma2ParamList.clear();
+                std::stringstream sps(v); std::string spt;
+                while (std::getline(sps, spt, ',')) {
+                    if (spt.empty()) continue;
+                    if (spt == "c") sigma2ParamList.push_back(Sigma2Param::C);
+                    else if (spt == "nc") sigma2ParamList.push_back(Sigma2Param::NC);
+                    else Msg::error("flag \"-sigma2_param\" expects c or nc, but got \"" + spt + "\".");
+                }
+                if (sigma2ParamList.empty())
+                    Msg::error("flag \"-sigma2_param\" expects c or nc, or one such value per sequence partition.");
             } else if (arg == "-datatype") {
                 datatypeProvided = true;
                 std::string v = val;
@@ -821,8 +828,11 @@ CLOCK & SUBSTITUTION MODEL
   -sigma2_gamma <a,b,c>   gamma-Dirichlet prior on partition rate variances within each clock group
                           (default 1,10,1)
                           a = shape, b = rate, c = Dirichlet concentration; singleton = gamma(a,b)
-  -sigma2_param <c|nc>    parameterization of the sigma2. c (default) is fully centered;
-                          nc is fully non-centered.
+  -sigma2_param <c|nc[,...]>
+                          parameterization of the sigma2 move. c (default) is fully centered;
+                          nc is fully non-centered. A single value applies to every sequence
+                          partition; otherwise give one value per partition, in partition order
+                          (e.g. c,nc,c).
 
 OTHER
   -config <file>          read a config file (its format is in README.md)

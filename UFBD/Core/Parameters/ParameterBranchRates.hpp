@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "Parameter.hpp"
+#include "UserSettings.hpp"
 
 class Tree;
 class ParameterUnresolvedFossils;
@@ -134,6 +135,7 @@ class BranchRateModel : public Parameter {
         Tree*                       tree;
         int                         numPartitions;
         std::vector<std::vector<int>> clockPartitions;
+        std::vector<Sigma2Param>    sigma2ParamByPartition;
         int                         numNodes;
         std::vector<int>            branchNodes;
         double                      rgeneParam[3];

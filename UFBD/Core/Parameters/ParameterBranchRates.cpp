@@ -82,6 +82,14 @@ BranchRateModel::BranchRateModel(double prob, PhylogeneticModel* m, Tree* t, int
             clockPartitions.resize(group + 1);
         clockPartitions[group].push_back(p);
     }
+    const std::vector<Sigma2Param>& s2p = UserSettings::userSettings().getSigma2ParamList();
+    if((int)s2p.size() == 1)
+        sigma2ParamByPartition.assign(numPartitions, s2p[0]);
+    else if((int)s2p.size() == numPartitions)
+        sigma2ParamByPartition = s2p;
+    else
+        Msg::error("sigma2_param has " + std::to_string(s2p.size()) + " entries but there are "
+                   + std::to_string(numPartitions) + " sequence partitions; give one value or one per partition.");
     numNodes = t->getNumNodes();
     lastMove = -1;
     lastPartition = -1;
@@ -1139,7 +1147,7 @@ double ParameterBranchRates::update(void){
         lastMove = 0;
         return scalePartitionRate(lastPartition);
     }
-    if(clockModel == ClockModel::WN || UserSettings::userSettings().getSigma2Param() == Sigma2Param::C){
+    if(clockModel == ClockModel::WN || sigma2ParamByPartition[lastPartition] == Sigma2Param::C){
         lastMove = 1;
         return scalePartitionSigma2(lastPartition);
     }
