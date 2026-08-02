@@ -159,7 +159,11 @@ void ThreadPool::parallelTasks(const std::vector<std::function<void()>>& tasks){
 }
 
 ThreadPool& ThreadPool::shared(void){
-    static ThreadPool pool(UserSettings::userSettings().getNumCores());
+    UserSettings& s = UserSettings::userSettings();
+    int cores = s.getNumCores();
+    int coupled = s.getNumCoupledChains();
+    int chainThreads = (coupled > 1) ? s.getNumRuns() * std::min(coupled, cores) : 0;
+    static ThreadPool pool(std::max(1, cores - chainThreads));
     return pool;
 }
 

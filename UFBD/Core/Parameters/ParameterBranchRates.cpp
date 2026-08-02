@@ -860,6 +860,11 @@ void BranchRateModel::freezePncp(void){
 }
 
 void ParameterBranchRates::branchLikePrecision(int p, std::vector<double>& tauL, std::vector<double>& ellB){
+    if(UserSettings::userSettings().getSigma2Param() != Sigma2Param::PNCP){
+        tauL.assign(numNodes, 0.0);
+        ellB.assign(numNodes, 0.0);
+        return;
+    }
     if((int)sigTauL.size() != numPartitions){
         sigTauL.assign(numPartitions, std::vector<double>());
         sigEllB.assign(numPartitions, std::vector<double>());
@@ -917,10 +922,6 @@ void ParameterBranchRates::branchLikePrecision(int p, std::vector<double>& tauL,
     }
     tauL = sigTauL[p];
     ellB = sigEllB[p];
-    if(UserSettings::userSettings().getSigma2Param() == Sigma2Param::NC){
-        tauL.assign(numNodes, 0.0);
-        ellB.assign(numNodes, 0.0);
-    }
 }
 
 double ParameterBranchRates::sigmaPncpMove(int p){

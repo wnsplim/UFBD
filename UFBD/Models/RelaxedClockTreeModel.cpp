@@ -327,7 +327,7 @@ std::vector<std::string> RelaxedClockTreeModel::getParameterNames(void){
         if(s != "originAge" && isNodeAgeName(s) == false)
             n.push_back(s);
     for(int p = 0; p < clock->getNumPartitions(); p++){
-        std::string suf = (clock->getNumPartitions() > 1) ? std::to_string(p) : "";
+        std::string suf = (clock->getNumPartitions() > 1) ? ("_" + std::to_string(p)) : "";
         n.push_back("clockMean" + suf);
         n.push_back("clockSigma2" + suf);
     }
