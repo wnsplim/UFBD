@@ -99,8 +99,10 @@ class BranchRateModel : public Parameter {
                                     BranchRateModel(double prob, PhylogeneticModel* m, Tree* tree, int numPartitions, const std::vector<int>& partitionGroup, const double* rgeneParam, const double* sigma2Param);
         double                      getAcceptanceRatio(void);
         int                         getNumPartitions(void) { return numPartitions; }
-        double                      getPartitionRate(int p) { return mu[0][p]; }
-        double                      getPartitionSigma2(int p) { return sigma2[0][p]; }
+        int                         getNumClockGroups(void) { return numClockGroups; }
+        int                         getFirstPartitionOfGroup(int g) { for(int p = 0; p < numPartitions; p++) if(groupOf[p] == g) return p; return 0; }
+        double                      getClockGroupRate(int g) { return mu[0][g]; }
+        double                      getClockGroupSigma2(int g) { return sigma2[0][g]; }
         int                         getNumBranchNodes(void) { return (int)branchNodes.size(); }
         int                         getBranchNodeOffset(int i) { return branchNodes[i]; }
         void                        scaleAll(double sf);
@@ -134,8 +136,9 @@ class BranchRateModel : public Parameter {
         double                      gammaLnPdf(double a, double b, double x);
         Tree*                       tree;
         int                         numPartitions;
-        std::vector<std::vector<int>> clockPartitions;
-        std::vector<Sigma2Param>    sigma2ParamByPartition;
+        int                         numClockGroups;
+        std::vector<int>            groupOf;
+        std::vector<Sigma2Param>    sigma2ParamByGroup;
         int                         numNodes;
         std::vector<int>            branchNodes;
         double                      rgeneParam[3];
