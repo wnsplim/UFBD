@@ -11,14 +11,13 @@ class ParameterSimplex;
 class PhylogeneticModel;
 class SequenceLikelihood;
 class Tree;
-struct BranchMGF;
 
 class SequenceCTMCModel {
 
     public:
                                         SequenceCTMCModel(PhylogeneticModel* owner, const std::string& sequenceFile, const std::string& partitionFile, int nStates, int numCats);
         void                            buildParameters(void);
-        double                          computeLnL(Tree* tree, const std::vector<std::vector<double> >& branchRates, const std::vector<std::vector<BranchMGF> >& branchMGF);
+        double                          computeLnL(Tree* tree, const std::vector<std::vector<double> >& branchRates);
         void                            invalidateCache(void);
         double                          lnPrior(void);
         double                          update(void);
@@ -31,11 +30,15 @@ class SequenceCTMCModel {
         void                            readState(std::istream& is);
         int                             getNumPartitions(void) const;
         std::vector<int>                getPartitionGroups(void) const { return partitionGroup; }
+        const std::vector<std::string>& getPartitionNames(void) const { return partitionNames; }
+        const std::vector<std::string>& getClockGroupNames(void) const { return clockGroupNames; }
 
     private:
         PhylogeneticModel*              owner;
         SequenceLikelihood*             seqLik;
         std::vector<int>                partitionGroup;
+        std::vector<std::string>        partitionNames;
+        std::vector<std::string>        clockGroupNames;
         std::vector<ParameterSimplex*>  exch;
         std::vector<ParameterSimplex*>  freq;
         std::vector<ParameterDouble*>   alpha;

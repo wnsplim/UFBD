@@ -406,20 +406,28 @@ void AlignmentReader::parseClockPartition(const std::vector<std::string>& tok){
                 if(idx < 0)
                     Msg::error("charpartition clock references undefined charset '" + part + "'.");
                 if(curGroup < 0)
-                    Msg::error("charpartition clock: charset '" + part + "' precedes any 'label:' clock-group.");
+                    Msg::error("charpartition clock: charset '" + part + "' precedes any 'name:' clock partition.");
                 partitionGroup[idx] = curGroup;
             }
         }
+        std::map<int, std::string> groupLabel;
+        for(std::map<std::string, int>::iterator it = labelToGroup.begin(); it != labelToGroup.end(); ++it)
+            groupLabel[it->second] = it->first;
         int nextGroup = (int)labelToGroup.size();
         for(int k = 0; k < nPart; k++)
-            if(partitionGroup[k] < 0)
+            if(partitionGroup[k] < 0){
+                groupLabel[nextGroup] = partitionNames[k];
                 partitionGroup[k] = nextGroup++;
+            }
         std::map<int, int> remap;
         for(int k = 0; k < nPart; k++){
             if(remap.count(partitionGroup[k]) == 0)
                 remap[partitionGroup[k]] = (int)remap.size();
             partitionGroup[k] = remap[partitionGroup[k]];
         }
+        clockGroupNames.assign(remap.size(), "");
+        for(std::map<int, int>::iterator it = remap.begin(); it != remap.end(); ++it)
+            clockGroupNames[it->second] = groupLabel[it->first];
         break;
     }
 }

@@ -29,74 +29,10 @@ class AdaptiveMixSelector {
 
 enum class ClockModel { UCLN, WN, GBM, CIR, GBMC }; // WN + CIR + GBMC: halt — detached, not selectable
 
-struct BranchMGF {
-    int    kind;
-    double rho, rhoUp, Ln, sigmaPB, theta, muH;
-    double alpha, beta;
-
-    bool operator!=(const BranchMGF& o) const {
-        return kind != o.kind || rho != o.rho || rhoUp != o.rhoUp || Ln != o.Ln
-            || sigmaPB != o.sigmaPB || theta != o.theta || muH != o.muH
-            || alpha != o.alpha || beta != o.beta;
-    }
-};
-
-// CIR clock: halt — detached dead code (kept, not wired)
-inline double cirLogBesselI(double nu, double u){
-    if(nu < 0.0 || u < 0.0)
-        return -INFINITY;
-    if(u < 700.0)
-        return std::log(std::cyl_bessel_i(nu, u));
-    double z = 4.0 * nu * nu;
-    double corr = 1.0 - (z - 1.0) / (8.0 * u) + (z - 1.0) * (z - 9.0) / (128.0 * u * u);
-    return u - 0.5 * std::log(2.0 * M_PI * u) + std::log(corr);
-}
-
-inline double cirBridgeLogG(double eta, double r0, double rt, double t, double s2, double b){
-    double bbar = std::sqrt(b * b - 2.0 * eta * s2);
-    double decay = std::exp(-bbar * t);
-    double om = 1.0 - decay;
-    double c = 2.0 * bbar / (s2 * om);
-    double nu = 2.0 * b / s2 - 1.0;
-    double nu0 = b / s2 - 0.5;
-    double u = 2.0 * c * std::sqrt(r0 * rt * decay);
-    double A = -(b * t / s2) * (bbar - b) + ((b - bbar) / s2) * r0 - ((b + bbar) / s2) * rt - c * (r0 + rt) * decay;
-    return std::log(c) + A + nu0 * std::log(rt / (r0 * decay)) + cirLogBesselI(nu, u);
-}
-
-inline double cirBridgeMGF(double eta, double r0, double rt, double t, double s2, double b){
-    if(t * b < 0.0001)
-        return std::exp(eta * (r0 + rt) * t * 0.5);
-    return std::exp(cirBridgeLogG(eta, r0, rt, t, s2, b) - cirBridgeLogG(0.0, r0, rt, t, s2, b));
-}
-
-inline double normalCdf(double x){ return 0.5 * std::erfc(-x * M_SQRT1_2); }
-
-inline void gbmBridgeMoments(double T, double A, double B, double u, double* mean, double* var){
-    double uuT = u * u * T;
-    double s = std::sqrt(uuT);
-    double lz = std::log(B / A);
-    double pa1 = lz / s + 0.5 * s;
-    double pa2 = pa1 - s;
-    if((pa1 > 2.0 && pa2 > 2.0) || (pa1 < -2.0 && pa2 < -2.0)){
-        *mean = ((B - A) / lz + u * u * T * ((A + B) / (2.0 * lz * lz) - (B - A) / (lz * lz * lz)));
-        *var = 0.0;
-        return;
-    }
-    double m = (A / (u * u)) * std::sqrt(2.0 * M_PI * uuT) * std::exp((uuT / 2.0 + lz) * (uuT / 2.0 + lz) / (2.0 * uuT)) * (normalCdf(pa1) - normalCdf(pa2)) / T;
-    *mean = m;
-    double U = uuT, z = B / A, sU = std::sqrt(U);
-    double ez2 = 2.0 * std::sqrt(2.0 * M_PI * U) * std::exp((U + lz) * (U + lz) / (2.0 * U)) * (normalCdf(lz / sU + sU) - normalCdf(lz / sU - sU))
-               - (1.0 + z) * 2.0 * std::sqrt(2.0 * M_PI * U) * std::exp((U / 2.0 + lz) * (U / 2.0 + lz) / (2.0 * U)) * (normalCdf(lz / sU + 0.5 * sU) - normalCdf(lz / sU - 0.5 * sU));
-    ez2 = ez2 * A * A / (u * u * u * u) / (T * T);
-    double v = ez2 - m * m;
-    *var = (v < 0.0) ? 0.0 : v;
-}
-
 class BranchRateModel : public Parameter {
 
     public:
-                                    BranchRateModel(double prob, PhylogeneticModel* m, Tree* tree, int numPartitions, const std::vector<int>& partitionGroup, const double* rgeneParam, const double* sigma2Param);
+                                    BranchRateModel(double prob, PhylogeneticModel* m, Tree* tree, int numPartitions, const std::vector<int>& partitionGroup, const std::vector<Sigma2Param>& sigma2ParamPerGroup, const double* rgeneParam, const double* sigma2Param);
         double                      getAcceptanceRatio(void);
         int                         getNumPartitions(void) { return numPartitions; }
         int                         getNumClockGroups(void) { return numClockGroups; }
@@ -122,7 +58,6 @@ class BranchRateModel : public Parameter {
         void                        setChainLabel(int c) { chainLabel = c; }
         void                        setPncpReporter(bool b) { pncpReporter = b; }
         virtual std::vector<std::vector<double>> getAbsoluteRates(void) = 0;
-        virtual std::vector<std::vector<BranchMGF>> getBranchMGF(void){ return std::vector<std::vector<BranchMGF>>(numPartitions, std::vector<BranchMGF>(numNodes, BranchMGF{0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0})); }
 
     protected:
         double                      scalePartitionRate(int p);
@@ -194,14 +129,14 @@ class ParameterBranchRates : public BranchRateModel {
 
     public:
                                     ParameterBranchRates(void) = delete;
-                                    ParameterBranchRates(double prob, PhylogeneticModel* m, Tree* tree, int numPartitions, const std::vector<int>& partitionGroup, ClockModel clockModel, const double* rgeneParam, const double* sigma2Param);
+                                    ParameterBranchRates(double prob, PhylogeneticModel* m, Tree* tree, int numPartitions, const std::vector<int>& partitionGroup, const std::vector<ClockModel>& clockModel, const std::vector<Sigma2Param>& sigma2ParamPerGroup, const double* rgeneParam, const double* sigma2Param);
         std::vector<std::vector<double>> getAbsoluteRates(void);
-        std::vector<std::vector<BranchMGF>> getBranchMGF(void);
         double                      lnProbability(void);
         double                      update(void);
         double                      updatePncpPartition(int p);
         int                         getLastPncpPartition(void) { return lastMove == 8 ? lastPartition : -1; }
-        ClockModel                  getClockModel(void) { return clockModel; }
+        ClockModel                  getClockModel(int g) { return clockModelOf[g]; }
+        bool                        allGroupsAre(ClockModel c) { for(ClockModel m : clockModelOf) if(m != c) return false; return true; }
 
     private:
         double                      lognormalLnP(double r, double s2, double m);
@@ -213,7 +148,7 @@ class ParameterBranchRates : public BranchRateModel {
         double                      sigmaPncpMoveGBM(int p);
         double                      sigmaPncpMoveWN(int p);
         void                        branchLikePrecision(int p, std::vector<double>& tauL, std::vector<double>& ellB);
-        ClockModel                  clockModel;
+        std::vector<ClockModel>     clockModelOf;
 };
 
 // CIR clock: halt — detached dead code (kept, never constructed)
@@ -221,9 +156,8 @@ class ParameterBranchRatesCIR : public BranchRateModel {
 
     public:
                                     ParameterBranchRatesCIR(void) = delete;
-                                    ParameterBranchRatesCIR(double prob, PhylogeneticModel* m, Tree* tree, int numPartitions, const std::vector<int>& partitionGroup, const double* rgeneParam, const double* sigma2Param);
+                                    ParameterBranchRatesCIR(double prob, PhylogeneticModel* m, Tree* tree, int numPartitions, const std::vector<int>& partitionGroup, const std::vector<Sigma2Param>& sigma2ParamPerGroup, const double* rgeneParam, const double* sigma2Param);
         std::vector<std::vector<double>> getAbsoluteRates(void);
-        std::vector<std::vector<BranchMGF>> getBranchMGF(void);
         double                      lnProbability(void);
         double                      update(void);
         void                        updateForAcceptance(void);

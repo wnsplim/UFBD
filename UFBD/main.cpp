@@ -136,9 +136,9 @@ int main(int argc, const char* argv[]) {
         Msg::error("-sequence and -hessian are mutually exclusive.");
     if(settings.clockOrCtmcConfigured() && seq == false && hessian == false)
         Msg::warning("no -sequence or -hessian provided, running pure FBD model.");
-    ClockModel cm = ClockModel::UCLN;
-    std::string cn = settings.getClockModelName();
-    if(cn == "gbm")  cm = ClockModel::GBM;
+    std::vector<ClockModel> cm;
+    for(const std::string& cn : settings.getClockModelNames())
+        cm.push_back(cn == "gbm" ? ClockModel::GBM : ClockModel::UCLN);
     // WN + GBMC clock: halt — detached, not selectable
 
     int numCoupledChains = settings.getNumCoupledChains();

@@ -34,6 +34,14 @@ static void parseSkylineTimes(const std::string& flag, const std::string& val, s
     }
 }
 
+static std::string trimmed(const std::string& s){
+    size_t a = s.find_first_not_of(" \t");
+    if(a == std::string::npos)
+        return "";
+    size_t b = s.find_last_not_of(" \t");
+    return s.substr(a, b - a + 1);
+}
+
 static bool isPriorFamilyKeyword(const std::string& s){
     std::string k = s;
     for(char& ch : k) ch = (char)std::tolower((unsigned char)ch);
@@ -140,6 +148,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     thinning        = 1000;
     hessianFile     = "";
     clockModelName  = "ucln";
+    clockModelNames.assign(1, "ucln");
     sigma2ParamList.assign(1, Sigma2Param::C);
     nStates         = 4;
     sequenceFile    = "";
@@ -432,22 +441,80 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 partitionFile = val;
             } else if (arg == "-clock_partitions") {
                 clockGroups.clear();
+                std::string cpv = val;
+                for (char& ch : cpv) ch = (char)std::tolower((unsigned char)ch);
+                if (cpv == "all") {
+                    clockPartitionMode = ClockPartitionMode::ALL;
+                    continue;
+                }
+                if (cpv == "single") {
+                    clockPartitionMode = ClockPartitionMode::SINGLE;
+                    continue;
+                }
+                clockPartitionMode = ClockPartitionMode::MANUAL;
+                clockGroupLabels.clear();
+                clockGroupMembers.clear();
                 std::stringstream cgs(val);
-                std::string ct;
-                while (std::getline(cgs, ct, ',')) {
-                    try { clockGroups.push_back(std::stoi(ct)); }
-                    catch (...) { Msg::error("flag \"-clock_partitions\" expects comma-separated integers, but got \"" + val + "\"."); }
+                std::string entry;
+                while (std::getline(cgs, entry, '|')) {
+                    entry = trimmed(entry);
+                    if (entry.empty())
+                        continue;
+                    size_t c = entry.find(':');
+                    if (c == std::string::npos)
+                        Msg::error("flag \"-clock_partitions\" expects all, single, or \"name:(part,part) | name:(part)\", but got \"" + entry + "\".");
+                    std::string label = trimmed(entry.substr(0, c));
+                    if (label.empty())
+                        Msg::error("flag \"-clock_partitions\" has an entry with an empty name in \"" + val + "\".");
+                    for (const std::string& l : clockGroupLabels)
+                        if (l == label)
+                            Msg::error("flag \"-clock_partitions\" repeats the clock-partition name \"" + label + "\".");
+                    std::string set = trimmed(entry.substr(c + 1));
+                    if (set.size() < 2 || set.front() != '(' || set.back() != ')')
+                        Msg::error("clock partition \"" + label + "\" must list its sequence partitions in parentheses.");
+                    set = set.substr(1, set.size() - 2);
+                    std::vector<std::string> members;
+                    std::stringstream ms(set);
+                    std::string mt;
+                    while (std::getline(ms, mt, ',')) {
+                        mt = trimmed(mt);
+                        if (mt.empty() == false)
+                            members.push_back(mt);
+                    }
+                    if (members.empty())
+                        Msg::error("clock partition \"" + label + "\" lists no sequence partitions.");
+                    clockGroupLabels.push_back(label);
+                    clockGroupMembers.push_back(members);
                 }
-                std::vector<int> seen;
-                for (int& g : clockGroups) {
-                    int idx = -1;
-                    for (size_t k = 0; k < seen.size(); k++) if (seen[k] == g) { idx = (int)k; break; }
-                    if (idx < 0) { idx = (int)seen.size(); seen.push_back(g); }
-                    g = idx;
-                }
+                if (clockGroupLabels.empty())
+                    Msg::error("flag \"-clock_partitions\" expects all, single, or \"label:members | label:members\".");
             } else if (arg == "-clock_model") {
-                clockModelName = val;
-                for (char& ch : clockModelName) ch = std::tolower((unsigned char)ch);
+                clockModelNames.clear();
+                clockModelByLabel.clear();
+                std::stringstream cms(val);
+                std::string entry;
+                while (std::getline(cms, entry, '|')) {
+                    entry = trimmed(entry);
+                    if (entry.empty())
+                        continue;
+                    size_t c = entry.find(':');
+                    std::string label = (c == std::string::npos) ? "" : trimmed(entry.substr(0, c));
+                    std::string v = trimmed((c == std::string::npos) ? entry : entry.substr(c + 1));
+                    for (char& ch : v) ch = (char)std::tolower((unsigned char)ch);
+                    if (v != "ucln" && v != "gbm")
+                        Msg::error("flag \"-clock_model\" expects ucln or gbm, but got \"" + v + "\".");
+                    if (label.empty())
+                        clockModelNames.assign(1, v);
+                    else
+                        clockModelByLabel[label] = v;
+                }
+                if (clockModelNames.empty() && clockModelByLabel.empty())
+                    Msg::error("flag \"-clock_model\" expects ucln or gbm, or \"name:value | name:value\" per clock partition.");
+                if (clockModelNames.empty() == false && clockModelByLabel.empty() == false)
+                    Msg::error("flag \"-clock_model\" got \"" + val + "\". Use one value for every clock partition,"
+                               " or one value per clock partition by name.");
+                if (clockModelNames.empty() == false)
+                    clockModelName = clockModelNames[0];
             } else if (arg == "-rgene_gamma") {
                 std::stringstream ss(val); std::string tok; int k = 0;
                 while (std::getline(ss, tok, ',') && k < 3) if (tok.empty() == false) rgeneGamma[k++] = std::stod(tok);
@@ -455,18 +522,30 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 std::stringstream ss(val); std::string tok; int k = 0;
                 while (std::getline(ss, tok, ',') && k < 3) if (tok.empty() == false) sigma2Gamma[k++] = std::stod(tok);
             } else if (arg == "-sigma2_param") {
-                std::string v = val;
-                for (char& ch : v) ch = std::tolower((unsigned char)ch);
                 sigma2ParamList.clear();
-                std::stringstream sps(v); std::string spt;
-                while (std::getline(sps, spt, ',')) {
-                    if (spt.empty()) continue;
-                    if (spt == "c") sigma2ParamList.push_back(Sigma2Param::C);
-                    else if (spt == "nc") sigma2ParamList.push_back(Sigma2Param::NC);
-                    else Msg::error("flag \"-sigma2_param\" expects c or nc, but got \"" + spt + "\".");
+                sigma2ParamByLabel.clear();
+                std::stringstream sps(val);
+                std::string entry;
+                while (std::getline(sps, entry, '|')) {
+                    entry = trimmed(entry);
+                    if (entry.empty())
+                        continue;
+                    size_t c = entry.find(':');
+                    std::string label = (c == std::string::npos) ? "" : trimmed(entry.substr(0, c));
+                    std::string v = trimmed((c == std::string::npos) ? entry : entry.substr(c + 1));
+                    for (char& ch : v) ch = (char)std::tolower((unsigned char)ch);
+                    if (v != "c" && v != "nc")
+                        Msg::error("flag \"-sigma2_param\" expects c or nc, but got \"" + v + "\".");
+                    if (label.empty())
+                        sigma2ParamList.assign(1, v == "c" ? Sigma2Param::C : Sigma2Param::NC);
+                    else
+                        sigma2ParamByLabel[label] = v;
                 }
-                if (sigma2ParamList.empty())
-                    Msg::error("flag \"-sigma2_param\" expects c or nc, or one such value per sequence partition.");
+                if (sigma2ParamList.empty() && sigma2ParamByLabel.empty())
+                    Msg::error("flag \"-sigma2_param\" expects c or nc, or \"name:value | name:value\" per clock partition.");
+                if (sigma2ParamList.empty() == false && sigma2ParamByLabel.empty() == false)
+                    Msg::error("flag \"-sigma2_param\" got \"" + val + "\". Use one value for every clock partition,"
+                               " or one value per clock partition by name.");
             } else if (arg == "-datatype") {
                 datatypeProvided = true;
                 std::string v = val;
@@ -820,19 +899,18 @@ CLOCK & SUBSTITUTION MODEL
   -ctmc_inv <on|off>      add a proportion of invariant sites (default off)
   -ctmc_freq <model|empirical|estimated>
                           equilibrium frequencies (default model)
-  -clock_model <ucln|gbm> uncorrelated lognormal, or geometric Brownian motion (default ucln)
-  -clock_partitions <g,...>
-                          clock-group ID per sequence partition (omit = one group)
-  -rgene_gamma <a,b,c>    gamma-Dirichlet prior on partition mean rates within each clock group
+  -clock_partitions <all|single|name:(part,...)|...>
+                          sequence partitions sharing one clock. all (default) = one clock per
+                          sequence partition, single = one clock for all sequence partitions
+  -clock_model <ucln|gbm> uncorrelated lognormal, or geometric Brownian motion (default ucln);
+                          or one per clock partition, "name:value | name:value"
+  -rgene_gamma <a,b,c>    gamma-Dirichlet prior on the mean rates across clock partitions
                           (default 2,2000,1)
-  -sigma2_gamma <a,b,c>   gamma-Dirichlet prior on partition rate variances within each clock group
+  -sigma2_gamma <a,b,c>   gamma-Dirichlet prior on the rate variances across clock partitions
                           (default 1,10,1)
                           a = shape, b = rate, c = Dirichlet concentration; singleton = gamma(a,b)
-  -sigma2_param <c|nc[,...]>
-                          parameterization of the sigma2 move. c (default) is fully centered;
-                          nc is fully non-centered. A single value applies to every sequence
-                          partition; otherwise give one value per partition, in partition order
-                          (e.g. c,nc,c).
+  -sigma2_param <c|nc>    parameterization of the sigma2 move: centered (default) or
+                          non-centered; or one per clock partition, "name:value | name:value"
 
 OTHER
   -config <file>          read a config file (its format is in README.md)

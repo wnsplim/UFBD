@@ -20,8 +20,8 @@ class RelaxedClockTreeModel : public PhylogeneticModel {
 
     public:
                                     RelaxedClockTreeModel(void) = delete;
-                                    RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, const std::string& hessianFile, const std::string& mlTreeFile, int nStates, ClockModel clockModel, const double* rgeneParam, const double* sigma2Param, unsigned int seed);
-                                    RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, const std::string& sequenceFile, const std::string& partitionFile, int nStates, int numCats, ClockModel clockModel, const double* rgeneParam, const double* sigma2Param, unsigned int seed);
+                                    RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, const std::string& hessianFile, const std::string& mlTreeFile, int nStates, const std::vector<ClockModel>& clockModel, const double* rgeneParam, const double* sigma2Param, unsigned int seed);
+                                    RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, const std::string& sequenceFile, const std::string& partitionFile, int nStates, int numCats, const std::vector<ClockModel>& clockModel, const double* rgeneParam, const double* sigma2Param, unsigned int seed);
         std::vector<std::string>    getParameterNames(void);
         std::vector<double>         getParameterString(void);
         std::vector<std::string>    getLatentNames(void);
@@ -39,7 +39,7 @@ class RelaxedClockTreeModel : public PhylogeneticModel {
         void                        updateForRejection(void);
         void                        writeState(std::ostream& os);
         void                        readState(std::istream& is);
-        int                         getNumSequencePartitions(void) { return clock->getNumPartitions(); }
+        int                         getNumClockGroups(void) { return clock->getNumClockGroups(); }
         int                         getLastPncpPartition(void) { return lastMoveType == 0 ? static_cast<ParameterBranchRates*>(clock)->getLastPncpPartition() : -1; }
         double                      updatePncpPartition(int p) { lastMoveType = 0; return static_cast<ParameterBranchRates*>(clock)->updatePncpPartition(p); }
         void                        freezePncpTuning(void) { clock->freezePncp(); }
@@ -47,7 +47,7 @@ class RelaxedClockTreeModel : public PhylogeneticModel {
         void                        setPncpReporter(bool b) { clock->setPncpReporter(b); }
 
     private:
-        void                        buildClock(ClockModel clockModel, const double* rgeneParam, const double* sigma2Param);
+        void                        buildClock(const std::vector<ClockModel>& clockModel, const double* rgeneParam, const double* sigma2Param);
         void                        crownInitScale(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils);
         void                        collectNodeAges(std::vector<std::string>* names, std::vector<double>* vals);
         double                      nodeAgeSweep(void);

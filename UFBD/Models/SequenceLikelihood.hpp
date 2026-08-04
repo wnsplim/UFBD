@@ -21,8 +21,7 @@ class SequenceLikelihood {
                                        const std::vector<std::vector<double>>& exchangeability,
                                        const std::vector<std::vector<double>>& frequency,
                                        const std::vector<double>& alpha,
-                                       const std::vector<double>& proportionInvariant,
-                                       const std::vector<std::vector<BranchMGF>>& branchMGF);
+                                       const std::vector<double>& proportionInvariant);
 
     private:
         void                mapTaxaToNodes(Tree* tree);
@@ -33,7 +32,6 @@ class SequenceLikelihood {
                                        const std::vector<std::vector<double>>& frequency,
                                        const std::vector<double>& alpha,
                                        const std::vector<double>& proportionInvariant,
-                                       const std::vector<std::vector<BranchMGF>>& branchMGF,
                                        bool parallelPatterns);
 
         int                                          numStates;
@@ -58,7 +56,6 @@ class SequenceLikelihood {
         std::vector<std::vector<std::vector<double>>>   conP;
         std::vector<std::vector<std::vector<double>>>   cumScale;
         std::vector<std::vector<double>>                lastBl;
-        std::vector<std::vector<BranchMGF>>             lastMGF;
         std::vector<std::vector<double>>                lastExch;
         std::vector<std::vector<double>>                lastFreq;
         std::vector<double>                             lastAlpha;

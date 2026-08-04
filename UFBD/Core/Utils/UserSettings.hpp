@@ -13,6 +13,8 @@ enum class Model { RFBD, HEA14, UFBD };
 enum class RateMode { INDEP, OU };
 enum class Sigma2Param { PNCP, C, NC }; // PNCP: halt — not selectable, detached dead code
 
+enum class ClockPartitionMode { ALL, SINGLE, MANUAL };
+
 struct OUHyperSpec {
     bool   thetaSet = false; double thetaMedian = 0.0, thetaSd = 0.0;
     bool   sdSet    = false; double sdShape = 0.0, sdRate = 0.0;
@@ -82,7 +84,13 @@ class UserSettings {
         std::string                 getHessianFile(void) { return hessianFile; }
         std::string                 getConfigFile(void) { return configFilePath; }
         std::string                 getClockModelName(void) { return clockModelName; }
+        const std::vector<std::string>& getClockModelNames(void) { return clockModelNames; }
+        const std::map<std::string,std::string>& getClockModelByLabel(void) { return clockModelByLabel; }
+        const std::map<std::string,std::string>& getSigma2ParamByLabel(void) { return sigma2ParamByLabel; }
         const std::vector<int>&     getClockGroups(void) { return clockGroups; }
+        const std::vector<std::string>& getClockGroupLabels(void) { return clockGroupLabels; }
+        const std::vector<std::vector<std::string>>& getClockGroupMembers(void) { return clockGroupMembers; }
+        ClockPartitionMode          getClockPartitionMode(void) { return clockPartitionMode; }
         int                         getModelNStates(void) {
                                         if(sequenceFile.empty() == false)
                                             return datatypeProvided ? (seqDataType == "aa" ? 20 : 4) : 4;
@@ -174,6 +182,7 @@ class UserSettings {
         std::string                 configFilePath;
         std::string                 invocation;
         std::string                 clockModelName;
+        std::vector<std::string>    clockModelNames = { "ucln" };
         std::vector<Sigma2Param>    sigma2ParamList = { Sigma2Param::C };
         unsigned long               pncpTuningGens = 2500 * pncpRefreshInterval; // PNCP: halt
         double                      deltaTemperature = 0.1;
@@ -181,6 +190,11 @@ class UserSettings {
         unsigned long               resampleEvery = 1000;
         bool                        resampleEveryProvided = false;
         std::vector<int>            clockGroups;
+        std::vector<std::string>    clockGroupLabels;
+        std::vector<std::vector<std::string>> clockGroupMembers;
+        std::map<std::string,std::string> clockModelByLabel;
+        std::map<std::string,std::string> sigma2ParamByLabel;
+        ClockPartitionMode          clockPartitionMode = ClockPartitionMode::ALL;
         int                         nStates;
         std::string                 sequenceFile;
         std::string                 partitionFile;

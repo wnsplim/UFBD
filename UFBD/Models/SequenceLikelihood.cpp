@@ -109,8 +109,7 @@ double SequenceLikelihood::computeLnL(Tree* tree,
                                       const std::vector<std::vector<double>>& exchangeability,
                                       const std::vector<std::vector<double>>& frequency,
                                       const std::vector<double>& alpha,
-                                      const std::vector<double>& proportionInvariant,
-                                      const std::vector<std::vector<BranchMGF>>& branchMGF){
+                                      const std::vector<double>& proportionInvariant){
     mapTaxaToNodes(tree);
     tree->ensureBackboneCache();
     int numNodes = tree->getNumNodes();
@@ -118,7 +117,6 @@ double SequenceLikelihood::computeLnL(Tree* tree,
         conP.assign(numPartitions, std::vector<std::vector<double>>(numNodes));
         cumScale.assign(numPartitions, std::vector<std::vector<double>>(numNodes));
         lastBl.assign(numPartitions, std::vector<double>(numNodes, -1.0));
-        lastMGF.assign(numPartitions, std::vector<BranchMGF>(numNodes, BranchMGF{-1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}));
         lastExch.assign(numPartitions, std::vector<double>());
         lastFreq.assign(numPartitions, std::vector<double>());
         lastAlpha.assign(numPartitions, -1.0);
@@ -128,12 +126,12 @@ double SequenceLikelihood::computeLnL(Tree* tree,
     double lnL = 0.0;
     const double ninf = -std::numeric_limits<double>::infinity();
     if(numPartitions <= 1){
-        lnL = computePartitionLnL(0, tree, branchRates, exchangeability, frequency, alpha, proportionInvariant, branchMGF, true);
+        lnL = computePartitionLnL(0, tree, branchRates, exchangeability, frequency, alpha, proportionInvariant, true);
     }else{
         std::vector<double> partLnL(numPartitions, 0.0);
         ThreadPool::current().parallelFor(OP_CTMC, numPartitions, [&](int q0, int q1){
             for(int q = q0; q < q1; q++)
-                partLnL[q] = computePartitionLnL(q, tree, branchRates, exchangeability, frequency, alpha, proportionInvariant, branchMGF, false);
+                partLnL[q] = computePartitionLnL(q, tree, branchRates, exchangeability, frequency, alpha, proportionInvariant, false);
         });
         for(double v : partLnL){
             if(v == ninf){ lnL = ninf; break; }
@@ -150,7 +148,6 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
                                       const std::vector<std::vector<double>>& frequency,
                                       const std::vector<double>& alpha,
                                       const std::vector<double>& proportionInvariant,
-                                      const std::vector<std::vector<BranchMGF>>& branchMGF,
                                       bool parallelPatterns){
     std::vector<Node*>& downPass = tree->getDownPassSequence();
     Node* root = tree->getRoot();
@@ -213,7 +210,7 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
             for(Node* c : children){
                 int coff = c->getOffset();
                 if(c->getIsTip() && tipMissing[p][coff]) continue;
-                if(dirty[coff] || curBl[coff] != lastBl[p][coff] || branchMGF[p][coff] != lastMGF[p][coff]) nd = true;
+                if(dirty[coff] || curBl[coff] != lastBl[p][coff]) nd = true;
             }
             if(nd == false) continue;
             dirty[off] = 1;
@@ -227,7 +224,7 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
                 if(c->getIsTip() && tipMissing[p][coff]) continue;
                 Pcache[coff].assign(K * n * n, 0.0);
                 for(int k = 0; k < K; k++)
-                    rateModel[p].transitionProbabilities(curBl[coff], cat[k], branchMGF[p][coff], &Pcache[coff][k * n * n]);
+                    rateModel[p].transitionProbabilities(curBl[coff], cat[k], &Pcache[coff][k * n * n]);
             }
         }
 
@@ -400,7 +397,6 @@ double SequenceLikelihood::computePartitionLnL(int p, Tree* tree,
         else
             rootSum(0, npat);
         lastBl[p] = curBl;
-        lastMGF[p] = branchMGF[p];
         lastExch[p] = exchangeability[p];
         lastFreq[p] = frequency[p];
         lastAlpha[p] = alpha[p];

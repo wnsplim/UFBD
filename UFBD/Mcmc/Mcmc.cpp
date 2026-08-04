@@ -148,8 +148,8 @@ void Mcmc::advance(unsigned long nGens) {
         if(relaxed != nullptr){
             int firstPartition = relaxed->getLastPncpPartition();
             if(firstPartition >= 0){
-                int numPartitions = relaxed->getNumSequencePartitions();
-                for(int partition = 0; partition < numPartitions; partition++){
+                int numClockGroups = relaxed->getNumClockGroups();
+                for(int partition = 0; partition < numClockGroups; partition++){
                     if(partition == firstPartition)
                         continue;
                     double pncpProposalRatio = relaxed->updatePncpPartition(partition);

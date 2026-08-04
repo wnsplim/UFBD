@@ -18,15 +18,89 @@
 #include "Tree.hpp"
 #include "UserSettings.hpp"
 
-void RelaxedClockTreeModel::buildClock(ClockModel clockModel, const double* rgeneParam, const double* sigma2Param){
+void RelaxedClockTreeModel::buildClock(const std::vector<ClockModel>& clockModel, const double* rgeneParam, const double* sigma2Param){
     int nPart = (lik != nullptr) ? lik->getNumPartitions() : ctmc->getNumPartitions();
-    std::vector<int> pgroup = UserSettings::userSettings().getClockGroups();
-    if(pgroup.empty())
-        pgroup = (lik != nullptr) ? lik->getPartitionGroups() : ctmc->getPartitionGroups();
-    if(pgroup.empty() == false && (int)pgroup.size() != nPart)
-        Msg::error("clock-partition assignment (" + std::to_string(pgroup.size()) + " entries) does not match the number of partitions (" + std::to_string(nPart) + ")");
+    UserSettings& us = UserSettings::userSettings();
+    std::vector<std::string> seqNames = (ctmc != nullptr) ? ctmc->getPartitionNames() : std::vector<std::string>();
+    std::vector<int> pgroup;
+    std::vector<std::string> groupNames;
+
+    if(us.getClockPartitionMode() == ClockPartitionMode::MANUAL){
+        const std::vector<std::string>& labels = us.getClockGroupLabels();
+        const std::vector<std::vector<std::string>>& members = us.getClockGroupMembers();
+        pgroup.assign(nPart, -1);
+        groupNames = labels;
+        for(size_t g = 0; g < members.size(); g++){
+            for(const std::string& m : members[g]){
+                int idx = -1;
+                for(size_t k = 0; k < seqNames.size(); k++)
+                    if(seqNames[k] == m){ idx = (int)k; break; }
+                if(idx < 0){
+                    bool numeric = m.empty() == false && m.find_first_not_of("0123456789") == std::string::npos;
+                    if(numeric == false)
+                        Msg::error("clock partition \"" + labels[g] + "\" references \"" + m + "\", which is not a sequence partition.");
+                    idx = std::stoi(m);
+                    if(idx < 0 || idx >= nPart)
+                        Msg::error("clock partition \"" + labels[g] + "\" references sequence partition " + m + ", but there are only " + std::to_string(nPart) + ".");
+                }
+                if(pgroup[idx] >= 0)
+                    Msg::error("sequence partition \"" + m + "\" is listed in both clock partitions \"" + labels[pgroup[idx]] + "\" and \"" + labels[g] + "\".");
+                pgroup[idx] = (int)g;
+            }
+        }
+        for(int k = 0; k < nPart; k++)
+            if(pgroup[k] < 0){
+                std::string nm = (k < (int)seqNames.size()) ? seqNames[k] : std::to_string(k);
+                Msg::error("sequence partition \"" + nm + "\" is not assigned to any clock partition.");
+            }
+    }else if(us.getClockPartitionMode() == ClockPartitionMode::SINGLE){
+        pgroup.assign(nPart, 0);
+        groupNames.assign(1, "shared");
+    }else{
+        std::vector<std::string> nexNames = (ctmc != nullptr) ? ctmc->getClockGroupNames() : std::vector<std::string>();
+        if(nexNames.empty() == false){
+            pgroup = ctmc->getPartitionGroups();
+            groupNames = nexNames;
+        }else{
+            pgroup.clear();
+            for(int k = 0; k < nPart; k++)
+                groupNames.push_back(k < (int)seqNames.size() ? seqNames[k] : std::to_string(k));
+        }
+    }
+    std::vector<ClockModel> cmByGroup = clockModel;
+    const std::map<std::string,std::string>& cmMap = us.getClockModelByLabel();
+    if(cmMap.empty() == false){
+        cmByGroup.assign(groupNames.size(), ClockModel::UCLN);
+        for(std::map<std::string,std::string>::const_iterator it = cmMap.begin(); it != cmMap.end(); ++it){
+            int g = -1;
+            for(size_t k = 0; k < groupNames.size(); k++)
+                if(groupNames[k] == it->first){ g = (int)k; break; }
+            if(g < 0)
+                Msg::error("clock_model refers to clock partition \"" + it->first + "\", which is not defined.");
+            cmByGroup[g] = (it->second == "gbm") ? ClockModel::GBM : ClockModel::UCLN;
+        }
+        for(size_t k = 0; k < groupNames.size(); k++)
+            if(cmMap.count(groupNames[k]) == 0)
+                Msg::error("clock_model gives no value for clock partition \"" + groupNames[k] + "\".");
+    }
+    std::vector<Sigma2Param> s2ByGroup = us.getSigma2ParamList();
+    const std::map<std::string,std::string>& s2Map = us.getSigma2ParamByLabel();
+    if(s2Map.empty() == false){
+        s2ByGroup.assign(groupNames.size(), Sigma2Param::C);
+        for(std::map<std::string,std::string>::const_iterator it = s2Map.begin(); it != s2Map.end(); ++it){
+            int g = -1;
+            for(size_t k = 0; k < groupNames.size(); k++)
+                if(groupNames[k] == it->first){ g = (int)k; break; }
+            if(g < 0)
+                Msg::error("sigma2_param refers to clock partition \"" + it->first + "\", which is not defined.");
+            s2ByGroup[g] = (it->second == "nc") ? Sigma2Param::NC : Sigma2Param::C;
+        }
+        for(size_t k = 0; k < groupNames.size(); k++)
+            if(s2Map.count(groupNames[k]) == 0)
+                Msg::error("sigma2_param gives no value for clock partition \"" + groupNames[k] + "\".");
+    }
     // CIR clock: halt — construction detached (ParameterBranchRatesCIR kept but never built)
-    clock = new ParameterBranchRates(1.0, this, fbd->getTree(), nPart, pgroup, clockModel, rgeneParam, sigma2Param);
+    clock = new ParameterBranchRates(1.0, this, fbd->getTree(), nPart, pgroup, cmByGroup, s2ByGroup, rgeneParam, sigma2Param);
     clock->setUnresolvedFossils(fbd->getUnresolvedFossils());
     naSel.init(2);
 }
@@ -86,7 +160,7 @@ double RelaxedClockTreeModel::nodeAgeJump2(void){
     return s;
 }
 
-RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, const std::string& hessianFile, const std::string& mlTreeFile, int nStates, ClockModel clockModel, const double* rgeneParam, const double* sigma2Param, unsigned int seed){
+RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, const std::string& hessianFile, const std::string& mlTreeFile, int nStates, const std::vector<ClockModel>& clockModel, const double* rgeneParam, const double* sigma2Param, unsigned int seed){
     rng.setSeed(seed);
     RandomVariable* prevRng = RandomVariable::getActiveInstance();
     RandomVariable::setActiveInstance(&rng);
@@ -103,7 +177,7 @@ RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades
     RandomVariable::setActiveInstance(prevRng);
 }
 
-RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, const std::string& sequenceFile, const std::string& partitionFile, int nStates, int numCats, ClockModel clockModel, const double* rgeneParam, const double* sigma2Param, unsigned int seed){
+RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, const std::string& sequenceFile, const std::string& partitionFile, int nStates, int numCats, const std::vector<ClockModel>& clockModel, const double* rgeneParam, const double* sigma2Param, unsigned int seed){
     rng.setSeed(seed);
     RandomVariable* prevRng = RandomVariable::getActiveInstance();
     RandomVariable::setActiveInstance(&rng);
@@ -131,7 +205,7 @@ double RelaxedClockTreeModel::lnLikelihood(void){
     if(ctmc == nullptr){
         return lik->computeLnL(fbd->getTree(), clock->getAbsoluteRates());
     }
-    return ctmc->computeLnL(fbd->getTree(), clock->getAbsoluteRates(), clock->getBranchMGF());
+    return ctmc->computeLnL(fbd->getTree(), clock->getAbsoluteRates());
 }
 
 void RelaxedClockTreeModel::invalidatePriorCache(void){
@@ -188,7 +262,7 @@ double RelaxedClockTreeModel::update(void){
         if(nInternalAge == 0) nInternalAge = (int)fbd->getAgeLogNodes().size();
         double pCrown = (nInternalAge > 0) ? 1.0 / nInternalAge : 0.0;
         if(r.uniformRv() < pCrown){ lastMoveType = 8; return clock->simpleDistanceMove(); }
-        if(static_cast<ParameterBranchRates*>(clock)->getClockModel() == ClockModel::UCLN && r.uniformRv() < pCrown){ lastMoveType = 10; return clock->smallPulleyMove(); }
+        if(static_cast<ParameterBranchRates*>(clock)->allGroupsAre(ClockModel::UCLN) && r.uniformRv() < pCrown){ lastMoveType = 10; return clock->smallPulleyMove(); }
         naSnap.clear();
         std::vector<Node*> nodes = fbd->getTree()->getInternalAgeNodes();
         for(Node* n : nodes)

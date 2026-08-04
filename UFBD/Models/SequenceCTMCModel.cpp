@@ -34,6 +34,8 @@ SequenceCTMCModel::SequenceCTMCModel(PhylogeneticModel* owner, const std::string
         observedFreq.push_back(cnt);
     }
     partitionGroup = aln.getPartitionGroups();
+    partitionNames = aln.getPartitionNames();
+    clockGroupNames = aln.getClockGroupNames();
 
     lastSubstParm = nullptr;
 }
@@ -85,7 +87,7 @@ int SequenceCTMCModel::getNumPartitions(void) const {
     return seqLik->getNumPartitions();
 }
 
-double SequenceCTMCModel::computeLnL(Tree* tree, const std::vector<std::vector<double> >& branchRates, const std::vector<std::vector<BranchMGF> >& branchMGF){
+double SequenceCTMCModel::computeLnL(Tree* tree, const std::vector<std::vector<double> >& branchRates){
     int nPartitions = seqLik->getNumPartitions();
     std::vector<std::vector<double> > exchV(nPartitions), freqV(nPartitions);
     std::vector<double> alphaV(nPartitions), pinvV(nPartitions);
@@ -95,7 +97,7 @@ double SequenceCTMCModel::computeLnL(Tree* tree, const std::vector<std::vector<d
         alphaV[p] = alpha[p]->getValue();
         pinvV[p] = pinv[p]->getValue();
     }
-    return seqLik->computeLnL(tree, branchRates, exchV, freqV, alphaV, pinvV, branchMGF);
+    return seqLik->computeLnL(tree, branchRates, exchV, freqV, alphaV, pinvV);
 }
 
 double SequenceCTMCModel::lnPrior(void){
