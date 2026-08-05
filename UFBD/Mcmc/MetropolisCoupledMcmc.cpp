@@ -444,6 +444,7 @@ void MetropolisCoupledMcmc::writeCheckpoint(void) {
     os << std::setprecision(17);
     os << gen << ' ' << thinning << ' ' << deltaT << ' ' << numModels << ' ' << swapAdaptCount << ' ' << swapAdaptAcc << ' ' << swapAdaptAtt << ' '
        << numSwapSweeps << ' ' << roundTrips << ' ' << chainDecision << '\n';
+    writeDataShape(os, models[0]);
     for(int i = 0; i < numModels; i++)
         os << indices[i] << ' ';
     os << '\n';
@@ -470,6 +471,10 @@ bool MetropolisCoupledMcmc::loadCheckpoint(void) {
     is >> gen >> storedSf >> deltaT >> nm >> swapAdaptCount >> swapAdaptAcc >> swapAdaptAtt
        >> numSwapSweeps >> roundTrips >> chainDecision;
     reconcileThinning(storedSf, thinning);
+    checkDataShape(is, models[0]);
+    if(nm != numModels)
+        Msg::error("-coupled_chains " + std::to_string(numModels) + " differs from the pre-resume -coupled_chains "
+                   + std::to_string(nm));
     indices.assign(nm, 0);
     coldModelIdx = -1;
     for(int i = 0; i < nm; i++){

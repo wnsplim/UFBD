@@ -3,6 +3,8 @@
 #include "ChainRunner.hpp"
 #include "Msg.hpp"
 #include "RandomVariable.hpp"
+#include "PhylogeneticModel.hpp"
+#include "Tree.hpp"
 #include "UserSettings.hpp"
 
 std::ifstream ChainRunner::openCheckpoint(const std::string& path) {
@@ -12,11 +14,36 @@ std::ifstream ChainRunner::openCheckpoint(const std::string& path) {
     return is;
 }
 
+bool ChainRunner::thinningWarned = false;
+
 void ChainRunner::reconcileThinning(int storedSf, int& thinning) {
     if(storedSf != thinning){
-        Msg::warning("-thinning " + std::to_string(thinning) + " differs from the pre-resume thinning " + std::to_string(storedSf) + "; forcing " + std::to_string(storedSf));
+        if(thinningWarned == false){
+            Msg::warning("-thinning " + std::to_string(thinning) + " differs from the pre-resume thinning " + std::to_string(storedSf) + "; forcing " + std::to_string(storedSf));
+            thinningWarned = true;
+        }
         thinning = storedSf;
+        UserSettings::userSettings().setThinning(storedSf);
     }
+}
+
+void ChainRunner::writeDataShape(std::ostream& os, PhylogeneticModel* m) {
+    os << "shape " << m->getTree()->getNumNodes() << ' ' << m->getNumFossils() << ' ' << m->getNumClockGroups() << '\n';
+}
+
+void ChainRunner::checkDataShape(std::istream& is, PhylogeneticModel* m) {
+    std::streampos here = is.tellg();
+    std::string tag;
+    is >> tag;
+    if(tag != "shape"){
+        is.clear();
+        is.seekg(here);
+        return;
+    }
+    int nNode, nFossil, nGroup;
+    is >> nNode >> nFossil >> nGroup;
+    if(nNode != m->getTree()->getNumNodes() || nFossil != m->getNumFossils() || nGroup != m->getNumClockGroups())
+        Msg::error("the input files do not match the checkpoint");
 }
 
 void ChainRunner::requireCheckpointIntact(std::istream& is, const std::string& path) {

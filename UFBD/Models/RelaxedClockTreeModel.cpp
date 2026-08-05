@@ -194,6 +194,10 @@ RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades
     RandomVariable::setActiveInstance(prevRng);
 }
 
+int RelaxedClockTreeModel::getNumFossils(void){
+    return fbd->getNumFossils();
+}
+
 void RelaxedClockTreeModel::invalidateLikelihoodCache(void){
     if(ctmc != nullptr)
         ctmc->invalidateCache();

@@ -40,6 +40,7 @@ class RelaxedClockTreeModel : public PhylogeneticModel {
         void                        writeState(std::ostream& os);
         void                        readState(std::istream& is);
         int                         getNumClockGroups(void) { return clock->getNumClockGroups(); }
+        int                         getNumFossils(void);
         int                         getLastPncpPartition(void) { return lastMoveType == 0 ? static_cast<ParameterBranchRates*>(clock)->getLastPncpPartition() : -1; }
         double                      updatePncpPartition(int p) { lastMoveType = 0; return static_cast<ParameterBranchRates*>(clock)->updatePncpPartition(p); }
         void                        freezePncpTuning(void) { clock->freezePncp(); }

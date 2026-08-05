@@ -11,6 +11,7 @@
 
 class RandomVariable;
 class Tree;
+class PhylogeneticModel;
 
 class ChainRunner {
 
@@ -39,6 +40,9 @@ class ChainRunner {
     protected:
         static std::ifstream                    openCheckpoint(const std::string& path);
         static void                             reconcileThinning(int storedSf, int& thinning);
+        static void                             writeDataShape(std::ostream& os, PhylogeneticModel* m);
+        static void                             checkDataShape(std::istream& is, PhylogeneticModel* m);
+        static bool                             thinningWarned;
         static void                             requireCheckpointIntact(std::istream& is, const std::string& path);
         virtual RandomVariable*                 resumeRng(void) = 0;
         virtual std::vector<std::string>        resumeParameterNames(void) = 0;

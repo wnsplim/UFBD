@@ -277,6 +277,7 @@ void Mcmc::writeCheckpoint(void) {
     std::ofstream os(tmp);
     os << std::setprecision(17);
     os << gen << ' ' << thinning << '\n';
+    writeDataShape(os, model);
     os << curLnL << ' ' << curLnP << '\n';
     model->getRng()->writeState(os);
     model->writeState(os);
@@ -293,6 +294,7 @@ bool Mcmc::loadCheckpoint(void) {
     int storedSf;
     is >> gen >> storedSf;
     reconcileThinning(storedSf, thinning);
+    checkDataShape(is, model);
     is >> curLnL >> curLnP;
     model->getRng()->readState(is);
     model->readState(is);
@@ -307,6 +309,7 @@ void Mcmc::checkCheckpointRoundTrip(const std::string& path) {
     std::ostringstream os;
     os << std::setprecision(17);
     os << gen << ' ' << thinning << '\n';
+    writeDataShape(os, model);
     os << curLnL << ' ' << curLnP << '\n';
     model->getRng()->writeState(os);
     model->writeState(os);

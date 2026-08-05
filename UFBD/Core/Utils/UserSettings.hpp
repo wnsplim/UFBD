@@ -81,6 +81,7 @@ class UserSettings {
         double                      getRho(void) { return rho; }
         unsigned int                getSeed(void) { return seed; }
         int                         getThinning(void) { return thinning; }
+        void                        setThinning(int t) { thinning = t; }
         std::string                 getHessianFile(void) { return hessianFile; }
         std::string                 getConfigFile(void) { return configFilePath; }
         std::string                 getClockModelName(void) { return clockModelName; }

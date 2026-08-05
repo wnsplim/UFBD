@@ -48,8 +48,6 @@ bool ConvergenceRunner::run(void){
         }
     bool autoStop = s.getAutoChainLength();
     unsigned long maxGen = autoStop ? s.getMaxGen() : s.getChainLength();
-    long blockGens = 50L * (long)s.getThinning();
-    if(blockGens < 1) blockGens = 1;
 
     if(verbose && autoStop){
         int essFloor = (int)s.getEssThreshold();
@@ -73,6 +71,21 @@ bool ConvergenceRunner::run(void){
 
     unsigned long gen = 0;
     if(s.getResume()){
+        int stale = 0;
+        for(int r = (int)replicates.size(); ; r++){
+            std::string pf = repParamFiles[0];
+            size_t d = pf.rfind("chain");
+            if(d == std::string::npos)
+                break;
+            std::string probe = pf.substr(0, d) + "chain" + std::to_string(r) + pf.substr(pf.find_first_not_of("0123456789", d + 5));
+            std::ifstream f(probe + ".ckp");
+            if(f.is_open() == false)
+                break;
+            stale++;
+        }
+        if(stale > 0)
+            Msg::error("-parallel_chains " + std::to_string(replicates.size()) + " differs from the pre-resume -parallel_chains "
+                       + std::to_string(replicates.size() + stale));
         for(ChainRunner* c : replicates){
             c->loadCheckpoint();
             c->resumeOutputs();
@@ -99,6 +112,9 @@ bool ConvergenceRunner::run(void){
         for(ChainRunner* c : replicates)
             c->init();
     }
+
+    long blockGens = 50L * (long)s.getThinning();
+    if(blockGens < 1) blockGens = 1;
 
     bool stoppedEarly = false;
     while(gen < maxGen){

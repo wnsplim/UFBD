@@ -42,6 +42,7 @@ class FBDTreeModel : public PhylogeneticModel {
         void                        readState(std::istream& is);
         ParameterTree*              getParameterTree(void) { return parameterTree; }
         ParameterUnresolvedFossils* getUnresolvedFossils(void) { return unresolvedFossils; }
+        int                         getNumFossils(void) { return (int)backboneFossils.size() + (int)unrFossilName.size(); }
         double                      evaluateAtGeneratingState(const std::vector<double>& lam, const std::vector<double>& muV,
                                                               const std::vector<std::vector<double>>& psiV, double x0,
                                                               const std::vector<double>& nodeAges, const std::vector<double>& z,

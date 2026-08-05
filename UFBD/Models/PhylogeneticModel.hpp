@@ -37,6 +37,7 @@ class PhylogeneticModel {
         virtual void                            writeState(std::ostream& os) {}
         virtual void                            readState(std::istream& is) {}
         virtual int                             getNumClockGroups(void) { return 1; }
+        virtual int                             getNumFossils(void) { return 0; }
         virtual void                            freezePncpTuning(void) {}
         virtual void                            setChainLabel(int) {}
         virtual void                            setPncpReporter(bool) {}
