@@ -110,7 +110,7 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      muAt(int i);
         double                      psiTotalAt(int i);
         double                      psiOfTypeAt(int type, int i);
-        std::vector<int>            buildSkylineRates(const std::string& prefix, const std::string& sep, int nBins, const std::vector<double>& times, RateMode mode, const OUHyperSpec& ou, const Probability::PriorSpec& basePrior, double rate0, const std::vector<int>& groupIds, const std::map<int,Probability::PriorSpec>& groupPrior, std::vector<ParameterDouble*>& outVec, ParameterOUField*& outField, std::vector<std::string>& outNames);
+        std::vector<int>            buildSkylineRates(const std::string& prefix, const std::string& sep, int nBins, const std::vector<double>& times, RateMode mode, const OUHyperSpec& ou, const Probability::PriorSpec& basePrior, double rate0, double avoid, const std::vector<int>& groupIds, const std::vector<std::string>& groupLabels, const std::map<int,Probability::PriorSpec>& groupPrior, std::vector<ParameterDouble*>& outVec, ParameterOUField*& outField, std::vector<std::string>& outNames);
         void                        appendRateMap(const std::vector<double>& times, const std::vector<int>& binToChunk, const std::vector<std::string>& names);
         //ordered by memory footprint
         std::vector<ParameterDouble*> lambda;

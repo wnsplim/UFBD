@@ -57,7 +57,8 @@ void RelaxedClockTreeModel::buildClock(const std::vector<ClockModel>& clockModel
         pgroup.assign(nPart, 0);
         groupNames.assign(1, "shared");
     }else{
-        std::vector<std::string> nexNames = (ctmc != nullptr) ? ctmc->getClockGroupNames() : std::vector<std::string>();
+        bool useNexus = (ctmc != nullptr && us.getClockPartitionMode() == ClockPartitionMode::UNSET);
+        std::vector<std::string> nexNames = useNexus ? ctmc->getClockGroupNames() : std::vector<std::string>();
         if(nexNames.empty() == false){
             pgroup = ctmc->getPartitionGroups();
             groupNames = nexNames;

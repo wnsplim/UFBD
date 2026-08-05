@@ -13,7 +13,7 @@ enum class Model { RFBD, HEA14, UFBD };
 enum class RateMode { INDEP, OU };
 enum class Sigma2Param { PNCP, C, NC }; // PNCP: halt — not selectable, detached dead code
 
-enum class ClockPartitionMode { ALL, SINGLE, MANUAL };
+enum class ClockPartitionMode { UNSET, ALL, SINGLE, MANUAL };
 
 struct OUHyperSpec {
     bool   thetaSet = false; double thetaMedian = 0.0, thetaSd = 0.0;
@@ -74,6 +74,9 @@ class UserSettings {
         std::vector<int>            getLambdaGroups(void) { return lambdaGroups; }
         std::vector<int>            getMuGroups(void) { return muGroups; }
         std::vector<int>            getPsiGroups(int t);
+        std::vector<std::string>    getLambdaGroupNames(void) { return lambdaGroupNames; }
+        std::vector<std::string>    getMuGroupNames(void) { return muGroupNames; }
+        std::vector<std::string>    getPsiGroupNames(int t);
         std::map<int,Probability::PriorSpec> getLambdaGroupPrior(void) { return lambdaGroupPrior; }
         std::map<int,Probability::PriorSpec> getMuGroupPrior(void) { return muGroupPrior; }
         std::map<int,Probability::PriorSpec> getPsiGroupPrior(int t);
@@ -158,6 +161,8 @@ class UserSettings {
         std::map<std::string, OUHyperSpec> psiOUByName;
         std::vector<int>            lambdaGroups, muGroups, psiGroups;
         std::map<std::string, std::vector<int>> psiGroupsByName;
+        std::vector<std::string>    lambdaGroupNames, muGroupNames, psiGroupNames;
+        std::map<std::string, std::vector<std::string>> psiGroupNamesByName;
         std::map<int, Probability::PriorSpec> lambdaGroupPrior, muGroupPrior, psiGroupPrior;
         std::map<std::string, std::map<int, Probability::PriorSpec>> psiGroupPriorByName;
         Model                       model;
@@ -195,7 +200,7 @@ class UserSettings {
         std::vector<std::vector<std::string>> clockGroupMembers;
         std::map<std::string,std::string> clockModelByLabel;
         std::map<std::string,std::string> sigma2ParamByLabel;
-        ClockPartitionMode          clockPartitionMode = ClockPartitionMode::ALL;
+        ClockPartitionMode          clockPartitionMode = ClockPartitionMode::UNSET;
         int                         nStates;
         std::string                 sequenceFile;
         std::string                 partitionFile;

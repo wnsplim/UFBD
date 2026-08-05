@@ -30,6 +30,7 @@ double drawPrior(const Probability::PriorSpec& s, RandomVariable* rng){
         case PriorFamily::EXPONENTIAL:      return Exponential::rv(rng, s.p1);
         case PriorFamily::GAMMA:            return Gamma::rv(rng, s.p1, s.p2);
         case PriorFamily::TRUNCATED_NORMAL: return TruncatedNormal::rv(rng, s.p1, s.p2, 0.0, std::numeric_limits<double>::infinity());
+        case PriorFamily::NORMAL: return Normal::rv(rng, s.p1, s.p2);
         case PriorFamily::IMPROPER:         break;
     }
     return 0.0;

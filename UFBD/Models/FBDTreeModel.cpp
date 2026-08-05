@@ -238,8 +238,8 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     }
     Probability::PriorSpec lp = rateUs.getLambdaPrior();
     Probability::PriorSpec mp = rateUs.getMuPrior();
-    if(rateUs.getLambdaMode() == RateMode::OU && lp.set) Msg::error("-lambda_prior is only used under mode=indep; under mode=ou set the OU level with -lambda_ou_theta.");
-    if(rateUs.getMuMode() == RateMode::OU && mp.set) Msg::error("-mu_prior is only used under mode=indep; under mode=ou set the OU level with -mu_ou_theta.");
+    if(rateUs.getLambdaMode() == RateMode::OU && (lp.set || rateUs.getLambdaGroupPrior().empty() == false)) Msg::error("-lambda_prior is only used under mode=indep; under mode=ou set the OU level with -lambda_ou_theta.");
+    if(rateUs.getMuMode() == RateMode::OU && (mp.set || rateUs.getMuGroupPrior().empty() == false)) Msg::error("-mu_prior is only used under mode=indep; under mode=ou set the OU level with -mu_ou_theta.");
     Probability::PriorSpec defRate{true, Probability::PriorFamily::EXPONENTIAL, 5.0, 1.0};
     if(!lp.set) lp = defRate;
     if(!mp.set) mp = defRate;
@@ -249,14 +249,13 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     if(!(lam0 > 0.0 && std::isfinite(lam0))) lam0 = 0.1;
     double mu0 = Probability::priorMean(mp.family, mp.p1, mp.p2, mp.p3);
     if(!(mu0 > 0.0 && std::isfinite(mu0))) mu0 = 0.1;
-    mu0 = offsetFromLambda(mu0, lam0, mp);
     {
-        std::vector<int> b2c = buildSkylineRates("lambda", "", nLambda, lambdaTimes, rateUs.getLambdaMode(), rateUs.getLambdaOU(), lp, lam0, rateUs.getLambdaGroups(), rateUs.getLambdaGroupPrior(), lambda, lambdaField, lambdaName);
+        std::vector<int> b2c = buildSkylineRates("lambda", "", nLambda, lambdaTimes, rateUs.getLambdaMode(), rateUs.getLambdaOU(), lp, lam0, std::numeric_limits<double>::quiet_NaN(), rateUs.getLambdaGroups(), rateUs.getLambdaGroupNames(), rateUs.getLambdaGroupPrior(), lambda, lambdaField, lambdaName);
         for(int& u : lambdaIdx) u = b2c[u];
         appendRateMap(lambdaTimes, b2c, lambdaName);
     }
     {
-        std::vector<int> b2c = buildSkylineRates("mu", "", nMu, muTimes, rateUs.getMuMode(), rateUs.getMuOU(), mp, mu0, rateUs.getMuGroups(), rateUs.getMuGroupPrior(), mu, muField, muName);
+        std::vector<int> b2c = buildSkylineRates("mu", "", nMu, muTimes, rateUs.getMuMode(), rateUs.getMuOU(), mp, mu0, lam0, rateUs.getMuGroups(), rateUs.getMuGroupNames(), rateUs.getMuGroupPrior(), mu, muField, muName);
         for(int& u : muIdx) u = b2c[u];
         appendRateMap(muTimes, b2c, muName);
     }
@@ -265,15 +264,14 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     psiName.assign(numPsiTypes, std::vector<std::string>());
     for(int tp = 0; tp < numPsiTypes; tp++){
         Probability::PriorSpec pp = rateUs.getPsiPrior(tp);
-        if(rateUs.getPsiMode(tp) == RateMode::OU && pp.set) Msg::error("-psi_prior is only used under mode=indep; under mode=ou set the OU level with -psi_ou_theta.");
+        if(rateUs.getPsiMode(tp) == RateMode::OU && (pp.set || rateUs.getPsiGroupPrior(tp).empty() == false)) Msg::error("-psi_prior is only used under mode=indep; under mode=ou set the OU level with -psi_ou_theta.");
         if(!pp.set) pp = defRate;
         double psi0 = Probability::priorMean(pp.family, pp.p1, pp.p2, pp.p3);
         if(!(psi0 > 0.0 && std::isfinite(psi0))) psi0 = 0.1;
-        psi0 = offsetFromLambda(psi0, lam0, pp);
         int nPsi = (int)psiTimes[tp].size();
         std::string prefix = (numPsiTypes > 1) ? ("psi_" + rateUs.getPsiTypeNames()[tp]) : "psi";
         std::string sep = (numPsiTypes > 1) ? "_" : "";
-        std::vector<int> b2c = buildSkylineRates(prefix, sep, nPsi, psiTimes[tp], rateUs.getPsiMode(tp), rateUs.getPsiOU(tp), pp, psi0, rateUs.getPsiGroups(tp), rateUs.getPsiGroupPrior(tp), psi[tp], psiField[tp], psiName[tp]);
+        std::vector<int> b2c = buildSkylineRates(prefix, sep, nPsi, psiTimes[tp], rateUs.getPsiMode(tp), rateUs.getPsiOU(tp), pp, psi0, lam0, rateUs.getPsiGroups(tp), rateUs.getPsiGroupNames(tp), rateUs.getPsiGroupPrior(tp), psi[tp], psiField[tp], psiName[tp]);
         for(int& u : psiIdx[tp]) u = b2c[u];
         appendRateMap(psiTimes[tp], b2c, psiName[tp]);
     }
@@ -324,7 +322,8 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     RandomVariable::setActiveInstance(prevRng);
 }
 
-std::vector<int> FBDTreeModel::buildSkylineRates(const std::string& prefix, const std::string& sep, int nBins, const std::vector<double>& times, RateMode mode, const OUHyperSpec& ou, const Probability::PriorSpec& basePrior, double rate0, const std::vector<int>& groupIds, const std::map<int,Probability::PriorSpec>& groupPrior, std::vector<ParameterDouble*>& outVec, ParameterOUField*& outField, std::vector<std::string>& outNames){
+std::vector<int> FBDTreeModel::buildSkylineRates(const std::string& prefix, const std::string& sep, int nBins, const std::vector<double>& times, RateMode mode, const OUHyperSpec& ou, const Probability::PriorSpec& basePrior, double rate0, double avoid, const std::vector<int>& groupIds, const std::vector<std::string>& groupLabels, const std::map<int,Probability::PriorSpec>& groupPrior, std::vector<ParameterDouble*>& outVec, ParameterOUField*& outField, std::vector<std::string>& outNames){
+    rate0 = offsetFromLambda(rate0, avoid, basePrior);
     std::vector<int> binToChunk(nBins, 0);
     std::map<int,int> gidToChunk;
     std::vector<int> chunkGid, chunkMinBin;
@@ -336,8 +335,13 @@ std::vector<int> FBDTreeModel::buildSkylineRates(const std::string& prefix, cons
     }
     int nChunks = (int)chunkGid.size();
     outNames.clear();
-    for(int c = 0; c < nChunks; c++)
-        outNames.push_back(prefix + ((nChunks > 1) ? (sep + std::to_string(chunkMinBin[c])) : ""));
+    for(int c = 0; c < nChunks; c++){
+        if(nChunks == 1){ outNames.push_back(prefix); continue; }
+        if(chunkGid[c] >= 0 && chunkGid[c] < (int)groupLabels.size())
+            outNames.push_back(prefix + "_" + groupLabels[chunkGid[c]]);
+        else
+            outNames.push_back(prefix + sep + std::to_string(chunkMinBin[c]));
+    }
 
     bool useOu = (mode == RateMode::OU);
     if(useOu && nChunks < 2){
@@ -368,7 +372,7 @@ std::vector<int> FBDTreeModel::buildSkylineRates(const std::string& prefix, cons
         bool ov = (pit != groupPrior.end() && pit->second.set);
         const Probability::PriorSpec& sp = ov ? pit->second : basePrior;
         p->setPrior(sp.family, sp.p1, sp.p2);
-        p->setValue(ov ? Probability::priorMean(sp.family, sp.p1, sp.p2, sp.p3) : rate0);
+        p->setValue(offsetFromLambda(ov ? Probability::priorMean(sp.family, sp.p1, sp.p2, sp.p3) : rate0, avoid, sp));
         outVec.push_back(p);
         parameters.push_back(p);
     }
@@ -465,7 +469,7 @@ std::vector<std::string> FBDTreeModel::getParameterNames(void){
     for(int tp = 0; tp < numPsiTypes; tp++){
         if(psiField[tp] != nullptr){
             for(const std::string& n : psiName[tp]) names.push_back(n);
-            std::string pf = "ou_psi" + (numPsiTypes > 1 ? std::to_string(tp) : std::string(""));
+            std::string pf = "ou_psi" + (numPsiTypes > 1 ? "_" + UserSettings::userSettings().getPsiTypeNames()[tp] : std::string(""));
             names.push_back(pf + "_theta"); names.push_back(pf + "_sdEq"); names.push_back(pf + "_nu");
         }else
             for(ParameterDouble* p : psi[tp]) names.push_back(p->getName());

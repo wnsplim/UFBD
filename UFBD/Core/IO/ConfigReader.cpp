@@ -162,8 +162,14 @@ void translateRateSection(const std::string& ratePrefix, const std::string& type
             std::string cutStr, grpStr;
             for(size_t i = 0; i < cuts.size(); i++){ if(i) cutStr += ","; cutStr += fmtNum(cuts[i]); }
             for(size_t i = 0; i < groups.size(); i++){ if(i) grpStr += ","; grpStr += std::to_string(groups[i]); }
+            std::vector<std::string> byGid(nameToGid.size());
+            for(std::map<std::string,int>::iterator it = nameToGid.begin(); it != nameToGid.end(); ++it)
+                byGid[it->second] = it->first;
+            std::string nmStr;
+            for(size_t i = 0; i < byGid.size(); i++){ if(i) nmStr += ","; nmStr += byGid[i]; }
             emit(out, "-" + ratePrefix + "_skyline_times", typeLabel.empty() ? cutStr : typeLabel + ":" + cutStr);
             emit(out, "-" + ratePrefix + "_groups", typeLabel.empty() ? grpStr : typeLabel + ":" + grpStr);
+            emit(out, "-" + ratePrefix + "_group_names", typeLabel.empty() ? nmStr : typeLabel + ":" + nmStr);
         }
     }
     std::string pr = getVal(kv, "prior");
@@ -231,7 +237,7 @@ std::vector<std::string> ConfigReader::translate(const std::string& path){
         "partition","datatype","n_states","ctmc_model","ctmc_gamma_cat","ctmc_inv","ctmc_freq"
     };
     static const std::set<std::string> clockKeys = {
-        "clock_partitions","clock_model","rgene_gamma","sigma2_gamma","sigma2_param","pncp_tuning"
+        "clock_partitions","clock_model","rgene_gamma","sigma2_gamma","sigma2_param"
     };
     static const std::set<std::string> rateKeys = { "time_bins","prior","mode","ou_theta","ou_sd","ou_nu" };
 
@@ -246,7 +252,10 @@ std::vector<std::string> ConfigReader::translate(const std::string& path){
     }
     for(std::map<std::string,std::string>::iterator it = clock.begin(); it != clock.end(); ++it){
         if(clockKeys.count(it->first) == 0) Msg::error("config: unknown key '" + it->first + "' in [clock]");
-        emit(out, "-" + it->first, it->second);
+        std::string v;
+        for(char c : it->second)
+            if(std::isspace((unsigned char)c) == false) v += c;
+        emit(out, "-" + it->first, v);
     }
     for(std::map<std::string,std::string>::iterator it = lambda.begin(); it != lambda.end(); ++it)
         if(rateKeys.count(it->first) == 0) Msg::error("config: unknown key '" + it->first + "' in [lambda]");

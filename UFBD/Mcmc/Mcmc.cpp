@@ -294,6 +294,8 @@ bool Mcmc::loadCheckpoint(void) {
     int storedSf;
     is >> gen >> storedSf;
     reconcileThinning(storedSf, thinning);
+    if(checkpointIsCoupled(is))
+        Msg::error("-coupled_chains 1 but the checkpoint was written with Metropolis coupling");
     checkDataShape(is, model);
     is >> curLnL >> curLnP;
     model->getRng()->readState(is);

@@ -42,6 +42,7 @@ class ChainRunner {
         static void                             reconcileThinning(int storedSf, int& thinning);
         static void                             writeDataShape(std::ostream& os, PhylogeneticModel* m);
         static void                             checkDataShape(std::istream& is, PhylogeneticModel* m);
+        static bool                             checkpointIsCoupled(std::istream& is);
         static bool                             thinningWarned;
         static void                             requireCheckpointIntact(std::istream& is, const std::string& path);
         virtual RandomVariable*                 resumeRng(void) = 0;

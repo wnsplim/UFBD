@@ -468,9 +468,12 @@ bool MetropolisCoupledMcmc::loadCheckpoint(void) {
     std::string path = paramOut + ".ckp";
     std::ifstream is = openCheckpoint(path);
     int nm, storedSf;
-    is >> gen >> storedSf >> deltaT >> nm >> swapAdaptCount >> swapAdaptAcc >> swapAdaptAtt
-       >> numSwapSweeps >> roundTrips >> chainDecision;
+    is >> gen >> storedSf;
     reconcileThinning(storedSf, thinning);
+    if(checkpointIsCoupled(is) == false)
+        Msg::error("-coupled_chains " + std::to_string(numModels) + " but the checkpoint was written without Metropolis coupling");
+    is >> deltaT >> nm >> swapAdaptCount >> swapAdaptAcc >> swapAdaptAtt
+       >> numSwapSweeps >> roundTrips >> chainDecision;
     checkDataShape(is, models[0]);
     if(nm != numModels)
         Msg::error("-coupled_chains " + std::to_string(numModels) + " differs from the pre-resume -coupled_chains "

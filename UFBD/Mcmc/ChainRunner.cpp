@@ -46,6 +46,15 @@ void ChainRunner::checkDataShape(std::istream& is, PhylogeneticModel* m) {
         Msg::error("the input files do not match the checkpoint");
 }
 
+bool ChainRunner::checkpointIsCoupled(std::istream& is) {
+    std::streampos here = is.tellg();
+    std::string tag;
+    is >> tag;
+    is.clear();
+    is.seekg(here);
+    return tag != "shape";
+}
+
 void ChainRunner::requireCheckpointIntact(std::istream& is, const std::string& path) {
     if(is.fail())
         Msg::error("checkpoint file is truncated or corrupt: " + path);

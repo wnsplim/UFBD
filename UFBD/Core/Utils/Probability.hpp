@@ -17,7 +17,7 @@ class RandomVariable;
 
 namespace  Probability {
 
-    enum class PriorFamily { IMPROPER, TRUNCATED_NORMAL, EXPONENTIAL, GAMMA, LOGNORMAL, UNIFORM, FIXED };
+    enum class PriorFamily { IMPROPER, TRUNCATED_NORMAL, NORMAL, EXPONENTIAL, GAMMA, LOGNORMAL, UNIFORM, FIXED };
 
     struct PriorSpec {
         bool        set    = false;

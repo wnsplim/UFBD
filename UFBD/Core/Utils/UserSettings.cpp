@@ -46,8 +46,8 @@ static bool isPriorFamilyKeyword(const std::string& s){
     std::string k = s;
     for(char& ch : k) ch = (char)std::tolower((unsigned char)ch);
     return k == "exp" || k == "exponential" || k == "gamma" || k == "lognormal"
-        || k == "unif" || k == "uniform" || k == "truncnormal" || k == "truncnorm" || k == "normal"
-        || k == "improper";
+        || k == "unif" || k == "uniform" || k == "truncnormal" || k == "truncnorm"
+        || k == "normal" || k == "improper";
 }
 
 std::vector<double> UserSettings::getSkylineTimes(void){
@@ -102,6 +102,15 @@ std::vector<int> UserSettings::getPsiGroups(int t){
         return std::vector<int>();
     }
     return psiGroups;
+}
+
+std::vector<std::string> UserSettings::getPsiGroupNames(int t){
+    if(psiTypeNames.empty() == false){
+        std::map<std::string, std::vector<std::string>>::iterator it = psiGroupNamesByName.find(psiTypeNames[t]);
+        if(it != psiGroupNamesByName.end()) return it->second;
+        return std::vector<std::string>();
+    }
+    return psiGroupNames;
 }
 
 std::map<int,Probability::PriorSpec> UserSettings::getPsiGroupPrior(int t){
@@ -210,6 +219,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode",
         "-lambda_ou_theta", "-mu_ou_theta", "-psi_ou_theta", "-lambda_ou_sd", "-mu_ou_sd", "-psi_ou_sd", "-lambda_ou_nu", "-mu_ou_nu", "-psi_ou_nu",
         "-lambda_groups", "-mu_groups", "-psi_groups", "-cpu_time", "-age_offset",
+        "-lambda_group_names", "-mu_group_names", "-psi_group_names",
         "-hessian", "-clock_model", "-n_states", "-rgene_gamma", "-sigma2_gamma", "-sigma2_param",
         "-sequence", "-partition", "-ctmc_gamma_cat", "-datatype", "-ctmc_model", "-ctmc_inv", "-ctmc_freq",
         "-parallel_chains", "-burn_in", "-rhat", "-min_ess", "-max_gen", "-delta_temperature", "-swap_interval", "-resume", "-ar_log", "-no_latent_log"
@@ -221,6 +231,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode",
         "-lambda_ou_theta", "-mu_ou_theta", "-psi_ou_theta", "-lambda_ou_sd", "-mu_ou_sd", "-psi_ou_sd", "-lambda_ou_nu", "-mu_ou_nu", "-psi_ou_nu",
         "-lambda_groups", "-mu_groups", "-psi_groups", "-cpu_time", "-age_offset",
+        "-lambda_group_names", "-mu_group_names", "-psi_group_names",
         "-hessian", "-clock_model", "-n_states", "-rgene_gamma", "-sigma2_gamma", "-sigma2_param",
         "-sequence", "-partition", "-ctmc_gamma_cat", "-datatype", "-ctmc_model", "-ctmc_inv", "-ctmc_freq",
         "-parallel_chains", "-burn_in", "-rhat", "-min_ess", "-max_gen", "-delta_temperature", "-swap_interval"
@@ -360,6 +371,15 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 if (arg == "-lambda_groups") lambdaGroups = g;
                 else if (arg == "-mu_groups") muGroups = g;
                 else if (nm.empty()) psiGroups = g; else psiGroupsByName[nm] = g;
+            } else if (arg == "-lambda_group_names" || arg == "-mu_group_names" || arg == "-psi_group_names") {
+                std::string nm, lst = val;
+                if (arg == "-psi_group_names") { size_t c = val.find(':'); if (c != std::string::npos) { nm = val.substr(0, c); lst = val.substr(c + 1); } }
+                std::vector<std::string> g;
+                std::stringstream ss(lst); std::string tok;
+                while (std::getline(ss, tok, ',')) if (tok.empty() == false) g.push_back(tok);
+                if (arg == "-lambda_group_names") lambdaGroupNames = g;
+                else if (arg == "-mu_group_names") muGroupNames = g;
+                else if (nm.empty()) psiGroupNames = g; else psiGroupNamesByName[nm] = g;
             } else if (arg == "-psi_types") {
                 std::stringstream ss(val); std::string tok;
                 while (std::getline(ss, tok, ',')) if (tok.empty() == false) psiTypeNames.push_back(tok);
@@ -584,12 +604,18 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 resampleEveryProvided = true;
             } else if (arg == "-rhat") {
                 rhatThreshold = std::stod(val);
+                if(rhatThreshold <= 1.0)
+                    Msg::error("flag \"-rhat\" must be greater than 1.");
                 rhatThresholdSet = true;
             } else if (arg == "-min_ess") {
                 essThreshold = std::stod(val);
+                if(essThreshold <= 0.0)
+                    Msg::error("flag \"-min_ess\" must be positive.");
                 essThresholdSet = true;
             } else if (arg == "-max_gen") {
                 maxGen = std::stoull(val);
+                if(maxGen < 1)
+                    Msg::error("flag \"-max_gen\" must be a positive integer.");
             } else if (arg == "-chain_length" && val == "auto") {
                 autoChainLength = true;
             }else {
@@ -604,11 +630,18 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
 
                 int intVal = std::stoi(val);
 
+                if (arg != "-chain_length" && intVal < 1)
+                    Msg::error("flag \"" + arg + "\" must be a positive integer.");
+
                 if (arg == "-chain_length")        chainLength     = intVal;
                 else if (arg == "-thinning") thinning = intVal;
                 else if (arg == "-coupled_chains") { numCoupledChains = intVal; coupledChainsProvided = true; }
                 else if (arg == "-cores") { numCores = intVal; coresProvided = true; }
-                else if (arg == "-n_states") { nStates = intVal; nstatesProvided = true; }
+                else if (arg == "-n_states") {
+                    if (intVal < 2)
+                        Msg::error("flag \"-n_states\" must be at least 2.");
+                    nStates = intVal; nstatesProvided = true;
+                }
                 else if (arg == "-ctmc_gamma_cat")    numCats     = intVal;
                 else if (arg == "-parallel_chains")    numRuns     = intVal;
             }
@@ -643,11 +676,6 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     if (essThresholdSet == false)
         essThreshold = 100.0 * (double)numRuns;
 
-    if (numCoupledChains < 1) {
-        Msg::warning("chains must be >= 1; setting to 1.");
-        numCoupledChains = 1;
-    }
-
     if (deltaTemperatureProvided && numCoupledChains <= 1)
         Msg::warning("-delta_temperature has no effect without -coupled_chains > 1.");
 
@@ -663,9 +691,6 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     if (thinning < 1)
         Msg::error("flag \"-thinning\" must be a positive integer.");
 
-    if (coresProvided == false && numCoupledChains > 1)
-        numCores = numCoupledChains;
-
     if (numCores > maxNumThreads) {
         if (coresProvided)
             Msg::warning("requested " + std::to_string(numCores) +
@@ -673,16 +698,16 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                          " available; capping at " + std::to_string(maxNumThreads) + ".");
         numCores = maxNumThreads;
     }
-    if (numCores < 1)
-        numCores = 1;
 
     bool empiricalModel = (substModel != "gtr");
-    if (empiricalModel && seqDataType == "nt")
-        Msg::error("empirical rate matrix (-ctmc_model " + substModel + ") is for amino-acid; use -datatype aa.");
-    if (seqDataType == "aa" && empiricalModel == false)
-        Msg::warning("amino-acid data (-datatype aa) with -ctmc_model gtr estimates 190 exchangeability parameters.");
-    if (sequenceFile.empty() == false && nstatesProvided)
-        Msg::warning("-n_states applies to the approximate-dating (-hessian) path only; ignoring it.");
+    if (sequenceFile.empty() == false) {
+        if (empiricalModel && seqDataType == "nt")
+            Msg::error("empirical rate matrix (-ctmc_model " + substModel + ") is for amino-acid; use -datatype aa.");
+        if (seqDataType == "aa" && empiricalModel == false)
+            Msg::warning("amino-acid data (-datatype aa) with -ctmc_model gtr estimates 190 exchangeability parameters.");
+        if (nstatesProvided)
+            Msg::warning("-n_states applies to the approximate-dating (-hessian) path only; ignoring it.");
+    }
     if (hessianFile.empty() == false && nstatesProvided && datatypeProvided) {
         int implied = (seqDataType == "aa" ? 20 : 4);
         if (implied != nStates)
@@ -690,8 +715,12 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     }
     if (hessianFile.empty() == false && partitionFile.empty() == false)
         Msg::warning("-partition (NEXUS charset) applies to the sequence path only; ignoring it under -hessian.");
+    if (hessianFile.empty() == false && (empiricalModel || numCats != 4 || useInvariant || freqMode != "model"))
+        Msg::warning("-ctmc_model, -ctmc_gamma_cat, -ctmc_inv and -ctmc_freq apply to the sequence path only; ignoring them under -hessian.");
 
     if (ageOffset > 0.0) {
+        if (conditioningEvent != ConditioningEvent::EXTINCT)
+            Msg::error("-age_offset (" + std::to_string(ageOffset) + ") requires -conditioning extinct.");
         double minCut = 0.0;
         bool haveCut = false;
         std::vector<std::vector<double>*> cutVecs = { &lambdaSkylineTimes, &muSkylineTimes, &psiSkylineTimes };
@@ -706,7 +735,8 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         if (conditionAgePriorSet) {
             if (conditionAgePrior == Probability::PriorFamily::FIXED) conditionAgePriorP1 -= ageOffset;
             else if (conditionAgePrior == Probability::PriorFamily::UNIFORM) { conditionAgePriorP1 -= ageOffset; conditionAgePriorP2 -= ageOffset; }
-            else if (conditionAgePrior == Probability::PriorFamily::TRUNCATED_NORMAL) { conditionAgePriorP1 -= ageOffset; conditionAgePriorP3 -= ageOffset; }
+            else if (conditionAgePrior == Probability::PriorFamily::TRUNCATED_NORMAL
+                  || conditionAgePrior == Probability::PriorFamily::NORMAL) { conditionAgePriorP1 -= ageOffset; conditionAgePriorP3 -= ageOffset; }
             else conditionAgePriorP3 -= ageOffset;
         }
     }
@@ -753,7 +783,10 @@ void UserSettings::parsePriorInto(const std::string& spec, Probability::PriorFam
     } else if (fam == "unif" || fam == "uniform") {
         if (ps.size() != 2 || ps[0] >= ps[1]) Msg::error("unif prior needs a<b: unif:a,b.");
         family = Probability::PriorFamily::UNIFORM; p1 = ps[0]; p2 = ps[1];
-    } else if (fam == "truncnormal" || fam == "truncnorm" || fam == "normal") {
+    } else if (fam == "normal") {
+        if ((ps.size() != 2 && ps.size() != 3) || ps[1] <= 0.0) Msg::error("normal prior needs mean,sd with sd>0 and an optional offset: normal:mean,sd[,offset].");
+        family = Probability::PriorFamily::NORMAL; p1 = ps[0]; p2 = ps[1]; if (ps.size() == 3) p3 = ps[2];
+    } else if (fam == "truncnormal" || fam == "truncnorm") {
         if ((ps.size() != 2 && ps.size() != 3) || ps[1] <= 0.0) Msg::error("truncnormal prior needs mean,sd with sd>0 and an optional lower/offset: truncnormal:mean,sd[,offset].");
         family = Probability::PriorFamily::TRUNCATED_NORMAL; p1 = ps[0]; p2 = ps[1]; if (ps.size() == 3) p3 = ps[2];
     } else if (fam == "improper") {
