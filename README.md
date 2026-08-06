@@ -8,6 +8,17 @@ Please cite following paper if you found this program to be useful:
 
 For any comments, help or bug report, please file a GitHub issue, or contact: <david9456@berkeley.edu>
 
+## Building
+
+The repository ships a static Linux x86-64 binary, `ufbd` (see releases/). On other platforms, build from source with CMake 3.16 or newer and a C++20 compiler. Eigen is bundled and jemalloc is linked only if present.
+
+```
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+```
+
+`CMakeLists.txt` compiles with `-march=x86-64-v3`, which an ARM compiler will reject, so the flag should be dropped on Apple Silicon. The build uses GCC/Clang flags throughout, so on Windows use WSL, MinGW or Clang rather than MSVC.
+
 ## Running
 
 ```
