@@ -4,7 +4,7 @@ Fossilized birth-death (FBD) analysis under the unresolved formulation of the FB
 
 Please cite following paper if you found this program to be useful:
 
-Lim, W., Raskin, L. Y., Li, J. K., Huelsenbeck, J., & Nielsen, R. (2026). Estimating divergence times and diversification rates with unresolved fossilized birth-death process. TBA
+* Lim, W., Raskin, L. Y., Li, J. K., Huelsenbeck, J., & Nielsen, R. (2026). Estimating divergence times and diversification rates with unresolved fossilized birth-death process. *TBA*
 
 For any comments, help or bug report, please file a GitHub issue, or contact: <david9456@berkeley.edu>
 
@@ -304,7 +304,7 @@ coupled_chains    = 1
 thinning          = 1000
 burn_in           = 0.25
 cores             = 1
-seed              =              # drawn from the system random device
+seed              =              # drawn from the system RNG
 max_gen           = 1000000000
 min_ess           =              # 100 x parallel_chains
 rhat              = 1.01
