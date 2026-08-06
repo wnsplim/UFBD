@@ -148,7 +148,7 @@ rho          = 1                # fraction of extant species sampled
 
 `crown` places the conditioning point at the root of the backbone and needs at least two backbone tips that define the crown node of the clade. The other three place the conditioning at the origin of the clade. `origin` and `crown` condition on survival to the present, so they need at least one extant taxon. `crown` cannot be used when there is no backbone. `extinct` requires no extant samples, and forces `rho` to 1. `anysample` is the most loose conditioning, and requires at least one of either extant or fossil taxon. Under `crown` no fossil may be `STEM` on the *whole* clade.
 
-The age prior after the keyword is optional, and omitting it leaves the conditioning point with a flat improper prior (which generally leads to poor mixing).
+Omitting he age prior after the keyword leaves the conditioning point with a flat improper prior (which generally leads to poor mixing).
 
 ### `[lambda]`, `[mu]`, `[psi]`
 
