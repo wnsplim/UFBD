@@ -129,6 +129,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     treeFile        = "";
     cladesFile      = "";
     fossilFile      = "";
+    ueFile          = "";
     conditioningSet = false;
     conditioningEvent = ConditioningEvent::SURVIVAL;
     conditionAgePriorSet = false;
@@ -213,7 +214,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     }
 
     std::set<std::string> knownFlags = {
-        "-tree_output", "-log_output", "-backbone_tree", "-clade_def", "-fossils", "-conditioning", "-rho", "-seed", "-chain_length", "-thinning", "-coupled_chains", "-cores", "-help", "-h",
+        "-tree_output", "-log_output", "-backbone_tree", "-clade_def", "-fossils", "-unsampled_extants", "-conditioning", "-rho", "-seed", "-chain_length", "-thinning", "-coupled_chains", "-cores", "-help", "-h",
         "-lambda_prior", "-mu_prior", "-psi_prior", "-psi_types",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_partitions",
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode",
@@ -225,7 +226,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-parallel_chains", "-burn_in", "-rhat", "-min_ess", "-max_gen", "-delta_temperature", "-swap_interval", "-resume", "-ar_log", "-no_latent_log"
     };
     std::set<std::string> valueFlags = {
-        "-tree_output", "-log_output", "-backbone_tree", "-clade_def", "-fossils", "-conditioning", "-rho", "-seed", "-chain_length", "-thinning", "-coupled_chains", "-cores",
+        "-tree_output", "-log_output", "-backbone_tree", "-clade_def", "-fossils", "-unsampled_extants", "-conditioning", "-rho", "-seed", "-chain_length", "-thinning", "-coupled_chains", "-cores",
         "-lambda_prior", "-mu_prior", "-psi_prior", "-psi_types",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_partitions",
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode",
@@ -289,6 +290,8 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 cladesFile = val;
             } else if (arg == "-fossils") {
                 fossilFile = val;
+            } else if (arg == "-unsampled_extants") {
+                ueFile = val;
             } else if (arg == "-conditioning") {
                 std::string v = val;
                 for (char& ch : v) ch = std::toupper((unsigned char)ch);
@@ -805,6 +808,8 @@ void UserSettings::print(void) {
         std::cout << "Clades input file:            " << cladesFile << std::endl;
     if (fossilFile.empty() == false)
         std::cout << "Fossils input file:           " << fossilFile << std::endl;
+    if (ueFile.empty() == false)
+        std::cout << "Unsampled extants input file: " << ueFile << std::endl;
     if (sequenceFile.empty() == false)
         std::cout << "Sequence input file:          " << sequenceFile << std::endl;
     if (hessianFile.empty() == false)
@@ -863,6 +868,12 @@ INPUT
                           every taxon is treated as unresolved
   -clade_def <file>       name<TAB>taxon,taxon,... ; a clade is all taxa under
                           the MRCA of the listed ones
+  -unsampled_extants <file>
+                          clade<TAB>CROWN|TOTAL<TAB>number ; adds that many
+                          extant taxa of age 0 to the clade, named
+                          <clade>_<crown|total>_1 .. _<number>; UE can instead
+                          be listed one per row in -fossils with min age =
+                          max age = 0
 
 OUTPUT  (prefixes: the engine appends .log/.trees/.tree, _chainN per chain)
   -log_output <prefix>    parameter log: merged across parallel chains as

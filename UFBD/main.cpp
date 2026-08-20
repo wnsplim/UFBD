@@ -118,7 +118,7 @@ int main(int argc, const char* argv[]) {
         restoreConsoleStreams();
     }
 
-    FBDInput input(settings.getTreeFile(), settings.getCladesFile(), settings.getFossilFile());
+    FBDInput input(settings.getTreeFile(), settings.getCladesFile(), settings.getFossilFile(), settings.getUnsampledExtantsFile());
     Tree* pt = input.getTree();
 
     settings.print();

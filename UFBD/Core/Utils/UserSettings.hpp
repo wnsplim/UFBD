@@ -47,6 +47,7 @@ class UserSettings {
         std::string                 getTreeFile(void) { return treeFile; }
         std::string                 getCladesFile(void) { return cladesFile; }
         std::string                 getFossilFile(void) { return fossilFile; }
+        std::string                 getUnsampledExtantsFile(void) { return ueFile; }
         Conditioning                getConditioning(void) { return conditioning; }
         ConditioningEvent           getConditioningEvent(void) { return conditioningEvent; }
         Probability::PriorFamily         getConditionAgePrior(void) { return conditionAgePrior; }
@@ -132,6 +133,7 @@ class UserSettings {
         std::string                 treeFile;
         std::string                 cladesFile;
         std::string                 fossilFile;
+        std::string                 ueFile;
         Conditioning                conditioning;
         ConditioningEvent           conditioningEvent;
         bool                        conditioningSet;

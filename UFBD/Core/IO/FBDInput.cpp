@@ -11,11 +11,12 @@
 #include <fstream>
 #include <limits>
 #include <map>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
 
-FBDInput::FBDInput(std::string treePath, std::string cladesPath, std::string fossilPath){
+FBDInput::FBDInput(std::string treePath, std::string cladesPath, std::string fossilPath, std::string uePath){
     if(treePath.empty()){
         Msg::warning("no backbone tree supplied (-backbone_tree): running with an empty backbone (every taxa unresolved).");
         tree = new Tree("");
@@ -25,10 +26,12 @@ FBDInput::FBDInput(std::string treePath, std::string cladesPath, std::string fos
         if(cladesPath.empty() == false)
             readClades(cladesPath);
     }
-    if(fossilPath.empty() == false){
+    if(fossilPath.empty() == false)
         readFossils(fossilPath);
+    if(uePath.empty() == false)
+        readUnsampledExtants(uePath);
+    if(fossilPath.empty() == false || uePath.empty() == false)
         assignFossilAwareAges();
-    }
 }
 
 static void stripBracketComments(std::string& s){
@@ -164,56 +167,102 @@ void FBDInput::readFossils(std::string path){
         }catch(...){
             Msg::error("fossil '" + taxon + "' has a non-numeric age");
         }
-        std::string cladeName = row[3];
-        std::string assignStr = row[4];
+        addFossil(taxon, minAge, maxAge, row[3], row[4], (row.size() >= 6) ? row[5] : "");
+    }
+}
+
+void FBDInput::addFossil(const std::string& taxon, double minAge, double maxAge, const std::string& cladeName, std::string assignStr, const std::string& typeName){
+    for(char& ch : assignStr)
+        ch = std::toupper((unsigned char)ch);
+
+    if(minAge > maxAge)
+        Msg::error("fossil '" + taxon + "' has min_age greater than max_age");
+    if(minAge < 0.0)
+        Msg::error("fossil '" + taxon + "' has a negative age");
+
+    Clade* clade = nullptr;
+    for(Clade& c : clades)
+        if(c.getName() == cladeName){
+            clade = &c;
+            break;
+        }
+    if(clade == nullptr)
+        Msg::error("fossil '" + taxon + "' is assigned to an undefined clade '" + cladeName + "'");
+
+    if(assignStr != "CROWN" && assignStr != "TOTAL" && assignStr != "STEM")
+        Msg::error("fossil '" + taxon + "' has unknown assignment '" + assignStr + "'");
+    Assignment assignment = (assignStr == "CROWN") ? Assignment::CROWN
+                          : (assignStr == "STEM")  ? Assignment::STEM
+                          :                          Assignment::TOTAL;
+
+    if(assignment == Assignment::STEM && maxAge == 0.0)
+        Msg::error("fossil '" + taxon + "' is an unresolved extant assigned STEM; UE can only be CROWN or TOTAL.");
+
+    if(assignment == Assignment::CROWN && clade->getCrown()->getIsTip()){
+        Msg::warning("fossil '" + taxon + "' assigned CROWN to singleton clade '" + cladeName + "'; treating as TOTAL");
+        assignment = Assignment::TOTAL;
+    }
+    if(assignment == Assignment::STEM && clade->getCrown()->getIsTip()){
+        Msg::warning("fossil '" + taxon + "' assigned STEM to singleton clade '" + cladeName + "'; treating as TOTAL");
+        assignment = Assignment::TOTAL;
+    }
+    if(assignment == Assignment::STEM && clade->getCrown() == tree->getCrown()
+       && UserSettings::userSettings().getConditioning() == Conditioning::CROWN)
+        Msg::error("conditioning on crown node but fossil '" + taxon + "' is STEM on the whole-tree clade '" + cladeName + "'.");
+    if(UserSettings::userSettings().getConditioning() == Conditioning::CROWN
+       && assignment == Assignment::TOTAL && clade->getCrown() == tree->getCrown()){
+        Msg::warning("conditioning on crown node but fossil '" + taxon + "' is TOTAL on the whole-tree clade '" + cladeName + "'; treating as CROWN");
+        assignment = Assignment::CROWN;
+    }
+
+    double off = UserSettings::userSettings().getAgeOffset();
+    if(off > 0.0 && minAge < off)
+        Msg::error("fossil '" + taxon + "' youngest age " + std::to_string(minAge) + " is below the youngest rate-bin edge " + std::to_string(off) + ".");
+    fossils.push_back(Fossil(taxon, minAge - off, maxAge - off, cladeName, assignment, typeName));
+}
+
+void FBDInput::readUnsampledExtants(std::string path){
+    ReadTSV reader(path, false, false, true);
+    std::vector<std::vector<std::string>> rows = reader.getReadStringData();
+    if(rows.empty() == false && isHeaderRow(rows[0], "clade"))
+        rows.erase(rows.begin());
+
+    std::set<std::string> taken;
+    for(Node* n : tree->getDownPassSequence())
+        if(n->getIsTip())
+            taken.insert(n->getName());
+    for(Fossil& f : fossils)
+        taken.insert(f.getTaxon());
+
+    std::set<std::string> seen;
+    for(std::vector<std::string>& row : rows){
+        if(row.size() < 3)
+            Msg::error("unsampled extant row needs: clade, assignment, number of UE");
+        std::string cladeName = row[0];
+        std::string assignStr = row[1];
         for(char& ch : assignStr)
-            ch = std::toupper((unsigned char)ch);
+            ch = (char)std::toupper((unsigned char)ch);
+        if(assignStr == "STEM")
+            Msg::error("unsampled extants of clade '" + cladeName + "' are assigned STEM; UE can only be CROWN or TOTAL.");
+        if(assignStr != "CROWN" && assignStr != "TOTAL")
+            Msg::error("unsampled extants of clade '" + cladeName + "' have unknown assignment '" + row[1] + "'");
 
-        if(minAge > maxAge)
-            Msg::error("fossil '" + taxon + "' has min_age greater than max_age");
-        if(minAge < 0.0)
-            Msg::error("fossil '" + taxon + "' has a negative age");
+        if(row[2].empty() || row[2].find_first_not_of("0123456789") != std::string::npos)
+            Msg::error("unsampled extants of clade '" + cladeName + "' have a non-integer number of taxa '" + row[2] + "'");
+        long count = std::stol(row[2]);
 
-        Clade* clade = nullptr;
-        for(Clade& c : clades)
-            if(c.getName() == cladeName){
-                clade = &c;
-                break;
-            }
-        if(clade == nullptr)
-            Msg::error("fossil '" + taxon + "' references undefined clade '" + cladeName + "'");
+        if(seen.insert(cladeName + '\t' + assignStr).second == false)
+            Msg::error("clade '" + cladeName + "' appears twice with assignment " + assignStr + " in the unsampled extants file");
 
-        if(assignStr != "CROWN" && assignStr != "TOTAL" && assignStr != "STEM")
-            Msg::error("fossil '" + taxon + "' has unknown assignment '" + assignStr + "'");
-        Assignment assignment = (assignStr == "CROWN") ? Assignment::CROWN
-                              : (assignStr == "STEM")  ? Assignment::STEM
-                              :                          Assignment::TOTAL;
-
-        if(assignment == Assignment::STEM && maxAge == 0.0)
-            Msg::error("fossil '" + taxon + "' is an unresolved extant assigned STEM; UE can only be CROWN or TOTAL.");
-
-        if(assignment == Assignment::CROWN && clade->getCrown()->getIsTip()){
-            Msg::warning("fossil '" + taxon + "' assigned CROWN to singleton clade '" + cladeName + "'; treating as TOTAL");
-            assignment = Assignment::TOTAL;
+        std::string suffix = assignStr;
+        for(char& ch : suffix)
+            ch = (char)std::tolower((unsigned char)ch);
+        for(long i = 1; i <= count; i++){
+            std::string taxon = cladeName + "_" + suffix + "_" + std::to_string(i);
+            if(taken.insert(taxon).second == false)
+                Msg::error("unsampled extant '" + taxon + "' has a name that is already in use");
+            addFossil(taxon, 0.0, 0.0, cladeName, assignStr, "");
         }
-        if(assignment == Assignment::STEM && clade->getCrown()->getIsTip()){
-            Msg::warning("fossil '" + taxon + "' assigned STEM to singleton clade '" + cladeName + "'; treating as TOTAL");
-            assignment = Assignment::TOTAL;
-        }
-        if(assignment == Assignment::STEM && clade->getCrown() == tree->getCrown()
-           && UserSettings::userSettings().getConditioning() == Conditioning::CROWN)
-            Msg::error("conditioning on crown node but fossil '" + taxon + "' is STEM on the whole-tree clade '" + cladeName + "'.");
-        if(UserSettings::userSettings().getConditioning() == Conditioning::CROWN
-           && assignment == Assignment::TOTAL && clade->getCrown() == tree->getCrown()){
-            Msg::warning("conditioning on crown node but fossil '" + taxon + "' is TOTAL on the whole-tree clade '" + cladeName + "'; treating as CROWN");
-            assignment = Assignment::CROWN;
-        }
-
-        std::string typeName = (row.size() >= 6) ? row[5] : "";
-        double off = UserSettings::userSettings().getAgeOffset();
-        if(off > 0.0 && minAge < off)
-            Msg::error("fossil '" + taxon + "' youngest age " + std::to_string(minAge) + " is below the youngest rate-bin edge " + std::to_string(off) + ".");
-        fossils.push_back(Fossil(taxon, minAge - off, maxAge - off, cladeName, assignment, typeName));
     }
 }
 

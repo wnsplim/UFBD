@@ -48,7 +48,7 @@ class Fossil {
 class FBDInput {
 
     public:
-                                            FBDInput(std::string treePath, std::string cladesPath, std::string fossilPath);
+                                            FBDInput(std::string treePath, std::string cladesPath, std::string fossilPath, std::string uePath);
         Tree*                               getTree(void) { return tree; }
         std::vector<Clade>&                 getClades(void) { return clades; }
         std::vector<Fossil>&                getFossils(void) { return fossils; }
@@ -57,6 +57,8 @@ class FBDInput {
         Tree*                               readTree(std::string path);
         void                                readClades(std::string path);
         void                                readFossils(std::string path);
+        void                                readUnsampledExtants(std::string path);
+        void                                addFossil(const std::string& taxon, double minAge, double maxAge, const std::string& cladeName, std::string assignStr, const std::string& typeName);
         void                                assignFossilAwareAges(void);
         Tree*                               tree;
         std::vector<Clade>                  clades;

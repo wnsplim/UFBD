@@ -67,6 +67,15 @@ taxa1	45.9000	48.8000	whole	STEM	lithic
 taxa3	4.5000	4.9000	genus1	TOTAL	amber
 ```
 
+`unsampled_extants` — Tab-separated, with an optional header. Each row declares a count of unsampled extants rather than naming them one by one, which is the same declaration as writing that many `fossils` rows with `min_age` and `max_age` both 0. `assignment` can only be `CROWN` or `TOTAL`. The taxa of a row are named `<clade>_<crown|total>_1` through `<clade>_<crown|total>_<number>`, and those names must not already be in use by a backbone tip or a `fossils` row. A clade can appear once as `CROWN` and once as `TOTAL`.
+
+```
+clade	assignment	number
+genus1	TOTAL	400
+genus1	CROWN	1000
+genus2	CROWN	500
+```
+
 `backbone_tree` — NEWICK or NEXUS formats are accepted, which must be rooted and bifurcating. Backbone tree topology is assumed to be fixed throughout the analysis. A backbone tip whose name matches a `fossils` row becomes a non-contemporaneous tip, with its age sampled uniformly within that fossil's `min_age`–`max_age` range. Note that when one include fossils in the backbone tree, the program will suppress that fossil from becoming a sampled ancestor.
 
 `sequence` — FASTA, PHYLIP or NEXUS formats are accepted. Must be supplied for full-likelihood analysis.
@@ -96,6 +105,7 @@ Entries before any `[section]` are global, and an absent value leaves the settin
 ```ini
 fossils       = fossils.tsv
 clade_def     = clades.tsv
+# unsampled_extants = ue.tsv      # counts of unsampled extants per clade/assignment
 backbone_tree = backbone.tree
 sequence      = align.fasta
 # hessian     = in.BV             # for approximate-likelihood path, replacing sequence entry.
