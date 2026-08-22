@@ -2285,6 +2285,7 @@ void FBDTreeModel::updateGammaCache(void){
         }
     }
 
+    bool anyFossilMoved = false;
     for(int i = 0; i < nf; i++){
         double yi = unresolvedFossils->getFossilAge(i);
         double zi = unresolvedFossils->getAttachAge(i);
@@ -2292,6 +2293,7 @@ void FBDTreeModel::updateGammaCache(void){
         int lzi = unresolvedFossils->getAttachmentZone(i);
         if(yi == prevY[i] && zi == prevZ[i] && sai == prevSA[i] && lzi == prevAttachmentZone[i])
             continue;
+        anyFossilMoved = true;
         gammaStale[i] = 1;
         bool wasTerm = (prevSA[i] == 0);
         bool isTerm = (sai == 0);
@@ -2354,7 +2356,10 @@ void FBDTreeModel::updateGammaCache(void){
         }
     }
 
-    rebuildStalkIndex();
+    if(anyFossilMoved || stalkIndexBuilt == false){
+        rebuildStalkIndex();
+        stalkIndexBuilt = true;
+    }
 
     std::vector<int> staleIdx;
     for(int i = 0; i < nf; i++)

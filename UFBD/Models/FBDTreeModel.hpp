@@ -199,6 +199,7 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<double>         fbdPrevGammaLn, fbdPrevFy, fbdPrevFz;
         std::vector<double>         fbdRateSig;
         bool                        fbdMemoInit = false;
+        bool                        stalkIndexBuilt = false;
         std::vector<double>         gammaValM;
         std::vector<double>         gammaLogTab;
     public:
