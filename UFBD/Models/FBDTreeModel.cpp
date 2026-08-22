@@ -1405,9 +1405,12 @@ void FBDTreeModel::rebuildZoneStalks(int z, const std::vector<int>& fos){
 }
 
 void FBDTreeModel::zoneRecomputeGamma(const std::vector<int>& fos){
+    if(gammaValM.size() != cachedGammaLn.size())
+        gammaValM.assign(cachedGammaLn.size(), 0.0);
     for(int i : fos){
         double g = computeGamma(unresolvedFossils->getAttachAge(i), i);
         cachedGammaLn[i] = (g > 0.0) ? std::log(g) : -INFINITY;
+        gammaValM[i] = g;
     }
 }
 
@@ -2137,6 +2140,16 @@ double FBDTreeModel::computeGamma(double z, int i){
     return count;
 }
 
+namespace {
+struct EdgeFlip {
+    int    zone;
+    double lo, hi;
+    double sign;
+    double gate;
+    bool   gateIsUpper;
+};
+}
+
 void FBDTreeModel::updateGammaCache(void){
     Tree* tree = parameterTree->getTree();
     int nf = unresolvedFossils->getNumFossils();
@@ -2158,12 +2171,40 @@ void FBDTreeModel::updateGammaCache(void){
                 if(edits > budget){ edits = -1; break; }
             }
     }
+    bool nodeDelta = (edits >= 0) && cacheInit && gammaValM.size() == (size_t)nf;
+    if(nodeDelta)
+        for(Node* nd : dpseq)
+            if(nd->getTime() != prevNodeAge[nd->getOffset()] && (nd == root || nd == tree->getCrown()))
+                nodeDelta = false;
+    std::vector<EdgeFlip> flips;
+
     if(edits >= 0){
         for(Node* nd : dpseq){
             double oldA = prevNodeAge[nd->getOffset()];
             double newA = nd->getTime();
             if(oldA == newA)
                 continue;
+            if(nodeDelta){
+                double blo = std::min(oldA, newA), bhi = std::max(oldA, newA);
+                int mzf = minZoneOfNode[nd->getOffset()];
+                if(mzf >= 0){
+                    EdgeFlip f;
+                    f.zone = mzf; f.lo = blo; f.hi = bhi;
+                    f.sign = (newA < oldA) ? 1.0 : -1.0;
+                    f.gate = nd->getAncestor()->getTime(); f.gateIsUpper = true;
+                    flips.push_back(f);
+                }
+                for(Node* c : nd->getDescendants()){
+                    int mcf = minZoneOfNode[c->getOffset()];
+                    if(mcf < 0)
+                        continue;
+                    EdgeFlip f;
+                    f.zone = mcf; f.lo = blo; f.hi = bhi;
+                    f.sign = (newA > oldA) ? 1.0 : -1.0;
+                    f.gate = c->getTime(); f.gateIsUpper = false;
+                    flips.push_back(f);
+                }
+            }
             int mz = (nd != root) ? minZoneOfNode[nd->getOffset()] : -1;
             if(mz >= 0){
                 std::vector<double>& v = zoneEdges[mz].yng;
@@ -2201,6 +2242,7 @@ void FBDTreeModel::updateGammaCache(void){
 
     if(cacheInit == false){
         cachedGammaLn.assign(nf, 0.0);
+        gammaValM.assign(nf, 0.0);
         gammaStale.assign(nf, 1);
         prevY.assign(nf, -1.0);
         prevZ.assign(nf, -1.0);
@@ -2284,7 +2326,26 @@ void FBDTreeModel::updateGammaCache(void){
         if(n->getTime() != pc || anc->getTime() != pp)
             changedIntervals.push_back(std::make_pair(std::min(n->getTime(), pc), std::max(anc->getTime(), pp)));
     }
-    if(changedIntervals.empty() == false){
+    if(nodeDelta){
+        if((int)gammaLogTab.size() < 2 * (nf + tree->getNumNodes()) + 8){
+            gammaLogTab.resize(2 * (nf + tree->getNumNodes()) + 8);
+            for(size_t q = 0; q < gammaLogTab.size(); q++)
+                gammaLogTab[q] = (q > 0) ? std::log(0.5 * (double)q) : -INFINITY;
+        }
+        for(const EdgeFlip& f : flips){
+            for(int i = 0; i < nf; i++){
+                if(gammaStale[i] || unresolvedFossils->getAttachmentZone(i) != f.zone)
+                    continue;
+                double q = unresolvedFossils->getAttachAge(i);
+                if(q <= f.lo || q >= f.hi)
+                    continue;
+                if(f.gateIsUpper ? (q >= f.gate) : (q <= f.gate))
+                    continue;
+                gammaValM[i] += f.sign;
+                cachedGammaLn[i] = gammaLogTab[(int)(2.0 * gammaValM[i] + 0.5)];
+            }
+        }
+    }else if(changedIntervals.empty() == false){
         for(int i = 0; i < nf; i++){
             if(gammaStale[i]) continue;
             double ti = unresolvedFossils->isSA(i) ? unresolvedFossils->getFossilAge(i) : unresolvedFossils->getAttachAge(i);
@@ -2308,6 +2369,7 @@ void FBDTreeModel::updateGammaCache(void){
             int i = staleIdx[k];
             double g = computeGamma(unresolvedFossils->getAttachAge(i), i);
             cachedGammaLn[i] = (g > 0.0) ? std::log(g) : -INFINITY;
+            gammaValM[i] = g;
             gammaStale[i] = 0;
         }
     });
