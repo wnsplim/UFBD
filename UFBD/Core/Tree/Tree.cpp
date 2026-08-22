@@ -36,6 +36,7 @@ Tree::Tree(std::string newick){
     }
     Node* p = nullptr;
     bool readingBl = false;
+    bool closedClade = false;
     for(int i = 0; i < newickTokens.size(); i++){
         std::string token = newickTokens[i];
         if(token == "("){
@@ -48,17 +49,25 @@ Tree::Tree(std::string newick){
                 newNode->setAncestor(p);
             }
             p = newNode;
+            closedClade = false;
         }else if (token == ")" || token == ","){
             if(p->getAncestor() == nullptr)
-                Msg::error("no anc found for p");
+                Msg::error("malformed tree string");
             p = p->getAncestor();
+            closedClade = (token == ")");
         }else if (token == ";"){
             if(p != crown)
-                Msg::error("expecting to be at crown");
+                Msg::error("malformed tree string");
         }else if (token == ":"){
             readingBl = true;
+            closedClade = false;
         }else{
-            if(readingBl == false){
+            if(readingBl){
+                readingBl = false;
+            }else if(closedClade){
+                p->setName(token);
+                closedClade = false;
+            }else{
                 Node* newNode = addNode();
                 if(p == nullptr){
                     crown = newNode;
@@ -71,8 +80,6 @@ Tree::Tree(std::string newick){
                 newNode->setIsTip(true);
                 numTaxa++;
                 p = newNode;
-            }else{
-                readingBl = false;
             }
         }
     }
