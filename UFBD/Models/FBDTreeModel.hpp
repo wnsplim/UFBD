@@ -195,6 +195,10 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<double>         prevNodeAge;
         double                      prevX0;
         bool                        cacheInit;
+        std::vector<double>         fbdTermFoss;
+        std::vector<double>         fbdPrevGammaLn, fbdPrevFy, fbdPrevFz;
+        std::vector<double>         fbdRateSig;
+        bool                        fbdMemoInit = false;
     public:
         void                        invalidateGammaCache(void){ cacheInit = false; }
     private:
@@ -223,6 +227,8 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<int>            azGibbsIdx;
         long                        azAcc;
         long                        azAtt;
+        long long                   gammaStaleTot;
+        long                        gammaStaleCalls;
 };
 
 
