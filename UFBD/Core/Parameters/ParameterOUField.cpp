@@ -258,6 +258,11 @@ void ParameterOUField::writeState(std::ostream& os){
     os << theta[1] << ' ' << sdEq[1] << ' ' << nu[1] << ' '
        << step[OU_BIN] << ' ' << step[OU_THETA] << ' ' << step[OU_SDEQ] << ' ' << step[OU_NU] << '\n';
     Serialize::writeVec(os, stepBin);
+    Serialize::writeLVec(os, attWBin);
+    Serialize::writeLVec(os, accWBin);
+    Serialize::writeLVec(os, adaptNBin);
+    for(int m = 0; m < 4; m++) os << attW[m] << ' ' << accW[m] << ' ' << adaptN[m] << ' ';
+    os << '\n';
 }
 
 void ParameterOUField::readState(std::istream& is){
@@ -266,6 +271,10 @@ void ParameterOUField::readState(std::istream& is){
     is >> theta[1] >> sdEq[1] >> nu[1]
        >> step[OU_BIN] >> step[OU_THETA] >> step[OU_SDEQ] >> step[OU_NU];
     Serialize::readVec(is, stepBin);
+    Serialize::readLVec(is, attWBin);
+    Serialize::readLVec(is, accWBin);
+    Serialize::readLVec(is, adaptNBin);
+    for(int m = 0; m < 4; m++) is >> attW[m] >> accW[m] >> adaptN[m];
     theta[0] = theta[1];
     sdEq[0] = sdEq[1];
     nu[0] = nu[1];
