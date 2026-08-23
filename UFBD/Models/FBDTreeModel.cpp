@@ -1677,18 +1677,20 @@ double FBDTreeModel::uePqLn(double z){
     return std::log(rhoVal) + std::log(2*lambdaAt(findIndex(z))) + lnD(z);
 }
 
+double FBDTreeModel::lnSurvivalWithin(int i, double t){
+    double lam = lambdaAt(i), mu = muAt(i);
+    double tau = t - intervalStart[i];
+    double c1 = std::abs(lam - mu);
+    double u = (c1 > 0.0) ? -std::expm1(-c1 * tau) / c1 : tau;
+    double lnS = lnSPrevHat[i];
+    double s = std::exp(lnS);
+    if(lam >= mu)
+        return lnS - std::log(std::exp(-c1 * tau) + s * lam * u);
+    return lnS - c1 * tau - std::log1p(s * lam * u);
+}
+
 double FBDTreeModel::calculateLnSurvival(double t){
-    int k = findIndex(t);
-    double lam = lambdaAt(k), mu = muAt(k), c1 = c1HatVec[k], c2 = c2HatVec[k];
-    double tau = t - intervalStart[k];
-    if(lam < 1e-9 * c1){ // lambda->0: log(N)-log(2*lam) is a removable 0/0; exact lambda=0 limit
-        double eb = (k == 0) ? (1.0 - rhoVal) : ePrevHat[k];
-        return -mu * tau + std::log(1.0 - eb);
-    }
-    double E = std::exp(-c1 * tau);
-    double N  = E * (1.0 - c2) * ((lam - mu) - c1) + (1.0 + c2) * ((lam - mu) + c1);
-    double Dp = E * (1.0 - c2) + (1.0 + c2);
-    return std::log(N) - std::log(2.0 * lam) - std::log(Dp);
+    return lnSurvivalWithin(findIndex(t), t);
 }
 
 double FBDTreeModel::calculateLnAnySample(double t){
@@ -1749,21 +1751,10 @@ void FBDTreeModel::prepareIntervals(void){
             c2Vec[i] = ((1.0 - 2.0 * ePrev[i]) * li + mi + pi) / c1Vec[i];
         }
     }
-    c1HatVec.assign(n, 0.0);
-    c2HatVec.assign(n, 0.0);
-    ePrevHat.assign(n, 0.0);
-    for(size_t i = 0; i < n; i++){
-        double li = lambdaAt(i);
-        double mi = muAt(i);
-        c1HatVec[i] = std::abs(li - mi);
-        if(i == 0){
-            ePrevHat[0] = 1.0;
-            c2HatVec[0] = (-li + mi + 2*li * rhoVal) / c1HatVec[0];
-        }else{
-            ePrevHat[i] = calculateP0HatAt((int)i - 1, intervalStart[i]);
-            c2HatVec[i] = ((1.0 - 2.0 * ePrevHat[i]) * li + mi) / c1HatVec[i];
-        }
-    }
+    lnSPrevHat.assign(n, 0.0);
+    lnSPrevHat[0] = std::log(rhoVal);
+    for(size_t i = 1; i < n; i++)
+        lnSPrevHat[i] = lnSurvivalWithin((int)i - 1, intervalStart[i]);
 }
 
 int FBDTreeModel::findIndex(double t){
@@ -1806,17 +1797,7 @@ double FBDTreeModel::calculateP0(double t){
 }
 
 double FBDTreeModel::calculateP0HatAt(int i, double t){
-    double tau = t - intervalStart[i];
-    double li = lambdaAt(i);
-    double mi = muAt(i);
-    if(li < 1e-7 * c1HatVec[i]){ // lambda->0: same 0/0 as P0At; exact lambda=0 limit (pure death)
-        double eb = (i == 0) ? (1.0 - rhoVal) : ePrevHat[i];
-        return 1.0 + (eb - 1.0) * std::exp(-mi * tau);
-    }
-    double tmp = -li + mi;
-    tmp += c1HatVec[i] * (std::exp(-c1HatVec[i] * tau) * (1 - c2HatVec[i]) - (1+c2HatVec[i]) ) / ( std::exp(-c1HatVec[i] * tau) * (1 - c2HatVec[i]) + (1+c2HatVec[i])  );
-    tmp /= 2*li;
-    return 1 + tmp;
+    return -std::expm1(lnSurvivalWithin(i, t));
 }
 
 void FBDTreeModel::buildEulerIndex(void){

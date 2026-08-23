@@ -67,6 +67,7 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      fossilPqLn(double y, double z, int type);
         double                      uePqLn(double z);
         double                      calculateLnSurvival(double t);
+        double                      lnSurvivalWithin(int i, double t);
         double                      calculateLnAnySample(double t);
         double                      calculateLnConditioning(double t);
         void                        prepareIntervals(void);
@@ -145,9 +146,7 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<double>         c2Vec;
         std::vector<double>         ePrev;
         std::vector<double>         lnDPrev;
-        std::vector<double>         c1HatVec;
-        std::vector<double>         c2HatVec;
-        std::vector<double>         ePrevHat;
+        std::vector<double>         lnSPrevHat;
         double                      rhoVal;
         enum MoveKind { MK_PARAM, MK_AZGIBBS, MK_RATESHIFT, MK_RATEVEC, MK_UPDOWN, MK_JOINTSCALE };
         MoveKind                    lastMoveKind;
