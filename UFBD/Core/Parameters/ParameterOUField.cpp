@@ -257,6 +257,7 @@ void ParameterOUField::writeState(std::ostream& os){
     Serialize::writeVec(os, rateVal[1]);
     os << theta[1] << ' ' << sdEq[1] << ' ' << nu[1] << ' '
        << step[OU_BIN] << ' ' << step[OU_THETA] << ' ' << step[OU_SDEQ] << ' ' << step[OU_NU] << '\n';
+    Serialize::writeVec(os, stepBin);
 }
 
 void ParameterOUField::readState(std::istream& is){
@@ -264,6 +265,7 @@ void ParameterOUField::readState(std::istream& is){
     rateVal[0] = rateVal[1];
     is >> theta[1] >> sdEq[1] >> nu[1]
        >> step[OU_BIN] >> step[OU_THETA] >> step[OU_SDEQ] >> step[OU_NU];
+    Serialize::readVec(is, stepBin);
     theta[0] = theta[1];
     sdEq[0] = sdEq[1];
     nu[0] = nu[1];
