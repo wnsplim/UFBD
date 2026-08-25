@@ -28,8 +28,8 @@ class ParameterSimplex : public Parameter {
         std::vector<std::vector<double>> value;
         std::vector<double>              priorAlpha;
         double                           tuning;
-        int                              numAcceptances;
-        int                              numRejections;
+        long long                        numAcceptances;
+        long long                        numRejections;
         std::deque<bool>                 recentAcceptRej;
 };
 

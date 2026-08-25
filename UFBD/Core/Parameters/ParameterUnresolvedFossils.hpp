@@ -98,8 +98,8 @@ class ParameterUnresolvedFossils : public Parameter {
         double                      flipTz;
         char                        flipSsa;
         char                        flipTsa;
-        int                         numAcceptances;
-        int                         numRejections;
+        long long                   numAcceptances;
+        long long                   numRejections;
 };
 
 #endif

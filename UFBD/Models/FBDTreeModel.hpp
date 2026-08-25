@@ -68,6 +68,10 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      uePqLn(double z);
         double                      calculateLnSurvival(double t);
         double                      lnSurvivalWithin(int i, double t);
+        double                      lnSurvDecrement(int i, double t);
+        double                      lnQBracket(int i, double t);
+        double                      incDecLn(int i, double t);
+        double                      lnDDiff(double zhi, double ylo);
         double                      calculateLnAnySample(double t);
         double                      calculateLnConditioning(double t);
         void                        prepareIntervals(void);
@@ -76,6 +80,7 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      calculateP0At(int i, double t);
         double                      calculateP0(double t);
         double                      calculateP0HatAt(int i, double t);
+        double                      calculateSurvivalAt(int i, double t);
         double                      computeGamma(double z, int i);
         static double               lnChoose(int n, int k);
         void                        buildEulerIndex(void);
@@ -147,6 +152,8 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<double>         ePrev;
         std::vector<double>         lnDPrev;
         std::vector<double>         lnSPrevHat;
+        std::vector<double>         lnRPrev;
+        std::vector<double>         lnR2Prev;
         double                      rhoVal;
         enum MoveKind { MK_PARAM, MK_AZGIBBS, MK_RATESHIFT, MK_RATEVEC, MK_UPDOWN, MK_JOINTSCALE };
         MoveKind                    lastMoveKind;
@@ -196,13 +203,14 @@ class FBDTreeModel : public PhylogeneticModel {
         bool                        cacheInit;
         std::vector<double>         fbdTermFoss;
         std::vector<double>         fbdPrevGammaLn, fbdPrevFy, fbdPrevFz;
+        std::vector<int>            fbdPrevKind;
         std::vector<double>         fbdRateSig;
         bool                        fbdMemoInit = false;
         bool                        stalkIndexBuilt = false;
         std::vector<double>         gammaValM;
         std::vector<double>         gammaLogTab;
     public:
-        void                        invalidateGammaCache(void){ cacheInit = false; }
+        void                        invalidateGammaCache(void){ cacheInit = false; fbdMemoInit = false; }
     private:
         bool                        zoneInit;
         bool                        isResolved;

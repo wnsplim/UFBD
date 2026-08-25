@@ -33,8 +33,8 @@ class ParameterTree : public Parameter {
         void                        tuneScale(bool accepted);
         //ordered by menmory footprint
         Tree*                       trees[2];
-        int                         numAcceptances;
-        int                         numRejections;
+        long long                   numAcceptances;
+        long long                   numRejections;
         double                      scaleLambda;
         std::deque<bool>            recentScaleAcceptRej;
         int                         numScaleMoves;

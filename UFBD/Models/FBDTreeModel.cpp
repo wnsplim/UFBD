@@ -654,7 +654,7 @@ double FBDTreeModel::evaluateAtGeneratingState(const std::vector<double>& lam, c
             unresolvedFossils->acceptFossil(i);
         }
     }
-    cacheInit = false;
+    invalidateGammaCache();
     zoneInit = false;
     zoneIndexBuilt = false;
     eulerBuilt = false;
@@ -1233,16 +1233,15 @@ double FBDTreeModel::calculateFBDProbability(void){
             if(unresolvedFossils->getAttachAge(i) > x0)
                 return -INFINITY;
         }
-        double lx0 = lambdaAt(findIndex(x0));
-        fbdProb -= std::log(lx0);
-        fbdProb -= calculateLnConditioning(x0);
-        fbdProb += std::log(4 * lx0);
-        fbdProb += lnD(x0) - std::log(4.0);
+        int k = findIndex(x0);
+        if(UserSettings::userSettings().getConditioningEvent() == ConditioningEvent::SURVIVAL)
+            fbdProb += lnRPrev[k] + incDecLn(k, x0);
+        else
+            fbdProb += lnD(x0) - calculateLnConditioning(x0);
     }else{
-        double lr = lambdaAt(findIndex(crownAge));
-        fbdProb -= 2 * (std::log(lr) + calculateLnSurvival(crownAge));
-        fbdProb += std::log(4 * lr);
-        fbdProb += lnD(crownAge) - std::log(4.0);
+        int k = findIndex(crownAge);
+        fbdProb += lnR2Prev[k] + incDecLn(k, crownAge) + lnSurvDecrement(k, crownAge)
+                   - std::log(lambdaAt(k));
     }
 
     dbgT1 = fbdProb;
@@ -1271,10 +1270,11 @@ double FBDTreeModel::calculateFBDProbability(void){
     updateGammaCache();
     int spineIdx = unresolvedFossils->getSpineIdx();
     std::vector<double> sig;
-    sig.reserve(4 * c1Vec.size() + numPsiTypes * c1Vec.size() + 1);
+    sig.reserve(6 * c1Vec.size() + numPsiTypes * c1Vec.size() + 1);
     for(size_t q = 0; q < c1Vec.size(); q++){
         sig.push_back(c1Vec[q]); sig.push_back(c2Vec[q]);
         sig.push_back(ePrev[q]); sig.push_back(lnDPrev[q]);
+        sig.push_back(lambdaAt((int)q)); sig.push_back(muAt((int)q));
         for(int t = 0; t < numPsiTypes; t++)
             sig.push_back(psiOfTypeAt(t, (int)q));
     }
@@ -1285,6 +1285,7 @@ double FBDTreeModel::calculateFBDProbability(void){
         fbdPrevGammaLn.assign(numFossils, std::numeric_limits<double>::quiet_NaN());
         fbdPrevFy.assign(numFossils, std::numeric_limits<double>::quiet_NaN());
         fbdPrevFz.assign(numFossils, std::numeric_limits<double>::quiet_NaN());
+        fbdPrevKind.assign(numFossils, -1);
         ratesSame = false;
         fbdMemoInit = true;
     }
@@ -1295,12 +1296,15 @@ double FBDTreeModel::calculateFBDProbability(void){
         for(int i = lo; i < hi; i++){
             double gy = unresolvedFossils->getFossilAge(i);
             double gz = unresolvedFossils->getAttachAge(i);
-            if(ratesSame && cachedGammaLn[i] == fbdPrevGammaLn[i] && gy == fbdPrevFy[i] && gz == fbdPrevFz[i])
+            int kind = (unresolvedFossils->isSA(i) ? 2 : 0) | (i == spineIdx ? 1 : 0);
+            if(ratesSame && cachedGammaLn[i] == fbdPrevGammaLn[i] && gy == fbdPrevFy[i]
+               && gz == fbdPrevFz[i] && kind == fbdPrevKind[i])
                 continue;
             termFoss[i] = fossilTermLn(i, spineIdx);
             fbdPrevGammaLn[i] = cachedGammaLn[i];
             fbdPrevFy[i] = gy;
             fbdPrevFz[i] = gz;
+            fbdPrevKind[i] = kind;
         }
     });
     for(int i = 0; i < numFossils; i++)
@@ -1641,7 +1645,7 @@ double FBDTreeModel::calculateResolvedFBD(void){
 
     for(Node* n : tree->getDownPassSequence()){
         if(n != root)
-            lnP += lnD(n->getAncestor()->getTime()) - lnD(n->getTime());
+            lnP += lnDDiff(n->getAncestor()->getTime(), n->getTime());
         if(n->getIsTip()){
             if(n->getIsFossil() == false)
                 lnP += std::log(rhoVal);
@@ -1670,11 +1674,49 @@ double FBDTreeModel::lnD(double t){
 }
 
 double FBDTreeModel::fossilPqLn(double y, double z, int type){
-    return std::log(psiOfTypeAt(type, findIndex(y))) + std::log(2*lambdaAt(findIndex(z))) + std::log(calculateP0(y)) + lnD(z) - lnD(y);
+    return std::log(psiOfTypeAt(type, findIndex(y))) + std::log(2*lambdaAt(findIndex(z))) + std::log(calculateP0(y)) + lnDDiff(z, y);
 }
 
 double FBDTreeModel::uePqLn(double z){
     return std::log(rhoVal) + std::log(2*lambdaAt(findIndex(z))) + lnD(z);
+}
+
+double FBDTreeModel::lnQBracket(int i, double t){
+    double a = c1Vec[i] * (t - intervalStart[i]);
+    double c2 = c2Vec[i];
+    return std::log(std::pow(1.0 + c2, 2) + std::exp(-a) * 2.0 * (1.0 - c2 * c2)
+                    + std::exp(-2.0 * a) * std::pow(1.0 - c2, 2));
+}
+
+double FBDTreeModel::lnSurvDecrement(int i, double t){
+    double lam = lambdaAt(i), mu = muAt(i);
+    double tau = t - intervalStart[i];
+    double c1 = std::abs(lam - mu);
+    double u = (c1 > 0.0) ? -std::expm1(-c1 * tau) / c1 : tau;
+    double s = std::exp(lnSPrevHat[i]);
+    if(lam >= mu)
+        return std::log(std::exp(-c1 * tau) + s * lam * u);
+    return c1 * tau + std::log1p(s * lam * u);
+}
+
+double FBDTreeModel::incDecLn(int i, double t){
+    double lam = lambdaAt(i), mu = muAt(i);
+    if(lam >= mu)
+        return std::log(4.0) - calculateLnQtAt(i, t) + lnSurvDecrement(i, t);
+    double psi = psiTotalAt(i), beta = lam - mu - psi;
+    double delta = (beta >= 0.0 ? c1Vec[i] + beta : 4.0 * lam * psi / (c1Vec[i] - beta)) + psi;
+    double tau = t - intervalStart[i], ch = mu - lam;
+    double u = -std::expm1(-ch * tau) / ch;
+    double s = std::exp(lnSPrevHat[i]);
+    return -delta * tau + std::log(4.0) - lnQBracket(i, t) + std::log1p(s * lam * u);
+}
+
+double FBDTreeModel::lnDDiff(double zhi, double ylo){
+    int kz = findIndex(zhi), ky = findIndex(ylo);
+    double d = calculateLnQtAt(ky, ylo) - calculateLnQtAt(kz, zhi);
+    for(int i = ky + 1; i <= kz; i++)
+        d += std::log(4.0) - calculateLnQtAt(i - 1, intervalStart[i]);
+    return d;
 }
 
 double FBDTreeModel::lnSurvivalWithin(int i, double t){
@@ -1722,7 +1764,7 @@ double FBDTreeModel::calculateLnConditioning(double t){
             return calculateLnAnySample(t);
         case ConditioningEvent::EXTINCT: {
             int k = findIndex(t);
-            double pExtinct = calculateP0HatAt(k, t) - calculateP0At(k, t);
+            double pExtinct = calculateSurvivalAt(k, t) - std::exp(lnSurvivalWithin(k, t));
             return (pExtinct > 0.0) ? std::log(pExtinct) : -INFINITY;
         }
     }
@@ -1752,9 +1794,18 @@ void FBDTreeModel::prepareIntervals(void){
         }
     }
     lnSPrevHat.assign(n, 0.0);
+    lnRPrev.assign(n, 0.0);
+    lnR2Prev.assign(n, 0.0);
     lnSPrevHat[0] = std::log(rhoVal);
-    for(size_t i = 1; i < n; i++)
-        lnSPrevHat[i] = lnSurvivalWithin((int)i - 1, intervalStart[i]);
+    lnRPrev[0] = -std::log(rhoVal);
+    lnR2Prev[0] = -2.0 * std::log(rhoVal);
+    for(size_t i = 1; i < n; i++){
+        double dec = lnSurvDecrement((int)i - 1, intervalStart[i]);
+        double incdec = incDecLn((int)i - 1, intervalStart[i]);
+        lnRPrev[i] = lnRPrev[i-1] + incdec;
+        lnR2Prev[i] = lnR2Prev[i-1] + incdec + dec;
+        lnSPrevHat[i] = lnSPrevHat[i-1] - dec;
+    }
 }
 
 int FBDTreeModel::findIndex(double t){
@@ -1794,6 +1845,26 @@ double FBDTreeModel::calculateP0At(int i, double t){
 
 double FBDTreeModel::calculateP0(double t){
     return calculateP0At(findIndex(t), t);
+}
+
+double FBDTreeModel::calculateSurvivalAt(int i, double t){
+    double tau = t - intervalStart[i];
+    double li = lambdaAt(i);
+    double mi = muAt(i);
+    double pi = psiTotalAt(i);
+    if(li < 1e-7 * c1Vec[i]){
+        double s = mi + pi;
+        double eb = (i == 0) ? (1.0 - rhoVal) : ePrev[i];
+        if(s <= 0.0)
+            return 1.0 - eb;
+        double a = mi / s;
+        return pi / s - (eb - a) * std::exp(-s * tau);
+    }
+    double tmp = -li + mi + pi;
+    double e = std::exp(-c1Vec[i] * tau);
+    double p = 1.0 + c2Vec[i], q = 1.0 - c2Vec[i];
+    tmp += c1Vec[i] * (e * q - p) / (e * q + p);
+    return -tmp / (2.0 * li);
 }
 
 double FBDTreeModel::calculateP0HatAt(int i, double t){
@@ -2182,7 +2253,7 @@ void FBDTreeModel::updateGammaCache(void){
                     EdgeFlip f;
                     f.zone = mcf; f.lo = blo; f.hi = bhi;
                     f.sign = (newA > oldA) ? 1.0 : -1.0;
-                    f.gate = c->getTime(); f.gateIsUpper = false;
+                    f.gate = prevNodeAge[c->getOffset()]; f.gateIsUpper = false;
                     flips.push_back(f);
                 }
             }

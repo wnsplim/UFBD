@@ -42,8 +42,8 @@ class ParameterDouble : public Parameter {
         double                      priorP3 = 0.0;
         double                      targetAr;
         double                      windowSize;
-        int                         numAcceptances;
-        int                         numRejections;
+        long long                   numAcceptances;
+        long long                   numRejections;
 };
 
 
