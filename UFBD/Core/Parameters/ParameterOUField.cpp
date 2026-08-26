@@ -223,9 +223,11 @@ void ParameterOUField::printPerBinAccept(std::ostream& os, const char* label) co
     os << "]";
 }
 
-double ParameterOUField::scaleAllProposed(double c){
+double ParameterOUField::scaleAllProposed(double c, bool withTheta){
     for(int k = 0; k < nBins; k++)
         rateVal[0][k] = rateVal[1][k] * c;
+    if(withTheta)
+        theta[0] = theta[1] + std::log(c);
     return (double)nBins * std::log(c);
 }
 
@@ -250,7 +252,7 @@ double ParameterOUField::shiftRates(double d){
     for(int k = 0; k < nBins; k++)
         rateVal[0][k] = rateVal[1][k] * c;
     theta[0] = theta[1] + std::log(c);
-    return std::log(rBar) - std::log(rBar + d);
+    return (double)(nBins - 1) * std::log(c);
 }
 
 void ParameterOUField::writeState(std::ostream& os){

@@ -1115,6 +1115,9 @@ void FBDTreeModel::updateForAcceptance(void){
         for(ParameterDouble* l : lambda) l->commitProposed();
         for(ParameterDouble* m : mu) m->commitProposed();
         for(auto& pv : psi) for(ParameterDouble* p : pv) p->commitProposed();
+        if(lambdaField != nullptr) lambdaField->commitProposed();
+        if(muField != nullptr) muField->commitProposed();
+        for(int tp = 0; tp < numPsiTypes; tp++) if(psiField[tp] != nullptr) psiField[tp]->commitProposed();
         if(originAge != nullptr) originAge->commitProposed();
         parameterTree->updateForAcceptance();
         if(unresolvedFossils != nullptr) unresolvedFossils->updateForAcceptance();
@@ -1159,6 +1162,9 @@ void FBDTreeModel::updateForRejection(void){
         for(ParameterDouble* l : lambda) l->restoreProposed();
         for(ParameterDouble* m : mu) m->restoreProposed();
         for(auto& pv : psi) for(ParameterDouble* p : pv) p->restoreProposed();
+        if(lambdaField != nullptr) lambdaField->restoreProposed();
+        if(muField != nullptr) muField->restoreProposed();
+        for(int tp = 0; tp < numPsiTypes; tp++) if(psiField[tp] != nullptr) psiField[tp]->restoreProposed();
         if(originAge != nullptr) originAge->restoreProposed();
         parameterTree->updateForRejection();
         if(unresolvedFossils != nullptr) unresolvedFossils->updateForRejection();
@@ -2747,10 +2753,15 @@ double FBDTreeModel::doUpDownScale(void){
     double lnc = std::log(c);
 
     int nUp = 0;
+    double h = 0.0;
     for(ParameterDouble* l : lambda) if(l->getProposalProbability() > 0.0){ l->scaleProposed(c); nUp++; }
     for(ParameterDouble* m : mu) if(m->getProposalProbability() > 0.0){ m->scaleProposed(c); nUp++; }
     for(auto& pv : psi) for(ParameterDouble* p : pv) if(p->getProposalProbability() > 0.0){ p->scaleProposed(c); nUp++; }
-    double h = nUp * lnc;
+    if(lambdaField != nullptr) h += lambdaField->scaleAllProposed(c, true);
+    if(muField != nullptr)     h += muField->scaleAllProposed(c, true);
+    for(int tp = 0; tp < numPsiTypes; tp++)
+        if(psiField[tp] != nullptr) h += psiField[tp]->scaleAllProposed(c, true);
+    h += nUp * lnc;
 
     Tree* t = parameterTree->getTree();
     t->setLastUpdateWasScale(true);
