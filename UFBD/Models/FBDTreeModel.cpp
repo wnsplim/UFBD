@@ -1501,8 +1501,7 @@ double FBDTreeModel::fossilSweepParallel(void){
             std::vector<int>& fos = zoneFos[z];
             if(fos.empty())
                 continue;
-            RandomVariable zr;
-            zr.setSeed(seed[z]);
+            RandomVariable zr(seed[z]);
             std::vector<int> ord = fos;
             for(int a = (int)ord.size() - 1; a > 0; a--)
                 std::swap(ord[a], ord[(int)(zr.uniformRv() * (a + 1))]);
@@ -2344,6 +2343,7 @@ void FBDTreeModel::updateGammaCache(void){
     }
 
     bool anyFossilMoved = false;
+    std::vector<std::pair<double,int> > tSorted;
     for(int i = 0; i < nf; i++){
         double yi = unresolvedFossils->getFossilAge(i);
         double zi = unresolvedFossils->getAttachAge(i);
@@ -2367,12 +2367,22 @@ void FBDTreeModel::updateGammaCache(void){
                 if(wasTerm) hi = std::max(hi, prevZ[i]);
                 if(isTerm)  hi = std::max(hi, zi);
             }
-            for(int j = 0; j < nf; j++){
-                if(gammaStale[j]) continue;
-                double tj = unresolvedFossils->isSA(j) ? unresolvedFossils->getFossilAge(j) : unresolvedFossils->getAttachAge(j);
-                if(pureZ ? (tj >= lo && tj < hi) : (tj > lo && tj < hi))
-                    gammaStale[j] = 1;
+            if(tSorted.empty()){
+                tSorted.reserve(nf);
+                for(int j = 0; j < nf; j++)
+                    tSorted.push_back(std::make_pair(unresolvedFossils->isSA(j)
+                                                     ? unresolvedFossils->getFossilAge(j)
+                                                     : unresolvedFossils->getAttachAge(j), j));
+                std::sort(tSorted.begin(), tSorted.end());
             }
+            const int lowI = std::numeric_limits<int>::min(), highI = std::numeric_limits<int>::max();
+            std::vector<std::pair<double,int> >::const_iterator b = pureZ
+                ? std::lower_bound(tSorted.begin(), tSorted.end(), std::make_pair(lo, lowI))
+                : std::upper_bound(tSorted.begin(), tSorted.end(), std::make_pair(lo, highI));
+            std::vector<std::pair<double,int> >::const_iterator e =
+                std::lower_bound(tSorted.begin(), tSorted.end(), std::make_pair(hi, lowI));
+            for(; b != e; ++b)
+                gammaStale[b->second] = 1;
         }
     }
 
