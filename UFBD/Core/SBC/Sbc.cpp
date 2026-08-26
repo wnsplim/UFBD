@@ -86,16 +86,38 @@ void initAges(Tree* tree, std::vector<Fossil>& fossils, bool origin, const Proba
         tree->scaleInternalAges(target / cur);
 }
 
-double ksPvalue(double d, long n){
-    double t = std::sqrt((double)n) * d;
-    if(t < 1e-12) return 1.0;
-    double sum = 0.0;
-    for(int k = 1; k <= 200; k++)
-        sum += (k % 2 == 1 ? 1.0 : -1.0) * std::exp(-2.0 * k * k * t * t);
-    double p = 2.0 * sum;
-    if(p < 0.0) p = 0.0;
-    if(p > 1.0) p = 1.0;
-    return p;
+double binomTail(long n, double p, long k, bool upper){
+    if(upper)
+        return (k <= 0) ? 1.0 : Probability::Helper::incompleteBeta((double)k, (double)(n - k + 1), p);
+    return (k >= n) ? 1.0 : 1.0 - Probability::Helper::incompleteBeta((double)(k + 1), (double)(n - k), p);
+}
+
+double ecdfGamma(std::vector<double> u, const std::vector<double>& z){
+    long n = (long)u.size();
+    std::sort(u.begin(), u.end());
+    double g = 1.0;
+    for(double zj : z){
+        long k = (long)(std::upper_bound(u.begin(), u.end(), zj) - u.begin());
+        double lo = binomTail(n, zj, k, false);
+        double hi = binomTail(n, zj, k, true);
+        double t = 2.0 * std::min(lo, hi);
+        if(t < g) g = t;
+    }
+    return g;
+}
+
+double ecdfGamma5(long n, const std::vector<double>& z, int nNull, RandomVariable* rng){
+    std::vector<double> g(nNull);
+    std::vector<double> u((size_t)n);
+    for(int b = 0; b < nNull; b++){
+        for(long i = 0; i < n; i++) u[i] = rng->uniformRv();
+        g[b] = ecdfGamma(u, z);
+    }
+    std::sort(g.begin(), g.end());
+    double idx = 0.05 * (double)(nNull - 1);
+    size_t lo = (size_t)idx;
+    double fr = idx - (double)lo;
+    return (lo + 1 < g.size()) ? g[lo] * (1.0 - fr) + g[lo + 1] * fr : g[lo];
 }
 
 double quantile(const std::vector<double>& s, double q){
@@ -381,21 +403,25 @@ void Sbc::runInference(void){
     if(nUnconverged > 0)
         printf("  WARNING: %d of %d reps did not reach the R-hat/ESS thresholds.\n",
                nUnconverged, cfg.numReps);
-    printf("  %-12s %8s %8s %7s %7s\n", "param", "KS_D", "KS_p", "cov50", "cov90");
+    long nRank = 0;
+    for(const std::string& nm : outCols)
+        if((long)ranks[nm].size() > nRank) nRank = (long)ranks[nm].size();
+    int nGrid = (int)std::min(nRank, (long)200);
+    std::vector<double> zGrid;
+    for(int j = 1; j < nGrid; j++)
+        zGrid.push_back((double)j / (double)nGrid);
+    double g5 = (nRank > 0 && zGrid.empty() == false) ? ecdfGamma5(nRank, zGrid, 4000, rng) : 0.0;
+    printf("  gamma5 at %ld replicates from 4000 null rank sets: %.6g\n", nRank, g5);
+    printf("  %-12s %10s %10s %18s %7s %7s\n", "param", "gamma", "gamma5", "log(gamma/gamma5)", "cov50", "cov90");
     for(const std::string& nm : outCols){
         std::vector<double> v = ranks[nm];
         long R = (long)v.size();
         if(R == 0) continue;
-        std::sort(v.begin(), v.end());
-        double D = 0.0;
-        for(long i = 0; i < R; i++){
-            double lo = (double)i / R, hi = (double)(i + 1) / R;
-            D = std::max(D, std::max(v[i] - lo, hi - v[i]));
-        }
-        double ksp = ksPvalue(D, R);
+        double g = ecdfGamma(v, zGrid);
+        double lg = (g > 0.0 && g5 > 0.0) ? std::log(g / g5) : -std::numeric_limits<double>::infinity();
         double c50 = (double)cov50[nm] / R;
         double c90 = (double)cov90[nm] / R;
-        printf("  %-12s %8.4f %8.4f %7.4f %7.4f\n", nm.c_str(), D, ksp, c50, c90);
+        printf("  %-12s %10.3g %10.3g %18.3f %7.4f %7.4f\n", nm.c_str(), g, g5, lg, c50, c90);
     }
 
     if(cfg.dumpPrefix.empty() == false && liveHeader)
