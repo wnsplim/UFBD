@@ -58,7 +58,6 @@ class ParameterOUField : public Parameter {
         int                         lastBin;
         std::vector<long>           binAtt, binAcc;
 
-        bool                        perBinStep;
         std::vector<double>         stepBin;
         std::vector<long>           attWBin, accWBin, adaptNBin;
 };

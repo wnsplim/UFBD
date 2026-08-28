@@ -57,7 +57,6 @@ ParameterOUField::ParameterOUField(double prob, PhylogeneticModel* m, int nB, co
     numAcc = 0;
     numRej = 0;
 
-    perBinStep = (model->getTree()->getNumBackbone() == 0);
     stepBin.assign(nBins, step[OU_BIN]);
     attWBin.assign(nBins, 0);
     accWBin.assign(nBins, 0);
@@ -117,7 +116,7 @@ double ParameterOUField::update(void){
         int k = (int)(rng.uniformRv() * (double)nBins);
         if(k >= nBins) k = nBins - 1;
         lastBin = k;
-        double s = perBinStep ? stepBin[k] : step[OU_BIN];
+        double s = stepBin[k];
         double c = std::exp(s * bactrianDelta());
         rateVal[0][k] = rateVal[1][k] * c;
         return std::log(c);
@@ -188,7 +187,7 @@ void ParameterOUField::updateForAcceptance(void){
     numAcc++;
     moveAtt[lastMove]++;
     moveAcc[lastMove]++;
-    if(perBinStep && lastMove == OU_BIN && lastBin >= 0)
+    if(lastMove == OU_BIN && lastBin >= 0)
         adaptStepBin(lastBin, true);
     else
         adaptStep(lastMove, true);
@@ -199,7 +198,7 @@ void ParameterOUField::updateForRejection(void){
     restoreProposed();
     numRej++;
     moveAtt[lastMove]++;
-    if(perBinStep && lastMove == OU_BIN && lastBin >= 0)
+    if(lastMove == OU_BIN && lastBin >= 0)
         adaptStepBin(lastBin, false);
     else
         adaptStep(lastMove, false);
@@ -210,7 +209,7 @@ void ParameterOUField::printPerBinAccept(std::ostream& os, const char* label) co
     os << " " << label << "_binAR[";
     for(int k = 0; k < nBins; k++)
         os << k << ":" << (binAtt[k] > 0 ? (double)binAcc[k] / (double)binAtt[k] : 0.0)
-           << "(" << binAcc[k] << "/" << binAtt[k] << ",step " << (perBinStep ? stepBin[k] : step[OU_BIN]) << ") ";
+           << "(" << binAcc[k] << "/" << binAtt[k] << ",step " << stepBin[k] << ") ";
     os << "]";
     static const char* hyName[3] = {"theta", "sdEq", "nu"};
     static const int hyMove[3] = {OU_THETA, OU_SDEQ, OU_NU};
