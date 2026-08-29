@@ -25,6 +25,7 @@ class PhylogeneticModel {
         Tree*                                   getTree(void);
         RandomVariable*                         getRng(void) { return &rng; }
         const Parameter*                        getUpdatedParameter(void) { return updatedParameter; };
+        virtual void                            setHeat(double h) { heat = h; }
         virtual double                          lnLikelihood(void) = 0;
         virtual void                            invalidateLikelihoodCache(void) {}
         virtual void                            invalidatePriorCache(void) {}
@@ -44,6 +45,7 @@ class PhylogeneticModel {
         std::vector<Parameter*>                 parameters;
         Parameter*                              updatedParameter;
         RandomVariable                          rng;
+        double                                  heat = 1.0;
 };
 
 #endif

@@ -217,6 +217,11 @@ void RelaxedClockTreeModel::invalidatePriorCache(void){
     fbd->invalidateGammaCache();
 }
 
+void RelaxedClockTreeModel::setHeat(double h){
+    heat = h;
+    fbd->setHeat(h);
+}
+
 double RelaxedClockTreeModel::lnPriorProbability(void){
     double lnp = fbd->lnLikelihood() + fbd->lnPriorProbability() + clock->lnProbability();
     if(ctmc != nullptr)
@@ -239,7 +244,7 @@ double RelaxedClockTreeModel::nodeAgeSweep(void){
         double newL = lnLikelihood();
         double newP = lnPriorProbability();
         naSweepAtt++;
-        if(std::log(r.uniformRv()) < (newL - curL) + (newP - curP) + ratio){
+        if(std::log(r.uniformRv()) < heat * ((newL - curL) + (newP - curP)) + ratio){
             curL = newL;
             curP = newP;
             fbd->getParameterTree()->updateForAcceptance();

@@ -1461,7 +1461,7 @@ double FBDTreeModel::fossilSweepSequential(void){
         }
         updateGammaCache();
         double t3new = term3Sum();
-        if(std::log(rng.uniformRv()) < (t3new - t3) + ratio){
+        if(std::log(rng.uniformRv()) < heat * (t3new - t3) + ratio){
             t3 = t3new;
             unresolvedFossils->updateForAcceptance();
         }else{
@@ -1592,7 +1592,7 @@ double FBDTreeModel::fossilSweepParallel(void){
                     }
                 }
 
-                if(std::log(zr.uniformRv()) < dz + ratio){
+                if(std::log(zr.uniformRv()) < heat * dz + ratio){
                     zt += dz;
                     unresolvedFossils->acceptFossil(idx);
                     zAcc[z][sub]++;

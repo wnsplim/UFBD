@@ -249,6 +249,7 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
             ThreadPool::setCurrent(&ThreadPool::shared());
             RandomVariable* r = models[i]->getRng();
             double heat = calcHeating(indices[i]);
+            models[i]->setHeat(heat);
             bool cold = (i == coldModelIdx);
             RelaxedClockTreeModel* relaxed = tuning ? dynamic_cast<RelaxedClockTreeModel*>(models[i]) : nullptr;
             for(unsigned long b = 1; b <= blockLen; b++){

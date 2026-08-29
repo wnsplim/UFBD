@@ -33,6 +33,7 @@ class RelaxedClockTreeModel : public PhylogeneticModel {
         void                        invalidateLikelihoodCache(void);
         void                        invalidatePriorCache(void);
         double                      lnPriorProbability(void);
+        void                        setHeat(double h);
         void                        print(void);
         double                      update(void);
         void                        updateForAcceptance(void);
