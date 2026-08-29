@@ -63,12 +63,6 @@ ParameterOUField::ParameterOUField(double prob, PhylogeneticModel* m, int nB, co
     adaptNBin.assign(nBins, 0);
 }
 
-double ParameterOUField::topAge(void){
-    if(originAge != nullptr)
-        return originAge->getValue();
-    return model->getTree()->getCrown()->getTime();
-}
-
 double ParameterOUField::lnProbability(void){
     double th = theta[0], sd = sdEq[0], nuv = nu[0];
     if(sd <= 0.0 || nuv <= 0.0)
@@ -82,11 +76,14 @@ double ParameterOUField::lnProbability(void){
     double x = std::log(rateVal[0][0]);
     lp += Probability::Normal::lnPdf(th, var0, x) - x;
 
-    double top = topAge();
-    double prevMid = 0.5 * (loEdges[0] + loEdges[1]);
+    double w0 = loEdges[1] - loEdges[0];
+    if(nBins > 2)
+        w0 = std::min(w0, loEdges[2] - loEdges[1]);
+    double prevMid = loEdges[0] + 0.5 * w0;
     double prevX = x;
     for(int c = 1; c < nBins; c++){
-        double mid = (c < nBins - 1) ? 0.5 * (loEdges[c] + loEdges[c + 1]) : 0.5 * (loEdges[c] + top);
+        double mid = (c < nBins - 1) ? 0.5 * (loEdges[c] + loEdges[c + 1])
+                                     : loEdges[c] + 0.5 * (loEdges[c] - loEdges[c - 1]);
         double dt = mid - prevMid;
         double rho = std::exp(-nuv * dt);
         double mean = th + (prevX - th) * rho;

@@ -34,7 +34,6 @@ class ParameterOUField : public Parameter {
 
     private:
         double                      bactrianDelta(void);
-        double                      topAge(void);
         void                        adaptStep(int m, bool accepted);
         void                        adaptStepBin(int k, bool accepted);
 
