@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include "ParameterOUField.hpp"
@@ -255,6 +256,7 @@ void ParameterOUField::writeState(std::ostream& os){
     Serialize::writeVec(os, rateVal[1]);
     os << theta[1] << ' ' << sdEq[1] << ' ' << nu[1] << ' '
        << step[OU_BIN] << ' ' << step[OU_THETA] << ' ' << step[OU_SDEQ] << ' ' << step[OU_NU] << '\n';
+    os << "perbin\n";
     Serialize::writeVec(os, stepBin);
     Serialize::writeLVec(os, attWBin);
     Serialize::writeLVec(os, accWBin);
@@ -263,16 +265,61 @@ void ParameterOUField::writeState(std::ostream& os){
     os << '\n';
 }
 
+bool ParameterOUField::readUntaggedPerBin(std::istream& is, size_t n){
+    std::vector<double> sb(n);
+    std::vector<long> aw(n), cw(n), an(n);
+    long long c = 0;
+    bool ok = (bool)(is >> c) && c == (long long)n;
+    for(size_t i = 0; ok && i < n; i++)
+        ok = (bool)(is >> sb[i]);
+    std::vector<long>* dst[3] = { &aw, &cw, &an };
+    for(int v = 0; v < 3 && ok; v++){
+        ok = (bool)(is >> c) && c == (long long)n;
+        for(size_t i = 0; ok && i < n; i++)
+            ok = (bool)(is >> (*dst[v])[i]);
+    }
+    if(ok == false){
+        is.clear();
+        return false;
+    }
+    stepBin = sb;
+    attWBin = aw;
+    accWBin = cw;
+    adaptNBin = an;
+    return true;
+}
+
 void ParameterOUField::readState(std::istream& is){
     Serialize::readVec(is, rateVal[1]);
     rateVal[0] = rateVal[1];
     is >> theta[1] >> sdEq[1] >> nu[1]
        >> step[OU_BIN] >> step[OU_THETA] >> step[OU_SDEQ] >> step[OU_NU];
-    Serialize::readVec(is, stepBin);
-    Serialize::readLVec(is, attWBin);
-    Serialize::readLVec(is, accWBin);
-    Serialize::readLVec(is, adaptNBin);
-    for(int m = 0; m < 4; m++) is >> attW[m] >> accW[m] >> adaptN[m];
+    size_t n = rateVal[1].size();
+    std::streampos here = is.tellg();
+    std::string tag;
+    is >> tag;
+    bool block = (tag == "perbin");
+    if(block){
+        Serialize::readVec(is, stepBin);
+        Serialize::readLVec(is, attWBin);
+        Serialize::readLVec(is, accWBin);
+        Serialize::readLVec(is, adaptNBin);
+    }else{
+        is.clear();
+        is.seekg(here);
+        block = readUntaggedPerBin(is, n);
+        if(block == false)
+            is.seekg(here);
+    }
+    if(block){
+        for(int m = 0; m < 4; m++) is >> attW[m] >> accW[m] >> adaptN[m];
+    }else{
+        stepBin.assign(n, step[OU_BIN]);
+        attWBin.assign(n, 0);
+        accWBin.assign(n, 0);
+        adaptNBin.assign(n, 0);
+        for(int m = 0; m < 4; m++){ attW[m] = 0; accW[m] = 0; adaptN[m] = 0; }
+    }
     theta[0] = theta[1];
     sdEq[0] = sdEq[1];
     nu[0] = nu[1];

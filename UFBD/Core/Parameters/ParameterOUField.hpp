@@ -30,6 +30,7 @@ class ParameterOUField : public Parameter {
         void                        updateForRejection(void);
         void                        writeState(std::ostream& os);
         void                        readState(std::istream& is);
+        bool                        readUntaggedPerBin(std::istream& is, size_t n);
         void                        printPerBinAccept(std::ostream& os, const char* label) const;
 
     private:
