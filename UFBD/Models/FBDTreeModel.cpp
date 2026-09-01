@@ -2086,6 +2086,167 @@ double FBDTreeModel::validZoneSet(int i, int a, std::vector<std::pair<double,dou
     return measure;
 }
 
+void FBDTreeModel::snapshotZoneEdges(ZoneEdgeSnap& s){
+    Tree* tree = parameterTree->getTree();
+    Node* root = tree->getRoot();
+    s.e.assign(numZones, std::vector<std::pair<double,double> >());
+    for(Node* nd : tree->getDownPassSequence()){
+        if(nd == root)
+            continue;
+        int mz = minZoneOfNode[nd->getOffset()];
+        if(mz < 0)
+            continue;
+        s.e[mz].push_back(std::make_pair(nd->getTime(), nd->getAncestor()->getTime()));
+    }
+    s.crownTime = tree->getCrown()->getTime();
+    s.x0 = (originAge != nullptr) ? originAge->getValue() : 0.0;
+    s.numBackbone = tree->getNumBackbone();
+}
+
+double FBDTreeModel::gammaWithZone(int i, int a, const ZoneEdgeSnap& s){
+    double z = unresolvedFossils->getAttachAge(i);
+    double count = 0.0;
+    for(const std::pair<double,double>& e : s.e[a])
+        if(e.first < z && z < e.second)
+            count += 1.0;
+    if(a == trunkMinZone){
+        if(s.numBackbone == 0){
+            if(z >= s.x0)
+                count += 1.0;
+        }else if(s.crownTime < z && z < s.x0){
+            count += 1.0;
+        }
+    }
+    bool halfFix = (UserSettings::userSettings().getModel() == Model::UFBD);
+    bool focalIsTip = (unresolvedFossils->isSA(i) == false);
+    double w = (halfFix && focalIsTip) ? 0.5 : 1.0;
+    const StalkBucket& b = zoneStalks[a];
+    count += w * (double)countStraddling(b.y, b.zy, z);
+    int sp = unresolvedFossils->getSpineIdx();
+    if(halfFix && focalIsTip && sp >= 0 && sp != i && unresolvedFossils->isSA(sp) == false
+       && unresolvedFossils->getAttachmentZone(sp) == a){
+        double ys = unresolvedFossils->getFossilAge(sp), zs = unresolvedFossils->getAttachAge(sp);
+        if(ys < z && z < zs)
+            count += 0.5;
+    }
+    return count;
+}
+
+double FBDTreeModel::azBlockPass(const ZoneEdgeSnap& s, std::vector<int>& lab, bool draw){
+    double lq = 0.0;
+    std::vector<double> w;
+    for(size_t k = 0; k < zbIdx.size(); k++){
+        int i = zbIdx[k];
+        std::vector<int>& dom = unresolvedFossils->getAttachmentZoneDomain(i);
+        w.assign(dom.size(), 0.0);
+        double sum = 0.0;
+        for(size_t d = 0; d < dom.size(); d++){
+            double g = gammaWithZone(i, dom[d], s);
+            w[d] = (g > 0.0) ? g : 0.0;
+            sum += w[d];
+        }
+        if(sum <= 0.0)
+            return -INFINITY;
+        if(draw){
+            double u = rng.uniformRv() * sum;
+            size_t pick = dom.size() - 1;
+            for(size_t d = 0; d < dom.size(); d++){
+                u -= w[d];
+                if(u < 0.0){ pick = d; break; }
+            }
+            lab[k] = dom[pick];
+            lq += std::log(w[pick] / sum);
+        }else{
+            double wl = 0.0;
+            for(size_t d = 0; d < dom.size(); d++)
+                if(dom[d] == lab[k])
+                    wl = w[d];
+            if(wl <= 0.0)
+                return -INFINITY;
+            lq += std::log(wl / sum);
+        }
+    }
+    return lq;
+}
+
+double FBDTreeModel::relabelAcrossNode(Node* n, double oldAge){
+    zbIdx.clear();
+    if(isResolved || unresolvedFossils == nullptr || zoneIndexBuilt == false)
+        return 0.0;
+    double newAge = n->getTime();
+    double lo = (oldAge < newAge) ? oldAge : newAge;
+    double hi = (oldAge < newAge) ? newAge : oldAge;
+    std::vector<char> aff(numZones, 0);
+    int mz = minZoneOfNode[n->getOffset()];
+    if(mz >= 0)
+        aff[mz] = 1;
+    for(Node* c : n->getDescendants()){
+        int mc = minZoneOfNode[c->getOffset()];
+        if(mc >= 0)
+            aff[mc] = 1;
+    }
+    for(int i : azGibbsIdx){
+        double t = unresolvedFossils->getAttachAge(i);
+        if(t <= lo || t >= hi)
+            continue;
+        for(int a : unresolvedFossils->getAttachmentZoneDomain(i))
+            if(aff[a]){ zbIdx.push_back(i); break; }
+    }
+    relAtt++;
+    if(zbIdx.empty())
+        return 0.0;
+    relFire++;
+    relSize += (long)zbIdx.size();
+
+    zbOld.resize(zbIdx.size());
+    for(size_t k = 0; k < zbIdx.size(); k++)
+        zbOld[k] = unresolvedFossils->getAttachmentZone(zbIdx[k]);
+
+    ZoneEdgeSnap snapNew, snapOld;
+    snapshotZoneEdges(snapNew);
+    n->setTime(oldAge);
+    snapshotZoneEdges(snapOld);
+    n->setTime(newAge);
+
+    std::vector<int> lab(zbIdx.size(), -1);
+    double lqf = azBlockPass(snapNew, lab, true);
+    if(lqf == -INFINITY){
+        zbIdx.clear();
+        return -INFINITY;
+    }
+    unresolvedFossils->beginZoneBlock(zbIdx);
+    for(size_t k = 0; k < zbIdx.size(); k++)
+        unresolvedFossils->setAttachmentZone(zbIdx[k], lab[k]);
+    rebuildStalkIndex();
+
+    std::vector<int> back = zbOld;
+    double lqr = azBlockPass(snapOld, back, false);
+    if(lqr == -INFINITY)
+        return -INFINITY;
+    return lqr - lqf;
+}
+
+void FBDTreeModel::commitZoneBlock(void){
+    if(zbIdx.empty())
+        return;
+    for(size_t k = 0; k < zbIdx.size(); k++)
+        if(unresolvedFossils->getAttachmentZone(zbIdx[k]) != zbOld[k]){
+            relCross++;
+            if(unresolvedFossils->isSA(zbIdx[k]))
+                relCrossSA++;
+        }
+    unresolvedFossils->commitZoneBlock();
+    zbIdx.clear();
+}
+
+void FBDTreeModel::restoreZoneBlock(void){
+    if(zbIdx.empty())
+        return;
+    unresolvedFossils->restoreZoneBlock();
+    rebuildStalkIndex();
+    zbIdx.clear();
+}
+
 double FBDTreeModel::doAttachmentZoneJump(int i){
     std::vector<int>& dom = unresolvedFossils->getAttachmentZoneDomain(i);
     int k = (int)dom.size();

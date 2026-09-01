@@ -303,6 +303,27 @@ double ParameterUnresolvedFossils::scaleAttachAges(const std::vector<int>& indic
     return count * std::log(m);
 }
 
+void ParameterUnresolvedFossils::beginZoneBlock(const std::vector<int>& idx){
+    zbIdx = idx;
+    zbAz.resize(idx.size());
+    for(size_t k = 0; k < idx.size(); k++)
+        zbAz[k] = az[0][idx[k]];
+}
+
+void ParameterUnresolvedFossils::commitZoneBlock(void){
+    for(size_t k = 0; k < zbIdx.size(); k++)
+        az[1][zbIdx[k]] = az[0][zbIdx[k]];
+    zbIdx.clear();
+}
+
+void ParameterUnresolvedFossils::restoreZoneBlock(void){
+    for(size_t k = 0; k < zbIdx.size(); k++){
+        az[0][zbIdx[k]] = zbAz[k];
+        az[1][zbIdx[k]] = zbAz[k];
+    }
+    zbIdx.clear();
+}
+
 void ParameterUnresolvedFossils::updateForAcceptance(void){
     numAcceptances++;
     if(lastMove == SINGLE || lastMove == FLIP){ subAtt[lastSub]++; subAcc[lastSub]++; }

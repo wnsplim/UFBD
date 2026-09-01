@@ -386,6 +386,8 @@ double BranchRateModel::constantDistanceMove(void){
         if(ynew > yHi) ynew = 2.0 * yHi - ynew;
     }
     double newAge = std::exp(ynew);
+    cdMovedNode = node;
+    cdOldAge = myAge;
     node->setTime(newAge);
     cdNodes.push_back(node->getOffset());
     double bbParentAge = tree->getBackboneParent(node)->getTime();

@@ -10,6 +10,7 @@
 #include "UserSettings.hpp"
 
 class Tree;
+class Node;
 class ParameterUnresolvedFossils;
 class RandomVariable;
 
@@ -45,6 +46,8 @@ class BranchRateModel : public Parameter {
         void                        commitAll(void);
         void                        restoreAll(void);
         double                      constantDistanceMove(void);
+        Node*                       getCdNode(void) { return cdMovedNode; }
+        double                      getCdOldAge(void) { return cdOldAge; }
         double                      rateAgeSubtreeMove(void);
         double                      simpleDistanceMove(void);
         double                      smallPulleyMove(void);
@@ -93,6 +96,8 @@ class BranchRateModel : public Parameter {
         std::vector<long>           cdAttNode;
         std::vector<long>           cdTotNode;
         int                         lastCdNode;
+        Node*                       cdMovedNode = nullptr;
+        double                      cdOldAge = 0.0;
         std::vector<int>            cdNodes;
         double                      sdStep;
         long                        sdAccW;

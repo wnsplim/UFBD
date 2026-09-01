@@ -52,6 +52,14 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      getOriginAgeValue(void);
         void                        setupNodeAgeFloors(void);
         double                      fossilSweep(void);
+        double                      relabelAcrossNode(Node* n, double oldAge);
+        void                        commitZoneBlock(void);
+        void                        restoreZoneBlock(void);
+        long                        getRelabelAtt(void) { return relAtt; }
+        long                        getRelabelFire(void) { return relFire; }
+        long                        getRelabelSize(void) { return relSize; }
+        long                        getRelabelCross(void) { return relCross; }
+        long                        getRelabelCrossSA(void) { return relCrossSA; }
     private:
         double                      fossilTermLn(int i, int spineIdx);
         double                      term3Sum(void);
@@ -91,6 +99,15 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      doAttachmentZoneGibbs(void);
         double                      doAttachmentZoneJump(int i);
         double                      validZoneSet(int i, int a, std::vector<std::pair<double,double> >& iv);
+        struct ZoneEdgeSnap {
+            std::vector<std::vector<std::pair<double,double> > > e;
+            double crownTime = 0.0;
+            double x0 = 0.0;
+            int    numBackbone = 0;
+        };
+        void                        snapshotZoneEdges(ZoneEdgeSnap& s);
+        double                      gammaWithZone(int i, int a, const ZoneEdgeSnap& s);
+        double                      azBlockPass(const ZoneEdgeSnap& s, std::vector<int>& lab, bool draw);
         void                        updateGammaCache(void);
         void                        computeAgeFloors(std::map<Node*,double>& floors);
         void                        resolveFossils(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils);
@@ -230,6 +247,13 @@ class FBDTreeModel : public PhylogeneticModel {
             std::vector<std::pair<double,double>> zy;
         };
         std::vector<StalkBucket>    zoneStalks;
+        std::vector<int>            zbIdx;
+        std::vector<int>            zbOld;
+        long                        relAtt = 0;
+        long                        relFire = 0;
+        long                        relSize = 0;
+        long                        relCross = 0;
+        long                        relCrossSA = 0;
         bool                        zoneIndexBuilt = false;
         std::vector<int>            prevAttachmentZone;
         std::vector<std::string>    zoneCladeName;

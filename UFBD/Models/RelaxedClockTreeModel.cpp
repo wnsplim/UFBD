@@ -240,7 +240,9 @@ double RelaxedClockTreeModel::nodeAgeSweep(void){
     double curL = lnLikelihood();
     double curP = lnPriorProbability();
     for(Node* n : nodes){
+        double oldAge = n->getTime();
         double ratio = fbd->getTree()->updateNodeAgeOnNode(n, fbd->getParameterTree()->getNodeAgeStep());
+        ratio += fbd->relabelAcrossNode(n, oldAge);
         double newL = lnLikelihood();
         double newP = lnPriorProbability();
         naSweepAtt++;
@@ -248,10 +250,12 @@ double RelaxedClockTreeModel::nodeAgeSweep(void){
             curL = newL;
             curP = newP;
             fbd->getParameterTree()->updateForAcceptance();
+            fbd->commitZoneBlock();
             fbd->getParameterTree()->recordNodeAgeMove(true);
             naSweepAcc++;
         }else{
             fbd->getParameterTree()->updateForRejection();
+            fbd->restoreZoneBlock();
             fbd->getParameterTree()->recordNodeAgeMove(false);
         }
     }
@@ -278,7 +282,13 @@ double RelaxedClockTreeModel::update(void){
         for(Node* n : nodes)
             naSnap.push_back(std::log(n->getTime()));
         naOp = naSel.pick(r);
-        if(naOp == 0){ lastMoveType = 1; return clock->constantDistanceMove(); }
+        if(naOp == 0){
+            lastMoveType = 1;
+            double h = clock->constantDistanceMove();
+            if(h == -std::numeric_limits<double>::infinity())
+                return h;
+            return h + fbd->relabelAcrossNode(clock->getCdNode(), clock->getCdOldAge());
+        }
         lastMoveType = 7;
         double h = nodeAgeSweep();
         naSel.record(1, nodeAgeJump2(), (double)naSnap.size());
@@ -320,6 +330,7 @@ void RelaxedClockTreeModel::updateForAcceptance(void){
     else if(lastMoveType == 1){
         clock->updateForAcceptance();
         fbd->getParameterTree()->updateForAcceptance();
+        fbd->commitZoneBlock();
         naSel.record(0, nodeAgeJump2(), 1.0);
     }else if(lastMoveType == 3){
         ageScaleAcc++;
@@ -348,6 +359,7 @@ void RelaxedClockTreeModel::updateForRejection(void){
     else if(lastMoveType == 1){
         clock->updateForRejection();
         fbd->getParameterTree()->updateForRejection();
+        fbd->restoreZoneBlock();
         naSel.record(0, 0.0, 1.0);
     }else if(lastMoveType == 3){
         clock->restoreAll();
@@ -480,6 +492,13 @@ void RelaxedClockTreeModel::print(void){
     if(naSweepAtt > 0)
         std::cout << "nodeAgeSweep (per-node A/R): " << (double)naSweepAcc / naSweepAtt << " [" << naSweepAcc << "/" << naSweepAtt << "]\n";
     std::cout << "nodeAgeStep: " << fbd->getParameterTree()->getNodeAgeStep() << "\n";
+    if(fbd->getRelabelAtt() > 0)
+        std::cout << "zoneRelabel (fire/att): " << (double)fbd->getRelabelFire() / fbd->getRelabelAtt()
+                  << " [" << fbd->getRelabelFire() << "/" << fbd->getRelabelAtt()
+                  << "] mean block: "
+                  << (fbd->getRelabelFire() > 0 ? (double)fbd->getRelabelSize() / fbd->getRelabelFire() : 0.0)
+                  << " accepted label changes: " << fbd->getRelabelCross()
+                  << " (SA " << fbd->getRelabelCrossSA() << ")\n";
     if(ctmc != nullptr)
         ctmc->print();
 }
