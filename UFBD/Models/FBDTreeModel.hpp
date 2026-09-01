@@ -53,6 +53,8 @@ class FBDTreeModel : public PhylogeneticModel {
         void                        setupNodeAgeFloors(void);
         double                      fossilSweep(void);
         double                      relabelAcrossNode(Node* n, double oldAge);
+        void                        beginNodeAgeSweep(void){ rebuildStalkIndex(); inNodeAgeSweep = true; }
+        void                        endNodeAgeSweep(void){ inNodeAgeSweep = false; }
         void                        commitZoneBlock(void);
         void                        restoreZoneBlock(void);
         long                        getRelabelAtt(void) { return relAtt; }
@@ -96,6 +98,7 @@ class FBDTreeModel : public PhylogeneticModel {
         void                        buildZoneIndex(void);
         double                      zoneBackboneEdges(int mz, double z);
         void                        rebuildStalkIndex(void);
+        void                        moveStalk(int i, int from, int to);
         double                      doAttachmentZoneGibbs(void);
         double                      doAttachmentZoneJump(int i);
         double                      validZoneSet(int i, int a, std::vector<std::pair<double,double> >& iv);
@@ -166,6 +169,8 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      rho;
         std::vector<double>         c1Vec;
         std::vector<double>         c2Vec;
+        std::vector<double>         ln2LambdaVec;
+        std::vector<std::vector<double> > lnPsiTypeVec;
         std::vector<double>         ePrev;
         std::vector<double>         lnDPrev;
         std::vector<double>         lnSPrevHat;
@@ -219,13 +224,17 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      prevX0;
         bool                        cacheInit;
         std::vector<double>         fbdTermFoss;
+        std::vector<double>         fbdTermNode;
         std::vector<double>         fbdPrevGammaLn, fbdPrevFy, fbdPrevFz;
         std::vector<int>            fbdPrevKind;
         std::vector<double>         fbdRateSig;
         bool                        fbdMemoInit = false;
         bool                        stalkIndexBuilt = false;
+        bool                        stalkIndexFresh = false;
+        bool                        inNodeAgeSweep = false;
         std::vector<double>         gammaValM;
         std::vector<double>         gammaLogTab;
+        std::vector<std::vector<int> > flipsByZone;
     public:
         void                        invalidateGammaCache(void){ cacheInit = false; fbdMemoInit = false; }
     private:
@@ -244,7 +253,7 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<ZoneEdges>      zoneEdges;
         struct StalkBucket {
             std::vector<double> y;
-            std::vector<std::pair<double,double>> zy;
+            std::vector<double> z;
         };
         std::vector<StalkBucket>    zoneStalks;
         std::vector<int>            zbIdx;

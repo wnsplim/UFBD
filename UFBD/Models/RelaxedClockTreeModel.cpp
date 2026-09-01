@@ -239,6 +239,7 @@ double RelaxedClockTreeModel::nodeAgeSweep(void){
     }
     double curL = lnLikelihood();
     double curP = lnPriorProbability();
+    fbd->beginNodeAgeSweep();
     for(Node* n : nodes){
         double oldAge = n->getTime();
         double ratio = fbd->getTree()->updateNodeAgeOnNode(n, fbd->getParameterTree()->getNodeAgeStep());
@@ -259,6 +260,7 @@ double RelaxedClockTreeModel::nodeAgeSweep(void){
             fbd->getParameterTree()->recordNodeAgeMove(false);
         }
     }
+    fbd->endNodeAgeSweep();
     return std::numeric_limits<double>::infinity(); // each node already MH-accepted above; force outer accept
 }
 

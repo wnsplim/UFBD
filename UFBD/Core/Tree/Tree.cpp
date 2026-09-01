@@ -178,18 +178,31 @@ void Tree::clone(const Tree& t) {
     this->crown = this->nodes[t.crown->getOffset()];
     this->origin = (t.origin != nullptr) ? this->nodes[t.origin->getOffset()] : nullptr;
     
+    bool sameTopology = (this->downPassSequence.size() == t.nodes.size());
+    for (size_t i = 0; sameTopology && i < t.nodes.size(); i++)
+        {
+        Node* qa = t.nodes[i]->getAncestor();
+        Node* pa = this->nodes[i]->getAncestor();
+        if ((qa == nullptr) != (pa == nullptr))
+            sameTopology = false;
+        else if (qa != nullptr && qa->getOffset() != pa->getOffset())
+            sameTopology = false;
+        }
+
     for (int i=0; i<t.nodes.size(); i++)
         {
         Node* q = t.nodes[i];
         Node* p = this->nodes[i];
         p->setIndex(q->getIndex());
-        p->setIsTip(q->getIsTip());
-        p->setName(q->getName());
         p->setFlag(q->getFlag());
         p->setTime(q->getTime());
-        p->setIsFossil(q->getIsFossil());
         p->setIsSA(q->getIsSA());
         p->setFossilAgeRange(q->getFossilYMin(), q->getFossilYMax());
+        if (sameTopology)
+            continue;
+        p->setIsTip(q->getIsTip());
+        p->setName(q->getName());
+        p->setIsFossil(q->getIsFossil());
         if (q->getAncestor() != nullptr)
             p->setAncestor( this->nodes[q->getAncestor()->getOffset()] );
         else
@@ -205,7 +218,8 @@ void Tree::clone(const Tree& t) {
         this->ageFloors[this->nodes[it->first->getOffset()]] = it->second;
     this->lastUpdateWasScale = t.lastUpdateWasScale;
 
-    initializeDownPassSequence();
+    if (sameTopology == false)
+        initializeDownPassSequence();
 }
 
 

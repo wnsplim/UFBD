@@ -80,13 +80,15 @@ void RandomVariable::twist(void) {
 
     for (uint32_t i=0; i<N; i++)
         {
-        uint32_t x = (mt[i] & MASK_UPPER) + (mt[(i + 1) % N] & MASK_LOWER);
+        uint32_t i1 = (i + 1 < N) ? i + 1 : 0;
+        uint32_t im = (i + M < N) ? i + M : i + M - N;
+        uint32_t x = (mt[i] & MASK_UPPER) + (mt[i1] & MASK_LOWER);
         uint32_t xA = x >> 1;
 
         if ( x & 0x1 )
             xA ^= A;
 
-        mt[i] = mt[(i + M) % N] ^ xA;
+        mt[i] = mt[im] ^ xA;
         }
     index = 0;
 }

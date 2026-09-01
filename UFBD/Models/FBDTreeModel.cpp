@@ -894,13 +894,19 @@ double FBDTreeModel::lnChoose(int n, int k){
 
 // crossing count: intervals (lo<hi) with lo<zq<hi = #{lo<zq} - #{hi<=zq}
 namespace {
-void eraseStalk(std::vector<double>& sy, std::vector<std::pair<double,double> >& szy, double y, double z){
-    sy.erase(std::lower_bound(sy.begin(), sy.end(), y));
-    szy.erase(std::lower_bound(szy.begin(), szy.end(), std::make_pair(z, y)));
+void eraseStalkZ(std::vector<double>& sz, double z){
+    sz.erase(std::lower_bound(sz.begin(), sz.end(), z));
 }
-void insertStalk(std::vector<double>& sy, std::vector<std::pair<double,double> >& szy, double y, double z){
+void insertStalkZ(std::vector<double>& sz, double z){
+    sz.insert(std::lower_bound(sz.begin(), sz.end(), z), z);
+}
+void eraseStalk(std::vector<double>& sy, std::vector<double>& sz, double y, double z){
+    sy.erase(std::lower_bound(sy.begin(), sy.end(), y));
+    eraseStalkZ(sz, z);
+}
+void insertStalk(std::vector<double>& sy, std::vector<double>& sz, double y, double z){
     sy.insert(std::lower_bound(sy.begin(), sy.end(), y), y);
-    szy.insert(std::lower_bound(szy.begin(), szy.end(), std::make_pair(z, y)), std::make_pair(z, y));
+    insertStalkZ(sz, z);
 }
 void eraseZIdx(std::vector<std::pair<double,int> >& v, double z, int i){
     v.erase(std::lower_bound(v.begin(), v.end(), std::make_pair(z, i)));
@@ -931,13 +937,6 @@ void collectInBand(const std::vector<std::pair<double,int> >& v, double lo, doub
 int countStraddling(const std::vector<double>& los, const std::vector<double>& his, double zq){
     int below = (int)(std::lower_bound(los.begin(), los.end(), zq) - los.begin());
     int above = (int)(std::upper_bound(his.begin(), his.end(), zq) - his.begin());
-    return below - above;
-}
-// stalks as (z_attach,y) sorted by z_attach; y passed separately (sorted)
-int countStraddling(const std::vector<double>& ySorted, const std::vector<std::pair<double,double>>& zy, double zq){
-    int below = (int)(std::lower_bound(ySorted.begin(), ySorted.end(), zq) - ySorted.begin());
-    int above = (int)(std::upper_bound(zy.begin(), zy.end(), zq,
-                     [](double v, const std::pair<double,double>& p){ return v < p.first; }) - zy.begin());
     return below - above;
 }
 }
@@ -1214,7 +1213,7 @@ double FBDTreeModel::calculateFBDProbability(void){
 
     int numInternalNodes = tree->getNumNodes() - tree->getNumBackbone();
     double crownAge = tree->getCrown()->getTime();
-    std::vector<Node*> dpseq = tree->getDownPassSequence();
+    std::vector<Node*>& dpseq = tree->getDownPassSequence();
     
     rhoVal = rho;
 
@@ -1253,7 +1252,8 @@ double FBDTreeModel::calculateFBDProbability(void){
     dbgT1 = fbdProb;
     //term 2: main body
     int nDp = (int)dpseq.size();
-    std::vector<double> termNode(nDp, 0.0);
+    fbdTermNode.assign(nDp, 0.0);
+    std::vector<double>& termNode = fbdTermNode;
     ThreadPool::current().parallelFor(OP_FBD, nDp, [&](int lo, int hi){
         for(int idx = lo; idx < hi; idx++){
             Node* n = dpseq[idx];
@@ -1374,14 +1374,14 @@ double FBDTreeModel::calculateFBDProbability(void){
 
 double FBDTreeModel::fossilTermLn(int i, int spineIdx){
     if(unresolvedFossils->isSA(i))
-        return std::log(psiOfTypeAt(fossilType[i], findIndex(unresolvedFossils->getFossilAge(i)))) + cachedGammaLn[i];
+        return lnPsiTypeVec[fossilType[i]][findIndex(unresolvedFossils->getFossilAge(i))] + cachedGammaLn[i];
     if(i == spineIdx && unresolvedFossils->isUE(i))
         return 0.0;
     if(unresolvedFossils->isUE(i))
         return uePqLn(unresolvedFossils->getAttachAge(i)) + cachedGammaLn[i];
     if(i == spineIdx){
         double ys = unresolvedFossils->getFossilAge(i);
-        return std::log(psiOfTypeAt(fossilType[i], findIndex(ys))) + std::log(calculateP0(ys)) - lnD(ys);
+        return lnPsiTypeVec[fossilType[i]][findIndex(ys)] + std::log(calculateP0(ys)) - lnD(ys);
     }
     return fossilPqLn(unresolvedFossils->getFossilAge(i), unresolvedFossils->getAttachAge(i), fossilType[i]) + cachedGammaLn[i];
 }
@@ -1402,16 +1402,15 @@ double FBDTreeModel::term3Sum(void){
 
 void FBDTreeModel::rebuildZoneStalks(int z, const std::vector<int>& fos){
     zoneStalks[z].y.clear();
-    zoneStalks[z].zy.clear();
+    zoneStalks[z].z.clear();
     for(int i : fos){
         if(unresolvedFossils->isSA(i))
             continue;
-        double yi = unresolvedFossils->getFossilAge(i);
-        zoneStalks[z].y.push_back(yi);
-        zoneStalks[z].zy.push_back(std::make_pair(unresolvedFossils->getAttachAge(i), yi));
+        zoneStalks[z].y.push_back(unresolvedFossils->getFossilAge(i));
+        zoneStalks[z].z.push_back(unresolvedFossils->getAttachAge(i));
     }
     std::sort(zoneStalks[z].y.begin(), zoneStalks[z].y.end());
-    std::sort(zoneStalks[z].zy.begin(), zoneStalks[z].zy.end());
+    std::sort(zoneStalks[z].z.begin(), zoneStalks[z].z.end());
 }
 
 void FBDTreeModel::zoneRecomputeGamma(const std::vector<int>& fos){
@@ -1544,10 +1543,15 @@ double FBDTreeModel::fossilSweepParallel(void){
                     continue;
                 }
 
-                if(saO == false)
-                    eraseStalk(sb.y, sb.zy, yO, zO);
-                if(saN == false)
-                    insertStalk(sb.y, sb.zy, yN, zN);
+                bool yKept = (saO == false && saN == false && yN == yO);
+                if(saO == false){
+                    if(yKept) eraseStalkZ(sb.z, zO);
+                    else      eraseStalk(sb.y, sb.z, yO, zO);
+                }
+                if(saN == false){
+                    if(yKept) insertStalkZ(sb.z, zN);
+                    else      insertStalk(sb.y, sb.z, yN, zN);
+                }
                 eraseZIdx(zIdx, zO, idx);
                 insertZIdx(zIdx, zN, idx);
 
@@ -1600,10 +1604,14 @@ double FBDTreeModel::fossilSweepParallel(void){
                 }else{
                     unresolvedFossils->rejectFossil(idx);
                     zNRej[z]++;
-                    if(saN == false)
-                        eraseStalk(sb.y, sb.zy, yN, zN);
-                    if(saO == false)
-                        insertStalk(sb.y, sb.zy, yO, zO);
+                    if(saN == false){
+                        if(yKept) eraseStalkZ(sb.z, zN);
+                        else      eraseStalk(sb.y, sb.z, yN, zN);
+                    }
+                    if(saO == false){
+                        if(yKept) insertStalkZ(sb.z, zO);
+                        else      insertStalk(sb.y, sb.z, yO, zO);
+                    }
                     eraseZIdx(zIdx, zN, idx);
                     insertZIdx(zIdx, zO, idx);
                     for(size_t q = keptIdx.size(); q-- > 0; ){
@@ -1623,6 +1631,7 @@ double FBDTreeModel::fossilSweepParallel(void){
         nAcc += zNAcc[z]; nRej += zNRej[z];
     }
     unresolvedFossils->mergeSubStats(att.data(), acc.data(), nAcc, nRej);
+    stalkIndexFresh = true;
     updateGammaCache();
     return std::numeric_limits<double>::infinity();
 }
@@ -1679,11 +1688,11 @@ double FBDTreeModel::lnD(double t){
 }
 
 double FBDTreeModel::fossilPqLn(double y, double z, int type){
-    return std::log(psiOfTypeAt(type, findIndex(y))) + std::log(2*lambdaAt(findIndex(z))) + std::log(calculateP0(y)) + lnDDiff(z, y);
+    return lnPsiTypeVec[type][findIndex(y)] + ln2LambdaVec[findIndex(z)] + std::log(calculateP0(y)) + lnDDiff(z, y);
 }
 
 double FBDTreeModel::uePqLn(double z){
-    return std::log(rhoVal) + std::log(2*lambdaAt(findIndex(z))) + lnD(z);
+    return std::log(rhoVal) + ln2LambdaVec[findIndex(z)] + lnD(z);
 }
 
 double FBDTreeModel::lnQBracket(int i, double t){
@@ -1798,6 +1807,14 @@ void FBDTreeModel::prepareIntervals(void){
             c2Vec[i] = ((1.0 - 2.0 * ePrev[i]) * li + mi + pi) / c1Vec[i];
         }
     }
+    ln2LambdaVec.assign(n, 0.0);
+    for(size_t i = 0; i < n; i++)
+        ln2LambdaVec[i] = std::log(2 * lambdaAt(i));
+    lnPsiTypeVec.assign(numPsiTypes, std::vector<double>(n, 0.0));
+    for(int t = 0; t < numPsiTypes; t++)
+        for(size_t i = 0; i < n; i++)
+            lnPsiTypeVec[t][i] = std::log(psiOfTypeAt(t, (int)i));
+
     lnSPrevHat.assign(n, 0.0);
     lnRPrev.assign(n, 0.0);
     lnR2Prev.assign(n, 0.0);
@@ -1814,11 +1831,8 @@ void FBDTreeModel::prepareIntervals(void){
 }
 
 int FBDTreeModel::findIndex(double t){
-    int i = 0;
-    for(size_t j = 1; j < intervalStart.size(); j++)
-        if(t >= intervalStart[j])
-            i = (int)j;
-    return i;
+    int i = (int)(std::upper_bound(intervalStart.begin(), intervalStart.end(), t) - intervalStart.begin()) - 1;
+    return (i > 0) ? i : 0;
 }
 
 double FBDTreeModel::calculateLnQtAt(int i, double t){
@@ -2028,21 +2042,29 @@ void FBDTreeModel::buildZoneIndex(void){
 void FBDTreeModel::rebuildStalkIndex(void){
     for(size_t k = 0; k < zoneStalks.size(); k++){
         zoneStalks[k].y.clear();
-        zoneStalks[k].zy.clear();
+        zoneStalks[k].z.clear();
     }
     int nf = unresolvedFossils->getNumFossils();
     for(int i = 0; i < nf; i++){
         if(unresolvedFossils->isSA(i))
             continue;
         StalkBucket& b = zoneStalks[unresolvedFossils->getAttachmentZone(i)];
-        double yi = unresolvedFossils->getFossilAge(i);
-        b.y.push_back(yi);
-        b.zy.push_back(std::make_pair(unresolvedFossils->getAttachAge(i), yi));
+        b.y.push_back(unresolvedFossils->getFossilAge(i));
+        b.z.push_back(unresolvedFossils->getAttachAge(i));
     }
     for(size_t k = 0; k < zoneStalks.size(); k++){
-        std::sort(zoneStalks[k].y.begin(),  zoneStalks[k].y.end());
-        std::sort(zoneStalks[k].zy.begin(), zoneStalks[k].zy.end());
+        std::sort(zoneStalks[k].y.begin(), zoneStalks[k].y.end());
+        std::sort(zoneStalks[k].z.begin(), zoneStalks[k].z.end());
     }
+}
+
+void FBDTreeModel::moveStalk(int i, int from, int to){
+    if(from == to || unresolvedFossils->isSA(i))
+        return;
+    double yi = unresolvedFossils->getFossilAge(i);
+    double zi = unresolvedFossils->getAttachAge(i);
+    eraseStalk(zoneStalks[from].y, zoneStalks[from].z, yi, zi);
+    insertStalk(zoneStalks[to].y,  zoneStalks[to].z,  yi, zi);
 }
 
 double FBDTreeModel::validZoneSet(int i, int a, std::vector<std::pair<double,double> >& iv){
@@ -2121,7 +2143,7 @@ double FBDTreeModel::gammaWithZone(int i, int a, const ZoneEdgeSnap& s){
     bool focalIsTip = (unresolvedFossils->isSA(i) == false);
     double w = (halfFix && focalIsTip) ? 0.5 : 1.0;
     const StalkBucket& b = zoneStalks[a];
-    count += w * (double)countStraddling(b.y, b.zy, z);
+    count += w * (double)countStraddling(b.y, b.z, z);
     int sp = unresolvedFossils->getSpineIdx();
     if(halfFix && focalIsTip && sp >= 0 && sp != i && unresolvedFossils->isSA(sp) == false
        && unresolvedFossils->getAttachmentZone(sp) == a){
@@ -2215,9 +2237,16 @@ double FBDTreeModel::relabelAcrossNode(Node* n, double oldAge){
         return -INFINITY;
     }
     unresolvedFossils->beginZoneBlock(zbIdx);
-    for(size_t k = 0; k < zbIdx.size(); k++)
-        unresolvedFossils->setAttachmentZone(zbIdx[k], lab[k]);
-    rebuildStalkIndex();
+    if(inNodeAgeSweep){
+        for(size_t k = 0; k < zbIdx.size(); k++){
+            unresolvedFossils->setAttachmentZone(zbIdx[k], lab[k]);
+            moveStalk(zbIdx[k], zbOld[k], lab[k]);
+        }
+    }else{
+        for(size_t k = 0; k < zbIdx.size(); k++)
+            unresolvedFossils->setAttachmentZone(zbIdx[k], lab[k]);
+        rebuildStalkIndex();
+    }
 
     std::vector<int> back = zbOld;
     double lqr = azBlockPass(snapOld, back, false);
@@ -2242,8 +2271,14 @@ void FBDTreeModel::commitZoneBlock(void){
 void FBDTreeModel::restoreZoneBlock(void){
     if(zbIdx.empty())
         return;
-    unresolvedFossils->restoreZoneBlock();
-    rebuildStalkIndex();
+    if(inNodeAgeSweep){
+        for(size_t k = 0; k < zbIdx.size(); k++)
+            moveStalk(zbIdx[k], unresolvedFossils->getAttachmentZone(zbIdx[k]), zbOld[k]);
+        unresolvedFossils->restoreZoneBlock();
+    }else{
+        unresolvedFossils->restoreZoneBlock();
+        rebuildStalkIndex();
+    }
     zbIdx.clear();
 }
 
@@ -2346,7 +2381,7 @@ double FBDTreeModel::computeGamma(double z, int i){
     double w = (halfFix && focalIsTip) ? 0.5 : 1.0;
 
     const StalkBucket& b = zoneStalks[mz];
-    count += w * (double)countStraddling(b.y, b.zy, z);
+    count += w * (double)countStraddling(b.y, b.z, z);
 
     int sp = unresolvedFossils->getSpineIdx();
     if(halfFix && focalIsTip && sp >= 0 && sp != i && unresolvedFossils->isSA(sp) == false
@@ -2563,11 +2598,18 @@ void FBDTreeModel::updateGammaCache(void){
             for(size_t q = 0; q < gammaLogTab.size(); q++)
                 gammaLogTab[q] = (q > 0) ? std::log(0.5 * (double)q) : -INFINITY;
         }
-        for(const EdgeFlip& f : flips){
-            for(int i = 0; i < nf; i++){
-                if(gammaStale[i] || unresolvedFossils->getAttachmentZone(i) != f.zone)
-                    continue;
-                double q = unresolvedFossils->getAttachAge(i);
+        flipsByZone.assign(numZones, std::vector<int>());
+        for(size_t k = 0; k < flips.size(); k++)
+            flipsByZone[flips[k].zone].push_back((int)k);
+        for(int i = 0; i < nf; i++){
+            if(gammaStale[i])
+                continue;
+            const std::vector<int>& fz = flipsByZone[unresolvedFossils->getAttachmentZone(i)];
+            if(fz.empty())
+                continue;
+            double q = unresolvedFossils->getAttachAge(i);
+            for(int k : fz){
+                const EdgeFlip& f = flips[k];
                 if(q <= f.lo || q >= f.hi)
                     continue;
                 if(f.gateIsUpper ? (q >= f.gate) : (q <= f.gate))
@@ -2586,9 +2628,11 @@ void FBDTreeModel::updateGammaCache(void){
     }
 
     if(anyFossilMoved || stalkIndexBuilt == false){
-        rebuildStalkIndex();
+        if(stalkIndexFresh == false)
+            rebuildStalkIndex();
         stalkIndexBuilt = true;
     }
+    stalkIndexFresh = false;
 
     std::vector<int> staleIdx;
     for(int i = 0; i < nf; i++)
