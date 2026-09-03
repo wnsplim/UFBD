@@ -1,23 +1,23 @@
 # UFBD
 
-Fossilized birth-death (FBD) analysis under the unresolved formulation of the FBD process (Heath et al., 2014, Lim et al. 2026). UFBD can infer divergence times and FBD rates (speciation, extinction, and sampling rates) when given (fixed) backbone topology, or only FBD rates when only given fossil records without any backbone topology.
+UFBD performs fossilized birth-death (FBD) analysis under the unresolved formulation of the FBD process (Heath et al., 2014; Lim et al., 2026). With a fixed backbone tree, UFBD infers divergence times and the FBD rates. The FBD rates are the speciation rate, the extinction rate and the sampling rate. With only fossil records and no backbone tree, UFBD infers the FBD rates alone.
 
-Please cite following paper if you found this program to be useful:
+Please cite the following paper if you found this program to be useful:
 
 * Lim, W., Raskin, L. Y., Li, J. K., Huelsenbeck, J., & Nielsen, R. (2026). Estimating divergence times and diversification rates with unresolved fossilized birth-death process. *TBA*
 
-For any comments, help or bug report, please file a GitHub issue, or contact: <david9456@berkeley.edu>
+For comments, help or a bug report, file a GitHub issue or write to <david9456@berkeley.edu>.
 
 ## Building
 
-The repository ships a static Linux x86-64 binary, `ufbd` (see releases/). On other platforms, build from source with CMake 3.16 or newer and a C++20 compiler. Eigen is bundled and jemalloc is linked only if present.
+The repository holds a static Linux x86-64 binary, `ufbd`, in `releases/`. On other platforms, build UFBD from the source. You need CMake 3.16 or later and a C++20 compiler. Eigen is included. UFBD links jemalloc only if jemalloc is present.
 
 ```
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
 
-`CMakeLists.txt` compiles with `-march=x86-64-v3`, which an ARM compiler will reject, so the flag should be dropped on Apple Silicon. The build uses GCC/Clang flags throughout, so on Windows use WSL, MinGW or Clang rather than MSVC.
+`CMakeLists.txt` uses the flag `-march=x86-64-v3`. An ARM compiler rejects this flag, so remove it on Apple Silicon. The build uses GCC and Clang flags only. On Windows, use WSL, MinGW or Clang instead of MSVC.
 
 ## Running
 
@@ -26,13 +26,13 @@ ufbd -config config_file.cfg
 ufbd -help
 ```
 
-Settings can be specified using a config file or on the command line as flags. If both are supplied, the config file is prioritized. Paths are resolved against the directory the command is run from.
+Set the options in a config file, or as flags on the command line. If you give both, the config file wins. UFBD reads every path relative to the directory you run the command from.
 
-Two user-facing options are available only as a command line flag:
+Two options are available only as a command-line flag:
 
-`-resume` continues an interrupted run from the checkpoint. To resume, re-run the same command with `-resume` added.
+`-resume` continues an interrupted run from its checkpoint. Run the same command again and add `-resume`.
 
-`-no_latent_log` skips writing `<prefix>_latent.log`. Might save some storage as the latent parameters logged in these files are of less interest, and often are not a mixing bottleneck.
+`-no_latent_log` does not write `<prefix>_latent.log`. This saves disk space. The latent parameters in that file are usually of less interest, and they are rarely a mixing bottleneck.
 
 ## Probability distribution grammar
 
@@ -48,13 +48,11 @@ empirical:samples.txt                     # file of samples, one per line
 0.05                                      # a bare number for fixed value
 ```
 
-Every family except `unif` and `empirical` can take an offset that shifts its support. For example, `exp:0.1,50.0` starts at 50.0, `truncnorm:55,2,50` is truncated below at 50, and `improper:100` is flat above 100.
-
-`empirical` reads a file of numbers, one per line, and uses that sample as the prior, so the posterior of an earlier analysis can be passed in without fitting a parametric family to it first. The bin edges are the sample quantiles at `round(sqrt(n))` equally spaced probabilities, and the density is constant within each bin at the fraction of samples the bin holds divided by its width. Values outside the range of the sample have zero density, so the support of the original analysis is kept rather than extended, and a thin sample gives a narrower prior than the analysis it came from. Ties that would give a bin zero width are merged, and the file needs at least two distinct values. A line that is not a single finite number is an error, blank lines are skipped. Under `-age_offset` the tabulation is shifted with the rest of the model, so the file is written in the same units as the other input.
+Every family except `unif` and `empirical` accepts an offset. The offset moves the support of the distribution. For example, `exp:0.1,50.0` starts at 50.0, `truncnorm:55,2,50` is truncated at 50, and `improper:100` is flat above 100. `empirical` uses a file of samples as the prior. This lets you pass in the posterior of an earlier analysis with no parametric fit. Under `-age_offset`, UFBD shifts the samples with the rest of the model.
 
 ## Input files
 
-`clade_def` — Tab-separated, with an optional header. A clade is defined as every taxon under the MRCA of the listed taxa, so two taxa are enough to define the clade. This input is only valid when a backbone tree file is supplied. When no backbone tree is provided, a single clade *whole*, including all taxa in the analysis, is automatically generated even when not specified.
+`clade_def` — Tab-separated, with an optional header. A clade is every taxon tipward of the MRCA of the listed taxa. Two taxa are therefore enough to define a clade. Use this file only with a backbone tree. With no backbone tree, UFBD makes one clade *whole* that holds every taxon in the analysis.
 
 ```
 clade	taxa
@@ -62,7 +60,7 @@ whole	taxa1,taxa2
 genus1	taxa1,taxa3
 ```
 
-`fossils` — Tab-separated, with an optional header. `assignment` defines where the fossils can attach relative to their assigned clade. `CROWN` fossils can attach inside the crown group, `TOTAL` can attach anywhere on the total group, and `STEM` can only attach on the stem stalk. A row with `max_age` 0 is read as an unsampled extant, and can only be assigned to `CROWN` or `TOTAL`. The optional 6th column gives the preservation type (see below).
+`fossils` — Tab-separated, with an optional header. `assignment` sets where a fossil can attach, relative to its clade. A `CROWN` fossil attaches inside the crown group. A `TOTAL` fossil attaches anywhere in the total group. A `STEM` fossil attaches only on the stem stalk. A row with `max_age` 0 is an unsampled extant, and takes only `CROWN` or `TOTAL`. The optional sixth column gives the preservation type.
 
 ```
 taxon	min_age	max_age	clade	assignment	type
@@ -70,7 +68,7 @@ taxa1	45.9000	48.8000	whole	STEM	lithic
 taxa3	4.5000	4.9000	genus1	TOTAL	amber
 ```
 
-`unsampled_extants` — Tab-separated, with an optional header. Each row declares a count of unsampled extants rather than naming them one by one, which is the same declaration as writing that many `fossils` rows with `min_age` and `max_age` both 0. `assignment` can only be `CROWN` or `TOTAL`. The taxa of a row are named `<clade>_<crown|total>_1` through `<clade>_<crown|total>_<number>`, and those names must not already be in use by a backbone tip or a `fossils` row. A clade can appear once as `CROWN` and once as `TOTAL`.
+`unsampled_extants` — Tab-separated, with an optional header. Each row gives a count of unsampled extants instead of a name for each one. One row is equal to that many `fossils` rows with `min_age` and `max_age` both 0. `assignment` takes only `CROWN` or `TOTAL`. UFBD names the taxa of a row `<clade>_<crown|total>_1` through `<clade>_<crown|total>_<number>`. These names must not already belong to a backbone tip or a `fossils` row. A clade can appear once as `CROWN` and once as `TOTAL`.
 
 ```
 clade	assignment	number
@@ -79,11 +77,11 @@ genus1	CROWN	1000
 genus2	CROWN	500
 ```
 
-`backbone_tree` — NEWICK or NEXUS formats are accepted, which must be rooted and bifurcating. Backbone tree topology is assumed to be fixed throughout the analysis. A backbone tip whose name matches a `fossils` row becomes a non-contemporaneous tip, with its age sampled uniformly within that fossil's `min_age`–`max_age` range. Note that when one include fossils in the backbone tree, the program will suppress that fossil from becoming a sampled ancestor.
+`backbone_tree` — NEWICK or NEXUS format. The tree must be rooted and bifurcating. UFBD holds the backbone topology fixed for the whole analysis. A backbone tip whose name matches a `fossils` row becomes a non-contemporaneous tip. UFBD then draws its age uniformly between the `min_age` and the `max_age` of that fossil. A fossil in the backbone tree cannot become a sampled ancestor.
 
-`sequence` — FASTA, PHYLIP or NEXUS formats are accepted. Must be supplied for full-likelihood analysis.
+`sequence` — FASTA, PHYLIP or NEXUS format. Supply this file for a full-likelihood analysis.
 
-`partition` — NEXUS `charset` blocks, optionally with a `charpartition clock` for manual clock partitioning. This file is named by the `partition` entry of `[substitution]` (see below).
+`partition` — NEXUS `charset` blocks. Add a `charpartition clock` block to set the clock partitions by hand. The `partition` entry of `[substitution]` names this file.
 
 ```
 #NEXUS
@@ -95,13 +93,13 @@ begin sets;
 end;
 ```
 
-In `charpartition clock`, a `name:` starts a clock partition definition and every charset after it belongs to that partition until the next clock partition name. Commas and spaces both separate members, so `fast` partition above includes gene1 and gene2. Clock partitions could be manually specified using config or flag as well (see below).
+In `charpartition clock`, a `name:` starts a clock partition. Every charset after it belongs to that partition, until the next clock partition name. Commas and spaces both separate members, so `fast` above holds gene1 and gene2. You can also set the clock partitions in the config file or with a flag.
 
-`hessian` — Hessian file (`in.BV` of PAML), which can be computed by programs like PAML (Yang, 2007), IQ-TREE (Demotte et al., 2025) or phyloHessian (Wang & Meade, 2026). Its topology and taxon labels must match `backbone_tree`. Must be supplied for approximate-likelihood analysis. The sequence partitions come from the Hessian file itself and carry no partition labels.
+`hessian` — A Hessian file, the `in.BV` file of PAML. PAML (Yang, 2007), IQ-TREE (Demotte et al., 2025) and phyloHessian (Wang & Meade, 2026) all compute this file. Its topology and taxon labels must match `backbone_tree`. Supply this file for an approximate-likelihood analysis. The sequence partitions come from the Hessian file, and they carry no labels.
 
 ## The config file
 
-Entries before any `[section]` are global, and an absent value leaves the setting at its default. Every default is listed at the end.
+Entries before the first `[section]` are global. An absent entry keeps its default. The last section lists every default.
 
 ### Input and output
 
@@ -116,9 +114,20 @@ log_output    = output/prefix
 tree_output   = output/prefix
 ```
 
-`log_output` and `tree_output` give a prefix, to which the extensions below are appended.
+`log_output` and `tree_output` give a prefix. UFBD adds the extensions below to that prefix.
 
-Output files are written as follows. When `parallel_chains > 1` is invoked, each parallel chain writes `<prefix>_chainN.log`, `<prefix>_chainN.trees`, `<prefix>_chainN_latent.log` (attachment ages, attachment zones, fossil ages, and per-branch clock rates) and `<prefix>_chainN.log.ckp`, indexed from 0. After the run finishes, `<prefix>.log` and `<prefix>.trees` are written by merging the logs for each `parallel_chains` with burn-in dropped and the generation column renumbered as a running counter, also generating `<prefix>.tree`, the posterior mean tree. `<prefix>.console.txt` logs the terminal console output. When an unresolved fossil has more than one candidate attachment zone, `<prefix>_chainN_zones.tsv` gives the clade and assignment behind each assignment zone (`az_`) column of the latent log. With `parallel_chains = 1` the per-replicate suffix is dropped, and since no merging step runs, `<prefix>.log` keeps its burn-in. For `coupled_chains > 1`, only the cold chain is logged. `<prefix>.trees`, `<prefix>.tree` and the zone files are not written when no backbone tree is supplied.
+With `parallel_chains > 1`, each chain writes four files, indexed from 0:
+
+* `<prefix>_chainN.log`
+* `<prefix>_chainN.trees`
+* `<prefix>_chainN_latent.log` — attachment ages, attachment zones, fossil ages and per-branch clock rates
+* `<prefix>_chainN.log.ckp` — the checkpoint
+
+At the end of the run, UFBD merges these logs into `<prefix>.log` and `<prefix>.trees`. The merge drops the burn-in, and renumbers the generation column as a running counter. UFBD also writes `<prefix>.tree`, the posterior mean tree.
+
+With `parallel_chains = 1`, UFBD drops the `_chainN` suffix. No merge runs, so `<prefix>.log` keeps its burn-in. With `coupled_chains > 1`, UFBD logs the cold chain only.
+
+`<prefix>.console.txt` holds the console output. If an unresolved fossil has more than one candidate attachment zone, `<prefix>_chainN_zones.tsv` gives the clade and the assignment behind each `az_` column of the latent log. With no backbone tree, UFBD does not write `<prefix>.trees`, `<prefix>.tree` or the zone files.
 
 ### MCMC
 
@@ -132,7 +141,7 @@ cores           = 16
 seed            = 42
 ```
 
-With `coupled_chains > 1`, one can also optionally set MC3 parameters:
+With `coupled_chains > 1`, you can also set the MC3 parameters:
 
 ```ini
 delta_temperature = 0.1      # initial chain spacing. Self-adapts
@@ -143,7 +152,7 @@ A chain shorter than `swap_interval` never attempts a swap.
 
 ### Convergence
 
-This block is valid only when `chain_length = auto`. The run stops once every parameter reaches `min_ess` bulk- and tail-ESS and falls to `rhat` or below, or reaches `max_gen`. Fixed parameters, discrete variables (`nSA`), and `posterior`, `likelihood` and `prior` are excluded from the calculation of R-hat.
+This block applies only when `chain_length = auto`. The run stops when every parameter reaches `min_ess` bulk-ESS and `min_ess` tail-ESS, and its R-hat falls to `rhat` or lower. The run also stops at `max_gen`. UFBD leaves fixed parameters, the discrete variable `nSA`, and `posterior`, `likelihood` and `prior` out of the R-hat calculation.
 
 ```ini
 max_gen = 1000000000
@@ -159,20 +168,20 @@ conditioning = origin exp:0.1   # origin | crown | anysample | extinct, then an 
 rho          = 1                # fraction of extant species sampled
 ```
 
-`crown` places the conditioning point at the root of the backbone and needs at least two backbone tips that define the crown node of the clade. The other three place the conditioning at the origin of the clade. `origin` and `crown` condition on survival to the present, so they need at least one extant taxon. `crown` cannot be used when there is no backbone. `extinct` requires no extant samples, and forces `rho` to 1. `anysample` is the most loose conditioning, and requires at least one of either extant or fossil taxon. Under `crown` no fossil may be `STEM` on the *whole* clade.
+`crown` puts the conditioning point at the root of the backbone tree. It needs two or more backbone tips to define the crown node of the clade. The other three options put the conditioning point at the origin of the clade. `origin` and `crown` condition on survival to the present, so they need one or more extant taxa. `crown` needs a backbone tree. `extinct` allows no extant taxa, and forces `rho` to 1. `anysample` is the loosest option, and needs one or more extant or fossil taxa. Under `crown`, no fossil can be `STEM` on the *whole* clade.
 
-Omitting he age prior after the keyword leaves the conditioning point with a flat improper prior (which generally leads to poor mixing).
+If you give no age prior after the keyword, the conditioning point gets a flat improper prior. This usually mixes poorly.
 
 ### `[lambda]`, `[mu]`, `[psi]`
 
-Without `time_bins` a rate is shared across all time points:
+Without `time_bins`, one rate applies at all times:
 
 ```ini
 [lambda]
 prior = exp:5
 ```
 
-`time_bins` enables setting of piecewise-constant rates. Bins are named, separated by `|`, and must tile `[t_min, inf)` without gaps or overlaps, where `t_min` is the youngest bin edge. `+` unions intervals into one bin, so `recent_old` below assigns a single rate over [20,40) and [80,inf). For most of the analysis, `t_min = 0`, and `t_min != 0` only when one conditions on extinction, and is confident that the clade went extinct before `t_min`. `t_min` should be shared between all three FBD rates. 
+`time_bins` sets piecewise-constant rates. Each bin has a name, and `|` separates the bins. The bins must cover `[t_min, inf)` with no gaps and no overlaps, where `t_min` is the youngest bin edge. `+` joins intervals into one bin, so `recent_old` below uses one rate over [20,40) and [80,inf). `t_min` is 0 in most analyses. Use `t_min > 0` only under `extinct` conditioning, when you are sure the clade went extinct before `t_min`. All three FBD rates must share the same `t_min`.
 
 ```ini
 [lambda]
@@ -181,7 +190,7 @@ prior     = early:exp:5 | recent_old:exp:5 | mid:unif:0,1
 mode      = indep
 ```
 
-An unnamed `prior` applies to every bin giving simpler representation:
+An unnamed `prior` applies to every bin:
 
 ```ini
 [psi]
@@ -190,7 +199,7 @@ prior     = exp:2
 mode      = indep
 ```
 
-`mode = ou` smooths the log-rates across bins through log-OU process:
+`mode = ou` smooths the log-rates across bins with a log-OU process:
 
 ```ini
 [mu]
@@ -201,11 +210,11 @@ ou_sd     = 6,5          # gamma(shape,rate) on the OU log-SD
 ou_nu     = 4,20         # gamma(shape,rate) on the reversion rate
 ```
 
-`ou` replaces the per-bin priors, so setting `prior` and `mode = ou` together gives an error. `ou` also rejects union bins, as piecewise smoothing becomes logically incompatible under this formulation. With only one bin it falls back to `indep` with a warning as there is nothing to smooth. The three hyperparameters are optional and each takes both of its numbers. The default `ou_nu` rate is `4 * dt / -log(0.7)`, where `dt` is the median spacing between consecutive bin midpoints, which puts the prior mean reversion rate at `-log(0.7) / dt` so that the correlation between adjacent bins is 0.7.
+`ou` replaces the per-bin priors, so `prior` and `mode = ou` together give an error. `ou` also rejects union bins, because piecewise smoothing is not compatible with them. With one bin only, UFBD uses `indep` and gives a warning, because there is nothing to smooth. The three hyperparameters are optional, and each one takes both of its numbers. The default `ou_nu` rate is `4 * dt / -log(0.7)`, where `dt` is the median distance between the midpoints of consecutive bins. This puts the prior mean reversion rate at `-log(0.7) / dt`, so the correlation between adjacent bins is 0.7.
 
 ### `[psi <type>]`
 
-For each fossil preservation type (optionally) presented in the 6th column of the fossil table, one should write one section per type with matching labels. Each type carries its own `time_bins`, so the types need not share a bin structure:
+The sixth column of the `fossils` file gives an optional preservation type. Write one section for each type, with a matching label. Each type has its own `time_bins`, so the types can use different bins:
 
 ```ini
 [psi amber]
@@ -217,7 +226,7 @@ mode      = indep
 prior = exp:5
 ```
 
-For now, only preservation rate could be split into multiple types. `<type>` argument can be omitted when there are no multiple preservation types, and `[psi]` could be set as same as `[lambda]` and `[mu]` following above. Once more than one type is declared, every fossils must carry a type matching a section name.
+Only the preservation rate splits into types. With one type, leave `<type>` out and write `[psi]` in the same way as `[lambda]` and `[mu]`. With two or more types, every fossil must carry a type that matches a section name.
 
 ### `[substitution]`
 
@@ -232,9 +241,9 @@ ctmc_inv       = off         # on | off
 ctmc_freq      = model       # model | empirical | estimated
 ```
 
-`ctmc_freq` chooses where the equilibrium frequencies come from. `estimated` samples them as free parameters. `empirical` fixes them at the frequencies observed in the alignment. `model` samples them under `gtr`, and under an empirical amino-acid matrix takes them from the matrix file and holds them fixed.
+`ctmc_freq` sets the source of the equilibrium frequencies. `estimated` samples them as free parameters. `empirical` holds them at the frequencies in the alignment. Under `gtr`, `model` samples them. Under an empirical amino-acid matrix, `model` takes them from the matrix file and holds them fixed.
 
-The sequence model is unused under `hessian`, so `partition`, `ctmc_model`, `ctmc_gamma_cat`, `ctmc_inv` and `ctmc_freq` are all ignored when approximate-likelihood path is used, and the partitions come from the Hessian file. Approximate-likelihood path requires size of the state space, and it is read from `n_states`, or from `datatype` when `n_states` is absent. Amino-acid Hessian data therefore need `n_states = 20` or `datatype = aa`.
+The approximate-likelihood path does not use the sequence model. It ignores `partition`, `ctmc_model`, `ctmc_gamma_cat`, `ctmc_inv` and `ctmc_freq`, and takes the partitions from the Hessian file. This path needs the size of the state space. UFBD reads that size from `n_states`, or from `datatype` if `n_states` is absent. Amino-acid Hessian data therefore need `n_states = 20` or `datatype = aa`.
 
 ### `[clock]`
 
@@ -247,11 +256,11 @@ sigma2_gamma     = 1,10,1
 sigma2_param     = fast:nc | slow:c
 ```
 
-A clock partition is a set of sequence partitions sharing the clock model. With more than one clock partition the MCMC log columns of clock model parameters carry a `_<index>` suffix, indexed from 0 in the order the clock partitions were declared. `rgene_gamma` and `sigma2_gamma` are `shape,rate,concentration` gamma–Dirichlet priors (dos Reis et al., 2014) on the mean rates and the clock-rate variances across clock partitions, reducing to a gamma when there is only one.
+A clock partition is a set of sequence partitions that share one clock model. With two or more clock partitions, the log columns for the clock parameters carry a `_<index>` suffix. The index starts at 0, in the order you declare the clock partitions. `rgene_gamma` and `sigma2_gamma` are `shape,rate,concentration` gamma–Dirichlet priors (dos Reis et al., 2014). They apply to the mean rates and to the clock-rate variances across clock partitions. With one clock partition, each prior reduces to a gamma.
 
-`clock_partitions` takes `all` (default: one clock per sequence partition, named after it), `single` (one clock for every sequence partitions), or manually set named groups. When the clock partitions are manually set, `|` separates the clock partitions and `,` separates its members, where a member is a charset name or a 0-based sequence-partition index. Every sequence partition must appear in exactly one group. A `charpartition clock` in the NEXUS file does the same and supplies the clock partition labels. If both are given, `clock_partitions` is prioritized and the `charpartition clock` is ignored. Under `hessian` there are no charset labels, so members must be indices and the `all` groups are named by index.
+`clock_partitions` takes `all`, `single`, or named groups that you write yourself. `all` is the default, and gives one clock to each sequence partition, named after that partition. `single` gives one clock to every sequence partition. In named groups, `|` separates the clock partitions and `,` separates the members of one partition. A member is a charset name or a sequence-partition index that starts at 0. Every sequence partition must appear in exactly one group. A `charpartition clock` block in the NEXUS file does the same, and supplies the labels. If you give both, `clock_partitions` wins and UFBD ignores the `charpartition clock` block. Under `hessian` there are no charset labels, so members must be indices, and UFBD names the `all` groups by index.
 
-The index counts the sequence partitions in the order they are declared, starting at 0. For the `partition` file shown earlier that is
+The index counts the sequence partitions in the order you declare them, and starts at 0. For the `partition` file above:
 
 ```
 charset gene1 = 1-679;       -> 0
@@ -259,7 +268,7 @@ charset gene2 = 680-1377;    -> 1
 charset gene3 = 1378-2044;   -> 2
 ```
 
-and under `hessian` it is the order the blocks appear in the Hessian file:
+Under `hessian`, the index follows the order of the blocks in the Hessian file:
 
 ```
  72                          -> 0
@@ -273,7 +282,7 @@ Hessian
 ...
 ```
 
-The four ways of grouping the sequence partition into clock partitions:
+There are four ways to group the sequence partitions into clock partitions:
 
 ```ini
 clock_partitions = all                    # three clocks, named gene1, gene2, gene3
@@ -282,20 +291,20 @@ clock_partitions = fast:(gene1,gene2) | slow:(gene3)
 clock_partitions = fast:(0,1) | slow:(2)  # the same grouping by index, the only specifiable form under approximate-likelihood path
 ```
 
-`clock_model` and `sigma2_param` are set using the above defined clock-partition name. If supplied with a single value same setting applies to all clock partitions, or one per clock partition.
+Use the clock-partition names above to set `clock_model` and `sigma2_param`. One value applies to every clock partition. You can also give one value for each clock partition.
 
 ```ini
 clock_model = gbm                    # every clock partition gets GBM clock model
 clock_model = fast:gbm | slow:ucln   # per clock partition clock models
 ```
 
-`clock_model` is `ucln` (the default) or `gbm`, and may differ between clock partitions.
+`clock_model` is `ucln` or `gbm`, and the default is `ucln`. Clock partitions can use different models.
 
-`sigma2_param` is `c` (the default) or `nc`, the centered and non-centered parameterizations (see Papaspiliopoulos et al., 2007). For a partition with short total sequence length (up to ~10 kb; depends on the informativeness of the sequence) non-centered (`nc`) parameterization is much more efficient, and for long sequences and genome-scale Hessian files, centered (`c`) parameterizations tends to work better.
+`sigma2_param` is `c` or `nc`, the centered and the non-centered parameterizations (Papaspiliopoulos et al., 2007). The default is `c`. For a short partition, up to about 10 kb, `nc` is much more efficient. The exact limit depends on how informative the sequence is. For long sequences and genome-scale Hessian files, `c` works better.
 
 ## Output log columns
 
-Column labels in `<prefix>.log` are built from the model, using the bin and preservation-type labels given in the config.
+UFBD builds the column labels in `<prefix>.log` from the model. It uses the bin labels and the preservation-type labels from the config file.
 
 ```
 n posterior likelihood prior
@@ -313,11 +322,11 @@ clockMean_0 clockSigma2_0 ...                  when multiple clock partitions ar
 exch<k>_* freq<k>_* alpha<k> pinv<k>           sequence model of sequence partition k
 ```
 
-Bins that share a rate are one column under the shared label, so `x:(0,10)+(25,45) | y:(10,25) | z:(45,inf)` gives `lambda_x`, `lambda_y` and `lambda_z`. Under `mode = ou` the per-bin rates are written alongside the three hyperparameters.
+Bins that share a rate give one column under the shared label. For example, `x:(0,10)+(25,45) | y:(10,25) | z:(45,inf)` gives `lambda_x`, `lambda_y` and `lambda_z`. Under `mode = ou`, UFBD writes the per-bin rates and the three hyperparameters.
 
-Every column label is mapped to its time interval at the start of the run, under `Rate intervals:`, and kept in `<prefix>.console.txt`.
+At the start of the run, UFBD maps every column label to its time interval under `Rate intervals:`. This map stays in `<prefix>.console.txt`.
 
-`<prefix>_latent.log` holds the per-sample latent variables: `y_<taxon>` fossil attachment ages, `z_` attachment positions, `az_` attachment zones, `rate_` per-branch clock rates and `sa_` sampled-ancestor indicators.
+`<prefix>_latent.log` holds the latent variables of each sample. `y_<taxon>` is a fossil attachment age, `z_` an attachment position, `az_` an attachment zone, `rate_` a per-branch clock rate and `sa_` a sampled-ancestor indicator.
 
 ## Defaults
 
