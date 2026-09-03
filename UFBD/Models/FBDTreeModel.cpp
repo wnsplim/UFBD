@@ -166,8 +166,10 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
             double pm = Probability::priorMean(us.getConditionAgePrior(), us.getConditionAgePriorP1(), us.getConditionAgePriorP2(), off);
             if(pm > x0init)
                 x0init = pm;
+            bool bounded = (us.getConditionAgePrior() == Probability::PriorFamily::UNIFORM ||
+                            us.getConditionAgePrior() == Probability::PriorFamily::EMPIRICAL);
             double hi = us.getConditionAgePriorP2();
-            if(us.getConditionAgePrior() == Probability::PriorFamily::UNIFORM && x0init >= hi)
+            if(bounded && x0init >= hi)
                 x0init = 0.5 * (floor + hi);
             if(x0init <= off)
                 x0init = off + 0.05 * (floor > 0.0 ? floor : 1.0);

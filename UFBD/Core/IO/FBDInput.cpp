@@ -294,10 +294,11 @@ void FBDInput::assignFossilAwareAges(void){
     UserSettings& us = UserSettings::userSettings();
     if(us.getConditionAgePriorSet()){
         bool origin  = (us.getConditioning() == Conditioning::ORIGIN);
-        bool bounded = (us.getConditionAgePrior() == Probability::PriorFamily::UNIFORM);
+        bool bounded = (us.getConditionAgePrior() == Probability::PriorFamily::UNIFORM ||
+                        us.getConditionAgePrior() == Probability::PriorFamily::EMPIRICAL);
         double hi = bounded ? us.getConditionAgePriorP2() : std::numeric_limits<double>::max();
         if(bounded && hi < maxBound)
-            Msg::error("conditioning age prior lower bound (" + std::to_string(hi) + ") is younger than the oldest fossil (" + std::to_string(maxBound) + ")");
+            Msg::error("conditioning age prior upper bound (" + std::to_string(hi) + ") is younger than the oldest fossil (" + std::to_string(maxBound) + ")");
         if(origin == false){
             double mean = Probability::priorMean(us.getConditionAgePrior(), us.getConditionAgePriorP1(), us.getConditionAgePriorP2(), us.getConditionAgePriorP3());
             double target = mean;

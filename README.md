@@ -44,10 +44,13 @@ unif:0.03,0.06    uniform:0.03,0.06       # a, b
 normal:55,2                               # mean, sd
 truncnormal:55,2  truncnorm:55,2          # mean, sd, truncated at 0
 improper                                  # improper Unif[0,inf) distribution
+empirical:samples.txt                     # file of samples, one per line
 0.05                                      # a bare number for fixed value
 ```
 
-Every family except `unif` can take an offset that shifts its support. For example, `exp:0.1,50.0` starts at 50.0, `truncnorm:55,2,50` is truncated below at 50, and `improper:100` is flat above 100.
+Every family except `unif` and `empirical` can take an offset that shifts its support. For example, `exp:0.1,50.0` starts at 50.0, `truncnorm:55,2,50` is truncated below at 50, and `improper:100` is flat above 100.
+
+`empirical` reads a file of numbers, one per line, and uses that sample as the prior, so the posterior of an earlier analysis can be passed in without fitting a parametric family to it first. The bin edges are the sample quantiles at `round(sqrt(n))` equally spaced probabilities, and the density is constant within each bin at the fraction of samples the bin holds divided by its width. Values outside the range of the sample have zero density, so the support of the original analysis is kept rather than extended, and a thin sample gives a narrower prior than the analysis it came from. Ties that would give a bin zero width are merged, and the file needs at least two distinct values. A line that is not a single finite number is an error, blank lines are skipped. Under `-age_offset` the tabulation is shifted with the rest of the model, so the file is written in the same units as the other input.
 
 ## Input files
 

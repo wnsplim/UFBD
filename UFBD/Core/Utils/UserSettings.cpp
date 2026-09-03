@@ -47,7 +47,7 @@ static bool isPriorFamilyKeyword(const std::string& s){
     for(char& ch : k) ch = (char)std::tolower((unsigned char)ch);
     return k == "exp" || k == "exponential" || k == "gamma" || k == "lognormal"
         || k == "unif" || k == "uniform" || k == "truncnormal" || k == "truncnorm"
-        || k == "normal" || k == "improper";
+        || k == "normal" || k == "improper" || k == "empirical";
 }
 
 std::vector<double> UserSettings::getSkylineTimes(void){
@@ -740,6 +740,10 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
             else if (conditionAgePrior == Probability::PriorFamily::UNIFORM) { conditionAgePriorP1 -= ageOffset; conditionAgePriorP2 -= ageOffset; }
             else if (conditionAgePrior == Probability::PriorFamily::TRUNCATED_NORMAL
                   || conditionAgePrior == Probability::PriorFamily::NORMAL) { conditionAgePriorP1 -= ageOffset; conditionAgePriorP3 -= ageOffset; }
+            else if (conditionAgePrior == Probability::PriorFamily::EMPIRICAL) {
+                Probability::Empirical::shift((int)conditionAgePriorP1, ageOffset);
+                conditionAgePriorP2 -= ageOffset; conditionAgePriorP3 -= ageOffset;
+            }
             else conditionAgePriorP3 -= ageOffset;
         }
     }
@@ -755,7 +759,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
 
 void UserSettings::parsePriorInto(const std::string& spec, Probability::PriorFamily& family, double& p1, double& p2, double& p3) {
     p3 = 0.0;
-    const std::string help = "prior must be a fixed number or a distribution written improper[:offset], exp:rate[,offset], gamma:shape,rate[,offset], lognormal:mu,sigma[,offset], unif:a,b, or truncnormal:mean,sd[,offset]; got \"" + spec + "\".";
+    const std::string help = "prior must be a fixed number or a distribution written improper[:offset], exp:rate[,offset], gamma:shape,rate[,offset], lognormal:mu,sigma[,offset], unif:a,b, truncnormal:mean,sd[,offset], or empirical:file; got \"" + spec + "\".";
     size_t cp = spec.find(':');
     if (cp == std::string::npos) {
         std::string s = spec;
@@ -767,6 +771,16 @@ void UserSettings::parsePriorInto(const std::string& spec, Probability::PriorFam
     }
     std::string fam = spec.substr(0, cp);
     for (char& ch : fam) ch = std::tolower((unsigned char)ch);
+    if (fam == "empirical") {
+        std::string path = spec.substr(cp + 1);
+        if (path.empty()) Msg::error("empirical prior needs a file with numbers, one per line.");
+        family = Probability::PriorFamily::EMPIRICAL;
+        int idx = Probability::Empirical::load(path);
+        p1 = (double)idx;
+        p2 = Probability::Empirical::upper(idx);
+        p3 = Probability::Empirical::lower(idx);
+        return;
+    }
     std::vector<double> ps;
     std::stringstream ss(spec.substr(cp + 1));
     std::string tok;

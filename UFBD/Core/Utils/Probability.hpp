@@ -6,6 +6,7 @@
 #endif
 
 #include "Eigen/Dense"
+#include <string>
 #include <vector>
 class RandomVariable;
 ////eigen matrixXd forward dec
@@ -17,7 +18,7 @@ class RandomVariable;
 
 namespace  Probability {
 
-    enum class PriorFamily { IMPROPER, TRUNCATED_NORMAL, NORMAL, EXPONENTIAL, GAMMA, LOGNORMAL, UNIFORM, FIXED };
+    enum class PriorFamily { IMPROPER, TRUNCATED_NORMAL, NORMAL, EXPONENTIAL, GAMMA, LOGNORMAL, UNIFORM, FIXED, EMPIRICAL };
 
     struct PriorSpec {
         bool        set    = false;
@@ -29,6 +30,20 @@ namespace  Probability {
 
     double priorLnPdf(PriorFamily family, double p1, double p2, double x, double lower, double upper, double offset = 0.0);
     double priorMean(PriorFamily family, double p1, double p2, double offset = 0.0);
+    double priorRv(PriorFamily family, double p1, double p2, RandomVariable* rng, double offset = 0.0);
+
+    namespace Empirical {
+
+        int     load(const std::string& path);
+        void    shift(int idx, double delta);
+        double  lnPdf(int idx, double x);
+        double  mean(int idx);
+        double  rv(int idx, RandomVariable* rng);
+        double  lower(int idx);
+        double  upper(int idx);
+        int     numBins(int idx);
+        int     numSamples(int idx);
+    }
 
     namespace Beta {
     

@@ -1,11 +1,131 @@
+#include <algorithm>
 #include <cmath>
 #include <cassert>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 #include "Eigen/Dense"
 #include "Msg.hpp"
 #include "Probability.hpp"
 #include "RandomVariable.hpp"
+
+#pragma mark - Empirical
+
+namespace {
+
+struct EmpiricalTable {
+    std::vector<double> edge;
+    std::vector<double> mass;
+    std::vector<double> cum;
+    std::vector<double> lnDens;
+    double mean = 0.0;
+    int nSample = 0;
+};
+
+std::vector<EmpiricalTable>& empiricalTables(void){
+    static std::vector<EmpiricalTable> t;
+    return t;
+}
+
+}
+
+int Probability::Empirical::load(const std::string& path){
+    std::ifstream fs(path.c_str());
+    if(fs.good() == false)
+        Msg::error("could not open empirical prior file '" + path + "'");
+    std::vector<double> v;
+    std::string line;
+    int lineNo = 0;
+    while(std::getline(fs, line)){
+        lineNo++;
+        std::stringstream ls(line);
+        double x;
+        std::string extra;
+        if(line.find_first_not_of(" \t\r\n") == std::string::npos)
+            continue;
+        if(!(ls >> x) || (ls >> extra) || std::isfinite(x) == false)
+            Msg::error("empirical prior file '" + path + "' line " + std::to_string(lineNo)
+                       + " is not a single finite number");
+        v.push_back(x);
+    }
+    std::sort(v.begin(), v.end());
+    if(v.size() < 2 || v.back() <= v.front())
+        Msg::error("empirical prior file '" + path + "' needs at least two distinct values, one per line");
+
+    int n = (int)v.size();
+    int nb = (int)(std::sqrt((double)n) + 0.5);
+
+    EmpiricalTable t;
+    t.nSample = n;
+    std::vector<double> raw(nb + 1);
+    for(int i = 0; i <= nb; i++){
+        int k = (int)((double)i / (double)nb * (double)(n - 1) + 0.5);
+        raw[i] = v[k];
+    }
+    t.edge.push_back(raw[0]);
+    for(int i = 1; i <= nb; i++)
+        if(raw[i] > t.edge.back())
+            t.edge.push_back(raw[i]);
+
+    int m = (int)t.edge.size() - 1;
+    std::vector<long> cnt(m, 0);
+    for(double x : v){
+        int b = (int)(std::upper_bound(t.edge.begin(), t.edge.end(), x) - t.edge.begin()) - 1;
+        if(b >= m) b = m - 1;
+        cnt[b]++;
+    }
+
+    t.mass.resize(m);
+    t.cum.assign(m + 1, 0.0);
+    t.lnDens.resize(m);
+    long run = 0;
+    for(int i = 0; i < m; i++){
+        run += cnt[i];
+        t.mass[i] = (double)cnt[i] / (double)n;
+        t.cum[i + 1] = (double)run / (double)n;
+        t.lnDens[i] = std::log(t.mass[i] / (t.edge[i + 1] - t.edge[i]));
+        t.mean += t.mass[i] * 0.5 * (t.edge[i] + t.edge[i + 1]);
+    }
+
+    empiricalTables().push_back(t);
+    return (int)empiricalTables().size() - 1;
+}
+
+void Probability::Empirical::shift(int idx, double delta){
+    EmpiricalTable& t = empiricalTables()[idx];
+    for(double& e : t.edge)
+        e -= delta;
+    t.mean -= delta;
+    for(size_t i = 0; i < t.mass.size(); i++)
+        t.lnDens[i] = std::log(t.mass[i] / (t.edge[i + 1] - t.edge[i]));
+}
+
+double Probability::Empirical::lnPdf(int idx, double x){
+    const EmpiricalTable& t = empiricalTables()[idx];
+    if(x < t.edge.front() || x > t.edge.back())
+        return -INFINITY;
+    int b = (int)(std::upper_bound(t.edge.begin(), t.edge.end(), x) - t.edge.begin()) - 1;
+    if(b >= (int)t.lnDens.size()) b = (int)t.lnDens.size() - 1;
+    return t.lnDens[b];
+}
+
+double Probability::Empirical::mean(int idx){
+    return empiricalTables()[idx].mean;
+}
+
+double Probability::Empirical::rv(int idx, RandomVariable* rng){
+    const EmpiricalTable& t = empiricalTables()[idx];
+    double u = rng->uniformRv();
+    int b = (int)(std::upper_bound(t.cum.begin(), t.cum.end(), u) - t.cum.begin()) - 1;
+    double within = (u - t.cum[b]) / (t.cum[b + 1] - t.cum[b]);
+    return t.edge[b] + within * (t.edge[b + 1] - t.edge[b]);
+}
+
+double Probability::Empirical::lower(int idx){ return empiricalTables()[idx].edge.front(); }
+double Probability::Empirical::upper(int idx){ return empiricalTables()[idx].edge.back(); }
+int    Probability::Empirical::numBins(int idx){ return (int)empiricalTables()[idx].mass.size(); }
+int    Probability::Empirical::numSamples(int idx){ return empiricalTables()[idx].nSample; }
 
 #pragma mark - PriorFamily
 
@@ -22,6 +142,7 @@ double Probability::priorLnPdf(PriorFamily family, double p1, double p2, double 
         case PriorFamily::LOGNORMAL:        lnp = (y > 0.0) ? Normal::lnPdf(p1, p2 * p2, std::log(y)) - std::log(y) : -INFINITY; break;
         case PriorFamily::UNIFORM:          lnp = (x < p1 || x > p2) ? -INFINITY : Uniform::lnPdf(p1, p2, x);         break;
         case PriorFamily::FIXED:            lnp = 0.0;                                                                break;
+        case PriorFamily::EMPIRICAL:        lnp = Empirical::lnPdf((int)p1, x);                                       break;
     }
     return lnp;
 }
@@ -37,8 +158,24 @@ double Probability::priorMean(PriorFamily family, double p1, double p2, double o
         case PriorFamily::LOGNORMAL:        return std::exp(p1) + offset;
         case PriorFamily::UNIFORM:          return 0.5 * (p1 + p2);
         case PriorFamily::FIXED:            return p1;
+        case PriorFamily::EMPIRICAL:        return Empirical::mean((int)p1);
     }
     return 1.0;
+}
+
+double Probability::priorRv(PriorFamily family, double p1, double p2, RandomVariable* rng, double offset){
+    switch(family){
+        case PriorFamily::IMPROPER:         break;
+        case PriorFamily::TRUNCATED_NORMAL: return TruncatedNormal::rv(rng, p1, p2, 0.0, std::numeric_limits<double>::infinity());
+        case PriorFamily::NORMAL:           return Normal::rv(rng, p1, p2);
+        case PriorFamily::EXPONENTIAL:      return Exponential::rv(rng, p1) + offset;
+        case PriorFamily::GAMMA:            return Gamma::rv(rng, p1, p2) + offset;
+        case PriorFamily::LOGNORMAL:        return std::exp(p1 + p2 * Normal::rv(rng)) + offset;
+        case PriorFamily::UNIFORM:          return Uniform::rv(rng, p1, p2);
+        case PriorFamily::FIXED:            return p1;
+        case PriorFamily::EMPIRICAL:        return Empirical::rv((int)p1, rng);
+    }
+    return 0.0;
 }
 
 #pragma mark - Beta
@@ -1245,17 +1382,7 @@ double Probability::Helper::chebyshevEval(double x, const double *a, const int n
 
     double b0, b1, b2, twox;
     int i;
-    
-    if (n < 1 || n > 1000)
-    {
-        Msg::error("Cannot compute chebyshev function");
-    }
-    
-    if (x < -1.1 || x > 1.1)
-    {
-        Msg::error("Cannot compute chebyshev function");
-    }
-    
+
     twox = x * 2;
     b2 = b1 = 0;
     b0 = 0;
@@ -1453,37 +1580,19 @@ double Probability::Helper::lnBeta(double a, double b)
     double corr, p, q;
     
     p = q = a;
-    if (b < p) p = b;/* := min(a,b) */
-    if (b > q) q = b;/* := max(a,b) */
-    
-    /* both arguments must be >= 0 */
-    if (p < 0)
-    {
+    if (b < p) p = b;
+    if (b > q) q = b;
 
-        std::cout << "Cannot compute log-beta function for a = " << a << " and b = " << b;
-    }
-    else if (p == 0)
-    {
-        return -1;
-    }
-    else if (!isFinite(q))
-    { /* q == +Inf */
-        return -1;
-    }
-    
     if (p >= 10) {
-        /* p and q are big. */
         corr = lnGammacor(p) + lnGammacor(q) - lnGammacor(p + q);
         return log(q) * -0.5 + 0.918938533204672741780329736406 + corr
             + (p - 0.5) * log(p / (p + q)) + q * log1p(-p / (p + q));
     }
     else if (q >= 10) {
-        /* p is small, but q is big. */
         corr = lnGammacor(q) - lnGammacor(p + q);
         return lnGamma(p) + corr + p - p * log(p + q) + (q - 0.5) * log1p(-p / (p + q));
     }
     else
-        /* p and q are small: p <= q < 10. */
         return log(gamma(p) * (gamma(q) / gamma(p + q)));
     
 }
@@ -1548,15 +1657,7 @@ double Probability::Helper::lnGammacor(double x) {
 #undef  xmax
 #define xmax  3.745194030963158e306
     
-    if (x < 10)
-    {
-        Msg::error("Cannot compute log-gammacor function");
-    }
-    else if (x >= xmax) {
-        Msg::error("Cannot compute log-gammacor function");
-        /* allow to underflow below */
-    }
-    else if (x < xbig) {
+    if (x < xbig) {
         tmp = 10 / x;
         return chebyshevEval(tmp * tmp * 2 - 1, algmcs, nalgm) / x;
     }

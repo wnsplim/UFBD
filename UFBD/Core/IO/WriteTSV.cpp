@@ -21,18 +21,14 @@ WriteTSV::~WriteTSV(void){
 }
 
 void WriteTSV::addColumnNamesTSV(std::vector<std::string> cn){
-    if(numRows == 0){
-        for(int i = 0; i < cn.size(); i++){
-            if(i < (cn.size() - 1))
-                fout << cn[i] << "\t";
-            else
-                fout << cn[i];
-        }
-        fout << "\n";
-        numRows++;
-    }else{
-        Msg::error("adding column names after data has already been entered");
+    for(int i = 0; i < cn.size(); i++){
+        if(i < (cn.size() - 1))
+            fout << cn[i] << "\t";
+        else
+            fout << cn[i];
     }
+    fout << "\n";
+    numRows++;
     fout.flush();
 }
 
@@ -51,9 +47,6 @@ void WriteTSV::addFilepath(std::string fp, bool overwrite){
 }
 
 void WriteTSV::appendDataTSV(std::vector<double> data){
-    if (!fout.is_open())
-        Msg::error("attempting to write to TSV file before opening it.");
-
     for(int i = 0; i < data.size(); i++){
         if(i < (data.size()-1))
             fout << data[i] << "\t";

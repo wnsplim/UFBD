@@ -31,7 +31,7 @@ std::vector<std::string> splitChar(const std::string& s, char sep){
 bool isFamily(const std::string& k){
     return k == "exp" || k == "exponential" || k == "gamma" || k == "lognormal"
         || k == "unif" || k == "uniform" || k == "truncnormal" || k == "truncnorm"
-        || k == "normal" || k == "improper";
+        || k == "normal" || k == "improper" || k == "empirical";
 }
 
 double parseBound(const std::string& s){

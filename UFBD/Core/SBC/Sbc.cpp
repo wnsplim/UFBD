@@ -22,18 +22,7 @@
 namespace {
 
 double drawPrior(const Probability::PriorSpec& s, RandomVariable* rng){
-    using namespace Probability;
-    switch(s.family){
-        case PriorFamily::FIXED:            return s.p1;
-        case PriorFamily::UNIFORM:          return Uniform::rv(rng, s.p1, s.p2);
-        case PriorFamily::LOGNORMAL:        return std::exp(s.p1 + s.p2 * Normal::rv(rng));
-        case PriorFamily::EXPONENTIAL:      return Exponential::rv(rng, s.p1);
-        case PriorFamily::GAMMA:            return Gamma::rv(rng, s.p1, s.p2);
-        case PriorFamily::TRUNCATED_NORMAL: return TruncatedNormal::rv(rng, s.p1, s.p2, 0.0, std::numeric_limits<double>::infinity());
-        case PriorFamily::NORMAL: return Normal::rv(rng, s.p1, s.p2);
-        case PriorFamily::IMPROPER:         break;
-    }
-    return 0.0;
+    return Probability::priorRv(s.family, s.p1, s.p2, rng);
 }
 
 double drawChunk(const std::vector<int>& groups, const std::map<int,Probability::PriorSpec>& groupPrior,
