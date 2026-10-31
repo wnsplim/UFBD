@@ -237,10 +237,8 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         "-sequence", "-partition", "-ctmc_gamma_cat", "-datatype", "-ctmc_model", "-ctmc_inv", "-ctmc_freq",
         "-parallel_chains", "-burn_in", "-rhat", "-min_ess", "-max_gen", "-delta_temperature", "-swap_interval"
     };
-    if (sbcMode) {
-        knownFlags.insert("-fbd_model");
-        valueFlags.insert("-fbd_model");
-    }
+    knownFlags.insert("-fbd_model");
+    valueFlags.insert("-fbd_model");
 
     bool coupledChainsProvided = false;
     for (int i = 1; i < (int)arguments.size(); i++) {
