@@ -44,7 +44,9 @@ class FBDTreeModel : public PhylogeneticModel {
         ParameterUnresolvedFossils* getUnresolvedFossils(void) { return unresolvedFossils; }
         int                         getNumFossils(void) { return (int)backboneFossils.size() + (int)unrFossilName.size(); }
         double                      evaluateAtGeneratingState(const std::vector<double>& lam, const std::vector<double>& muV,
-                                                              const std::vector<std::vector<double>>& psiV, double x0,
+                                                              const std::vector<std::vector<double>>& psiV,
+                                                              const std::vector<double>& lamOU, const std::vector<double>& muOU,
+                                                              const std::vector<std::vector<double>>& psiOU, double x0,
                                                               const std::vector<double>& nodeAges, const std::vector<double>& z,
                                                               const std::vector<char>& sa, double& lnPriorOut);
         std::string                 getRateMap(void);

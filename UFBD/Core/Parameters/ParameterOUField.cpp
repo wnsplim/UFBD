@@ -99,6 +99,14 @@ double ParameterOUField::binMid(int c){
     return loEdges[c] + 0.5 * (loEdges[c] - loEdges[c - 1]);
 }
 
+void ParameterOUField::setState(const std::vector<double>& r, double th, double sd, double n){
+    rateVal[0] = r;
+    theta[0] = th;
+    sdEq[0] = sd;
+    nu[0] = n;
+    commitProposed();
+}
+
 double ParameterOUField::bactrianDelta(void){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     double m = 0.95;

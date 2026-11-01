@@ -16,6 +16,9 @@ struct SimParams {
     std::vector<double> lambda;
     std::vector<double> mu;
     std::vector<std::vector<double>> psi;
+    std::vector<double> lambdaOU;
+    std::vector<double> muOU;
+    std::vector<std::vector<double>> psiOU;
     double              rho = 1.0;
     double              bb = 1.0;
     double              startAge = 0.0;

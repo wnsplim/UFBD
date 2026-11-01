@@ -307,7 +307,8 @@ void Sbc::runInference(void){
         double truthLnPrior = std::numeric_limits<double>::quiet_NaN();
         unsigned int truthSeed = (unsigned int)(rng->uniformRv() * 4294967295.0);
         FBDTreeModel* truthModel = new FBDTreeModel(tree, clades, fossils, truthSeed);
-        double truthLnL = truthModel->evaluateAtGeneratingState(truth.lambda, truth.mu, truth.psi, truth.startAge,
+        double truthLnL = truthModel->evaluateAtGeneratingState(truth.lambda, truth.mu, truth.psi,
+                                                                truth.lambdaOU, truth.muOU, truth.psiOU, truth.startAge,
                                                                 r.backboneNodeAges, zTrue, saTrue, truthLnPrior);
         delete truthModel;
 

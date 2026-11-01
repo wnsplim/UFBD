@@ -610,7 +610,9 @@ double FBDTreeModel::lnLikelihood(void){
 }
 
 double FBDTreeModel::evaluateAtGeneratingState(const std::vector<double>& lam, const std::vector<double>& muV,
-                                               const std::vector<std::vector<double>>& psiV, double x0,
+                                               const std::vector<std::vector<double>>& psiV,
+                                               const std::vector<double>& lamOU, const std::vector<double>& muOU,
+                                               const std::vector<std::vector<double>>& psiOU, double x0,
                                                const std::vector<double>& nodeAges, const std::vector<double>& z,
                                                const std::vector<char>& sa, double& lnPriorOut){
     for(size_t i = 0; i < lambda.size(); i++)
@@ -620,6 +622,13 @@ double FBDTreeModel::evaluateAtGeneratingState(const std::vector<double>& lam, c
     for(size_t t = 0; t < psi.size(); t++)
         for(size_t i = 0; i < psi[t].size(); i++)
             psi[t][i]->setValue(psiV[t][i]);
+    if(lambdaField != nullptr)
+        lambdaField->setState(lam, lamOU[0], lamOU[1], lamOU[2]);
+    if(muField != nullptr)
+        muField->setState(muV, muOU[0], muOU[1], muOU[2]);
+    for(size_t t = 0; t < psiField.size(); t++)
+        if(psiField[t] != nullptr)
+            psiField[t]->setState(psiV[t], psiOU[t][0], psiOU[t][1], psiOU[t][2]);
 
     Tree* tr = parameterTree->getTree();
     if(originAge != nullptr){
