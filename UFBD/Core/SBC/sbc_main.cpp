@@ -32,9 +32,10 @@ SBC FLAGS
                           model variant
 
 DRAW PRIORS AND CHAIN CONTROL
-  These reuse the main ufbd flags: -lambda_prior, -mu_prior, -psi_prior (all
-  required), -conditioning <event> <prior> (required), -rho, -*_skyline_times,
-  -psi_types, and, for -sbc_mode infer, the MCMC/convergence flags
+  These reuse the main ufbd flags: -lambda_prior, -mu_prior, -psi_prior
+  (required for every rate under mode=indep), -*_prior_mode, -*_ou_theta,
+  -*_ou_sd, -*_ou_nu, -conditioning <event> <prior> (required), -rho,
+  -*_skyline_times, -psi_types, and, for -sbc_mode infer, the MCMC/convergence flags
   -chain_length, -min_ess, -max_gen, -thinning, -burn_in, -parallel_chains,
   -cores, -seed. Run 'ufbd -help' for their descriptions.
 )SBC");
@@ -81,11 +82,13 @@ int main(int argc, const char* argv[]){
 
     Probability::PriorSpec lambdaPrior = s.getLambdaPrior();
     Probability::PriorSpec muPrior     = s.getMuPrior();
-    if(lambdaPrior.set == false || muPrior.set == false)
-        Msg::error("-lambda_prior, -mu_prior, and -psi_prior are all required.");
+    bool missing = (s.getLambdaMode() == RateMode::INDEP && lambdaPrior.set == false)
+                || (s.getMuMode() == RateMode::INDEP && muPrior.set == false);
     for(int t = 0; t < s.getNumPsiTypes(); t++)
-        if(s.getPsiPrior(t).set == false)
-            Msg::error("-lambda_prior, -mu_prior, and -psi_prior are all required.");
+        if(s.getPsiMode(t) == RateMode::INDEP && s.getPsiPrior(t).set == false)
+            missing = true;
+    if(missing)
+        Msg::error("-lambda_prior, -mu_prior, and -psi_prior are required for every rate under mode=indep.");
     if(s.getConditionAgePriorSet() == false)
         Msg::error("-conditioning must supply a distribution to draw the root age from.");
 
@@ -116,9 +119,15 @@ int main(int argc, const char* argv[]){
         cfg.psiPriors.push_back(s.getPsiPrior(t));
         cfg.psiGroups.push_back(s.getPsiGroups(t));
         cfg.psiGroupPriors.push_back(s.getPsiGroupPrior(t));
+        cfg.psiModes.push_back(s.getPsiMode(t));
+        cfg.psiOU.push_back(s.getPsiOU(t));
     }
     cfg.lambdaPrior = lambdaPrior;
     cfg.muPrior = muPrior;
+    cfg.lambdaMode = s.getLambdaMode();
+    cfg.muMode = s.getMuMode();
+    cfg.lambdaOU = s.getLambdaOU();
+    cfg.muOU = s.getMuOU();
     cfg.lambdaGroups = s.getLambdaGroups();
     cfg.muGroups = s.getMuGroups();
     cfg.lambdaGroupPrior = s.getLambdaGroupPrior();

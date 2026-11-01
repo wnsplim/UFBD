@@ -99,6 +99,21 @@ double ParameterOUField::binMid(int c){
     return loEdges[c] + 0.5 * (loEdges[c] - loEdges[c - 1]);
 }
 
+void ParameterOUField::drawFromPrior(RandomVariable* rng){
+    double th = Probability::Normal::rv(rng, thetaMean, thetaSd);
+    double sd = Probability::Gamma::rv(rng, sdShape, sdRate);
+    double nuv = Probability::Gamma::rv(rng, nuShape, nuRate);
+    std::vector<double> r(nBins);
+    double x = Probability::Normal::rv(rng, th, sd);
+    r[0] = std::exp(x);
+    for(int c = 1; c < nBins; c++){
+        double rho = std::exp(-nuv * (binMid(c) - binMid(c - 1)));
+        x = Probability::Normal::rv(rng, th + (x - th) * rho, sd * std::sqrt(1.0 - rho * rho));
+        r[c] = std::exp(x);
+    }
+    setState(r, th, sd, nuv);
+}
+
 void ParameterOUField::setState(const std::vector<double>& r, double th, double sd, double n){
     rateVal[0] = r;
     theta[0] = th;

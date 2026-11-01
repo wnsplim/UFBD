@@ -3,6 +3,7 @@
 #include "FBDTreeModel.hpp"
 #include "Msg.hpp"
 #include "Node.hpp"
+#include "ParameterOUField.hpp"
 #include "RandomVariable.hpp"
 #include "Tree.hpp"
 #include "UserSettings.hpp"
@@ -36,6 +37,16 @@ double drawChunk(const std::vector<int>& groups, const std::map<int,Probability:
     double v = drawPrior(sp, rng);
     chunkVal[gid] = v;
     return v;
+}
+
+std::vector<double> drawOU(const std::vector<double>& times, const OUHyperSpec& ou, std::vector<double>& hyper, RandomVariable* rng){
+    ParameterOUField f(1.0, nullptr, (int)times.size(), times, 0.0, nullptr, ou);
+    f.drawFromPrior(rng);
+    hyper = { f.getTheta(), f.getSdEq(), f.getNu() };
+    std::vector<double> r;
+    for(int i = 0; i < f.getNumBins(); i++)
+        r.push_back(f.getRate(i));
+    return r;
 }
 
 double truthForName(const std::string& name, const SimParams& p, const std::vector<std::string>& psiTypeNames){
@@ -137,12 +148,19 @@ SimParams Sbc::drawParams(void){
     std::vector<std::map<int,double>> psiChunk(nT);
     static const std::vector<int> noGroups;
     static const std::map<int,Probability::PriorSpec> noGroupPrior;
+    std::vector<double> lamOU, muOU;
+    std::vector<std::vector<double>> psiOU(nT);
+    p.psiOU.assign(nT, std::vector<double>());
+    if(cfg.lambdaMode == RateMode::OU) lamOU = drawOU(cfg.lambdaTimes, cfg.lambdaOU, p.lambdaOU, rng);
+    if(cfg.muMode == RateMode::OU)     muOU = drawOU(cfg.muTimes, cfg.muOU, p.muOU, rng);
+    for(int t = 0; t < nT; t++)
+        if(cfg.psiModes[t] == RateMode::OU) psiOU[t] = drawOU(cfg.psiTimes[t], cfg.psiOU[t], p.psiOU[t], rng);
     for(double s : cfg.intervalStart){
         int li = 0, mi = 0;
         for(int k = 0; k < (int)cfg.lambdaTimes.size(); k++) if(cfg.lambdaTimes[k] <= s) li = k;
         for(int k = 0; k < (int)cfg.muTimes.size(); k++)     if(cfg.muTimes[k] <= s)     mi = k;
-        if(li > lPrev){ p.lambda.push_back(drawChunk(cfg.lambdaGroups, cfg.lambdaGroupPrior, cfg.lambdaPrior, li, lamChunk, rng)); lPrev = li; }
-        if(mi > mPrev){ p.mu.push_back(drawChunk(cfg.muGroups, cfg.muGroupPrior, cfg.muPrior, mi, muChunk, rng)); mPrev = mi; }
+        if(li > lPrev){ p.lambda.push_back(cfg.lambdaMode == RateMode::OU ? lamOU[li] : drawChunk(cfg.lambdaGroups, cfg.lambdaGroupPrior, cfg.lambdaPrior, li, lamChunk, rng)); lPrev = li; }
+        if(mi > mPrev){ p.mu.push_back(cfg.muMode == RateMode::OU ? muOU[mi] : drawChunk(cfg.muGroups, cfg.muGroupPrior, cfg.muPrior, mi, muChunk, rng)); mPrev = mi; }
         p.lambdaIdx.push_back(li);
         p.muIdx.push_back(mi);
         for(int t = 0; t < nT; t++){
@@ -151,7 +169,7 @@ SimParams Sbc::drawParams(void){
             if(pi > pPrev[t]){
                 const std::vector<int>& g = (t < (int)cfg.psiGroups.size()) ? cfg.psiGroups[t] : noGroups;
                 const std::map<int,Probability::PriorSpec>& gp = (t < (int)cfg.psiGroupPriors.size()) ? cfg.psiGroupPriors[t] : noGroupPrior;
-                p.psi[t].push_back(drawChunk(g, gp, cfg.psiPriors[t], pi, psiChunk[t], rng));
+                p.psi[t].push_back(cfg.psiModes[t] == RateMode::OU ? psiOU[t][pi] : drawChunk(g, gp, cfg.psiPriors[t], pi, psiChunk[t], rng));
                 pPrev[t] = pi;
             }
             p.psiIdx[t].push_back(pi);

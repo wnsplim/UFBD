@@ -7,12 +7,14 @@
 #include "UserSettings.hpp"
 
 class ParameterDouble;
+class RandomVariable;
 
 class ParameterOUField : public Parameter {
 
     public:
                                     ParameterOUField(void) = delete;
                                     ParameterOUField(double prob, PhylogeneticModel* m, int nBins, const std::vector<double>& loEdges, double init0, ParameterDouble* originAge, const OUHyperSpec& ou);
+        void                        drawFromPrior(RandomVariable* rng);
         void                        setState(const std::vector<double>& r, double th, double sd, double n);
         double                      getRate(int i) { return rateVal[0][i]; }
         double                      shiftRates(double d);

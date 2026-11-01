@@ -34,6 +34,12 @@ struct SbcConfig {
     std::map<int,Probability::PriorSpec> lambdaGroupPrior;
     std::map<int,Probability::PriorSpec> muGroupPrior;
     std::vector<std::map<int,Probability::PriorSpec>> psiGroupPriors;
+    RateMode                lambdaMode;
+    RateMode                muMode;
+    std::vector<RateMode>   psiModes;
+    OUHyperSpec             lambdaOU;
+    OUHyperSpec             muOU;
+    std::vector<OUHyperSpec> psiOU;
     std::string             dumpPrefix;
 };
 
