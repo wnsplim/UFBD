@@ -270,7 +270,7 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
                 extants.push_back(n);
         int inBB = 0;
         for(SimNode* n : extants){
-            n->inBackbone = (rng->uniformRv() < p.bb);
+            n->inBackbone = (rng->uniformRv() < 1.0 - p.ue);
             if(n->inBackbone)
                 inBB++;
         }

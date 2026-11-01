@@ -25,8 +25,9 @@ SBC FLAGS
   -sbc_mode <emit|simulate|infer>
                           engine mode
   -sbc_reps <N>           number of replicate datasets
-  -sbc_bb <frac>          fraction of extant tips kept as backbone (default 1;
-                          a value < 1 is incompatible with crown conditioning)
+  -sbc_ue <prob>          probability that each extant taxon is designated an
+                          unsampled extant (UE) (default 0; a value > 0 is
+                          incompatible with crown conditioning)
   -sbc_out <prefix>       output prefix (required for -sbc_mode emit)
   -fbd_model <UFBD|RFBD|HEA14>
                           model variant
@@ -58,14 +59,14 @@ int main(int argc, const char* argv[]){
     std::string mode, out;
     bool repsSet = false;
     int reps = 0;
-    double bb = 1.0;
+    double ue = 0.0;
     std::vector<const char*> rest;
     rest.push_back(argv[0]);
     for(int i = 1; i < argc; i++){
         std::string a = argv[i];
         if(a == "-sbc_mode" && i + 1 < argc)        mode = argv[++i];
         else if(a == "-sbc_reps" && i + 1 < argc){  reps = std::stoi(argv[++i]); repsSet = true; }
-        else if(a == "-sbc_bb" && i + 1 < argc)     bb = std::stod(argv[++i]);
+        else if(a == "-sbc_ue" && i + 1 < argc)     ue = std::stod(argv[++i]);
         else if(a == "-sbc_out" && i + 1 < argc)    out = argv[++i];
         else                                        rest.push_back(argv[i]);
     }
@@ -99,9 +100,9 @@ int main(int argc, const char* argv[]){
     cfg.originConditioning = (s.getConditioning() == Conditioning::ORIGIN);
     cfg.condEvent = s.getConditioningEvent();
     cfg.rho = s.getRho();
-    cfg.bb = bb;
-    if(cfg.originConditioning == false && cfg.bb < 1.0)
-        Msg::error("crown conditioning requires bb=1.");
+    cfg.ue = ue;
+    if(cfg.originConditioning == false && cfg.ue > 0.0)
+        Msg::error("crown conditioning requires -sbc_ue 0.");
     cfg.intervalStart.push_back(0.0);
     for(double t : s.getSkylineTimes())
         cfg.intervalStart.push_back(t);

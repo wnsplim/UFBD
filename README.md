@@ -328,6 +328,41 @@ At the start of the run, UFBD maps every column label to its time interval under
 
 `<prefix>_latent.log` holds the latent variables of each sample. `y_<taxon>` is a fossil attachment age, `z_` an attachment position, `az_` an attachment zone, `rate_` a per-branch clock rate and `sa_` a sampled-ancestor indicator.
 
+## Simulation-based calibration
+
+`cmake --build build --target sbc` builds `sbc`. With `-sbc_mode infer`, `sbc` draws the parameters from the prior, simulates a dataset under the FBD process, analyzes it with one UFBD chain, and records the rank of each true value among the posterior samples.
+
+```
+sbc -sbc_mode infer -sbc_reps <N> -sbc_out <prefix> [flags]
+sbc -help
+```
+
+`-sbc_ue <prob>` designates each extant taxon an unsampled extant with this probability. The priors, the conditioning, the time bins, `mode = ou` and the chain use the `ufbd` flags.
+
+`<prefix>_ranks.tsv` has one row per replicate. Each rate column, each OU hyperparameter column, `logLik` and `logPrior` holds the randomized normalized rank of the true value among the post-burn-in samples. Then come `bulkESS`, `tailESS`, `maxRhat` and the true values `t_lambda`, `t_mu`, `t_psi` (first bin), `t_logLik` and `t_logPrior`.
+
+`<prefix>_noderanks.tsv` has one row per node per replicate, with the columns `rep`, `node` and `rank`. `x0` is the origin and `x1` ... `xK` are the backbone nodes, labeled as in `<prefix>.log`.
+
+`<prefix>_rep<k>.log` and `<prefix>_rep<k>.trees` hold the chain of replicate `k`.
+
+Each cell of Lim et al. (2026) is 100 runs of 50 replicates. Run `k` (0 to 99) uses `-seed <base>+k`, with the same seeds for `-fbd_model UFBD` and `-fbd_model HEA14`. Every run uses
+
+```
+-sbc_mode infer -sbc_reps 50 -chain_length 5000000 -thinning 1000 -burn_in 0.3 -parallel_chains 1 -cores 1 -rho 1
+```
+
+plus
+
+```
+o_single_ue0    base 110000  -lambda_prior unif:0.03,0.06 -mu_prior unif:0.005,0.025 -psi_prior unif:0.08,0.12 -conditioning origin lognormal:4.25,0.12 -sbc_ue 0
+o_single_ue05   base 111000  as o_single_ue0, with -sbc_ue 0.5
+o_single_ue1    base 112000  as o_single_ue0, with -sbc_ue 1
+e_single_ue1    base 113000  -lambda_prior unif:0.06,0.08 -mu_prior unif:0.04,0.06 -psi_prior unif:0.3,0.5 -conditioning extinct lognormal:4.25,0.12 -sbc_ue 1
+o_iid_ue05      base 114000  as o_single_ue05, with -lambda_skyline_times 20,40 -mu_skyline_times 20,40 -psi_skyline_times 20,40
+o_ou_ue05       base 115000  as o_iid_ue05, with -lambda_prior_mode ou -mu_prior_mode ou -lambda_ou_theta 0.045,0.15 -mu_ou_theta 0.015,0.15
+                             -lambda_ou_sd 20,100 -mu_ou_sd 20,100 in place of -lambda_prior and -mu_prior
+```
+
 ## Defaults
 
 ```ini

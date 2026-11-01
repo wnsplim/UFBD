@@ -17,7 +17,7 @@ struct SbcConfig {
     bool                    originConditioning;
     ConditioningEvent       condEvent;
     double                  rho;
-    double                  bb;
+    double                  ue;
     std::vector<double>     intervalStart;
     std::vector<double>     lambdaTimes;
     std::vector<double>     muTimes;

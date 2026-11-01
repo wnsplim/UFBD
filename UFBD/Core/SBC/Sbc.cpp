@@ -12,6 +12,7 @@
 #include "ConvergenceRunner.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <fstream>
@@ -49,21 +50,8 @@ std::vector<double> drawOU(const std::vector<double>& times, const OUHyperSpec& 
     return r;
 }
 
-double truthForName(const std::string& name, const SimParams& p, const std::vector<std::string>& psiTypeNames){
-    auto idxOf = [](const std::string& rest) -> int { return rest.empty() ? 0 : std::stoi(rest); };
-    if(name.rfind("lambda", 0) == 0)  return p.lambda[idxOf(name.substr(6))];
-    if(name.rfind("mu", 0) == 0)      return p.mu[idxOf(name.substr(2))];
-    if(name.rfind("psi_", 0) == 0){
-        std::string rest = name.substr(4);
-        for(size_t ti = 0; ti < psiTypeNames.size(); ti++){
-            const std::string& tn = psiTypeNames[ti];
-            if(rest == tn)                       return p.psi[ti][0];
-            if(rest.rfind(tn + "_", 0) == 0)     return p.psi[ti][std::stoi(rest.substr(tn.size() + 1))];
-        }
-        return std::numeric_limits<double>::quiet_NaN();
-    }
-    if(name.rfind("psi", 0) == 0)     return p.psi[0][idxOf(name.substr(3))];
-    return std::numeric_limits<double>::quiet_NaN();
+bool isRankedName(const std::string& nm){
+    return nm != "nSA" && nm != "originAge" && (nm[0] != 'x' || std::isdigit((unsigned char)nm[1]) == 0);
 }
 
 void initAges(Tree* tree, std::vector<Fossil>& fossils, bool origin, const Probability::PriorSpec& xp){
@@ -135,7 +123,7 @@ SimParams Sbc::drawParams(void){
     SimParams p;
     p.intervalStart = cfg.intervalStart;
     p.rho = cfg.rho;
-    p.bb = cfg.bb;
+    p.ue = cfg.ue;
     p.originConditioning = cfg.originConditioning;
     p.condEvent = cfg.condEvent;
     p.startAge = drawPrior(cfg.startAgePrior, rng);
@@ -255,8 +243,8 @@ void Sbc::runSimulateOnly(void){
         if(r.numBackbone == 1) nEq1++;
     }
     double n = cfg.numReps;
-    printf("SBC simulate-only: %d replicates, %s conditioning, rho=%.3g, bb=%.3g, %zu interval(s)\n",
-           cfg.numReps, cfg.originConditioning ? "origin" : "crown", cfg.rho, cfg.bb, cfg.intervalStart.size());
+    printf("SBC simulate-only: %d replicates, %s conditioning, rho=%.3g, ue=%.3g, %zu interval(s)\n",
+           cfg.numReps, cfg.originConditioning ? "origin" : "crown", cfg.rho, cfg.ue, cfg.intervalStart.size());
     printf("  drawn means : lambda0 %.5g  mu0 %.5g  psi0 %.5g  x %.5g\n", sLam/n, sMu/n, sPsi/n, sX/n);
     printf("  #extant(tot): mean %.3f  [%ld..%ld]\n", sExt/n, minE, maxE);
     printf("  #backbone   : mean %.3f  [%ld..%ld]\n", sBB/n, minB, maxB);
@@ -278,7 +266,7 @@ void Sbc::runInference(void){
     int nUnconverged = 0;
     int progStep = (cfg.numReps + 9) / 10;
     if(progStep < 1) progStep = 1;
-    std::ofstream rankOut;
+    std::ofstream rankOut, nodeOut;
     std::vector<std::string> outCols;
     bool liveHeader = false;
 
@@ -328,6 +316,11 @@ void Sbc::runInference(void){
         double truthLnL = truthModel->evaluateAtGeneratingState(truth.lambda, truth.mu, truth.psi,
                                                                 truth.lambdaOU, truth.muOU, truth.psiOU, truth.startAge,
                                                                 r.backboneNodeAges, zTrue, saTrue, truthLnPrior);
+        std::map<std::string, double> truthVal;
+        std::vector<std::string> truthNames = truthModel->getParameterNames();
+        std::vector<double> truthRow = truthModel->getParameterString();
+        for(size_t i = 0; i < truthNames.size(); i++)
+            truthVal[truthNames[i]] = truthRow[i];
         delete truthModel;
 
         std::vector<ChainRunner*> chains;
@@ -357,16 +350,19 @@ void Sbc::runInference(void){
             }
 
         std::map<std::string, double> thisRep;
-        auto addQuantity = [&](const std::string& nm, std::vector<double> s, double t){
-            if(std::isnan(t))
-                return;
-            std::sort(s.begin(), s.end());
+        auto rankOf = [&](const std::vector<double>& s, double t){
             long below = 0, equal = 0;
             for(double x : s){
                 if(x < t) below++;
                 else if(x == t) equal++;
             }
-            double rank = ((double)below + rng->uniformRv() * (double)equal) / (double)s.size();
+            return ((double)below + rng->uniformRv() * (double)equal) / (double)s.size();
+        };
+        auto addQuantity = [&](const std::string& nm, std::vector<double> s, double t){
+            if(std::isnan(t))
+                return;
+            std::sort(s.begin(), s.end());
+            double rank = rankOf(s, t);
             ranks[nm].push_back(rank);
             thisRep[nm] = rank;
             if(t >= quantile(s, 0.25) && t <= quantile(s, 0.75)) cov50[nm]++;
@@ -375,14 +371,26 @@ void Sbc::runInference(void){
         };
 
         int iLik = -1, iPri = -1;
+        std::map<std::string, int> colOf;
         for(size_t c = 0; c < names.size(); c++){
             if(names[c] == "likelihood") iLik = (int)c;
             if(names[c] == "prior")      iPri = (int)c;
+            colOf[names[c]] = (int)c;
         }
-        for(size_t c = 0; c < names.size(); c++)
-            addQuantity(names[c], post[c], truthForName(names[c], truth, cfg.psiTypeNames));
+        for(size_t c = 0; c < names.size(); c++){
+            std::map<std::string, double>::iterator t = truthVal.find(names[c]);
+            if(t != truthVal.end() && isRankedName(names[c]))
+                addQuantity(names[c], post[c], t->second);
+        }
         addQuantity("logLik", post[iLik], truthLnL);
         addQuantity("logPrior", post[iPri], truthLnPrior);
+        std::vector<std::pair<std::string, double>> nodeRank;
+        if(truthVal.count("originAge") > 0)
+            nodeRank.push_back({ "x0", rankOf(post[colOf["originAge"]], truthVal["originAge"]) });
+        for(int i = 1; truthVal.count("x" + std::to_string(i)) > 0; i++){
+            std::string xi = "x" + std::to_string(i);
+            nodeRank.push_back({ xi, rankOf(post[colOf[xi]], truthVal[xi]) });
+        }
         if(cfg.dumpPrefix.empty() == false){
             if(liveHeader == false){
                 rankOut.open(cfg.dumpPrefix + "_ranks.tsv");
@@ -390,8 +398,14 @@ void Sbc::runInference(void){
                 for(size_t c = 0; c < outCols.size(); c++)
                     rankOut << (c ? "\t" : "") << outCols[c];
                 rankOut << "\tbulkESS\ttailESS\tmaxRhat\tt_lambda\tt_mu\tt_psi\tt_logLik\tt_logPrior\n";
+                nodeOut.open(cfg.dumpPrefix + "_noderanks.tsv");
+                nodeOut.precision(17);
+                nodeOut << "rep\tnode\trank\n";
                 liveHeader = true;
             }
+            for(const std::pair<std::string, double>& nr : nodeRank)
+                nodeOut << rep << "\t" << nr.first << "\t" << nr.second << "\n";
+            nodeOut.flush();
             for(size_t c = 0; c < outCols.size(); c++){
                 std::map<std::string, double>::iterator f = thisRep.find(outCols[c]);
                 rankOut << (c ? "\t" : "") << (f != thisRep.end() ? f->second : std::numeric_limits<double>::quiet_NaN());
@@ -406,8 +420,8 @@ void Sbc::runInference(void){
         delete tree;
     }
 
-    printf("SBC inference: %d reps, %d chains/rep, conditioning=%s, rho=%.3g, bb=%.3g\n",
-           cfg.numReps, nRuns, cfg.originConditioning ? "origin" : "crown", cfg.rho, cfg.bb);
+    printf("SBC inference: %d reps, %d chains/rep, conditioning=%s, rho=%.3g, ue=%.3g\n",
+           cfg.numReps, nRuns, cfg.originConditioning ? "origin" : "crown", cfg.rho, cfg.ue);
     if(nUnconverged > 0)
         printf("  WARNING: %d of %d reps did not reach the R-hat/ESS thresholds.\n",
                nUnconverged, cfg.numReps);

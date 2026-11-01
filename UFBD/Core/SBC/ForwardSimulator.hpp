@@ -20,7 +20,7 @@ struct SimParams {
     std::vector<double> muOU;
     std::vector<std::vector<double>> psiOU;
     double              rho = 1.0;
-    double              bb = 1.0;
+    double              ue = 0.0;
     double              startAge = 0.0;
     bool                originConditioning = false;
     ConditioningEvent   condEvent = ConditioningEvent::SURVIVAL;
