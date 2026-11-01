@@ -1,5 +1,5 @@
 ---
-title: sbc
+title: SBC
 nav_order: 3
 permalink: /sbc/
 ---

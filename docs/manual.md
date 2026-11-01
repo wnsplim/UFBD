@@ -24,7 +24,7 @@ ufbd -config config_file.cfg
 ufbd -help
 ```
 
-Set the options in a config file, or as flags on the command line. If you give both, the config file wins. UFBD reads every path relative to the directory you run the command from.
+Set the options in a config file, or as flags on the command line. If you give both, the config file is prioritized. UFBD reads every path relative to the directory you run the command from.
 
 Two options are available only as a command-line flag:
 
@@ -378,23 +378,23 @@ sigma2_gamma     = 1,10,1
 
 Demotte, P., Panchaksaram, M., Kumarasinghe, H., Ly-Trong, N., dos Reis, M., & Minh, B. Q. (2025).
 IQ2MC: A new framework to infer phylogenetic time trees using IQ-TREE 3 and MCMCTree with mixture
-models. *EcoEvoRxiv*. https://doi.org/10.32942/X2CD2X
+models. *EcoEvoRxiv*. <https://doi.org/10.32942/X2CD2X>
 
 dos Reis, M., Zhu, T., & Yang, Z. (2014). The impact of the rate prior on Bayesian estimation of
 divergence times with multiple loci. *Systematic Biology, 63*(4), 555–565.
-https://doi.org/10.1093/sysbio/syu020
+<https://doi.org/10.1093/sysbio/syu020>
 
 Heath, T. A., Huelsenbeck, J. P., & Stadler, T. (2014). The fossilized birth–death process for
 coherent calibration of divergence-time estimates. *Proceedings of the National Academy of
-Sciences, 111*(29), E2957–E2966. https://doi.org/10.1073/pnas.1319091111
+Sciences, 111*(29), E2957–E2966. <https://doi.org/10.1073/pnas.1319091111>
 
 Papaspiliopoulos, O., Roberts, G. O., & Sköld, M. (2007). A general framework for the
 parametrization of hierarchical models. *Statistical Science, 22*(1), 59–73.
-https://doi.org/10.1214/088342307000000014
+<https://doi.org/10.1214/088342307000000014>
 
 Wang, S., & Meade, A. (2026). Molecular clock dating using complex mixture models: Applied to
 ancient symbionts. *Molecular Biology and Evolution, 43*(3), msag039.
-https://doi.org/10.1093/molbev/msag039
+<https://doi.org/10.1093/molbev/msag039>
 
 Yang, Z. (2007). PAML 4: Phylogenetic analysis by maximum likelihood. *Molecular Biology and
-Evolution, 24*(8), 1586–1591. https://doi.org/10.1093/molbev/msm088
+Evolution, 24*(8), 1586–1591. <https://doi.org/10.1093/molbev/msm088>
