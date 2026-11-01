@@ -6,8 +6,6 @@ permalink: /manual/
 
 # UFBD manual
 
-This manual covers `ufbd`. `sbc`, the program for simulation-based calibration, has its own page, [sbc](sbc.md).
-
 ## Building
 
 The repository holds a static Linux x86-64 binary, `ufbd`, in `releases/`. On other platforms, build UFBD from the source. You need CMake 3.16 or later and a C++20 compiler. Eigen is included. UFBD links jemalloc only if jemalloc is present.
