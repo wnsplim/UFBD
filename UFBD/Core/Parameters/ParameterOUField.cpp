@@ -16,22 +16,22 @@
 
 enum { OU_BIN = 0, OU_THETA = 1, OU_SDEQ = 2, OU_NU = 3 };
 
-ParameterOUField::ParameterOUField(double prob, PhylogeneticModel* m, int nB, const std::vector<double>& lo, double init0, ParameterDouble* orig, double thetaMedianOv, double thetaSdOv, double sdShapeOv, double sdRateOv, double nuShapeOv, double nuRateOv) : Parameter(prob, m, "rateField"){
+ParameterOUField::ParameterOUField(double prob, PhylogeneticModel* m, int nB, const std::vector<double>& lo, double init0, ParameterDouble* orig, const OUHyperSpec& ou) : Parameter(prob, m, "rateField"){
     nBins = nB;
     loEdges = lo;
     originAge = orig;
 
-    double thMed = std::isnan(thetaMedianOv) ? 0.2 : thetaMedianOv;
+    double thMed = ou.thetaSet ? ou.thetaMedian : 0.2;
     thetaMean = std::log(thMed);
-    thetaSd = std::isnan(thetaSdOv) ? 0.5 : thetaSdOv;
+    thetaSd = ou.thetaSet ? ou.thetaSd : 0.5;
     theta[0] = theta[1] = thetaMean;
 
     double r0 = (init0 > 0.0) ? init0 : thMed;
     rateVal[0].assign(nBins, r0);
     rateVal[1].assign(nBins, r0);
 
-    if(std::isnan(sdShapeOv)){ sdShape = 6.0; sdRate = sdShape / 1.2; }
-    else { sdShape = sdShapeOv; sdRate = sdRateOv; }
+    if(ou.sdSet == false){ sdShape = 6.0; sdRate = sdShape / 1.2; }
+    else { sdShape = ou.sdShape; sdRate = ou.sdRate; }
     sdEq[0] = sdEq[1] = sdShape / sdRate;
 
     std::vector<double> dts;
@@ -45,8 +45,8 @@ ParameterOUField::ParameterOUField(double prob, PhylogeneticModel* m, int nB, co
         std::sort(dts.begin(), dts.end());
         medDt = dts[dts.size() / 2];
     }
-    if(std::isnan(nuShapeOv)){ nuShape = 4.0; nuRate = nuShape / (-std::log(0.7) / medDt); }
-    else { nuShape = nuShapeOv; nuRate = nuRateOv; }
+    if(ou.nuSet == false){ nuShape = 4.0; nuRate = nuShape / (-std::log(0.7) / medDt); }
+    else { nuShape = ou.nuShape; nuRate = ou.nuRate; }
     nu[0] = nu[1] = nuShape / nuRate;
 
     for(int k = 0; k < 4; k++){ step[k] = 0.3; attW[k] = 0; accW[k] = 0; adaptN[k] = 0; moveAtt[k] = 0; moveAcc[k] = 0; }
@@ -74,27 +74,29 @@ double ParameterOUField::lnProbability(void){
     lp += Probability::Gamma::lnPdf(nuShape, nuRate, nuv);
 
     double var0 = sd * sd;
-    double x = std::log(rateVal[0][0]);
-    lp += Probability::Normal::lnPdf(th, var0, x) - x;
-
-    double w0 = loEdges[1] - loEdges[0];
-    if(nBins > 2)
-        w0 = std::min(w0, loEdges[2] - loEdges[1]);
-    double prevMid = loEdges[0] + 0.5 * w0;
-    double prevX = x;
+    double prevX = std::log(rateVal[0][0]);
+    lp += Probability::Normal::lnPdf(th, var0, prevX) - prevX;
     for(int c = 1; c < nBins; c++){
-        double mid = (c < nBins - 1) ? 0.5 * (loEdges[c] + loEdges[c + 1])
-                                     : loEdges[c] + 0.5 * (loEdges[c] - loEdges[c - 1]);
-        double dt = mid - prevMid;
-        double rho = std::exp(-nuv * dt);
+        double rho = std::exp(-nuv * (binMid(c) - binMid(c - 1)));
         double mean = th + (prevX - th) * rho;
         double var = var0 * (1.0 - rho * rho);
         double xc = std::log(rateVal[0][c]);
         lp += Probability::Normal::lnPdf(mean, var, xc) - xc;
-        prevMid = mid;
         prevX = xc;
     }
     return lp;
+}
+
+double ParameterOUField::binMid(int c){
+    if(c == 0){
+        double w0 = loEdges[1] - loEdges[0];
+        if(nBins > 2)
+            w0 = std::min(w0, loEdges[2] - loEdges[1]);
+        return loEdges[0] + 0.5 * w0;
+    }
+    if(c < nBins - 1)
+        return 0.5 * (loEdges[c] + loEdges[c + 1]);
+    return loEdges[c] + 0.5 * (loEdges[c] - loEdges[c - 1]);
 }
 
 double ParameterOUField::bactrianDelta(void){

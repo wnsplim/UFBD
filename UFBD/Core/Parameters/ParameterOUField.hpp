@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "Parameter.hpp"
+#include "UserSettings.hpp"
 
 class ParameterDouble;
 
@@ -11,7 +12,7 @@ class ParameterOUField : public Parameter {
 
     public:
                                     ParameterOUField(void) = delete;
-                                    ParameterOUField(double prob, PhylogeneticModel* m, int nBins, const std::vector<double>& loEdges, double init0, ParameterDouble* originAge, double thetaMedianOv, double thetaSdOv, double sdShapeOv, double sdRateOv, double nuShapeOv, double nuRateOv);
+                                    ParameterOUField(double prob, PhylogeneticModel* m, int nBins, const std::vector<double>& loEdges, double init0, ParameterDouble* originAge, const OUHyperSpec& ou);
         double                      getRate(int i) { return rateVal[0][i]; }
         double                      shiftRates(double d);
         double                      scaleAllProposed(double c, bool withTheta = false);
@@ -34,6 +35,7 @@ class ParameterOUField : public Parameter {
         void                        printPerBinAccept(std::ostream& os, const char* label) const;
 
     private:
+        double                      binMid(int c);
         double                      bactrianDelta(void);
         void                        adaptStep(int m, bool accepted);
         void                        adaptStepBin(int k, bool accepted);
