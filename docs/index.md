@@ -6,7 +6,7 @@ permalink: /
 
 # UFBD
 
-UFBD performs fossilized birth-death (FBD) analysis under the unresolved formulation of the FBD process (Heath et al., 2014; Lim et al., 2026). With a fixed backbone tree, UFBD infers divergence times and the FBD rates. The FBD rates are the speciation rate, the extinction rate and the sampling rate. With only fossil records and no backbone tree, UFBD infers the FBD rates alone.
+UFBD performs fossilized birth-death (FBD) analysis under the unresolved formulation of the FBD process (Heath et al., 2014; Lim et al., 2026). With a fixed backbone tree, UFBD infers divergence times and the FBD rates (speciation, extinction and  sampling rates). With only fossil records and no backbone tree, UFBD infers the FBD rates alone.
 
 Please cite the following paper if you found this program to be useful:
 
