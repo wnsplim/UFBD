@@ -4,7 +4,7 @@ nav_order: 3
 permalink: /sbc/
 ---
 
-# sbc manual
+# SBC manual
 
 `sbc` runs simulation-based calibration of UFBD. For each replicate, it draws the parameters from the specified priors, simulates a dataset under the FBD process, analyzes the dataset with UFBD, and records the rank of each true value among the posterior samples. Building UFBD as in the [manual](manual.md#building) also builds `sbc`.
 
