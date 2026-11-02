@@ -77,6 +77,8 @@ genus2	CROWN	500
 
 `backbone_tree` — NEWICK or NEXUS format. The tree must be rooted and bifurcating. UFBD holds the backbone topology fixed for the whole analysis. A backbone tip whose name matches a `fossils` row becomes a non-contemporaneous tip. UFBD then draws its age uniformly between the `min_age` and the `max_age` of that fossil. A fossil in the backbone tree cannot become a sampled ancestor.
 
+To fix where a fossil sits, put it in `backbone_tree` as a tip and give it a row in `fossils` under the same name. Its `clade` must name a clade in `clade_def`, and its `assignment` follows the same rules as for an unresolved fossil. A clade in `clade_def` can be defined by fossil tips. UFBD keeps the backbone nodes rootward of a fossil tip older than the fossil. Under `extinct` conditioning, the backbone tree can hold fossil tips only, with no sequence data. A fossil that is not the youngest of the fossils able to attach to its lineage could be a sampled ancestor, and placing it in the backbone tree excludes that. The effect is usually small, and UFBD prints a warning for each such fossil.
+
 `sequence` — FASTA, PHYLIP or NEXUS format. Supply this file for a full-likelihood analysis.
 
 `partition` — NEXUS `charset` blocks. Add a `charpartition clock` block to set the clock partitions by hand. The `partition` entry of `[substitution]` names this file.
@@ -166,7 +168,7 @@ conditioning = origin exp:0.1   # origin | crown | anysample | extinct, then an 
 rho          = 1                # fraction of extant species sampled
 ```
 
-`crown` puts the conditioning point at the root of the backbone tree. It needs two or more backbone tips to define the crown node of the clade. The other three options put the conditioning point at the origin of the clade. `origin` and `crown` condition on survival to the present, so they need one or more extant taxa. `crown` needs a backbone tree. `extinct` allows no extant taxa, and forces `rho` to 1. `anysample` is the loosest option, and needs one or more extant or fossil taxa. Under `crown`, no fossil can be `STEM` on the *whole* clade.
+`crown` puts the conditioning point at the root of the backbone tree. It needs two or more backbone tips to define the crown node of the clade. The other three options put the conditioning point at the origin of the clade. `origin` and `crown` condition on survival to the present, so they need one or more extant taxa. `crown` needs a backbone tree. `extinct` allows no extant taxa, and forces `rho` to 1. With `extinct`, the backbone tree can hold fossil tips only, each named in a `fossils` row. `anysample` is the loosest option, and needs one or more extant or fossil taxa. Under `crown`, no fossil can be `STEM` on the *whole* clade.
 
 If you give no age prior after the keyword, the conditioning point gets a flat improper prior. This usually mixes poorly.
 
@@ -306,9 +308,9 @@ UFBD builds the column labels in `<prefix>.log` from the model. It uses the bin 
 
 ```
 n posterior likelihood prior
-x0                                             origin age, with a backbone tree; skipped when -conditioning crown
+x0                                             origin age, with sequence data or a Hessian file; skipped when -conditioning crown
 x1 ... xK                                      backbone node ages
-originAge                                      origin age, when ran without a backbone tree
+originAge                                      origin age, without sequence data or a Hessian file; skipped when -conditioning crown
 nSA                                            number of sampled ancestors
 lambda mu psi                                  a rate with when no time_bins are set
 lambda_early lambda_mid ...                    a rate with time_bins set, one per bin label
