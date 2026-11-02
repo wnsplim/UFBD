@@ -1299,6 +1299,8 @@ double FBDTreeModel::calculateFBDProbability(void){
         fbdPrevFy.assign(numFossils, std::numeric_limits<double>::quiet_NaN());
         fbdPrevFz.assign(numFossils, std::numeric_limits<double>::quiet_NaN());
         fbdPrevKind.assign(numFossils, -1);
+        fbdKy.assign(numFossils, 0);
+        fbdKz.assign(numFossils, 0);
         ratesSame = false;
         fbdMemoInit = true;
     }
@@ -1313,10 +1315,14 @@ double FBDTreeModel::calculateFBDProbability(void){
             if(ratesSame && cachedGammaLn[i] == fbdPrevGammaLn[i] && gy == fbdPrevFy[i]
                && gz == fbdPrevFz[i] && kind == fbdPrevKind[i])
                 continue;
-            termFoss[i] = fossilTermLn(i, spineIdx);
+            int ky = (gy == fbdPrevFy[i]) ? fbdKy[i] : findIndex(gy);
+            int kz = (gz == fbdPrevFz[i]) ? fbdKz[i] : findIndex(gz);
+            termFoss[i] = fossilTermLn(i, spineIdx, ky, kz);
             fbdPrevGammaLn[i] = cachedGammaLn[i];
             fbdPrevFy[i] = gy;
             fbdPrevFz[i] = gz;
+            fbdKy[i] = ky;
+            fbdKz[i] = kz;
             fbdPrevKind[i] = kind;
         }
     });
@@ -1379,9 +1385,9 @@ double FBDTreeModel::calculateFBDProbability(void){
     return fbdProb;
 }
 
-double FBDTreeModel::fossilTermLn(int i, int spineIdx){
+double FBDTreeModel::fossilTermLn(int i, int spineIdx, int ky, int kz){
     if(unresolvedFossils->isSA(i))
-        return lnPsiTypeVec[fossilType[i]][findIndex(unresolvedFossils->getFossilAge(i))] + cachedGammaLn[i];
+        return lnPsiTypeVec[fossilType[i]][ky >= 0 ? ky : findIndex(unresolvedFossils->getFossilAge(i))] + cachedGammaLn[i];
     if(i == spineIdx && unresolvedFossils->isUE(i))
         return 0.0;
     if(unresolvedFossils->isUE(i))
@@ -1390,7 +1396,7 @@ double FBDTreeModel::fossilTermLn(int i, int spineIdx){
         double ys = unresolvedFossils->getFossilAge(i);
         return lnPsiTypeVec[fossilType[i]][findIndex(ys)] + std::log(calculateP0(ys)) - lnD(ys);
     }
-    return fossilPqLn(unresolvedFossils->getFossilAge(i), unresolvedFossils->getAttachAge(i), fossilType[i]) + cachedGammaLn[i];
+    return fossilPqLn(unresolvedFossils->getFossilAge(i), unresolvedFossils->getAttachAge(i), fossilType[i], ky, kz) + cachedGammaLn[i];
 }
 
 double FBDTreeModel::term3Sum(void){
@@ -1694,8 +1700,11 @@ double FBDTreeModel::lnD(double t){
     return (t <= 0.0) ? 0.0 : lnDPrev[findIndex(t)] + std::log(4.0) - calculateLnQtAt(findIndex(t), t);
 }
 
-double FBDTreeModel::fossilPqLn(double y, double z, int type){
-    return lnPsiTypeVec[type][findIndex(y)] + ln2LambdaVec[findIndex(z)] + std::log(calculateP0(y)) + lnDDiff(z, y);
+double FBDTreeModel::fossilPqLn(double y, double z, int type, int ky, int kz){
+    if(ky < 0) ky = findIndex(y);
+    if(kz < 0) kz = findIndex(z);
+    return lnPsiTypeVec[type][ky] + ln2LambdaVec[kz] + std::log(calculateP0At(ky, y))
+           + calculateLnQtAt(ky, y) - calculateLnQtAt(kz, z) + lnDPrev[kz] - lnDPrev[ky];
 }
 
 double FBDTreeModel::uePqLn(double z){
@@ -1734,10 +1743,7 @@ double FBDTreeModel::incDecLn(int i, double t){
 
 double FBDTreeModel::lnDDiff(double zhi, double ylo){
     int kz = findIndex(zhi), ky = findIndex(ylo);
-    double d = calculateLnQtAt(ky, ylo) - calculateLnQtAt(kz, zhi);
-    for(int i = ky + 1; i <= kz; i++)
-        d += std::log(4.0) - calculateLnQtAt(i - 1, intervalStart[i]);
-    return d;
+    return calculateLnQtAt(ky, ylo) - calculateLnQtAt(kz, zhi) + lnDPrev[kz] - lnDPrev[ky];
 }
 
 double FBDTreeModel::lnSurvivalWithin(int i, double t){
@@ -1846,7 +1852,8 @@ double FBDTreeModel::calculateLnQtAt(int i, double t){
     double tau = t - intervalStart[i];
     double a = c1Vec[i] * tau;
     double c2 = c2Vec[i];
-    double bracket = std::pow(1.0 + c2, 2) + std::exp(-a) * 2.0 * (1.0 - c2 * c2) + std::exp(-2.0 * a) * std::pow(1.0 - c2, 2);
+    double e = std::exp(-a);
+    double bracket = (1.0 + c2) * (1.0 + c2) + e * 2.0 * (1.0 - c2 * c2) + e * e * (1.0 - c2) * (1.0 - c2);
     return a + std::log(bracket);
 }
 
@@ -1864,7 +1871,8 @@ double FBDTreeModel::calculateP0At(int i, double t){
         return a + (eb - a) * std::exp(-s * tau);
     }
     double tmp = -li + mi + pi;
-    tmp += c1Vec[i] * (std::exp(-c1Vec[i] * tau) * (1 - c2Vec[i]) - (1+c2Vec[i]) ) / ( std::exp(-c1Vec[i] * tau) * (1 - c2Vec[i]) + (1+c2Vec[i])  );
+    double e = std::exp(-c1Vec[i] * tau);
+    tmp += c1Vec[i] * (e * (1 - c2Vec[i]) - (1+c2Vec[i]) ) / ( e * (1 - c2Vec[i]) + (1+c2Vec[i])  );
     tmp /= 2*li;
     return 1 + tmp;
 }

@@ -65,7 +65,7 @@ class FBDTreeModel : public PhylogeneticModel {
         long                        getRelabelCross(void) { return relCross; }
         long                        getRelabelCrossSA(void) { return relCrossSA; }
     private:
-        double                      fossilTermLn(int i, int spineIdx);
+        double                      fossilTermLn(int i, int spineIdx, int ky = -1, int kz = -1);
         double                      term3Sum(void);
         double                      fossilSweepSequential(void);
         double                      fossilSweepParallel(void);
@@ -76,7 +76,7 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      calculateResolvedFBD(void);
         int                         countResolvedSA(void);
         double                      lnD(double t);
-        double                      fossilPqLn(double y, double z, int type);
+        double                      fossilPqLn(double y, double z, int type, int ky = -1, int kz = -1);
         double                      uePqLn(double z);
         double                      calculateLnSurvival(double t);
         double                      lnSurvivalWithin(int i, double t);
@@ -229,6 +229,7 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<double>         fbdTermNode;
         std::vector<double>         fbdPrevGammaLn, fbdPrevFy, fbdPrevFz;
         std::vector<int>            fbdPrevKind;
+        std::vector<int>            fbdKy, fbdKz;
         std::vector<double>         fbdRateSig;
         bool                        fbdMemoInit = false;
         bool                        stalkIndexBuilt = false;
