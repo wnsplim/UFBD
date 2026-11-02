@@ -310,27 +310,25 @@ void Sbc::runInference(void){
             zTrue.push_back(r.ueAttachAge[i]);
             saTrue.push_back(0);
         }
+        double truthLnL = 0.0;
         double truthLnPrior = std::numeric_limits<double>::quiet_NaN();
-        unsigned int truthSeed = (unsigned int)(rng->uniformRv() * 4294967295.0);
-        FBDTreeModel* truthModel = new FBDTreeModel(tree, clades, fossils, truthSeed);
-        double truthLnL = truthModel->evaluateAtGeneratingState(truth.lambda, truth.mu, truth.psi,
-                                                                truth.lambdaOU, truth.muOU, truth.psiOU, truth.startAge,
-                                                                r.backboneNodeAges, zTrue, saTrue, truthLnPrior);
-        std::map<std::string, double> truthVal;
-        std::vector<std::string> truthNames = truthModel->getParameterNames();
-        std::vector<double> truthRow = truthModel->getParameterString();
-        for(size_t i = 0; i < truthNames.size(); i++)
-            truthVal[truthNames[i]] = truthRow[i];
-        delete truthModel;
-
+        rng->uniformRv(); // keeps each seed's replicate datasets identical to runs that built a separate truth model
         std::vector<ChainRunner*> chains;
         std::vector<FBDTreeModel*> models;
         for(int m = 0; m < nRuns; m++){
             unsigned int modelSeed = (unsigned int)(rng->uniformRv() * 4294967295.0);
             FBDTreeModel* model = new FBDTreeModel(tree, clades, fossils, modelSeed);
+            truthLnL = model->evaluateAtGeneratingState(truth.lambda, truth.mu, truth.psi,
+                                                        truth.lambdaOU, truth.muOU, truth.psiOU, truth.startAge,
+                                                        r.backboneNodeAges, zTrue, saTrue, truthLnPrior);
             models.push_back(model);
             chains.push_back(new Mcmc(ng, thin, model));
         }
+        std::map<std::string, double> truthVal;
+        std::vector<std::string> truthNames = models[0]->getParameterNames();
+        std::vector<double> truthRow = models[0]->getParameterString();
+        for(size_t i = 0; i < truthNames.size(); i++)
+            truthVal[truthNames[i]] = truthRow[i];
         ConvergenceRunner cr(chains, repBase + ".log", repBase + ".trees");
         if(cr.run() == false)
             nUnconverged++;
@@ -345,7 +343,7 @@ void Sbc::runInference(void){
         for(size_t c = 0; c < names.size(); c++)
             for(ChainRunner* ch : chains){
                 const std::vector<double>& col = ch->traceColumns()[c];
-                size_t bIdx = (size_t)(burnFrac * col.size());
+                size_t bIdx = std::max((size_t)1, (size_t)(burnFrac * col.size()));
                 post[c].insert(post[c].end(), col.begin() + bIdx, col.end());
             }
 

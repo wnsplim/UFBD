@@ -650,6 +650,7 @@ double FBDTreeModel::evaluateAtGeneratingState(const std::vector<double>& lam, c
     }
     for(size_t i = 0; i < order.size(); i++)
         order[i]->setTime(nodeAges[i]);
+    parameterTree->commitTree();
 
     if(unresolvedFossils != nullptr){
         int nf = unresolvedFossils->getNumFossils();

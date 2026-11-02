@@ -26,6 +26,7 @@ class ParameterTree : public Parameter {
         double                      update(void);
         void                        updateForAcceptance(void);
         void                        updateForRejection(void);
+        void                        commitTree(void) { *(trees[1]) = *(trees[0]); }
         void                        writeState(std::ostream& os);
         void                        readState(std::istream& is);
 
