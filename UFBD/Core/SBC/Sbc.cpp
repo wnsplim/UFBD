@@ -397,7 +397,7 @@ void Sbc::runInference(void){
                 rankOut.precision(17);
                 for(size_t c = 0; c < outCols.size(); c++)
                     rankOut << (c ? "\t" : "") << outCols[c];
-                rankOut << "\tbulkESS\ttailESS\tmaxRhat\tt_lambda\tt_mu\tt_psi\tt_logLik\tt_logPrior\n";
+                rankOut << "\tbulkESS\ttailESS\tmaxRhat\tt_lambda\tt_mu\tt_psi\tt_logLik\tt_logPrior\tsimAttempts\n";
                 nodeOut.open(cfg.dumpPrefix + "_noderanks.tsv");
                 nodeOut.precision(17);
                 nodeOut << "rep\tnode\trank\n";
@@ -412,7 +412,7 @@ void Sbc::runInference(void){
             }
             rankOut << "\t" << repBulkEss << "\t" << repTailEss << "\t" << repMaxRhat
                     << "\t" << truth.lambda[0] << "\t" << truth.mu[0] << "\t" << truth.psi[0][0]
-                    << "\t" << truthLnL << "\t" << truthLnPrior << "\n";
+                    << "\t" << truthLnL << "\t" << truthLnPrior << "\t" << r.attempts << "\n";
             rankOut.flush();
         }
         for(ChainRunner* ch : chains) delete ch;

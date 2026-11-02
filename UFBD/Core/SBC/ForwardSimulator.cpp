@@ -335,5 +335,6 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
     for(SimNode* n : allNodes)
         delete n;
 
+    res.attempts = attempts;
     return res;
 }
