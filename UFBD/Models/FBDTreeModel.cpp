@@ -2442,26 +2442,25 @@ void FBDTreeModel::updateGammaCache(void){
     int budget = 0;
     for(int x = nEdge; x > 1; x >>= 1) budget++;
     int edits = (cacheInit && nEdge > 0) ? 0 : -1;
+    bool rootOrCrownMoved = false;
+    std::vector<Node*> moved;
     if(edits == 0){
         for(Node* nd : dpseq)
             if(nd->getTime() != prevNodeAge[nd->getOffset()]){
                 edits += (nd != root ? 1 : 0) + (int)nd->getDescendants().size();
                 if(edits > budget){ edits = -1; break; }
+                moved.push_back(nd);
+                if(nd == root || nd == tree->getCrown())
+                    rootOrCrownMoved = true;
             }
     }
-    bool nodeDelta = (edits >= 0) && cacheInit && gammaValM.size() == (size_t)nf;
-    if(nodeDelta)
-        for(Node* nd : dpseq)
-            if(nd->getTime() != prevNodeAge[nd->getOffset()] && (nd == root || nd == tree->getCrown()))
-                nodeDelta = false;
+    bool nodeDelta = (edits >= 0) && cacheInit && gammaValM.size() == (size_t)nf && rootOrCrownMoved == false;
     std::vector<EdgeFlip> flips;
 
     if(edits >= 0){
-        for(Node* nd : dpseq){
+        for(Node* nd : moved){
             double oldA = prevNodeAge[nd->getOffset()];
             double newA = nd->getTime();
-            if(oldA == newA)
-                continue;
             if(nodeDelta){
                 double blo = std::min(oldA, newA), bhi = std::max(oldA, newA);
                 int mzf = minZoneOfNode[nd->getOffset()];
@@ -2605,19 +2604,13 @@ void FBDTreeModel::updateGammaCache(void){
             for(; b != e; ++b)
                 gammaStale[b->second] = 1;
         }
+        prevY[i] = yi;
+        prevZ[i] = zi;
+        prevSA[i] = sai;
+        prevAttachmentZone[i] = lzi;
     }
 
-    std::vector<std::pair<double,double> > changedIntervals;
-    for(Node* n : dpseq){
-        if(n == tree->getRoot()) continue;
-        Node* anc = n->getAncestor();
-        double pc = prevNodeAge[n->getOffset()];
-        double pp = prevNodeAge[anc->getOffset()];
-        if(pc < 0.0 || pp < 0.0) continue;
-        if(n->getTime() != pc || anc->getTime() != pp)
-            changedIntervals.push_back(std::make_pair(std::min(n->getTime(), pc), std::max(anc->getTime(), pp)));
-    }
-    if(nodeDelta){
+    if(nodeDelta && flips.empty() == false){
         if((int)gammaLogTab.size() < 2 * (nf + tree->getNumNodes()) + 8){
             gammaLogTab.resize(2 * (nf + tree->getNumNodes()) + 8);
             for(size_t q = 0; q < gammaLogTab.size(); q++)
@@ -2643,8 +2636,18 @@ void FBDTreeModel::updateGammaCache(void){
                 cachedGammaLn[i] = gammaLogTab[(int)(2.0 * gammaValM[i] + 0.5)];
             }
         }
-    }else if(changedIntervals.empty() == false){
-        for(int i = 0; i < nf; i++){
+    }else if(nodeDelta == false){
+        std::vector<std::pair<double,double> > changedIntervals;
+        for(Node* n : dpseq){
+            if(n == tree->getRoot()) continue;
+            Node* anc = n->getAncestor();
+            double pc = prevNodeAge[n->getOffset()];
+            double pp = prevNodeAge[anc->getOffset()];
+            if(pc < 0.0 || pp < 0.0) continue;
+            if(n->getTime() != pc || anc->getTime() != pp)
+                changedIntervals.push_back(std::make_pair(std::min(n->getTime(), pc), std::max(anc->getTime(), pp)));
+        }
+        for(int i = 0; i < nf && changedIntervals.empty() == false; i++){
             if(gammaStale[i]) continue;
             double ti = unresolvedFossils->isSA(i) ? unresolvedFossils->getFossilAge(i) : unresolvedFossils->getAttachAge(i);
             for(std::pair<double,double>& iv : changedIntervals)
@@ -2677,12 +2680,6 @@ void FBDTreeModel::updateGammaCache(void){
         }
     });
 
-    for(int i = 0; i < nf; i++){
-        prevY[i] = unresolvedFossils->getFossilAge(i);
-        prevZ[i] = unresolvedFossils->getAttachAge(i);
-        prevSA[i] = unresolvedFossils->isSA(i) ? 1 : 0;
-        prevAttachmentZone[i] = unresolvedFossils->getAttachmentZone(i);
-    }
     for(Node* n : dpseq)
         prevNodeAge[n->getOffset()] = n->getTime();
 
