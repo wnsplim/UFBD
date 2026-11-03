@@ -976,6 +976,8 @@ double Tree::updateCrownAge(double scaleLambda){
     double m = std::exp( scaleLambda * (rng.uniformRv() - 0.5) );
     double newCrownAge = getRoot()->getTime() * m;
     lastUpdateWasScale = true;
+    lastAgeNode = getRoot();
+    lastAgeNodeOldAge = getRoot()->getTime();
     if(newCrownAge <= maxChildAge)
         return -INFINITY;
 

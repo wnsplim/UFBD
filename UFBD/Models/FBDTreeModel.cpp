@@ -1096,7 +1096,7 @@ double FBDTreeModel::update(void){
     double ratio = updatedParameter->update();
     if(updatedParameter == parameterTree)
         lastTreeMove = parameterTree->getTree()->getLastUpdateWasScale() ? TM_CROWN : TM_NODEAGE;
-    if(lastTreeMove == TM_NODEAGE && isResolved == false && unresolvedFossils != nullptr){
+    if((lastTreeMove == TM_NODEAGE || lastTreeMove == TM_CROWN) && isResolved == false && unresolvedFossils != nullptr){
         Tree* t = parameterTree->getTree();
         if(t->getLastAgeNode() != nullptr)
             ratio += relabelAcrossNode(t->getLastAgeNode(), t->getLastAgeNodeOldAge());
@@ -1111,6 +1111,7 @@ void FBDTreeModel::updateForAcceptance(void){
     if(lastTreeMove == TM_SUBTREE) subtreeAccW++;
     else if(lastTreeMove == TM_JOINTSCALE) jointScaleAccW++;
     else if(lastTreeMove == TM_NODEAGE){ parameterTree->recordNodeAgeMove(true); commitZoneBlock(); }
+    else if(lastTreeMove == TM_CROWN) commitZoneBlock();
     if(lastMoveKind == MK_AZGIBBS){
         unresolvedFossils->updateForAcceptance();
         azAcc++;
@@ -1158,6 +1159,7 @@ void FBDTreeModel::updateForAcceptance(void){
 void FBDTreeModel::updateForRejection(void){
     if(lastTreeMove != TM_NONE) tmAtt[lastTreeMove]++;
     if(lastTreeMove == TM_NODEAGE){ parameterTree->recordNodeAgeMove(false); restoreZoneBlock(); }
+    if(lastTreeMove == TM_CROWN) restoreZoneBlock();
     if(lastMoveKind == MK_AZGIBBS){
         unresolvedFossils->updateForRejection();
         rebuildStalkIndex();
