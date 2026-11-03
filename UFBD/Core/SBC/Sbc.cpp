@@ -378,6 +378,7 @@ void Sbc::runInference(void){
                                                         r.backboneNodeAges, yTrue, zTrue, saTrue, zoneNode, truthLnPrior);
             models.push_back(model);
             chains.push_back(new Mcmc(ng, thin, model));
+            chains.back()->setWriteCheckpoints(false);
         }
         std::map<std::string, double> truthVal;
         std::vector<std::string> truthNames = models[0]->getParameterNames();

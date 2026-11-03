@@ -2974,14 +2974,15 @@ double FBDTreeModel::doSARJMCMC(void){
 
 double FBDTreeModel::doUpDownScale(void){
     lastMoveKind = MK_UPDOWN;
-    double ar = 0.0;
-    for(bool b : upDownRecent)
-        if(b)
-            ar++;
-    if(upDownRecent.empty() == false)
-        ar /= upDownRecent.size();
-    if(upDownTotal > 0 && upDownTotal % 100 == 0)
+    if(upDownTotal > 0 && upDownTotal % 100 == 0){
+        double ar = 0.0;
+        for(bool b : upDownRecent)
+            if(b)
+                ar++;
+        if(upDownRecent.empty() == false)
+            ar /= upDownRecent.size();
         upDownStep *= std::exp((1.0 / std::sqrt((double)(upDownTotal / 100))) * (ar - 0.3));
+    }
 
     double mBact = 0.95;
     double sBact = std::sqrt(1.0 - mBact * mBact);

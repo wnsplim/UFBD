@@ -56,14 +56,13 @@ double ParameterDouble::update(void) {
 double ParameterDouble::updateBactrianScale(){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
 
-    double acceptRej = 0.0;
-    for(bool b : recentAcceptRej)
-        if(b == true)
-            acceptRej++;
-    acceptRej /= recentAcceptRej.size();
-
     int total = numRejections + numAcceptances;
     if(total > 0 && total % 100 == 0){
+        double acceptRej = 0.0;
+        for(bool b : recentAcceptRej)
+            if(b == true)
+                acceptRej++;
+        acceptRej /= recentAcceptRej.size();
         double gain = 1.0 / std::sqrt((double)(total / 100));
         windowSize *= std::exp(gain * (acceptRej - targetAr));
     }

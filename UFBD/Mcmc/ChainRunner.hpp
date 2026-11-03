@@ -25,6 +25,7 @@ class ChainRunner {
         virtual void                            advance(unsigned long nGens) = 0;
         virtual void                            finalize(void) = 0;
         void                                    setOutputPaths(const std::string& po, const std::string& to) { paramOut = po; treeOut = to; }
+        void                                    setWriteCheckpoints(bool w) { writeCheckpoints = w; }
         const std::vector<std::vector<double>>& traceColumns(void) { return traceCols; }
         const std::vector<std::string>&         traceNames(void) { return traceNms; }
         const std::vector<bool>&                fixedTraceMask(void) { return fixedMask; }
@@ -58,6 +59,7 @@ class ChainRunner {
         std::string                             latentOut;
         bool                                    writeTrees;
         bool                                    writeLatent = false;
+        bool                                    writeCheckpoints = true;
         unsigned long                           gen;
         std::vector<std::vector<double>>        traceCols;
         std::vector<std::string>                traceNms;

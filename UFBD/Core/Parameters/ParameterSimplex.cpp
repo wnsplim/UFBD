@@ -28,14 +28,14 @@ double ParameterSimplex::update(void){
     int k = (int)value[1].size();
     value[0] = value[1];
 
-    double acceptRej = 0.0;
-    for(bool b : recentAcceptRej)
-        if(b)
-            acceptRej++;
-    if(recentAcceptRej.empty() == false)
-        acceptRej /= recentAcceptRej.size();
     int total = numAcceptances + numRejections;
     if(total > 0 && total % 100 == 0){
+        double acceptRej = 0.0;
+        for(bool b : recentAcceptRej)
+            if(b)
+                acceptRej++;
+        if(recentAcceptRej.empty() == false)
+            acceptRej /= recentAcceptRej.size();
         double gain = 1.0 / std::sqrt((double)(total / 100));
         tuning *= std::exp(gain * (acceptRej - 0.3));
     }

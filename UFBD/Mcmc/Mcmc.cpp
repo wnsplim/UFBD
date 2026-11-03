@@ -268,7 +268,10 @@ void Mcmc::sample(unsigned long n, double lnL, double lnP) {
     for(size_t j = 0; j < traceCols.size() && j < tv.size(); j++)
         traceCols[j].push_back(tv[j]);
 
-    writeCheckpoint();
+    if(writeCheckpoints)
+        writeCheckpoint();
+    model->invalidateLikelihoodCache();
+    model->invalidatePriorCache();
 }
 
 void Mcmc::writeCheckpoint(void) {
@@ -281,8 +284,6 @@ void Mcmc::writeCheckpoint(void) {
     os << curLnL << ' ' << curLnP << '\n';
     model->getRng()->writeState(os);
     model->writeState(os);
-    model->invalidateLikelihoodCache();
-    model->invalidatePriorCache();
     os.flush();
     os.close();
     std::rename(tmp.c_str(), path.c_str());
