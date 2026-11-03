@@ -29,6 +29,10 @@ SBC FLAGS
                           unsampled extant (UE) (default 0; a value > 0 is
                           incompatible with crown conditioning)
   -sbc_out <prefix>       output prefix (required for -sbc_mode emit)
+  -sbc_age_range <width>  give each fossil an age range of this width placed
+                          uniformly at random around its simulated age and
+                          truncated at the present, so fossil ages are sampled
+                          (default 0 = fixed ages)
   -fbd_model <UFBD|RFBD|HEA14>
                           model variant
 
@@ -59,7 +63,7 @@ int main(int argc, const char* argv[]){
     std::string mode, out;
     bool repsSet = false;
     int reps = 0;
-    double ue = 0.0;
+    double ue = 0.0, ageRange = 0.0;
     std::vector<const char*> rest;
     rest.push_back(argv[0]);
     for(int i = 1; i < argc; i++){
@@ -67,6 +71,7 @@ int main(int argc, const char* argv[]){
         if(a == "-sbc_mode" && i + 1 < argc)        mode = argv[++i];
         else if(a == "-sbc_reps" && i + 1 < argc){  reps = std::stoi(argv[++i]); repsSet = true; }
         else if(a == "-sbc_ue" && i + 1 < argc)     ue = std::stod(argv[++i]);
+        else if(a == "-sbc_age_range" && i + 1 < argc) ageRange = std::stod(argv[++i]);
         else if(a == "-sbc_out" && i + 1 < argc)    out = argv[++i];
         else                                        rest.push_back(argv[i]);
     }
@@ -103,6 +108,9 @@ int main(int argc, const char* argv[]){
     cfg.ue = ue;
     if(cfg.originConditioning == false && cfg.ue > 0.0)
         Msg::error("crown conditioning requires -sbc_ue 0.");
+    if(ageRange < 0.0)
+        Msg::error("-sbc_age_range must be >= 0.");
+    cfg.ageRange = ageRange;
     cfg.intervalStart.push_back(0.0);
     for(double t : s.getSkylineTimes())
         cfg.intervalStart.push_back(t);

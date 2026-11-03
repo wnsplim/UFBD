@@ -8,7 +8,10 @@
 #include <string>
 #include <vector>
 
+class Clade;
+class Fossil;
 class RandomVariable;
+class Tree;
 
 struct SbcConfig {
     int                     numReps;
@@ -41,6 +44,7 @@ struct SbcConfig {
     OUHyperSpec             muOU;
     std::vector<OUHyperSpec> psiOU;
     std::string             dumpPrefix;
+    double                  ageRange = 0.0;
 };
 
 class Sbc {
@@ -54,6 +58,7 @@ class Sbc {
         void            runSimulateOnly(void);
         void            runInference(void);
         void            runEmit(void);
+        void            buildInputs(const SimResult& r, Tree* tree, std::vector<Clade>& clades, std::vector<Fossil>& fossils);
         SbcConfig       cfg;
         RandomVariable* rng;
 };

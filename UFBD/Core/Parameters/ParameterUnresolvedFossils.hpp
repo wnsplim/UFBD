@@ -32,6 +32,7 @@ class ParameterUnresolvedFossils : public Parameter {
         void                        initAttachmentZone(int i, int v) { az[0][i] = v; az[1][i] = v; }
         void                        setAttachmentZone(int i, int v) { az[0][i] = v; }
         void                        setAttachAge(int i, double v) { z[0][i] = v; }
+        void                        setFossilAges(const std::vector<double>& v);
         void                        beginAttachmentZoneMove(int i) { lastFossil = i; lastMove = SINGLE; }
         void                        beginZoneBlock(const std::vector<int>& idx);
         void                        commitZoneBlock(void);
@@ -74,6 +75,7 @@ class ParameterUnresolvedFossils : public Parameter {
         double                      updateFossilAge(int i, RandomVariable& rng, MoveKind& mk);
         double                      updateAttachAge(int i, RandomVariable& rng);
         double                      updateSampledAncestor(int i, RandomVariable& rng);
+        void                        electSpine(void);
         Tree*                       backbone;
         ParameterDouble*            originAge;
         int                         numFossils;

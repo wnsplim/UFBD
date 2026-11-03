@@ -166,6 +166,30 @@ SimParams Sbc::drawParams(void){
     return p;
 }
 
+void Sbc::buildInputs(const SimResult& r, Tree* tree, std::vector<Clade>& clades, std::vector<Fossil>& fossils){
+    std::vector<std::string> taxa;
+    for(int i = 1; i <= r.numBackbone; i++)
+        taxa.push_back("T" + std::to_string(i));
+    Node* crown = tree->getCrown();
+    if(r.numBackbone > 0){
+        tree->validateBackbone();
+        crown = tree->getMRCA(taxa);
+    }
+    clades.push_back(Clade("whole", taxa, crown, crown->getAncestor()));
+    Assignment asg = cfg.originConditioning ? Assignment::TOTAL : Assignment::CROWN;
+    for(size_t i = 0; i < r.fossilAges.size(); i++){
+        std::string ty = (cfg.numPsiTypes > 1) ? cfg.psiTypeNames[r.fossilTypes[i]] : "";
+        double lo = r.fossilAges[i], hi = r.fossilAges[i];
+        if(cfg.ageRange > 0.0){
+            hi = r.fossilAges[i] + rng->uniformRv() * cfg.ageRange;
+            lo = std::max(0.0, hi - cfg.ageRange);
+        }
+        fossils.push_back(Fossil("F" + std::to_string(i + 1), lo, hi, "whole", asg, ty));
+    }
+    for(int i = 0; i < r.numUE; i++)
+        fossils.push_back(Fossil("U" + std::to_string(i + 1), 0.0, 0.0, "whole", asg));
+}
+
 void Sbc::run(void){
     if(cfg.emitFiles)
         runEmit();
@@ -187,6 +211,11 @@ void Sbc::runEmit(void){
         tf << r.backboneNewick << "\n";
         tf.close();
 
+        Tree tree(r.backboneNewick);
+        std::vector<Clade> clades;
+        std::vector<Fossil> fossils;
+        buildInputs(r, &tree, clades, fossils);
+
         std::ofstream cf(base + ".clades");
         cf << "whole\t";
         for(int i = 1; i <= r.numBackbone; i++)
@@ -195,13 +224,11 @@ void Sbc::runEmit(void){
         cf.close();
 
         std::ofstream ff(base + ".fossils");
-        for(size_t i = 0; i < r.fossilAges.size(); i++){
-            ff << "F" << (i + 1) << '\t' << r.fossilAges[i] << '\t' << r.fossilAges[i] << "\twhole\t" << asg;
-            if(cfg.numPsiTypes > 1) ff << '\t' << cfg.psiTypeNames[r.fossilTypes[i]];
+        for(Fossil& f : fossils){
+            ff << f.getTaxon() << '\t' << f.getMinAge() << '\t' << f.getMaxAge() << "\twhole\t" << asg;
+            if(f.getType().empty() == false) ff << '\t' << f.getType();
             ff << '\n';
         }
-        for(int i = 0; i < r.numUE; i++)
-            ff << "U" << (i + 1) << "\t0\t0\twhole\t" << asg << '\n';
         ff.close();
 
         std::ofstream xf(base + ".truth");
@@ -277,29 +304,14 @@ void Sbc::runInference(void){
         std::string repBase = cfg.dumpPrefix + "_rep" + std::to_string(rep);
 
         Tree* tree = new Tree(r.backboneNewick);
-        std::vector<std::string> taxa;
-        for(int i = 1; i <= r.numBackbone; i++)
-            taxa.push_back("T" + std::to_string(i));
-        Node* crown;
-        if(r.numBackbone > 0){
-            tree->validateBackbone();
-            crown = tree->getMRCA(taxa);
-        }else{
-            crown = tree->getCrown();
-        }
         std::vector<Clade> clades;
-        clades.push_back(Clade("whole", taxa, crown, crown->getAncestor()));
-        Assignment asg = cfg.originConditioning ? Assignment::TOTAL : Assignment::CROWN;
         std::vector<Fossil> fossils;
-        for(size_t i = 0; i < r.fossilAges.size(); i++){
-            std::string ty = (cfg.numPsiTypes > 1) ? cfg.psiTypeNames[r.fossilTypes[i]] : "";
-            fossils.push_back(Fossil("F" + std::to_string(i + 1), r.fossilAges[i], r.fossilAges[i], "whole", asg, ty));
-        }
-        for(int i = 0; i < r.numUE; i++)
-            fossils.push_back(Fossil("U" + std::to_string(i + 1), 0.0, 0.0, "whole", asg));
+        buildInputs(r, tree, clades, fossils);
         if(r.numBackbone > 0)
             initAges(tree, fossils, cfg.originConditioning, cfg.startAgePrior);
 
+        std::vector<double> yTrue = r.fossilAges;
+        yTrue.resize(fossils.size(), 0.0);
         std::vector<double> zTrue;
         std::vector<char> saTrue;
         for(size_t i = 0; i < r.fossilAttachAge.size(); i++){
@@ -320,7 +332,7 @@ void Sbc::runInference(void){
             FBDTreeModel* model = new FBDTreeModel(tree, clades, fossils, modelSeed);
             truthLnL = model->evaluateAtGeneratingState(truth.lambda, truth.mu, truth.psi,
                                                         truth.lambdaOU, truth.muOU, truth.psiOU, truth.startAge,
-                                                        r.backboneNodeAges, zTrue, saTrue, truthLnPrior);
+                                                        r.backboneNodeAges, yTrue, zTrue, saTrue, truthLnPrior);
             models.push_back(model);
             chains.push_back(new Mcmc(ng, thin, model));
         }

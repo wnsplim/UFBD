@@ -73,13 +73,22 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
         z[0][i] = zi;
         z[1][i] = zi;
     }
+    electSpine();
+}
 
+void ParameterUnresolvedFossils::electSpine(void){
     if(backbone->getNumBackbone() == 0 && numFossils > 0 && originAge != nullptr){
         spineIdx = 0;
         for(int i = 1; i < numFossils; i++)
             if(y[0][i] < y[0][spineIdx])
                 spineIdx = i;
     }
+}
+
+void ParameterUnresolvedFossils::setFossilAges(const std::vector<double>& v){
+    y[0] = v;
+    y[1] = v;
+    electSpine();
 }
 
 void ParameterUnresolvedFossils::setAttachmentZoneDomain(std::vector<std::vector<int> >& domain){

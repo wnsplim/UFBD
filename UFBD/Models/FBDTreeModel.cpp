@@ -613,8 +613,9 @@ double FBDTreeModel::evaluateAtGeneratingState(const std::vector<double>& lam, c
                                                const std::vector<std::vector<double>>& psiV,
                                                const std::vector<double>& lamOU, const std::vector<double>& muOU,
                                                const std::vector<std::vector<double>>& psiOU, double x0,
-                                               const std::vector<double>& nodeAges, const std::vector<double>& z,
-                                               const std::vector<char>& sa, double& lnPriorOut){
+                                               const std::vector<double>& nodeAges, const std::vector<double>& y,
+                                               const std::vector<double>& z, const std::vector<char>& sa,
+                                               double& lnPriorOut){
     for(size_t i = 0; i < lambda.size(); i++)
         lambda[i]->setValue(lam[i]);
     for(size_t i = 0; i < mu.size(); i++)
@@ -653,6 +654,7 @@ double FBDTreeModel::evaluateAtGeneratingState(const std::vector<double>& lam, c
     parameterTree->commitTree();
 
     if(unresolvedFossils != nullptr){
+        unresolvedFossils->setFossilAges(y);
         int nf = unresolvedFossils->getNumFossils();
         for(int i = 0; i < nf; i++){
             if(sa[i])
