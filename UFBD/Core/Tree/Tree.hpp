@@ -45,6 +45,8 @@ class Tree {
         Node*                               getRoot(void) { return origin != nullptr ? origin : crown; }
         Node*                               addOriginNode(double x0);
         bool                                getLastUpdateWasScale(void) { return lastUpdateWasScale; }
+        Node*                               getLastAgeNode(void) { return lastAgeNode; }
+        double                              getLastAgeNodeOldAge(void) { return lastAgeNodeOldAge; }
         bool                                isBinary(void);
         void                                validateBackbone(void);
         static bool                         isValidNewick(const std::string& s);
@@ -90,6 +92,8 @@ class Tree {
         Node*                               origin = nullptr;
         int                                 numTaxa;
         bool                                lastUpdateWasScale = false;
+        Node*                               lastAgeNode = nullptr;
+        double                              lastAgeNodeOldAge = 0.0;
         bool                                crownFixed = false;
         bool                                bbCacheValid = false;
         Node*                               bbRootNode = nullptr;

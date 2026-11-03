@@ -927,6 +927,8 @@ double Tree::updateNodeAgeOnNode(Node* n, double nodeAgeStep){
         if(proposed <= maxChildAge) proposed = 2.0 * maxChildAge - proposed;
         if(proposed >= parentAge)   proposed = 2.0 * parentAge - proposed;
     }
+    lastAgeNode = n;
+    lastAgeNodeOldAge = n->getTime();
     n->setTime(proposed);
 
     return 0.0;
@@ -935,6 +937,7 @@ double Tree::updateNodeAgeOnNode(Node* n, double nodeAgeStep){
 double Tree::updateNodeAge(double nodeAgeStep){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
     std::vector<Node*> candidates = getInternalAgeNodes();
+    lastAgeNode = nullptr;
     if(candidates.size() == 0)
         return 0.0;
     Node* n = candidates[(int)(rng.uniformRv() * candidates.size())];
