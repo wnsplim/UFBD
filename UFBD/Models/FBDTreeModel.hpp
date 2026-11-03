@@ -49,7 +49,7 @@ class FBDTreeModel : public PhylogeneticModel {
                                                               const std::vector<std::vector<double>>& psiOU, double x0,
                                                               const std::vector<double>& nodeAges, const std::vector<double>& y,
                                                               const std::vector<double>& z, const std::vector<char>& sa,
-                                                              double& lnPriorOut);
+                                                              const std::vector<int>& zoneNode, double& lnPriorOut);
         std::string                 getRateMap(void);
         bool                        hasOrigin(void) { return originAge != nullptr; }
         double                      getOriginAgeValue(void);

@@ -134,6 +134,28 @@ void assignLabels(SimNode* n, int& next){
         assignLabels(n->right, next);
 }
 
+void collectLabels(SimNode* n, std::vector<int>& out){
+    if(n->left == nullptr && n->right == nullptr){
+        out.push_back(n->label);
+        return;
+    }
+    if(n->left != nullptr && n->left->keep) collectLabels(n->left, out);
+    if(n->right != nullptr && n->right->keep) collectLabels(n->right, out);
+}
+
+SimNode* backboneEdgeBelow(SimNode* f){
+    SimNode* v = f->parent;
+    while(v->keep == false)
+        v = v->parent;
+    while(v->left != nullptr || v->right != nullptr){
+        bool kl = (v->left != nullptr && v->left->keep), kr = (v->right != nullptr && v->right->keep);
+        if(kl && kr)
+            break;
+        v = kl ? v->left : v->right;
+    }
+    return v;
+}
+
 void writeNewick(SimNode* n, std::stringstream& s){
     SimNode* kl = (n->left != nullptr && n->left->keep) ? n->left : nullptr;
     SimNode* kr = (n->right != nullptr && n->right->keep) ? n->right : nullptr;
@@ -327,6 +349,11 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
             s << ";";
             res.backboneNewick = s.str();
             collectBackboneAges(mrca, res.backboneNodeAges);
+            for(SimNode* n : allNodes)
+                if(n->isFossil){
+                    res.fossilEdgeTaxa.push_back(std::vector<int>());
+                    collectLabels(backboneEdgeBelow(n), res.fossilEdgeTaxa.back());
+                }
         }else{
             res.backboneNewick = "";
         }

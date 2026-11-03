@@ -36,6 +36,7 @@ struct SimResult {
     int                 numFossils = 0;
     std::vector<double> fossilAttachAge;
     std::vector<char>   fossilIsSA;
+    std::vector<std::vector<int>> fossilEdgeTaxa;
     std::vector<double> ueAttachAge;
     std::vector<double> backboneNodeAges;
     long                attempts = 0;

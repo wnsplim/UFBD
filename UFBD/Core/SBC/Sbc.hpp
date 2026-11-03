@@ -45,6 +45,7 @@ struct SbcConfig {
     std::vector<OUHyperSpec> psiOU;
     std::string             dumpPrefix;
     double                  ageRange = 0.0;
+    double                  zone = -1.0;
 };
 
 class Sbc {
@@ -58,7 +59,7 @@ class Sbc {
         void            runSimulateOnly(void);
         void            runInference(void);
         void            runEmit(void);
-        void            buildInputs(const SimResult& r, Tree* tree, std::vector<Clade>& clades, std::vector<Fossil>& fossils);
+        void            buildInputs(const SimResult& r, Tree* tree, std::vector<Clade>& clades, std::vector<Fossil>& fossils, std::vector<int>& zoneNode);
         SbcConfig       cfg;
         RandomVariable* rng;
 };

@@ -33,6 +33,12 @@ SBC FLAGS
                           uniformly at random around its simulated age and
                           truncated at the present, so fossil ages are sampled
                           (default 0 = fixed ages)
+  -sbc_zone <prob>        nested clade assignments: walking from the crown node
+                          of the backbone toward the fossil's attachment edge,
+                          each node's clade is assigned with probability <prob>;
+                          if the walk reaches the node tipward of that edge, the
+                          edge alone is assigned (requires -conditioning origin
+                          with survival and -sbc_ue 0)
   -fbd_model <UFBD|RFBD|HEA14>
                           model variant
 
@@ -63,7 +69,7 @@ int main(int argc, const char* argv[]){
     std::string mode, out;
     bool repsSet = false;
     int reps = 0;
-    double ue = 0.0, ageRange = 0.0;
+    double ue = 0.0, ageRange = 0.0, zone = -1.0;
     std::vector<const char*> rest;
     rest.push_back(argv[0]);
     for(int i = 1; i < argc; i++){
@@ -72,6 +78,7 @@ int main(int argc, const char* argv[]){
         else if(a == "-sbc_reps" && i + 1 < argc){  reps = std::stoi(argv[++i]); repsSet = true; }
         else if(a == "-sbc_ue" && i + 1 < argc)     ue = std::stod(argv[++i]);
         else if(a == "-sbc_age_range" && i + 1 < argc) ageRange = std::stod(argv[++i]);
+        else if(a == "-sbc_zone" && i + 1 < argc)   zone = std::stod(argv[++i]);
         else if(a == "-sbc_out" && i + 1 < argc)    out = argv[++i];
         else                                        rest.push_back(argv[i]);
     }
@@ -111,6 +118,11 @@ int main(int argc, const char* argv[]){
     if(ageRange < 0.0)
         Msg::error("-sbc_age_range must be >= 0.");
     cfg.ageRange = ageRange;
+    if(zone != -1.0 && (zone < 0.0 || zone > 1.0))
+        Msg::error("-sbc_zone must lie in [0, 1].");
+    if(zone >= 0.0 && (cfg.originConditioning == false || cfg.condEvent != ConditioningEvent::SURVIVAL || cfg.ue > 0.0))
+        Msg::error("-sbc_zone requires -conditioning origin with survival and -sbc_ue 0.");
+    cfg.zone = zone;
     cfg.intervalStart.push_back(0.0);
     for(double t : s.getSkylineTimes())
         cfg.intervalStart.push_back(t);
