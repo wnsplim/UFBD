@@ -478,7 +478,8 @@ std::vector<std::string> FBDTreeModel::getParameterNames(void){
         names.push_back("nSA");
     if(originAge != nullptr)
         names.push_back("originAge");
-    for(size_t i = 0; i < getAgeLogNodes().size(); i++)
+    size_t numAgeNodes = getAgeLogNodes().size();
+    for(size_t i = 0; i < numAgeNodes; i++)
         names.push_back("x" + std::to_string(i + 1));
     return names;
 }
