@@ -1,5 +1,6 @@
 #include <cmath>
 #include <iostream>
+#include <map>
 
 #include "FBDInput.hpp"
 #include "Msg.hpp"
@@ -41,6 +42,7 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
     azDomain.assign(numFossils, std::vector<int>(1, 0));
     cladeName.resize(numFossils);
 
+    std::map<Clade*, Node*> crownOfClade;
     for(int i = 0; i < numFossils; i++){
         Fossil& f = fossils[i];
         Clade* clade = nullptr;
@@ -49,7 +51,10 @@ ParameterUnresolvedFossils::ParameterUnresolvedFossils(double prob, Phylogenetic
                 clade = &c;
                 break;
             }
-        Node* cr = clade->getTaxa().empty() ? backbone->getCrown() : backbone->getMRCA(clade->getTaxa());
+        std::map<Clade*, Node*>::iterator it = crownOfClade.find(clade);
+        if(it == crownOfClade.end())
+            it = crownOfClade.emplace(clade, clade->getTaxa().empty() ? backbone->getCrown() : backbone->getMRCA(clade->getTaxa())).first;
+        Node* cr = it->second;
         crownNode[i]  = cr;
         originNode[i] = cr->getAncestor();
         isCrown[i]    = (f.getAssignment() == Assignment::CROWN);

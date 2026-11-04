@@ -741,15 +741,23 @@ void FBDTreeModel::print(void){
     os.precision(pr);
 }
 
+static int numFree(const std::vector<ParameterDouble*>& v){
+    int k = 0;
+    for(ParameterDouble* p : v)
+        if(p->getProposalProbability() > 0.0)
+            k++;
+    return k;
+}
+
 void FBDTreeModel::pickRateTarget(std::vector<ParameterDouble*>*& outVec, ParameterOUField*& outFld){
     outVec = nullptr;
     outFld = nullptr;
     std::vector<std::vector<ParameterDouble*>*> vcands;
     std::vector<ParameterOUField*> fcands;
-    if(lambdaField == nullptr && lambda.size() >= 2) vcands.push_back(&lambda);
-    if(muField == nullptr && mu.size() >= 2) vcands.push_back(&mu);
+    if(lambdaField == nullptr && numFree(lambda) >= 2) vcands.push_back(&lambda);
+    if(muField == nullptr && numFree(mu) >= 2) vcands.push_back(&mu);
     for(int tp = 0; tp < numPsiTypes; tp++){
-        if(psiField[tp] == nullptr && psi[tp].size() >= 2) vcands.push_back(&psi[tp]);
+        if(psiField[tp] == nullptr && numFree(psi[tp]) >= 2) vcands.push_back(&psi[tp]);
     }
     int n = (int)(vcands.size() + fcands.size());
     if(n == 0) return;
@@ -770,9 +778,13 @@ double FBDTreeModel::doRateVectorScale(void){
     if(lastRateField != nullptr){
         h = lastRateField->scaleAllProposed(c);
     }else{
+        int nFree = 0;
         for(ParameterDouble* p : *lastRateVec)
-            p->scaleProposed(c);
-        h = (double)lastRateVec->size() * std::log(c);
+            if(p->getProposalProbability() > 0.0){
+                p->scaleProposed(c);
+                nFree++;
+            }
+        h = (double)nFree * std::log(c);
     }
     rvAttW++;
     rvAtt++;
@@ -794,9 +806,10 @@ double FBDTreeModel::doRateShrinkExpand(void){
     int n = 0;
     double logMean = 0.0;
     if(lastRateField == nullptr){
-        n = (int)lastRateVec->size();
+        n = numFree(*lastRateVec);
         for(ParameterDouble* p : *lastRateVec)
-            logMean += std::log(p->getValue());
+            if(p->getProposalProbability() > 0.0)
+                logMean += std::log(p->getValue());
         logMean /= (double)n;
     }
     double mB = 0.95;
@@ -808,6 +821,8 @@ double FBDTreeModel::doRateShrinkExpand(void){
         h = lastRateField->shrinkExpandProposed(a);
     }else{
         for(ParameterDouble* p : *lastRateVec){
+            if(p->getProposalProbability() == 0.0)
+                continue;
             double cur = p->getValue();
             double target = std::exp(logMean + a * (std::log(cur) - logMean));
             p->scaleProposed(target / cur);
@@ -982,10 +997,10 @@ double FBDTreeModel::update(void){
         updateGammaCache();
 
     lastMoveKind = MK_PARAM;
-    bool haveIid = (lambdaField == nullptr && lambda.size() >= 2)
-                || (muField == nullptr && mu.size() >= 2);
+    bool haveIid = (lambdaField == nullptr && numFree(lambda) >= 2)
+                || (muField == nullptr && numFree(mu) >= 2);
     for(int tp = 0; tp < numPsiTypes && !haveIid; tp++)
-        if(psiField[tp] == nullptr && psi[tp].size() >= 2) haveIid = true;
+        if(psiField[tp] == nullptr && numFree(psi[tp]) >= 2) haveIid = true;
     bool haveLMField = (lambdaField != nullptr || muField != nullptr);
     lastTreeMove = TM_NONE;
     if(haveIid && rng.uniformRv() < 0.20){
