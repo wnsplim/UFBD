@@ -148,14 +148,15 @@ std::vector<double> ecdfGrid(long n){
 void printRankSummary(const std::vector<std::string>& names, std::map<std::string, std::vector<double>>& ranks,
                       const SbcConfig& cfg, RandomVariable* rng,
                       std::map<std::string, long>* cov50, std::map<std::string, long>* cov90){
-    struct Row { std::string nm; long n; double lg, lg5, lgBH, lgBY, lgp, p; };
+    struct Row { std::string nm; long n; double lg, lg5, lgBonf, lgBH, lgBY, lgp, p; };
     std::vector<Row> rows;
     for(const std::string& nm : names)
         if((long)ranks[nm].size() >= 2)
-            rows.push_back({ nm, (long)ranks[nm].size(), 0.0, 0.0, 0.0, 0.0, 0.0, 1.0 });
+            rows.push_back({ nm, (long)ranks[nm].size(), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0 });
     long m = (long)rows.size();
     double harmonic = 0.0;
     for(long j = 1; j <= m; j++) harmonic += 1.0 / (double)j;
+    double levelBonf = cfg.fdrQ / (double)m;
     double levelBH = cfg.fdrQ / (double)m, levelBY = cfg.fdrQ / ((double)m * harmonic);
     double smallest = (cfg.level > 0.0) ? std::min(levelBY, cfg.level) : levelBY;
     int nNull = (cfg.numNull > 0) ? cfg.numNull : std::max(4000, (int)std::ceil(20.0 / smallest));
@@ -168,6 +169,7 @@ void printRankSummary(const std::vector<std::string>& names, std::map<std::strin
         r.lg = ecdfLnGamma(ranks[r.nm], z);
         long k = (long)(std::upper_bound(nul.begin(), nul.end(), r.lg) - nul.begin());
         r.lg5 = lnQuantile(nul, 0.05);
+        r.lgBonf = lnQuantile(nul, levelBonf);
         r.lgBH = lnQuantile(nul, levelBH);
         r.lgBY = lnQuantile(nul, levelBY);
         if(cfg.level > 0.0)
@@ -187,17 +189,17 @@ void printRankSummary(const std::vector<std::string>& names, std::map<std::strin
         pBH[order[i]] = runBH;
         pBY[order[i]] = runBY;
     }
-    printf("  q = %g, m = %ld: BH p = %.4g, BY p = %.4g", cfg.fdrQ, m, levelBH, levelBY);
+    printf("  q = %g, m = %ld: Bonf p = %.4g, BH p = %.4g, BY p = %.4g", cfg.fdrQ, m, levelBonf, levelBH, levelBY);
     if(cfg.level > 0.0) printf(", fixed p = %.4g", cfg.level);
     printf("; %d null rank sets\n", nNull);
-    printf("  %-14s %6s %14s %14s %14s", "quantity", "n", "log(g/g_5)", "log(g/g_BH)", "log(g/g_BY)");
+    printf("  %-14s %6s %14s %14s %14s %14s", "quantity", "n", "log(g/g_5)", "log(g/g_Bonf)", "log(g/g_BH)", "log(g/g_BY)");
     if(cfg.level > 0.0) printf(" %14s", "log(g/g_p)");
     printf(" %9s %9s %9s %9s", "p", "p_Bonf", "p_BH", "p_BY");
     if(cov50 != nullptr) printf(" %7s %7s", "cov50", "cov90");
     printf("\n");
     for(long i = 0; i < m; i++){
         const Row& r = rows[i];
-        printf("  %-14s %6ld %14.3f %14.3f %14.3f", r.nm.c_str(), r.n, r.lg - r.lg5, r.lg - r.lgBH, r.lg - r.lgBY);
+        printf("  %-14s %6ld %14.3f %14.3f %14.3f %14.3f", r.nm.c_str(), r.n, r.lg - r.lg5, r.lg - r.lgBonf, r.lg - r.lgBH, r.lg - r.lgBY);
         if(cfg.level > 0.0) printf(" %14.3f", r.lg - r.lgp);
         printf(" %9.4g %9.4g %9.4g %9.4g", r.p, pBonf[i], pBH[i], pBY[i]);
         if(cov50 != nullptr && cov50->count(r.nm) > 0)
