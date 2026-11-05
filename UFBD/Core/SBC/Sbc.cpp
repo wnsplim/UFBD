@@ -91,7 +91,7 @@ void initAges(Tree* tree, std::vector<Fossil>& fossils, bool origin, const Proba
 double binomTail(long n, double p, long k, bool upper){
     if(upper)
         return (k <= 0) ? 1.0 : Probability::Helper::incompleteBeta((double)k, (double)(n - k + 1), p);
-    return (k >= n) ? 1.0 : 1.0 - Probability::Helper::incompleteBeta((double)(k + 1), (double)(n - k), p);
+    return (k >= n) ? 1.0 : Probability::Helper::incompleteBeta((double)(n - k), (double)(k + 1), 1.0 - p);
 }
 
 double ecdfGamma(std::vector<double> u, const std::vector<double>& z){
