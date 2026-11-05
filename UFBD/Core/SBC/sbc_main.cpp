@@ -8,6 +8,7 @@
 
 #include <cstdio>
 #include <random>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -15,7 +16,7 @@ static void printSbcHelp(){
     printf("%s", R"SBC(USAGE
 
   sbc -sbc_mode <emit|simulate|infer> -sbc_reps <N> [flags]
-  sbc -sbc_mode summarize -sbc_ranks <file> [-sbc_noderanks <file>] [flags]
+  sbc -sbc_mode summarize -sbc_ranks <file,...> [-sbc_noderanks <file,...>] [flags]
 
 MODES
   emit       write N simulated datasets to disk
@@ -27,11 +28,17 @@ SBC FLAGS
   -sbc_mode <emit|simulate|infer|summarize>
                           engine mode
   -sbc_reps <N>           number of replicate datasets
-  -sbc_level <p>          gamma_p is the p quantile of gamma under uniform
-                          ranks (default 0.05)
-  -sbc_null <N>           null rank sets for gamma_p and p-values (default 4000)
-  -sbc_ranks <file>       ranks file to summarize (format of <prefix>_ranks.tsv)
-  -sbc_noderanks <file>   node ranks file to summarize (format of
+  -sbc_q <q>              FDR level (default 0.05); gamma_BH and gamma_BY are the
+                          quantiles of gamma under uniform ranks at the first
+                          rejection thresholds q/m and q/(m*H_m) over the m
+                          quantities in the summary; p_BH and p_BY adjust p
+  -sbc_level <p>          also report gamma_p, the p quantile, at a fixed p
+  -sbc_null <N>           null rank sets (default max(4000, 20/smallest p))
+  -sbc_ranks <file,...>   ranks files to summarize as one family (format of
+                          <prefix>_ranks.tsv); with several files, quantities
+                          are labeled by the last two directories of each file
+  -sbc_noderanks <file,...>
+                          matching node ranks files (format of
                           <prefix>_noderanks.tsv, optional leading chunk column)
   -sbc_ue <prob>          probability that each extant taxon is designated an
                           unsampled extant (UE) (default 0; a value > 0 is
@@ -74,10 +81,10 @@ int main(int argc, const char* argv[]){
     }
     printf("%s\n", invocation.c_str());
 
-    std::string mode, out, ranksPath, nodeRanksPath;
+    std::string mode, out, ranksList, nodeRanksList;
     bool repsSet = false;
-    int reps = 0, numNull = 4000;
-    double ue = 0.0, ageRange = 0.0, zone = -1.0, level = 0.05;
+    int reps = 0, numNull = 0;
+    double ue = 0.0, ageRange = 0.0, zone = -1.0, level = -1.0, fdrQ = 0.05;
     std::vector<const char*> rest;
     rest.push_back(argv[0]);
     for(int i = 1; i < argc; i++){
@@ -89,21 +96,33 @@ int main(int argc, const char* argv[]){
         else if(a == "-sbc_zone" && i + 1 < argc)   zone = std::stod(argv[++i]);
         else if(a == "-sbc_out" && i + 1 < argc)    out = argv[++i];
         else if(a == "-sbc_level" && i + 1 < argc)  level = std::stod(argv[++i]);
+        else if(a == "-sbc_q" && i + 1 < argc)      fdrQ = std::stod(argv[++i]);
         else if(a == "-sbc_null" && i + 1 < argc)   numNull = std::stoi(argv[++i]);
-        else if(a == "-sbc_ranks" && i + 1 < argc)  ranksPath = argv[++i];
-        else if(a == "-sbc_noderanks" && i + 1 < argc) nodeRanksPath = argv[++i];
+        else if(a == "-sbc_ranks" && i + 1 < argc)  ranksList = argv[++i];
+        else if(a == "-sbc_noderanks" && i + 1 < argc) nodeRanksList = argv[++i];
         else                                        rest.push_back(argv[i]);
     }
 
     if(mode != "simulate" && mode != "infer" && mode != "emit" && mode != "summarize")
         Msg::error("-sbc_mode must be supplied as 'simulate', 'infer', 'emit', or 'summarize'.");
-    if(level <= 0.0 || level >= 1.0)
+    if(level != -1.0 && (level <= 0.0 || level >= 1.0))
         Msg::error("-sbc_level must lie in (0, 1).");
-    if(numNull < 1)
-        Msg::error("-sbc_null must be >= 1.");
+    if(fdrQ <= 0.0 || fdrQ >= 1.0)
+        Msg::error("-sbc_q must lie in (0, 1).");
+    if(numNull < 0)
+        Msg::error("-sbc_null must be >= 0 (0 = automatic).");
+    auto splitList = [](const std::string& s){
+        std::vector<std::string> v;
+        std::stringstream ss(s);
+        std::string tok;
+        while(std::getline(ss, tok, ','))
+            if(tok.empty() == false)
+                v.push_back(tok);
+        return v;
+    };
 
     if(mode == "summarize"){
-        if(ranksPath.empty())
+        if(ranksList.empty())
             Msg::error("-sbc_ranks is required for -sbc_mode summarize.");
         unsigned int seed = 1;
         for(size_t i = 1; i + 1 < rest.size(); i++)
@@ -111,9 +130,12 @@ int main(int argc, const char* argv[]){
                 seed = (unsigned int)std::stoul(rest[i + 1]);
         SbcConfig cfg;
         cfg.summarize = true;
-        cfg.ranksPath = ranksPath;
-        cfg.nodeRanksPath = nodeRanksPath;
+        cfg.ranksPaths = splitList(ranksList);
+        cfg.nodeRanksPaths = splitList(nodeRanksList);
+        if(cfg.nodeRanksPaths.empty() == false && cfg.nodeRanksPaths.size() != cfg.ranksPaths.size())
+            Msg::error("-sbc_noderanks must list one file per -sbc_ranks file.");
         cfg.level = level;
+        cfg.fdrQ = fdrQ;
         cfg.numNull = numNull;
         RandomVariable rng(seed);
         RandomVariable::setActiveInstance(&rng);
@@ -192,6 +214,7 @@ int main(int argc, const char* argv[]){
     cfg.startAgePrior = { true, s.getConditionAgePrior(), s.getConditionAgePriorP1(), s.getConditionAgePriorP2() };
     cfg.dumpPrefix = out;
     cfg.level = level;
+    cfg.fdrQ = fdrQ;
     cfg.numNull = numNull;
 
     unsigned int seed = s.getSeed();

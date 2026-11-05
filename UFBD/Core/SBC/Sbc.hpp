@@ -47,10 +47,11 @@ struct SbcConfig {
     double                  ageRange = 0.0;
     double                  zone = -1.0;
     bool                    summarize = false;
-    std::string             ranksPath;
-    std::string             nodeRanksPath;
-    double                  level = 0.05;
-    int                     numNull = 4000;
+    std::vector<std::string> ranksPaths;
+    std::vector<std::string> nodeRanksPaths;
+    double                  level = -1.0;
+    double                  fdrQ = 0.05;
+    int                     numNull = 0;
 };
 
 class Sbc {
