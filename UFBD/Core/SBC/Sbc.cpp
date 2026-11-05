@@ -88,32 +88,32 @@ void initAges(Tree* tree, std::vector<Fossil>& fossils, bool origin, const Proba
         tree->scaleInternalAges(target / cur);
 }
 
-double binomTail(long n, double p, long k, bool upper){
+double lnBinomTail(long n, double p, long k, bool upper){
     if(upper)
-        return (k <= 0) ? 1.0 : Probability::Helper::incompleteBeta((double)k, (double)(n - k + 1), p);
-    return (k >= n) ? 1.0 : Probability::Helper::incompleteBeta((double)(n - k), (double)(k + 1), 1.0 - p);
+        return (k <= 0) ? 0.0 : Probability::Helper::lnIncompleteBeta((double)k, (double)(n - k + 1), p);
+    return (k >= n) ? 0.0 : Probability::Helper::lnIncompleteBeta((double)(n - k), (double)(k + 1), 1.0 - p);
 }
 
-double ecdfGamma(std::vector<double> u, const std::vector<double>& z){
+double ecdfLnGamma(std::vector<double> u, const std::vector<double>& z){
     long n = (long)u.size();
     std::sort(u.begin(), u.end());
-    double g = 1.0;
+    double g = 0.0;
     for(double zj : z){
         long k = (long)(std::upper_bound(u.begin(), u.end(), zj) - u.begin());
-        double lo = binomTail(n, zj, k, false);
-        double hi = binomTail(n, zj, k, true);
-        double t = 2.0 * std::min(lo, hi);
+        double lo = lnBinomTail(n, zj, k, false);
+        double hi = lnBinomTail(n, zj, k, true);
+        double t = std::log(2.0) + std::min(lo, hi);
         if(t < g) g = t;
     }
     return g;
 }
 
-std::vector<double> nullGammas(long n, const std::vector<double>& z, int nNull, RandomVariable* rng){
+std::vector<double> nullLnGammas(long n, const std::vector<double>& z, int nNull, RandomVariable* rng){
     std::vector<double> g(nNull);
     std::vector<double> u((size_t)n);
     for(int b = 0; b < nNull; b++){
         for(long i = 0; i < n; i++) u[i] = rng->uniformRv();
-        g[b] = ecdfGamma(u, z);
+        g[b] = ecdfLnGamma(u, z);
     }
     std::sort(g.begin(), g.end());
     return g;
@@ -128,6 +128,15 @@ double quantile(const std::vector<double>& s, double q){
     return s[lo];
 }
 
+double lnQuantile(const std::vector<double>& s, double q){
+    double idx = q * (s.size() - 1);
+    size_t lo = (size_t)idx;
+    double frac = idx - lo;
+    if(lo + 1 < s.size())
+        return std::log(std::exp(s[lo]) * (1.0 - frac) + std::exp(s[lo + 1]) * frac);
+    return s[lo];
+}
+
 std::vector<double> ecdfGrid(long n){
     int nGrid = (int)std::min(n, (long)200);
     std::vector<double> z;
@@ -139,11 +148,11 @@ std::vector<double> ecdfGrid(long n){
 void printRankSummary(const std::vector<std::string>& names, std::map<std::string, std::vector<double>>& ranks,
                       const SbcConfig& cfg, RandomVariable* rng,
                       std::map<std::string, long>* cov50, std::map<std::string, long>* cov90){
-    struct Row { std::string nm; long n; double g, gBH, gBY, gp, p; };
+    struct Row { std::string nm; long n; double lg, lg5, lgBH, lgBY, lgp, p; };
     std::vector<Row> rows;
     for(const std::string& nm : names)
         if((long)ranks[nm].size() >= 2)
-            rows.push_back({ nm, (long)ranks[nm].size(), 0.0, 0.0, 0.0, 0.0, 1.0 });
+            rows.push_back({ nm, (long)ranks[nm].size(), 0.0, 0.0, 0.0, 0.0, 0.0, 1.0 });
     long m = (long)rows.size();
     double harmonic = 0.0;
     for(long j = 1; j <= m; j++) harmonic += 1.0 / (double)j;
@@ -154,14 +163,15 @@ void printRankSummary(const std::vector<std::string>& names, std::map<std::strin
     for(Row& r : rows){
         std::vector<double> z = ecdfGrid(r.n);
         if(nullByN.count(r.n) == 0)
-            nullByN[r.n] = nullGammas(r.n, z, nNull, rng);
+            nullByN[r.n] = nullLnGammas(r.n, z, nNull, rng);
         const std::vector<double>& nul = nullByN[r.n];
-        r.g = ecdfGamma(ranks[r.nm], z);
-        long k = (long)(std::upper_bound(nul.begin(), nul.end(), r.g) - nul.begin());
-        r.gBH = quantile(nul, levelBH);
-        r.gBY = quantile(nul, levelBY);
+        r.lg = ecdfLnGamma(ranks[r.nm], z);
+        long k = (long)(std::upper_bound(nul.begin(), nul.end(), r.lg) - nul.begin());
+        r.lg5 = lnQuantile(nul, 0.05);
+        r.lgBH = lnQuantile(nul, levelBH);
+        r.lgBY = lnQuantile(nul, levelBY);
         if(cfg.level > 0.0)
-            r.gp = quantile(nul, cfg.level);
+            r.lgp = lnQuantile(nul, cfg.level);
         r.p = (double)(k + 1) / (double)(nNull + 1);
     }
     std::vector<size_t> order(m);
@@ -176,19 +186,18 @@ void printRankSummary(const std::vector<std::string>& names, std::map<std::strin
         pBH[order[i]] = runBH;
         pBY[order[i]] = runBY;
     }
-    auto logRatio = [](double g, double t){ return (g > 0.0 && t > 0.0) ? std::log(g / t) : -std::numeric_limits<double>::infinity(); };
     printf("  q = %g, m = %ld: BH p = %.4g, BY p = %.4g", cfg.fdrQ, m, levelBH, levelBY);
     if(cfg.level > 0.0) printf(", fixed p = %.4g", cfg.level);
     printf("; %d null rank sets\n", nNull);
-    printf("  %-14s %6s %10s %10s %10s %14s %14s", "quantity", "n", "gamma", "gamma_BH", "gamma_BY", "log(g/g_BH)", "log(g/g_BY)");
-    if(cfg.level > 0.0) printf(" %10s %14s", "gamma_p", "log(g/g_p)");
+    printf("  %-14s %6s %14s %14s %14s", "quantity", "n", "log(g/g_5)", "log(g/g_BH)", "log(g/g_BY)");
+    if(cfg.level > 0.0) printf(" %14s", "log(g/g_p)");
     printf(" %9s %9s %9s", "p", "p_BH", "p_BY");
     if(cov50 != nullptr) printf(" %7s %7s", "cov50", "cov90");
     printf("\n");
     for(long i = 0; i < m; i++){
         const Row& r = rows[i];
-        printf("  %-14s %6ld %10.3g %10.3g %10.3g %14.3f %14.3f", r.nm.c_str(), r.n, r.g, r.gBH, r.gBY, logRatio(r.g, r.gBH), logRatio(r.g, r.gBY));
-        if(cfg.level > 0.0) printf(" %10.3g %14.3f", r.gp, logRatio(r.g, r.gp));
+        printf("  %-14s %6ld %14.3f %14.3f %14.3f", r.nm.c_str(), r.n, r.lg - r.lg5, r.lg - r.lgBH, r.lg - r.lgBY);
+        if(cfg.level > 0.0) printf(" %14.3f", r.lg - r.lgp);
         printf(" %9.4g %9.4g %9.4g", r.p, pBH[i], pBY[i]);
         if(cov50 != nullptr && cov50->count(r.nm) > 0)
             printf(" %7.4f %7.4f", (double)(*cov50)[r.nm] / r.n, (double)(*cov90)[r.nm] / r.n);

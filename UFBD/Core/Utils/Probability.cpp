@@ -1664,21 +1664,15 @@ double Probability::Helper::lnGammacor(double x) {
     return 1 / (x * 12);
 }
 
-double Probability::Helper::incompleteBeta(double a, double b, double x) {
-    
+static double incompleteBetaCore(double a, double b, double x, bool lnScale) {
+
     double tol = 1.0E-07;
-    
+
     double value;
     if ( x <= 0.0 )
-    {
-        value = 0.0;
-        return value;
-    }
+        return lnScale ? -std::numeric_limits<double>::infinity() : 0.0;
     else if ( 1.0 <= x )
-    {
-        value = 1.0;
-        return value;
-    }
+        return lnScale ? 0.0 : 1.0;
     
     /* change tail if necessary and determine S */
     double psq = a + b;
@@ -1721,6 +1715,8 @@ double Probability::Helper::incompleteBeta(double a, double b, double x) {
         it++;
         if ( it_max < it )
         {
+            if ( lnScale )
+                Msg::error("lnIncompleteBeta: series did not converge.");
             return -1;
         }
         term = term * temp * rx / ( pp + ( double ) ( i ) );
@@ -1743,11 +1739,21 @@ double Probability::Helper::incompleteBeta(double a, double b, double x) {
         }
     }
     
-    /* finish calculation */
-    value = value * exp(pp * log(xx) + (qq - 1.0) * log(cx) - lnBeta(a, b) - log(pp));
+    double lnFactor = pp * log(xx) + (qq - 1.0) * log(cx) - Probability::Helper::lnBeta(a, b) - log(pp);
+    if ( lnScale )
+        return indx ? log1p(-value * exp(lnFactor)) : log(value) + lnFactor;
+    value = value * exp(lnFactor);
     if ( indx )
         value = 1.0 - value;
     return value;
+}
+
+double Probability::Helper::incompleteBeta(double a, double b, double x) {
+    return incompleteBetaCore(a, b, x, false);
+}
+
+double Probability::Helper::lnIncompleteBeta(double a, double b, double x) {
+    return incompleteBetaCore(a, b, x, true);
 }
 
 /*

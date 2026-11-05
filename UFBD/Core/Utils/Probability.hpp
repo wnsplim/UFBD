@@ -170,6 +170,7 @@ namespace  Probability {
         double  lnGamma(double a);
         double  lnGammacor(double x);
         double  incompleteBeta(double a, double b, double x);
+        double  lnIncompleteBeta(double a, double b, double x);
         double  incompleteGamma(double x, double alpha, double LnGamma_alpha);
         void    normalize(std::vector<double>& vec);
         double  pointNormal(double prob);

@@ -22,7 +22,7 @@ sbc -help
 
 ## Summary
 
-For each quantity, `sbc` prints the ECDF statistic γ (Säilynoja et al., 2022; Modrák et al., 2025), its p-value against uniform ranks, and the Benjamini–Hochberg (`p_BH`; Benjamini & Hochberg, 1995) and Benjamini–Yekutieli (`p_BY`; Benjamini & Yekutieli, 2001) adjusted p-values over all quantities in the summary. A quantity fails at level q when its adjusted p-value is below q. γ_BH and γ_BY are the quantiles of γ under uniform ranks at the first rejection thresholds of the two procedures, printed with log(γ/γ_BH) and log(γ/γ_BY). The quantities are the columns of the ranks files, the origin (`x0`), the crown (`x1`), and one internal node per replicate chosen at random. `-sbc_q <q>` sets q (default 0.05), `-sbc_level <p>` adds γ_p, the `p` quantile, with log(γ/γ_p), and `-sbc_null <N>` sets the number of uniform rank sets.
+For each quantity, `sbc` compares the ECDF statistic γ (Säilynoja et al., 2022; Modrák et al., 2025) with its distribution under uniform ranks and prints log(γ/γ_5), log(γ/γ_BH) and log(γ/γ_BY), the p-value of γ, and the Benjamini–Hochberg (`p_BH`; Benjamini & Hochberg, 1995) and Benjamini–Yekutieli (`p_BY`; Benjamini & Yekutieli, 2001) adjusted p-values over all quantities in the summary. γ_5 is the 5% quantile of γ under uniform ranks, and γ_BH and γ_BY are its quantiles at the first rejection thresholds of the two procedures. A quantity fails at level q when its adjusted p-value is below q. The quantities are the columns of the ranks files, the origin (`x0`), the crown (`x1`), and one internal node per replicate chosen at random. `-sbc_q <q>` sets q (default 0.05), `-sbc_level <p>` adds log(γ/γ_p) for the `p` quantile, and `-sbc_null <N>` sets the number of uniform rank sets.
 
 ## Output
 

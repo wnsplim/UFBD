@@ -32,7 +32,7 @@ SBC FLAGS
                           quantiles of gamma under uniform ranks at the first
                           rejection thresholds q/m and q/(m*H_m) over the m
                           quantities in the summary; p_BH and p_BY adjust p
-  -sbc_level <p>          also report gamma_p, the p quantile, at a fixed p
+  -sbc_level <p>          also report log(gamma/gamma_p), gamma_p the p quantile
   -sbc_null <N>           null rank sets (default max(4000, 20/smallest p))
   -sbc_ranks <file,...>   ranks files to summarize as one family (format of
                           <prefix>_ranks.tsv); with several files, quantities
