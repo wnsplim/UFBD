@@ -177,10 +177,11 @@ void printRankSummary(const std::vector<std::string>& names, std::map<std::strin
     std::vector<size_t> order(m);
     for(long i = 0; i < m; i++) order[i] = (size_t)i;
     std::sort(order.begin(), order.end(), [&](size_t a, size_t b){ return rows[a].p < rows[b].p; });
-    std::vector<double> pBH(m), pBY(m);
+    std::vector<double> pBonf(m), pBH(m), pBY(m);
     double runBH = 1.0, runBY = 1.0;
     for(long i = m - 1; i >= 0; i--){
         double p = rows[order[i]].p;
+        pBonf[order[i]] = std::min(1.0, p * (double)m);
         runBH = std::min(runBH, p * (double)m / (double)(i + 1));
         runBY = std::min(runBY, p * (double)m * harmonic / (double)(i + 1));
         pBH[order[i]] = runBH;
@@ -191,14 +192,14 @@ void printRankSummary(const std::vector<std::string>& names, std::map<std::strin
     printf("; %d null rank sets\n", nNull);
     printf("  %-14s %6s %14s %14s %14s", "quantity", "n", "log(g/g_5)", "log(g/g_BH)", "log(g/g_BY)");
     if(cfg.level > 0.0) printf(" %14s", "log(g/g_p)");
-    printf(" %9s %9s %9s", "p", "p_BH", "p_BY");
+    printf(" %9s %9s %9s %9s", "p", "p_Bonf", "p_BH", "p_BY");
     if(cov50 != nullptr) printf(" %7s %7s", "cov50", "cov90");
     printf("\n");
     for(long i = 0; i < m; i++){
         const Row& r = rows[i];
         printf("  %-14s %6ld %14.3f %14.3f %14.3f", r.nm.c_str(), r.n, r.lg - r.lg5, r.lg - r.lgBH, r.lg - r.lgBY);
         if(cfg.level > 0.0) printf(" %14.3f", r.lg - r.lgp);
-        printf(" %9.4g %9.4g %9.4g", r.p, pBH[i], pBY[i]);
+        printf(" %9.4g %9.4g %9.4g %9.4g", r.p, pBonf[i], pBH[i], pBY[i]);
         if(cov50 != nullptr && cov50->count(r.nm) > 0)
             printf(" %7.4f %7.4f", (double)(*cov50)[r.nm] / r.n, (double)(*cov90)[r.nm] / r.n);
         else if(cov50 != nullptr)
@@ -208,21 +209,20 @@ void printRankSummary(const std::vector<std::string>& names, std::map<std::strin
 }
 
 void addNodeQuantities(const std::vector<std::vector<std::pair<std::string, double>>>& perRep,
-                       std::map<std::string, std::vector<double>>& ranks, std::vector<std::string>& names,
-                       const std::string& prefix){
+                       std::map<std::string, std::vector<double>>& ranks, std::vector<std::string>& names){
     RandomVariable pick(1u);
     RandomVariable* rng = &pick;
     for(const char* nm : { "x0", "x1", "random_node" })
-        names.push_back(prefix + nm);
+        names.push_back(nm);
     for(const std::vector<std::pair<std::string, double>>& rep : perRep){
         std::vector<double> internal;
         for(const std::pair<std::string, double>& nr : rep){
-            if(nr.first == "x0") ranks[prefix + "x0"].push_back(nr.second);
+            if(nr.first == "x0") ranks["x0"].push_back(nr.second);
             else internal.push_back(nr.second);
-            if(nr.first == "x1") ranks[prefix + "x1"].push_back(nr.second);
+            if(nr.first == "x1") ranks["x1"].push_back(nr.second);
         }
         if(internal.empty() == false)
-            ranks[prefix + "random_node"].push_back(internal[(size_t)(rng->uniformRv() * (double)internal.size())]);
+            ranks["random_node"].push_back(internal[(size_t)(rng->uniformRv() * (double)internal.size())]);
     }
 }
 
@@ -338,18 +338,14 @@ void Sbc::run(void){
 }
 
 void Sbc::runSummarize(void){
-    std::map<std::string, std::vector<double>> ranks;
-    std::vector<std::string> names;
-    bool several = cfg.ranksPaths.size() > 1;
     for(size_t f = 0; f < cfg.ranksPaths.size(); f++){
+        std::map<std::string, std::vector<double>> ranks;
+        std::vector<std::string> names;
         const std::string& path = cfg.ranksPaths[f];
-        std::string prefix;
-        if(several){
-            std::string dir = path.substr(0, path.find_last_of('/'));
-            size_t cut = dir.find_last_of('/');
-            cut = (cut == std::string::npos || cut == 0) ? std::string::npos : dir.find_last_of('/', cut - 1);
-            prefix = (cut == std::string::npos ? dir : dir.substr(cut + 1)) + ":";
-        }
+        std::string dir = path.substr(0, path.find_last_of('/'));
+        size_t cut = dir.find_last_of('/');
+        cut = (cut == std::string::npos || cut == 0) ? std::string::npos : dir.find_last_of('/', cut - 1);
+        std::string label = (cut == std::string::npos) ? dir : dir.substr(cut + 1);
         std::ifstream rf(path);
         if(rf.is_open() == false)
             Msg::error("cannot open " + path);
@@ -364,43 +360,44 @@ void Sbc::runSummarize(void){
             const std::string& h = header[c];
             use[c] = h != "bulkESS" && h != "tailESS" && h != "maxRhat" && h != "simAttempts" && h.rfind("t_", 0) != 0;
             if(use[c])
-                names.push_back(prefix + h);
+                names.push_back(h);
         }
         while(std::getline(rf, line)){
             std::stringstream ls(line);
             for(size_t c = 0; c < header.size() && std::getline(ls, cell, '\t'); c++){
                 double v = std::stod(cell);
                 if(use[c] && std::isnan(v) == false)
-                    ranks[prefix + header[c]].push_back(v);
+                    ranks[header[c]].push_back(v);
             }
         }
-        if(f >= cfg.nodeRanksPaths.size())
-            continue;
-        std::ifstream nf(cfg.nodeRanksPaths[f]);
-        if(nf.is_open() == false)
-            Msg::error("cannot open " + cfg.nodeRanksPaths[f]);
-        std::getline(nf, line);
-        bool chunked = line.rfind("chunk", 0) == 0;
-        std::vector<std::vector<std::pair<std::string, double>>> perRep;
-        std::string lastKey;
-        while(std::getline(nf, line)){
-            std::stringstream ls(line);
-            std::string chunk, rep, node, rank;
-            if(chunked)
-                std::getline(ls, chunk, '\t');
-            std::getline(ls, rep, '\t');
-            std::getline(ls, node, '\t');
-            std::getline(ls, rank, '\t');
-            std::string key = chunk + ":" + rep;
-            if(perRep.empty() || key != lastKey)
-                perRep.push_back({});
-            lastKey = key;
-            perRep.back().push_back({ node, std::stod(rank) });
+        if(f < cfg.nodeRanksPaths.size()){
+            std::ifstream nf(cfg.nodeRanksPaths[f]);
+            if(nf.is_open() == false)
+                Msg::error("cannot open " + cfg.nodeRanksPaths[f]);
+            std::getline(nf, line);
+            bool chunked = line.rfind("chunk", 0) == 0;
+            std::vector<std::vector<std::pair<std::string, double>>> perRep;
+            std::string lastKey;
+            while(std::getline(nf, line)){
+                std::stringstream ls(line);
+                std::string chunk, rep, node, rank;
+                if(chunked)
+                    std::getline(ls, chunk, '\t');
+                std::getline(ls, rep, '\t');
+                std::getline(ls, node, '\t');
+                std::getline(ls, rank, '\t');
+                std::string key = chunk + ":" + rep;
+                if(perRep.empty() || key != lastKey)
+                    perRep.push_back({});
+                lastKey = key;
+                perRep.back().push_back({ node, std::stod(rank) });
+            }
+            addNodeQuantities(perRep, ranks, names);
         }
-        addNodeQuantities(perRep, ranks, names, prefix);
+        printf("%s\n", label.c_str());
+        RandomVariable fileRng(cfg.seed);
+        printRankSummary(names, ranks, cfg, &fileRng, nullptr, nullptr);
     }
-    printf("SBC summary of %zu ranks file(s)\n", cfg.ranksPaths.size());
-    printRankSummary(names, ranks, cfg, rng, nullptr, nullptr);
 }
 
 void Sbc::runEmit(void){
@@ -646,7 +643,7 @@ void Sbc::runInference(void){
         printf("  WARNING: %d of %d reps did not reach the R-hat/ESS thresholds.\n",
                nUnconverged, cfg.numReps);
     std::vector<std::string> names = outCols;
-    addNodeQuantities(nodeRanksPerRep, ranks, names, "");
+    addNodeQuantities(nodeRanksPerRep, ranks, names);
     printRankSummary(names, ranks, cfg, rng, &cov50, &cov90);
 
     if(cfg.dumpPrefix.empty() == false && liveHeader)

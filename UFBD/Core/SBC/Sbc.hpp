@@ -52,6 +52,7 @@ struct SbcConfig {
     double                  level = -1.0;
     double                  fdrQ = 0.05;
     int                     numNull = 0;
+    unsigned int            seed = 1;
 };
 
 class Sbc {

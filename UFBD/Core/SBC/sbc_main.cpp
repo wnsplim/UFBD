@@ -31,12 +31,13 @@ SBC FLAGS
   -sbc_q <q>              FDR level (default 0.05); gamma_BH and gamma_BY are the
                           quantiles of gamma under uniform ranks at the first
                           rejection thresholds q/m and q/(m*H_m) over the m
-                          quantities in the summary; p_BH and p_BY adjust p
+                          quantities of one ranks file; p_Bonf, p_BH and p_BY
+                          adjust p over the same m
   -sbc_level <p>          also report log(gamma/gamma_p), gamma_p the p quantile
   -sbc_null <N>           null rank sets (default max(4000, 20/smallest p))
-  -sbc_ranks <file,...>   ranks files to summarize as one family (format of
-                          <prefix>_ranks.tsv); with several files, quantities
-                          are labeled by the last two directories of each file
+  -sbc_ranks <file,...>   ranks files to summarize (format of <prefix>_ranks.tsv);
+                          each file is summarized separately under the last two
+                          directories of its path
   -sbc_noderanks <file,...>
                           matching node ranks files (format of
                           <prefix>_noderanks.tsv, optional leading chunk column)
@@ -137,6 +138,7 @@ int main(int argc, const char* argv[]){
         cfg.level = level;
         cfg.fdrQ = fdrQ;
         cfg.numNull = numNull;
+        cfg.seed = seed;
         RandomVariable rng(seed);
         RandomVariable::setActiveInstance(&rng);
         Sbc sbc(cfg, &rng);
