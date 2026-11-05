@@ -203,14 +203,14 @@ void addNodeQuantities(const std::vector<std::vector<std::pair<std::string, doub
                        const std::string& prefix){
     RandomVariable pick(1u);
     RandomVariable* rng = &pick;
-    for(const char* nm : { "origin", "crown", "random_node" })
+    for(const char* nm : { "x0", "x1", "random_node" })
         names.push_back(prefix + nm);
     for(const std::vector<std::pair<std::string, double>>& rep : perRep){
         std::vector<double> internal;
         for(const std::pair<std::string, double>& nr : rep){
-            if(nr.first == "x0") ranks[prefix + "origin"].push_back(nr.second);
+            if(nr.first == "x0") ranks[prefix + "x0"].push_back(nr.second);
             else internal.push_back(nr.second);
-            if(nr.first == "x1") ranks[prefix + "crown"].push_back(nr.second);
+            if(nr.first == "x1") ranks[prefix + "x1"].push_back(nr.second);
         }
         if(internal.empty() == false)
             ranks[prefix + "random_node"].push_back(internal[(size_t)(rng->uniformRv() * (double)internal.size())]);
