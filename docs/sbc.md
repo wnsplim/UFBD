@@ -6,7 +6,7 @@ permalink: /sbc/
 
 # SBC manual
 
-`sbc` runs simulation-based calibration checking (Cook et al., 2006; Talts et al., 2018) of UFBD. For each replicate, it draws the parameters from the specified priors, simulates a dataset under the FBD process, analyzes the dataset with UFBD, and records the rank of each true value among the posterior samples. Building UFBD as in the [manual](manual.md#building) also builds `sbc`.
+`sbc` runs simulation-based calibration checking (Cook et al., 2006; Talts et al., 2020) of UFBD. For each replicate, it draws the parameters from the specified priors, simulates a dataset under the FBD process, analyzes the dataset with UFBD, and records the rank of each true value among the posterior samples. Building UFBD as in the [manual](manual.md#building) also builds `sbc`.
 
 ## Running
 
@@ -51,5 +51,5 @@ Säilynoja, T., Bürkner, P.-C., & Vehtari, A. (2022). Graphical test for discre
 applications in goodness-of-fit evaluation and multiple sample comparison. *Statistics and
 Computing, 32*(2), 32. <https://doi.org/10.1007/s11222-022-10090-6>
 
-Talts, S., Betancourt, M., Simpson, D., Vehtari, A., & Gelman, A. (2018). Validating Bayesian
+Talts, S., Betancourt, M., Simpson, D., Vehtari, A., & Gelman, A. (2020). Validating Bayesian
 inference algorithms with simulation-based calibration. *arXiv*. <https://doi.org/10.48550/arXiv.1804.06788>
