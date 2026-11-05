@@ -46,6 +46,11 @@ struct SbcConfig {
     std::string             dumpPrefix;
     double                  ageRange = 0.0;
     double                  zone = -1.0;
+    bool                    summarize = false;
+    std::string             ranksPath;
+    std::string             nodeRanksPath;
+    double                  level = 0.05;
+    int                     numNull = 4000;
 };
 
 class Sbc {
@@ -59,6 +64,7 @@ class Sbc {
         void            runSimulateOnly(void);
         void            runInference(void);
         void            runEmit(void);
+        void            runSummarize(void);
         void            buildInputs(const SimResult& r, Tree* tree, std::vector<Clade>& clades, std::vector<Fossil>& fossils, std::vector<int>& zoneNode);
         SbcConfig       cfg;
         RandomVariable* rng;

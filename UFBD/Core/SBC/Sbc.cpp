@@ -18,6 +18,7 @@
 #include <fstream>
 #include <limits>
 #include <map>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -107,7 +108,7 @@ double ecdfGamma(std::vector<double> u, const std::vector<double>& z){
     return g;
 }
 
-double ecdfGamma5(long n, const std::vector<double>& z, int nNull, RandomVariable* rng){
+std::vector<double> nullGammas(long n, const std::vector<double>& z, int nNull, RandomVariable* rng){
     std::vector<double> g(nNull);
     std::vector<double> u((size_t)n);
     for(int b = 0; b < nNull; b++){
@@ -115,10 +116,7 @@ double ecdfGamma5(long n, const std::vector<double>& z, int nNull, RandomVariabl
         g[b] = ecdfGamma(u, z);
     }
     std::sort(g.begin(), g.end());
-    double idx = 0.05 * (double)(nNull - 1);
-    size_t lo = (size_t)idx;
-    double fr = idx - (double)lo;
-    return (lo + 1 < g.size()) ? g[lo] * (1.0 - fr) + g[lo + 1] * fr : g[lo];
+    return g;
 }
 
 double quantile(const std::vector<double>& s, double q){
@@ -128,6 +126,82 @@ double quantile(const std::vector<double>& s, double q){
     if(lo + 1 < s.size())
         return s[lo] * (1.0 - frac) + s[lo + 1] * frac;
     return s[lo];
+}
+
+std::vector<double> ecdfGrid(long n){
+    int nGrid = (int)std::min(n, (long)200);
+    std::vector<double> z;
+    for(int j = 1; j < nGrid; j++)
+        z.push_back((double)j / (double)nGrid);
+    return z;
+}
+
+void printRankSummary(const std::vector<std::string>& names, std::map<std::string, std::vector<double>>& ranks,
+                      double level, int nNull, RandomVariable* rng,
+                      std::map<std::string, long>* cov50, std::map<std::string, long>* cov90){
+    struct Row { std::string nm; long n; double g, gp, p; };
+    std::vector<Row> rows;
+    std::map<long, std::vector<double>> nullByN;
+    for(const std::string& nm : names){
+        const std::vector<double>& v = ranks[nm];
+        long n = (long)v.size();
+        if(n < 2)
+            continue;
+        std::vector<double> z = ecdfGrid(n);
+        if(nullByN.count(n) == 0)
+            nullByN[n] = nullGammas(n, z, nNull, rng);
+        const std::vector<double>& nul = nullByN[n];
+        double g = ecdfGamma(v, z);
+        long k = (long)(std::upper_bound(nul.begin(), nul.end(), g) - nul.begin());
+        rows.push_back({ nm, n, g, quantile(nul, level), (double)(k + 1) / (double)(nNull + 1) });
+    }
+    long m = (long)rows.size();
+    std::vector<size_t> order(m);
+    for(long i = 0; i < m; i++) order[i] = (size_t)i;
+    std::sort(order.begin(), order.end(), [&](size_t a, size_t b){ return rows[a].p < rows[b].p; });
+    double harmonic = 0.0;
+    for(long j = 1; j <= m; j++) harmonic += 1.0 / (double)j;
+    std::vector<double> pBH(m), pBY(m);
+    double runBH = 1.0, runBY = 1.0;
+    for(long i = m - 1; i >= 0; i--){
+        double p = rows[order[i]].p;
+        runBH = std::min(runBH, p * (double)m / (double)(i + 1));
+        runBY = std::min(runBY, p * (double)m * harmonic / (double)(i + 1));
+        pBH[order[i]] = runBH;
+        pBY[order[i]] = runBY;
+    }
+    printf("  p = %.4g, %d null rank sets\n", level, nNull);
+    printf("  %-14s %6s %10s %10s %18s %9s %9s %9s", "quantity", "n", "gamma", "gamma_p", "log(gamma/gamma_p)", "p", "p_BH", "p_BY");
+    if(cov50 != nullptr) printf(" %7s %7s", "cov50", "cov90");
+    printf("\n");
+    for(long i = 0; i < m; i++){
+        const Row& r = rows[i];
+        double lg = (r.g > 0.0 && r.gp > 0.0) ? std::log(r.g / r.gp) : -std::numeric_limits<double>::infinity();
+        printf("  %-14s %6ld %10.3g %10.3g %18.3f %9.4g %9.4g %9.4g", r.nm.c_str(), r.n, r.g, r.gp, lg, r.p, pBH[i], pBY[i]);
+        if(cov50 != nullptr && cov50->count(r.nm) > 0)
+            printf(" %7.4f %7.4f", (double)(*cov50)[r.nm] / r.n, (double)(*cov90)[r.nm] / r.n);
+        else if(cov50 != nullptr)
+            printf(" %7s %7s", "-", "-");
+        printf("\n");
+    }
+}
+
+void addNodeQuantities(const std::vector<std::vector<std::pair<std::string, double>>>& perRep,
+                       std::map<std::string, std::vector<double>>& ranks, std::vector<std::string>& names){
+    RandomVariable pick(1u);
+    RandomVariable* rng = &pick;
+    for(const char* nm : { "origin", "crown", "random_node" })
+        names.push_back(nm);
+    for(const std::vector<std::pair<std::string, double>>& rep : perRep){
+        std::vector<double> internal;
+        for(const std::pair<std::string, double>& nr : rep){
+            if(nr.first == "x0") ranks["origin"].push_back(nr.second);
+            else internal.push_back(nr.second);
+            if(nr.first == "x1") ranks["crown"].push_back(nr.second);
+        }
+        if(internal.empty() == false)
+            ranks["random_node"].push_back(internal[(size_t)(rng->uniformRv() * (double)internal.size())]);
+    }
 }
 
 }
@@ -231,12 +305,69 @@ void Sbc::buildInputs(const SimResult& r, Tree* tree, std::vector<Clade>& clades
 }
 
 void Sbc::run(void){
-    if(cfg.emitFiles)
+    if(cfg.summarize)
+        runSummarize();
+    else if(cfg.emitFiles)
         runEmit();
     else if(cfg.simulateOnly)
         runSimulateOnly();
     else
         runInference();
+}
+
+void Sbc::runSummarize(void){
+    std::map<std::string, std::vector<double>> ranks;
+    std::vector<std::string> names;
+    std::ifstream rf(cfg.ranksPath);
+    if(rf.is_open() == false)
+        Msg::error("cannot open " + cfg.ranksPath);
+    std::string line, cell;
+    std::getline(rf, line);
+    std::vector<std::string> header;
+    std::stringstream hs(line);
+    while(std::getline(hs, cell, '\t'))
+        header.push_back(cell);
+    std::vector<bool> use(header.size());
+    for(size_t c = 0; c < header.size(); c++){
+        const std::string& h = header[c];
+        use[c] = h != "bulkESS" && h != "tailESS" && h != "maxRhat" && h != "simAttempts" && h.rfind("t_", 0) != 0;
+        if(use[c])
+            names.push_back(h);
+    }
+    while(std::getline(rf, line)){
+        std::stringstream ls(line);
+        for(size_t c = 0; c < header.size() && std::getline(ls, cell, '\t'); c++){
+            double v = std::stod(cell);
+            if(use[c] && std::isnan(v) == false)
+                ranks[header[c]].push_back(v);
+        }
+    }
+    if(cfg.nodeRanksPath.empty() == false){
+        std::ifstream nf(cfg.nodeRanksPath);
+        if(nf.is_open() == false)
+            Msg::error("cannot open " + cfg.nodeRanksPath);
+        std::getline(nf, line);
+        bool chunked = line.rfind("chunk", 0) == 0;
+        std::vector<std::vector<std::pair<std::string, double>>> perRep;
+        std::string lastKey;
+        while(std::getline(nf, line)){
+            std::stringstream ls(line);
+            std::string chunk, rep, node, rank;
+            if(chunked)
+                std::getline(ls, chunk, '\t');
+            std::getline(ls, rep, '\t');
+            std::getline(ls, node, '\t');
+            std::getline(ls, rank, '\t');
+            std::string key = chunk + ":" + rep;
+            if(perRep.empty() || key != lastKey)
+                perRep.push_back({});
+            lastKey = key;
+            perRep.back().push_back({ node, std::stod(rank) });
+        }
+        addNodeQuantities(perRep, ranks, names);
+    }
+    printf("SBC summary of %s\n", cfg.ranksPath.c_str());
+    printRankSummary(names, ranks, cfg.level, cfg.numNull, rng, nullptr, nullptr);
 }
 
 void Sbc::runEmit(void){
@@ -332,6 +463,7 @@ void Sbc::runInference(void){
     double burnFrac = us.getBurninFraction();
     std::map<std::string, std::vector<double>> ranks;
     std::map<std::string, long> cov50, cov90;
+    std::vector<std::vector<std::pair<std::string, double>>> nodeRanksPerRep;
     int nUnconverged = 0;
     int progStep = (cfg.numReps + 9) / 10;
     if(progStep < 1) progStep = 1;
@@ -445,6 +577,7 @@ void Sbc::runInference(void){
             std::string xi = "x" + std::to_string(i);
             nodeRank.push_back({ xi, rankOf(post[colOf[xi]], truthVal[xi]) });
         }
+        nodeRanksPerRep.push_back(nodeRank);
         if(cfg.dumpPrefix.empty() == false){
             if(liveHeader == false){
                 rankOut.open(cfg.dumpPrefix + "_ranks.tsv");
@@ -479,26 +612,9 @@ void Sbc::runInference(void){
     if(nUnconverged > 0)
         printf("  WARNING: %d of %d reps did not reach the R-hat/ESS thresholds.\n",
                nUnconverged, cfg.numReps);
-    long nRank = 0;
-    for(const std::string& nm : outCols)
-        if((long)ranks[nm].size() > nRank) nRank = (long)ranks[nm].size();
-    int nGrid = (int)std::min(nRank, (long)200);
-    std::vector<double> zGrid;
-    for(int j = 1; j < nGrid; j++)
-        zGrid.push_back((double)j / (double)nGrid);
-    double g5 = (nRank > 0 && zGrid.empty() == false) ? ecdfGamma5(nRank, zGrid, 4000, rng) : 0.0;
-    printf("  gamma5 at %ld replicates from 4000 null rank sets: %.6g\n", nRank, g5);
-    printf("  %-12s %10s %10s %18s %7s %7s\n", "param", "gamma", "gamma5", "log(gamma/gamma5)", "cov50", "cov90");
-    for(const std::string& nm : outCols){
-        std::vector<double> v = ranks[nm];
-        long R = (long)v.size();
-        if(R == 0) continue;
-        double g = ecdfGamma(v, zGrid);
-        double lg = (g > 0.0 && g5 > 0.0) ? std::log(g / g5) : -std::numeric_limits<double>::infinity();
-        double c50 = (double)cov50[nm] / R;
-        double c90 = (double)cov90[nm] / R;
-        printf("  %-12s %10.3g %10.3g %18.3f %7.4f %7.4f\n", nm.c_str(), g, g5, lg, c50, c90);
-    }
+    std::vector<std::string> names = outCols;
+    addNodeQuantities(nodeRanksPerRep, ranks, names);
+    printRankSummary(names, ranks, cfg.level, cfg.numNull, rng, &cov50, &cov90);
 
     if(cfg.dumpPrefix.empty() == false && liveHeader)
         printf("  ranks saved in %s_ranks.tsv\n", cfg.dumpPrefix.c_str());

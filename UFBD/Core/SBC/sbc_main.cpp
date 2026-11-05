@@ -15,16 +15,24 @@ static void printSbcHelp(){
     printf("%s", R"SBC(USAGE
 
   sbc -sbc_mode <emit|simulate|infer> -sbc_reps <N> [flags]
+  sbc -sbc_mode summarize -sbc_ranks <file> [-sbc_noderanks <file>] [flags]
 
 MODES
   emit       write N simulated datasets to disk
   simulate   simulate N datasets and print summary statistics only
   infer      draw -> simulate -> infer -> rank; outputs <prefix>_ranks.tsv
+  summarize  ECDF gamma summary of rank files (e.g. chunk files merged)
 
 SBC FLAGS
-  -sbc_mode <emit|simulate|infer>
+  -sbc_mode <emit|simulate|infer|summarize>
                           engine mode
   -sbc_reps <N>           number of replicate datasets
+  -sbc_level <p>          gamma_p is the p quantile of gamma under uniform
+                          ranks (default 0.05)
+  -sbc_null <N>           null rank sets for gamma_p and p-values (default 4000)
+  -sbc_ranks <file>       ranks file to summarize (format of <prefix>_ranks.tsv)
+  -sbc_noderanks <file>   node ranks file to summarize (format of
+                          <prefix>_noderanks.tsv, optional leading chunk column)
   -sbc_ue <prob>          probability that each extant taxon is designated an
                           unsampled extant (UE) (default 0; a value > 0 is
                           incompatible with crown conditioning)
@@ -66,10 +74,10 @@ int main(int argc, const char* argv[]){
     }
     printf("%s\n", invocation.c_str());
 
-    std::string mode, out;
+    std::string mode, out, ranksPath, nodeRanksPath;
     bool repsSet = false;
-    int reps = 0;
-    double ue = 0.0, ageRange = 0.0, zone = -1.0;
+    int reps = 0, numNull = 4000;
+    double ue = 0.0, ageRange = 0.0, zone = -1.0, level = 0.05;
     std::vector<const char*> rest;
     rest.push_back(argv[0]);
     for(int i = 1; i < argc; i++){
@@ -80,18 +88,46 @@ int main(int argc, const char* argv[]){
         else if(a == "-sbc_age_range" && i + 1 < argc) ageRange = std::stod(argv[++i]);
         else if(a == "-sbc_zone" && i + 1 < argc)   zone = std::stod(argv[++i]);
         else if(a == "-sbc_out" && i + 1 < argc)    out = argv[++i];
+        else if(a == "-sbc_level" && i + 1 < argc)  level = std::stod(argv[++i]);
+        else if(a == "-sbc_null" && i + 1 < argc)   numNull = std::stoi(argv[++i]);
+        else if(a == "-sbc_ranks" && i + 1 < argc)  ranksPath = argv[++i];
+        else if(a == "-sbc_noderanks" && i + 1 < argc) nodeRanksPath = argv[++i];
         else                                        rest.push_back(argv[i]);
     }
 
-    if(mode != "simulate" && mode != "infer" && mode != "emit")
-        Msg::error("-sbc_mode must be supplied as 'simulate', 'infer', or 'emit'.");
+    if(mode != "simulate" && mode != "infer" && mode != "emit" && mode != "summarize")
+        Msg::error("-sbc_mode must be supplied as 'simulate', 'infer', 'emit', or 'summarize'.");
+    if(level <= 0.0 || level >= 1.0)
+        Msg::error("-sbc_level must lie in (0, 1).");
+    if(numNull < 1)
+        Msg::error("-sbc_null must be >= 1.");
+
+    if(mode == "summarize"){
+        if(ranksPath.empty())
+            Msg::error("-sbc_ranks is required for -sbc_mode summarize.");
+        unsigned int seed = 1;
+        for(size_t i = 1; i + 1 < rest.size(); i++)
+            if(std::string(rest[i]) == "-seed")
+                seed = (unsigned int)std::stoul(rest[i + 1]);
+        SbcConfig cfg;
+        cfg.summarize = true;
+        cfg.ranksPath = ranksPath;
+        cfg.nodeRanksPath = nodeRanksPath;
+        cfg.level = level;
+        cfg.numNull = numNull;
+        RandomVariable rng(seed);
+        RandomVariable::setActiveInstance(&rng);
+        Sbc sbc(cfg, &rng);
+        sbc.run();
+        return 0;
+    }
+
+    UserSettings& s = UserSettings::userSettings();
+    s.initializeSettings((int)rest.size(), rest.data(), true);
     if(repsSet == false)
         Msg::error("-sbc_reps is required.");
     if(mode == "emit" && out.empty())
         Msg::error("-sbc_out (output file prefix) is required.");
-
-    UserSettings& s = UserSettings::userSettings();
-    s.initializeSettings((int)rest.size(), rest.data(), true);
 
     Probability::PriorSpec lambdaPrior = s.getLambdaPrior();
     Probability::PriorSpec muPrior     = s.getMuPrior();
@@ -155,6 +191,8 @@ int main(int argc, const char* argv[]){
     cfg.muGroupPrior = s.getMuGroupPrior();
     cfg.startAgePrior = { true, s.getConditionAgePrior(), s.getConditionAgePriorP1(), s.getConditionAgePriorP2() };
     cfg.dumpPrefix = out;
+    cfg.level = level;
+    cfg.numNull = numNull;
 
     unsigned int seed = s.getSeed();
     RandomVariable rng(seed);
