@@ -41,6 +41,9 @@ SBC FLAGS
   -sbc_noderanks <file,...>
                           matching node ranks files (format of
                           <prefix>_noderanks.tsv, optional leading chunk column)
+  -sbc_fossilranks <file,...>
+                          matching fossil ranks files (format of
+                          <prefix>_fossilranks.tsv, optional leading chunk column)
   -sbc_ue <prob>          probability that each extant taxon is designated an
                           unsampled extant (UE) (default 0; a value > 0 is
                           incompatible with crown conditioning)
@@ -82,7 +85,7 @@ int main(int argc, const char* argv[]){
     }
     printf("%s\n", invocation.c_str());
 
-    std::string mode, out, ranksList, nodeRanksList;
+    std::string mode, out, ranksList, nodeRanksList, fossilRanksList;
     bool repsSet = false;
     int reps = 0, numNull = 0;
     double ue = 0.0, ageRange = 0.0, zone = -1.0, level = -1.0, fdrQ = 0.05;
@@ -101,6 +104,7 @@ int main(int argc, const char* argv[]){
         else if(a == "-sbc_null" && i + 1 < argc)   numNull = std::stoi(argv[++i]);
         else if(a == "-sbc_ranks" && i + 1 < argc)  ranksList = argv[++i];
         else if(a == "-sbc_noderanks" && i + 1 < argc) nodeRanksList = argv[++i];
+        else if(a == "-sbc_fossilranks" && i + 1 < argc) fossilRanksList = argv[++i];
         else                                        rest.push_back(argv[i]);
     }
 
@@ -135,6 +139,9 @@ int main(int argc, const char* argv[]){
         cfg.nodeRanksPaths = splitList(nodeRanksList);
         if(cfg.nodeRanksPaths.empty() == false && cfg.nodeRanksPaths.size() != cfg.ranksPaths.size())
             Msg::error("-sbc_noderanks must list one file per -sbc_ranks file.");
+        cfg.fossilRanksPaths = splitList(fossilRanksList);
+        if(cfg.fossilRanksPaths.empty() == false && cfg.fossilRanksPaths.size() != cfg.ranksPaths.size())
+            Msg::error("-sbc_fossilranks must list one file per -sbc_ranks file.");
         cfg.level = level;
         cfg.fdrQ = fdrQ;
         cfg.numNull = numNull;
@@ -220,6 +227,7 @@ int main(int argc, const char* argv[]){
     cfg.numNull = numNull;
 
     unsigned int seed = s.getSeed();
+    cfg.seed = seed;
     RandomVariable rng(seed);
     RandomVariable::setActiveInstance(&rng);
 

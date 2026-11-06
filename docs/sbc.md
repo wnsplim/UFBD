@@ -12,22 +12,23 @@ permalink: /sbc/
 
 ```
 sbc -sbc_mode infer -sbc_reps <N> -sbc_out <prefix> [flags]
-sbc -sbc_mode summarize -sbc_ranks <file,...> [-sbc_noderanks <file,...>] [flags]
+sbc -sbc_mode summarize -sbc_ranks <file,...> [-sbc_noderanks <file,...>] [-sbc_fossilranks <file,...>] [flags]
 sbc -help
 ```
 
 `-sbc_mode simulate` only simulates the datasets, and `-sbc_mode emit` writes them as UFBD input files. `-sbc_ue <p>` makes each extant taxon an unsampled extant with probability `p`. The priors, the conditioning, the time bins and the MCMC settings take the same flags as `ufbd`.
 
-`-sbc_mode summarize` prints the summary below for rank files, for example the per-run files of a batch merged into one; a node ranks file may carry a leading `chunk` column. Several comma-separated ranks files, with matching node ranks files, are summarized one after another, each under the last two directories of its path; each file is summarized exactly as it would be alone.
+`-sbc_mode summarize` prints the summary below for rank files, for example the per-run files of a batch merged into one; node and fossil ranks files may carry a leading `chunk` column. Several comma-separated ranks files, with matching node and fossil ranks files, are summarized one after another, each under the last two directories of its path; each file is summarized exactly as it would be alone.
 
 ## Summary
 
-For each quantity, `sbc` compares the ECDF statistic γ (Säilynoja et al., 2022; Modrák et al., 2025) with its distribution under uniform ranks and prints log(γ/γ_5), log(γ/γ_Bonf), log(γ/γ_BH) and log(γ/γ_BY), the p-value of γ, and the Bonferroni (`p_Bonf`; Cook et al., 2006), Benjamini–Hochberg (`p_BH`; Benjamini & Hochberg, 1995) and Benjamini–Yekutieli (`p_BY`; Benjamini & Yekutieli, 2001) adjusted p-values over all quantities of the same ranks file. γ_5 is the 5% quantile of γ under uniform ranks, γ_Bonf its quantile at the Bonferroni threshold q/m, and γ_BH and γ_BY its quantiles at the first rejection thresholds of the two procedures; γ_Bonf = γ_BH because both thresholds are q/m. A quantity fails at level q when its adjusted p-value is below q. The quantities are the columns of the ranks file, the origin (`x0`), the crown (`x1`), and one internal node per replicate chosen at random. `-sbc_q <q>` sets q (default 0.05), `-sbc_level <p>` adds log(γ/γ_p) for the `p` quantile, and `-sbc_null <N>` sets the number of uniform rank sets.
+For each quantity, `sbc` compares the ECDF statistic γ (Säilynoja et al., 2022; Modrák et al., 2025) with its distribution under uniform ranks and prints log(γ/γ_5), log(γ/γ_Bonf), log(γ/γ_BH) and log(γ/γ_BY), the p-value of γ, and the Bonferroni (`p_Bonf`; Cook et al., 2006), Benjamini–Hochberg (`p_BH`; Benjamini & Hochberg, 1995) and Benjamini–Yekutieli (`p_BY`; Benjamini & Yekutieli, 2001) adjusted p-values over all quantities of the same ranks file. γ_5 is the 5% quantile of γ under uniform ranks, γ_Bonf its quantile at the Bonferroni threshold q/m, and γ_BH and γ_BY its quantiles at the first rejection thresholds of the two procedures; γ_Bonf = γ_BH because both thresholds are q/m. A quantity fails at level q when its adjusted p-value is below q. The quantities are the columns of the ranks file, the origin (`x0`), the crown (`x1`), one internal node per replicate chosen at random (`random_node`), and, from the fossil ranks, the age of one fossil with a sampled age (`random_y`) and, with `-sbc_zone`, the attachment age of one fossil (`random_z`), each chosen at random per replicate. `-sbc_q <q>` sets q (default 0.05), `-sbc_level <p>` adds log(γ/γ_p) for the `p` quantile, and `-sbc_null <N>` sets the number of uniform rank sets.
 
 ## Output
 
 * `<prefix>_ranks.tsv` — one row per replicate, with the rank of the true value of each parameter, `logLik` and `logPrior`
 * `<prefix>_noderanks.tsv` — one row per node per replicate. `x0` is the origin and `x1` ... `xK` are the backbone nodes
+* `<prefix>_fossilranks.tsv` — one row per fossil per replicate, with the rank of its true age `y` (fossils with an age range) and of its true attachment age `z` (with `-sbc_zone`); written when the latent log is on
 * `<prefix>_rep<k>.log` and `<prefix>_rep<k>.trees` — the chain of replicate `k`
 
 ## References

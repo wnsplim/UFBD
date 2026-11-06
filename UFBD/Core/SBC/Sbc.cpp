@@ -154,6 +154,8 @@ void printRankSummary(const std::vector<std::string>& names, std::map<std::strin
         if((long)ranks[nm].size() >= 2)
             rows.push_back({ nm, (long)ranks[nm].size(), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0 });
     long m = (long)rows.size();
+    if(m == 0)
+        return;
     double harmonic = 0.0;
     for(long j = 1; j <= m; j++) harmonic += 1.0 / (double)j;
     double levelBonf = cfg.fdrQ / (double)m;
@@ -225,6 +227,24 @@ void addNodeQuantities(const std::vector<std::vector<std::pair<std::string, doub
         }
         if(internal.empty() == false)
             ranks["random_node"].push_back(internal[(size_t)(rng->uniformRv() * (double)internal.size())]);
+    }
+}
+
+void addFossilQuantities(const std::vector<std::vector<std::pair<double, double>>>& perRep,
+                         std::map<std::string, std::vector<double>>& ranks, std::vector<std::string>& names){
+    RandomVariable pick(2u);
+    for(const char* nm : { "random_y", "random_z" })
+        names.push_back(nm);
+    for(const std::vector<std::pair<double, double>>& rep : perRep){
+        std::vector<double> ys, zs;
+        for(const std::pair<double, double>& yz : rep){
+            if(std::isnan(yz.first) == false) ys.push_back(yz.first);
+            if(std::isnan(yz.second) == false) zs.push_back(yz.second);
+        }
+        if(ys.empty() == false)
+            ranks["random_y"].push_back(ys[(size_t)(pick.uniformRv() * (double)ys.size())]);
+        if(zs.empty() == false)
+            ranks["random_z"].push_back(zs[(size_t)(pick.uniformRv() * (double)zs.size())]);
     }
 }
 
@@ -396,6 +416,31 @@ void Sbc::runSummarize(void){
             }
             addNodeQuantities(perRep, ranks, names);
         }
+        if(f < cfg.fossilRanksPaths.size()){
+            std::ifstream ff(cfg.fossilRanksPaths[f]);
+            if(ff.is_open() == false)
+                Msg::error("cannot open " + cfg.fossilRanksPaths[f]);
+            std::getline(ff, line);
+            bool chunked = line.rfind("chunk", 0) == 0;
+            std::vector<std::vector<std::pair<double, double>>> perRep;
+            std::string lastKey;
+            while(std::getline(ff, line)){
+                std::stringstream ls(line);
+                std::string chunk, rep, fossil, y, z;
+                if(chunked)
+                    std::getline(ls, chunk, '\t');
+                std::getline(ls, rep, '\t');
+                std::getline(ls, fossil, '\t');
+                std::getline(ls, y, '\t');
+                std::getline(ls, z, '\t');
+                std::string key = chunk + ":" + rep;
+                if(perRep.empty() || key != lastKey)
+                    perRep.push_back({});
+                lastKey = key;
+                perRep.back().push_back({ std::stod(y), std::stod(z) });
+            }
+            addFossilQuantities(perRep, ranks, names);
+        }
         printf("%s\n", label.c_str());
         RandomVariable fileRng(cfg.seed);
         printRankSummary(names, ranks, cfg, &fileRng, nullptr, nullptr);
@@ -496,10 +541,12 @@ void Sbc::runInference(void){
     std::map<std::string, std::vector<double>> ranks;
     std::map<std::string, long> cov50, cov90;
     std::vector<std::vector<std::pair<std::string, double>>> nodeRanksPerRep;
+    std::vector<std::vector<std::pair<double, double>>> fossilRanksPerRep;
+    RandomVariable fossilTie(cfg.seed + 1);
     int nUnconverged = 0;
     int progStep = (cfg.numReps + 9) / 10;
     if(progStep < 1) progStep = 1;
-    std::ofstream rankOut, nodeOut;
+    std::ofstream rankOut, nodeOut, fossilOut;
     std::vector<std::string> outCols;
     bool liveHeader = false;
 
@@ -610,6 +657,35 @@ void Sbc::runInference(void){
             nodeRank.push_back({ xi, rankOf(post[colOf[xi]], truthVal[xi]) });
         }
         nodeRanksPerRep.push_back(nodeRank);
+        std::vector<std::pair<double, double>> fossilRank;
+        const std::vector<std::string>& latNames = chains[0]->latentNames();
+        if(latNames.empty() == false){
+            std::map<std::string, int> latCol;
+            for(size_t c = 0; c < latNames.size(); c++)
+                latCol[latNames[c]] = (int)c;
+            auto latentRank = [&](const std::string& nm, double t){
+                std::map<std::string, int>::iterator it = latCol.find(nm);
+                if(it == latCol.end())
+                    return std::numeric_limits<double>::quiet_NaN();
+                long below = 0, equal = 0, total = 0;
+                for(ChainRunner* ch : chains){
+                    const std::vector<double>& col = ch->latentColumns()[it->second];
+                    size_t bIdx = std::max((size_t)1, (size_t)(burnFrac * col.size()));
+                    for(size_t j = bIdx; j < col.size(); j++){
+                        if(col[j] < t) below++;
+                        else if(col[j] == t) equal++;
+                        total++;
+                    }
+                }
+                return ((double)below + fossilTie.uniformRv() * (double)equal) / (double)total;
+            };
+            for(size_t i = 0; i < fossils.size(); i++){
+                std::string nm = fossils[i].getTaxon();
+                double zr = (cfg.zone >= 0.0) ? latentRank("z_" + nm, zTrue[i]) : std::numeric_limits<double>::quiet_NaN();
+                fossilRank.push_back({ latentRank("y_" + nm, yTrue[i]), zr });
+            }
+        }
+        fossilRanksPerRep.push_back(fossilRank);
         if(cfg.dumpPrefix.empty() == false){
             if(liveHeader == false){
                 rankOut.open(cfg.dumpPrefix + "_ranks.tsv");
@@ -625,6 +701,14 @@ void Sbc::runInference(void){
             for(const std::pair<std::string, double>& nr : nodeRank)
                 nodeOut << rep << "\t" << nr.first << "\t" << nr.second << "\n";
             nodeOut.flush();
+            if(fossilRank.empty() == false && fossilOut.is_open() == false){
+                fossilOut.open(cfg.dumpPrefix + "_fossilranks.tsv");
+                fossilOut.precision(17);
+                fossilOut << "rep\tfossil\ty\tz\n";
+            }
+            for(size_t i = 0; i < fossilRank.size(); i++)
+                fossilOut << rep << "\t" << fossils[i].getTaxon() << "\t" << fossilRank[i].first << "\t" << fossilRank[i].second << "\n";
+            fossilOut.flush();
             for(size_t c = 0; c < outCols.size(); c++){
                 std::map<std::string, double>::iterator f = thisRep.find(outCols[c]);
                 rankOut << (c ? "\t" : "") << (f != thisRep.end() ? f->second : std::numeric_limits<double>::quiet_NaN());
@@ -646,6 +730,7 @@ void Sbc::runInference(void){
                nUnconverged, cfg.numReps);
     std::vector<std::string> names = outCols;
     addNodeQuantities(nodeRanksPerRep, ranks, names);
+    addFossilQuantities(fossilRanksPerRep, ranks, names);
     printRankSummary(names, ranks, cfg, rng, &cov50, &cov90);
 
     if(cfg.dumpPrefix.empty() == false && liveHeader)

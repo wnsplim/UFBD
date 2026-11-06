@@ -49,6 +49,7 @@ struct SbcConfig {
     bool                    summarize = false;
     std::vector<std::string> ranksPaths;
     std::vector<std::string> nodeRanksPaths;
+    std::vector<std::string> fossilRanksPaths;
     double                  level = -1.0;
     double                  fdrQ = 0.05;
     int                     numNull = 0;
