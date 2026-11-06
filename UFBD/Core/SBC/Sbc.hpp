@@ -50,9 +50,7 @@ struct SbcConfig {
     std::vector<std::string> ranksPaths;
     std::vector<std::string> nodeRanksPaths;
     std::vector<std::string> fossilRanksPaths;
-    double                  level = -1.0;
-    double                  fdrQ = 0.05;
-    int                     numNull = 0;
+    int                     numNull = 40000;
     unsigned int            seed = 1;
 };
 

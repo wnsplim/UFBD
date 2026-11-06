@@ -108,12 +108,65 @@ double ecdfLnGamma(std::vector<double> u, const std::vector<double>& z){
     return g;
 }
 
+double ecdfMaxDev(std::vector<double> u, const std::vector<double>& z){
+    std::sort(u.begin(), u.end());
+    double n = (double)u.size(), d = 0.0;
+    size_t k = 0;
+    for(double zj : z){
+        while(k < u.size() && u[k] <= zj) k++;
+        d = std::max(d, std::fabs((double)k / n - zj));
+    }
+    return d;
+}
+
+double lnAddExp(double a, double b){
+    double hi = std::max(a, b);
+    return hi + std::log1p(std::exp(std::min(a, b) - hi));
+}
+
 std::vector<double> nullLnGammas(long n, const std::vector<double>& z, int nNull, RandomVariable* rng){
+    size_t K = z.size();
+    std::vector<long> kLo(K), kHi(K);
+    std::vector<std::vector<double>> lnLo(K), lnHi(K);
+    double lnFactN = std::lgamma((double)n + 1.0);
+    for(size_t i = 0; i < K; i++){
+        double p = z[i], sd = std::sqrt((double)n * p * (1.0 - p));
+        kLo[i] = std::max(0L, (long)std::floor((double)n * p - 10.0 * sd) - 1);
+        kHi[i] = std::min(n, (long)std::ceil((double)n * p + 10.0 * sd) + 1);
+        long w = kHi[i] - kLo[i] + 1;
+        std::vector<double> lnPmf((size_t)w);
+        for(long j = 0; j < w; j++){
+            double k = (double)(kLo[i] + j);
+            lnPmf[j] = lnFactN - std::lgamma(k + 1.0) - std::lgamma((double)n - k + 1.0) + k * std::log(p) + ((double)n - k) * std::log1p(-p);
+        }
+        lnLo[i].resize((size_t)w);
+        lnHi[i].resize((size_t)w);
+        lnLo[i][0] = lnBinomTail(n, p, kLo[i], false);
+        for(long j = 1; j < w; j++) lnLo[i][j] = lnAddExp(lnLo[i][j - 1], lnPmf[j]);
+        lnHi[i][w - 1] = lnBinomTail(n, p, kHi[i], true);
+        for(long j = w - 2; j >= 0; j--) lnHi[i][j] = lnAddExp(lnHi[i][j + 1], lnPmf[j]);
+    }
     std::vector<double> g(nNull);
     std::vector<double> u((size_t)n);
     for(int b = 0; b < nNull; b++){
         for(long i = 0; i < n; i++) u[i] = rng->uniformRv();
-        g[b] = ecdfLnGamma(u, z);
+        std::sort(u.begin(), u.end());
+        long k = 0;
+        double lg = 0.0;
+        for(size_t i = 0; i < K; i++){
+            while(k < n && u[k] <= z[i]) k++;
+            double lo, hi;
+            if(k >= kLo[i] && k <= kHi[i]){
+                lo = lnLo[i][k - kLo[i]];
+                hi = lnHi[i][k - kLo[i]];
+            }else{
+                lo = lnBinomTail(n, z[i], k, false);
+                hi = lnBinomTail(n, z[i], k, true);
+            }
+            double t = std::log(2.0) + std::min(lo, hi);
+            if(t < lg) lg = t;
+        }
+        g[b] = lg;
     }
     std::sort(g.begin(), g.end());
     return g;
@@ -128,55 +181,36 @@ double quantile(const std::vector<double>& s, double q){
     return s[lo];
 }
 
-double lnQuantile(const std::vector<double>& s, double q){
-    double idx = q * (s.size() - 1);
-    size_t lo = (size_t)idx;
-    double frac = idx - lo;
-    if(lo + 1 < s.size())
-        return std::log(std::exp(s[lo]) * (1.0 - frac) + std::exp(s[lo + 1]) * frac);
-    return s[lo];
-}
-
 std::vector<double> ecdfGrid(long n){
-    int nGrid = (int)std::min(n, (long)200);
     std::vector<double> z;
-    for(int j = 1; j < nGrid; j++)
-        z.push_back((double)j / (double)nGrid);
+    for(long j = 1; j < n; j++)
+        z.push_back((double)j / (double)n);
     return z;
 }
 
 void printRankSummary(const std::vector<std::string>& names, std::map<std::string, std::vector<double>>& ranks,
                       const SbcConfig& cfg, RandomVariable* rng,
                       std::map<std::string, long>* cov50, std::map<std::string, long>* cov90){
-    struct Row { std::string nm; long n; double lg, lg5, lgBonf, lgBH, lgBY, lgp, p; };
+    struct Row { std::string nm; long n; double p, d; };
     std::vector<Row> rows;
     for(const std::string& nm : names)
         if((long)ranks[nm].size() >= 2)
-            rows.push_back({ nm, (long)ranks[nm].size(), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0 });
+            rows.push_back({ nm, (long)ranks[nm].size(), 1.0, 0.0 });
     long m = (long)rows.size();
     if(m == 0)
         return;
     double harmonic = 0.0;
     for(long j = 1; j <= m; j++) harmonic += 1.0 / (double)j;
-    double levelBonf = cfg.fdrQ / (double)m;
-    double levelBH = cfg.fdrQ / (double)m, levelBY = cfg.fdrQ / ((double)m * harmonic);
-    double smallest = (cfg.level > 0.0) ? std::min(levelBY, cfg.level) : levelBY;
-    int nNull = (cfg.numNull > 0) ? cfg.numNull : std::max(4000, (int)std::ceil(20.0 / smallest));
     std::map<long, std::vector<double>> nullByN;
     for(Row& r : rows){
         std::vector<double> z = ecdfGrid(r.n);
         if(nullByN.count(r.n) == 0)
-            nullByN[r.n] = nullLnGammas(r.n, z, nNull, rng);
+            nullByN[r.n] = nullLnGammas(r.n, z, cfg.numNull, rng);
         const std::vector<double>& nul = nullByN[r.n];
-        r.lg = ecdfLnGamma(ranks[r.nm], z);
-        long k = (long)(std::upper_bound(nul.begin(), nul.end(), r.lg) - nul.begin());
-        r.lg5 = lnQuantile(nul, 0.05);
-        r.lgBonf = lnQuantile(nul, levelBonf);
-        r.lgBH = lnQuantile(nul, levelBH);
-        r.lgBY = lnQuantile(nul, levelBY);
-        if(cfg.level > 0.0)
-            r.lgp = lnQuantile(nul, cfg.level);
-        r.p = (double)(k + 1) / (double)(nNull + 1);
+        double lg = ecdfLnGamma(ranks[r.nm], z);
+        long k = (long)(std::upper_bound(nul.begin(), nul.end(), lg) - nul.begin());
+        r.p = (double)(k + 1) / (double)(cfg.numNull + 1);
+        r.d = ecdfMaxDev(ranks[r.nm], z);
     }
     std::vector<size_t> order(m);
     for(long i = 0; i < m; i++) order[i] = (size_t)i;
@@ -191,19 +225,13 @@ void printRankSummary(const std::vector<std::string>& names, std::map<std::strin
         pBH[order[i]] = runBH;
         pBY[order[i]] = runBY;
     }
-    printf("  q = %g, m = %ld: Bonf p = %.4g, BH p = %.4g, BY p = %.4g", cfg.fdrQ, m, levelBonf, levelBH, levelBY);
-    if(cfg.level > 0.0) printf(", fixed p = %.4g", cfg.level);
-    printf("; %d null rank sets\n", nNull);
-    printf("  %-14s %6s %14s %14s %14s %14s", "quantity", "n", "log(g/g_5)", "log(g/g_Bonf)", "log(g/g_BH)", "log(g/g_BY)");
-    if(cfg.level > 0.0) printf(" %14s", "log(g/g_p)");
-    printf(" %9s %9s %9s %9s", "p", "p_Bonf", "p_BH", "p_BY");
+    printf("  m = %ld quantities; %d null rank sets\n", m, cfg.numNull);
+    printf("  %-16s %6s %9s %9s %9s %9s %7s", "quantity", "n", "p", "p_Bonf", "p_BH", "p_BY", "D");
     if(cov50 != nullptr) printf(" %7s %7s", "cov50", "cov90");
     printf("\n");
     for(long i = 0; i < m; i++){
         const Row& r = rows[i];
-        printf("  %-14s %6ld %14.3f %14.3f %14.3f %14.3f", r.nm.c_str(), r.n, r.lg - r.lg5, r.lg - r.lgBonf, r.lg - r.lgBH, r.lg - r.lgBY);
-        if(cfg.level > 0.0) printf(" %14.3f", r.lg - r.lgp);
-        printf(" %9.4g %9.4g %9.4g %9.4g", r.p, pBonf[i], pBH[i], pBY[i]);
+        printf("  %-16s %6ld %9.4g %9.4g %9.4g %9.4g %7.4f", r.nm.c_str(), r.n, r.p, pBonf[i], pBH[i], pBY[i], r.d);
         if(cov50 != nullptr && cov50->count(r.nm) > 0)
             printf(" %7.4f %7.4f", (double)(*cov50)[r.nm] / r.n, (double)(*cov90)[r.nm] / r.n);
         else if(cov50 != nullptr)
@@ -621,7 +649,7 @@ void Sbc::runInference(void){
                 if(x < t) below++;
                 else if(x == t) equal++;
             }
-            return ((double)below + rng->uniformRv() * (double)equal) / (double)s.size();
+            return ((double)below + rng->uniformRv() * (double)(equal + 1)) / (double)(s.size() + 1);
         };
         auto addQuantity = [&](const std::string& nm, std::vector<double> s, double t){
             if(std::isnan(t))
@@ -677,7 +705,7 @@ void Sbc::runInference(void){
                         total++;
                     }
                 }
-                return ((double)below + fossilTie.uniformRv() * (double)equal) / (double)total;
+                return ((double)below + fossilTie.uniformRv() * (double)(equal + 1)) / (double)(total + 1);
             };
             for(size_t i = 0; i < fossils.size(); i++){
                 std::string nm = fossils[i].getTaxon();
