@@ -22,7 +22,7 @@ sbc -help
 
 ## Summary
 
-For each quantity, `sbc` prints the p-value of the ECDF statistic γ (Säilynoja et al., 2022; Modrák et al., 2025) under uniform ranks (`p`), its Bonferroni (`p_Bonf`; Cook et al., 2006), Benjamini–Hochberg (`p_BH`; Benjamini & Hochberg, 1995) and Benjamini–Yekutieli (`p_BY`; Benjamini & Yekutieli, 2001) adjustments over the quantities of the same ranks file, and `D`, the largest absolute difference between the ECDF of the ranks and the uniform CDF. The quantities are the columns of the ranks file, the origin (`x0`), the crown (`x1`), one internal node per replicate chosen at random (`random_node`), and, from the fossil ranks, the age of one fossil with a sampled age (`random_y`) and, with `-sbc_zone`, the attachment age of one fossil (`random_z`), each chosen at random per replicate. `-sbc_null <N>` sets the number of uniform rank sets used for the p-value (default 40,000).
+For each quantity, `sbc` prints the p-value of the ECDF statistic γ (Säilynoja et al., 2022; Modrák et al., 2025) under uniform ranks (`p`), its Bonferroni (`p_Bonf`; Dunn, 1961), Benjamini–Hochberg (`p_BH`; Benjamini & Hochberg, 1995) and Benjamini–Yekutieli (`p_BY`; Benjamini & Yekutieli, 2001) adjustments over the quantities of the same ranks file, and `D`, the largest absolute difference between the ECDF of the ranks and the uniform CDF. The quantities are the columns of the ranks file, the origin (`x0`), the crown (`x1`), one internal node per replicate chosen at random (`random_node`), and, from the fossil ranks, the age of one fossil with a sampled age (`random_y`) and, with `-sbc_zone`, the attachment age of one fossil (`random_z`), each chosen at random per replicate. `-sbc_null <N>` sets the number of uniform rank sets used for the p-value (default 40,000).
 
 ## Output
 
@@ -43,6 +43,9 @@ under dependency. *The Annals of Statistics, 29*(4), 1165–1188. <https://doi.o
 Cook, S. R., Gelman, A., & Rubin, D. B. (2006). Validation of software for Bayesian models using
 posterior quantiles. *Journal of Computational and Graphical Statistics, 15*(3), 675–692.
 <https://doi.org/10.1198/106186006X136976>
+
+Dunn, O. J. (1961). Multiple comparisons among means. *Journal of the American Statistical Association,
+56*(293), 52–64. <https://doi.org/10.1080/01621459.1961.10482090>
 
 Modrák, M., Moon, A. H., Kim, S., Bürkner, P., Huurre, N., Faltejsková, K., Gelman, A., & Vehtari, A.
 (2025). Simulation-based calibration checking for Bayesian computation: The choice of test
