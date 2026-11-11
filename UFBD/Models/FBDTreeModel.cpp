@@ -486,12 +486,12 @@ std::vector<std::string> FBDTreeModel::getParameterNames(void){
 
 std::vector<bool> FBDTreeModel::getParameterFixedMask(void){
     std::vector<bool> m;
-    if(lambdaField != nullptr) for(size_t i = 0; i < lambdaName.size(); i++) m.push_back(false);
+    if(lambdaField != nullptr) m.insert(m.end(), lambdaName.size() + 3, false);
     else for(ParameterDouble* p : lambda) m.push_back(p->getProposalProbability() == 0.0);
-    if(muField != nullptr) for(size_t i = 0; i < muName.size(); i++) m.push_back(false);
+    if(muField != nullptr) m.insert(m.end(), muName.size() + 3, false);
     else for(ParameterDouble* p : mu) m.push_back(p->getProposalProbability() == 0.0);
     for(int tp = 0; tp < numPsiTypes; tp++){
-        if(psiField[tp] != nullptr) for(size_t i = 0; i < psiName[tp].size(); i++) m.push_back(false);
+        if(psiField[tp] != nullptr) m.insert(m.end(), psiName[tp].size() + 3, false);
         else for(ParameterDouble* p : psi[tp]) m.push_back(p->getProposalProbability() == 0.0);
     }
     if(unresolvedFossils != nullptr || isResolved) m.push_back(false);
