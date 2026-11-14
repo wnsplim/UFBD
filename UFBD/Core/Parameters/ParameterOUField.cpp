@@ -23,31 +23,20 @@ ParameterOUField::ParameterOUField(double prob, PhylogeneticModel* m, int nB, co
 
     double thMed = ou.thetaSet ? ou.thetaMedian : 0.2;
     thetaMean = std::log(thMed);
-    thetaSd = ou.thetaSet ? ou.thetaSd : 0.5;
+    thetaSd = ou.thetaSet ? ou.thetaSd : 1.6;
     theta[0] = theta[1] = thetaMean;
 
     double r0 = (init0 > 0.0) ? init0 : thMed;
     rateVal[0].assign(nBins, r0);
     rateVal[1].assign(nBins, r0);
 
-    if(ou.sdSet == false){ sdShape = 6.0; sdRate = sdShape / 1.2; }
-    else { sdShape = ou.sdShape; sdRate = ou.sdRate; }
-    sdEq[0] = sdEq[1] = sdShape / sdRate;
-
-    std::vector<double> dts;
-    for(int c = 1; c < nBins - 1; c++){
-        double midPrev = 0.5 * (loEdges[c - 1] + loEdges[c]);
-        double midCur  = 0.5 * (loEdges[c] + loEdges[c + 1]);
-        dts.push_back(midCur - midPrev);
-    }
-    double medDt = 5.0;
-    if(dts.empty() == false){
-        std::sort(dts.begin(), dts.end());
-        medDt = dts[dts.size() / 2];
-    }
-    if(ou.nuSet == false){ nuShape = 4.0; nuRate = nuShape / (-std::log(0.7) / medDt); }
-    else { nuShape = ou.nuShape; nuRate = ou.nuRate; }
-    nu[0] = nu[1] = nuShape / nuRate;
+    sdPrior = ou.sdPrior.set ? ou.sdPrior : Probability::PriorSpec{true, Probability::PriorFamily::EXPONENTIAL, 1.0 / 0.3, 1.0, 0.0};
+    nuPrior = ou.nuPrior.set ? ou.nuPrior : Probability::PriorSpec{true, Probability::PriorFamily::EXPONENTIAL, 10.0, 1.0, 0.0};
+    sdEq[0] = sdEq[1] = Probability::priorMean(sdPrior.family, sdPrior.p1, sdPrior.p2, sdPrior.p3);
+    nu[0] = nu[1] = Probability::priorMean(nuPrior.family, nuPrior.p1, nuPrior.p2, nuPrior.p3);
+    hyperMoves.push_back(OU_THETA);
+    if(isSdFixed() == false) hyperMoves.push_back(OU_SDEQ);
+    if(isNuFixed() == false) hyperMoves.push_back(OU_NU);
 
     for(int k = 0; k < 4; k++){ step[k] = 0.3; attW[k] = 0; accW[k] = 0; adaptN[k] = 0; moveAtt[k] = 0; moveAcc[k] = 0; }
     step[OU_BIN] = 0.5;
@@ -70,8 +59,8 @@ double ParameterOUField::lnProbability(void){
         return -std::numeric_limits<double>::infinity();
 
     double lp = Probability::Normal::lnPdf(thetaMean, thetaSd * thetaSd, th);
-    lp += Probability::Gamma::lnPdf(sdShape, sdRate, sd);
-    lp += Probability::Gamma::lnPdf(nuShape, nuRate, nuv);
+    lp += Probability::priorLnPdf(sdPrior.family, sdPrior.p1, sdPrior.p2, sd, 0.0, std::numeric_limits<double>::infinity(), sdPrior.p3);
+    lp += Probability::priorLnPdf(nuPrior.family, nuPrior.p1, nuPrior.p2, nuv, 0.0, std::numeric_limits<double>::infinity(), nuPrior.p3);
 
     double var0 = sd * sd;
     double prevX = std::log(rateVal[0][0]);
@@ -101,8 +90,8 @@ double ParameterOUField::binMid(int c){
 
 void ParameterOUField::drawFromPrior(RandomVariable* rng){
     double th = Probability::Normal::rv(rng, thetaMean, thetaSd);
-    double sd = Probability::Gamma::rv(rng, sdShape, sdRate);
-    double nuv = Probability::Gamma::rv(rng, nuShape, nuRate);
+    double sd = Probability::priorRv(sdPrior.family, sdPrior.p1, sdPrior.p2, rng, sdPrior.p3);
+    double nuv = Probability::priorRv(nuPrior.family, nuPrior.p1, nuPrior.p2, rng, nuPrior.p3);
     std::vector<double> r(nBins);
     double x = Probability::Normal::rv(rng, th, sd);
     r[0] = std::exp(x);
@@ -133,7 +122,8 @@ double ParameterOUField::bactrianDelta(void){
 
 double ParameterOUField::update(void){
     RandomVariable& rng = RandomVariable::randomVariableInstance();
-    double pHyper = 3.0 / ((double)nBins + 3.0);
+    double nHyper = (double)hyperMoves.size();
+    double pHyper = nHyper / ((double)nBins + nHyper);
     if(rng.uniformRv() >= pHyper){
         lastMove = OU_BIN;
         int k = (int)(rng.uniformRv() * (double)nBins);
@@ -144,20 +134,17 @@ double ParameterOUField::update(void){
         rateVal[0][k] = rateVal[1][k] * c;
         return std::log(c);
     }
-    double v = rng.uniformRv();
     lastBin = -1;
-    if(v < 1.0 / 3.0){
-        lastMove = OU_THETA;
+    lastMove = hyperMoves[(int)(rng.uniformRv() * nHyper)];
+    if(lastMove == OU_THETA){
         theta[0] = theta[1] + step[OU_THETA] * bactrianDelta();
         return 0.0;
     }
-    if(v < 2.0 / 3.0){
-        lastMove = OU_SDEQ;
+    if(lastMove == OU_SDEQ){
         double c = std::exp(step[OU_SDEQ] * bactrianDelta());
         sdEq[0] = sdEq[1] * c;
         return std::log(c);
     }
-    lastMove = OU_NU;
     double c = std::exp(step[OU_NU] * bactrianDelta());
     nu[0] = nu[1] * c;
     return std::log(c);

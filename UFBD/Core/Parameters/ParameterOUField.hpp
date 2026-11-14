@@ -26,6 +26,8 @@ class ParameterOUField : public Parameter {
         double                      getTheta(void) { return theta[0]; }
         double                      getSdEq(void) { return sdEq[0]; }
         double                      getNu(void) { return nu[0]; }
+        bool                        isSdFixed(void) { return sdPrior.family == Probability::PriorFamily::FIXED; }
+        bool                        isNuFixed(void) { return nuPrior.family == Probability::PriorFamily::FIXED; }
         double                      getAcceptanceRatio(void) { return (numAcc + numRej > 0) ? (double)numAcc / (double)(numAcc + numRej) : 0.0; }
         double                      lnProbability(void);
         void                        print(void) {}
@@ -52,8 +54,8 @@ class ParameterOUField : public Parameter {
         ParameterDouble*            originAge;
 
         double                      thetaMean, thetaSd;
-        double                      sdShape, sdRate;
-        double                      nuShape, nuRate;
+        Probability::PriorSpec      sdPrior, nuPrior;
+        std::vector<int>            hyperMoves;
 
         int                         lastMove;
         double                      step[4];

@@ -17,8 +17,7 @@ enum class ClockPartitionMode { UNSET, ALL, SINGLE, MANUAL };
 
 struct OUHyperSpec {
     bool   thetaSet = false; double thetaMedian = 0.0, thetaSd = 0.0;
-    bool   sdSet    = false; double sdShape = 0.0, sdRate = 0.0;
-    bool   nuSet    = false; double nuShape = 0.0, nuRate = 0.0;
+    Probability::PriorSpec sdPrior, nuPrior;
 };
 
 class UserSettings {

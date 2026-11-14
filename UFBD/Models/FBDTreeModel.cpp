@@ -484,14 +484,20 @@ std::vector<std::string> FBDTreeModel::getParameterNames(void){
     return names;
 }
 
+void FBDTreeModel::appendFieldMask(std::vector<bool>& m, ParameterOUField* f, size_t nRates){
+    m.insert(m.end(), nRates + 1, false);
+    m.push_back(f->isSdFixed());
+    m.push_back(f->isNuFixed());
+}
+
 std::vector<bool> FBDTreeModel::getParameterFixedMask(void){
     std::vector<bool> m;
-    if(lambdaField != nullptr) m.insert(m.end(), lambdaName.size() + 3, false);
+    if(lambdaField != nullptr) appendFieldMask(m, lambdaField, lambdaName.size());
     else for(ParameterDouble* p : lambda) m.push_back(p->getProposalProbability() == 0.0);
-    if(muField != nullptr) m.insert(m.end(), muName.size() + 3, false);
+    if(muField != nullptr) appendFieldMask(m, muField, muName.size());
     else for(ParameterDouble* p : mu) m.push_back(p->getProposalProbability() == 0.0);
     for(int tp = 0; tp < numPsiTypes; tp++){
-        if(psiField[tp] != nullptr) m.insert(m.end(), psiName[tp].size() + 3, false);
+        if(psiField[tp] != nullptr) appendFieldMask(m, psiField[tp], psiName[tp].size());
         else for(ParameterDouble* p : psi[tp]) m.push_back(p->getProposalProbability() == 0.0);
     }
     if(unresolvedFossils != nullptr || isResolved) m.push_back(false);

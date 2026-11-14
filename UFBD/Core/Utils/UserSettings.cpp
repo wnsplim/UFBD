@@ -423,20 +423,15 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 std::string nm, body = val;
                 if (isPsi) {
                     size_t c = val.find(':');
-                    if (c != std::string::npos) { nm = val.substr(0, c); body = val.substr(c + 1); }
+                    if (c != std::string::npos && isPriorFamilyKeyword(val.substr(0, c)) == false) { nm = val.substr(0, c); body = val.substr(c + 1); }
                 }
                 OUHyperSpec* target;
                 if (arg.rfind("-lambda_", 0) == 0)   target = &lambdaOU;
                 else if (arg.rfind("-mu_", 0) == 0)   target = &muOU;
                 else                                  target = nm.empty() ? &psiOU : &psiOUByName[nm];
-                double shape, rate;
-                size_t comma = body.find(',');
-                if (comma == std::string::npos) Msg::error("flag \"" + arg + "\" expects shape,rate, but got \"" + val + "\".");
-                try { shape = std::stod(body.substr(0, comma)); rate = std::stod(body.substr(comma + 1)); }
-                catch (...) { Msg::error("flag \"" + arg + "\" expects shape,rate, but got \"" + val + "\"."); }
-                if (shape <= 0.0 || rate <= 0.0) Msg::error("flag \"" + arg + "\" shape and rate must be > 0.");
-                if (arg.find("_ou_sd") != std::string::npos) { target->sdSet = true; target->sdShape = shape; target->sdRate = rate; }
-                else                                          { target->nuSet = true; target->nuShape = shape; target->nuRate = rate; }
+                Probability::PriorSpec& ps = (arg.find("_ou_sd") != std::string::npos) ? target->sdPrior : target->nuPrior;
+                parsePriorInto(body, ps.family, ps.p1, ps.p2, ps.p3);
+                ps.set = true;
             } else if (arg == "-age_offset") {
                 try { ageOffset = std::stod(val); } catch (...) { Msg::error("flag \"-age_offset\" expects a number, but got \"" + val + "\"."); }
                 if (ageOffset < 0.0) Msg::error("flag \"-age_offset\" must be >= 0.");
@@ -763,8 +758,11 @@ void UserSettings::parsePriorInto(const std::string& spec, Probability::PriorFam
         std::string s = spec;
         for (char& ch : s) ch = std::tolower((unsigned char)ch);
         if (s == "improper") { family = Probability::PriorFamily::IMPROPER; return; }
-        try { p1 = std::stod(spec); family = Probability::PriorFamily::FIXED; }
+        size_t used = 0;
+        try { p1 = std::stod(spec, &used); }
         catch (...) { Msg::error(help); }
+        if (used != spec.size()) Msg::error(help);
+        family = Probability::PriorFamily::FIXED;
         return;
     }
     std::string fam = spec.substr(0, cp);
@@ -929,10 +927,9 @@ SKYLINE  (piecewise-constant rates; write lambda, mu, or psi for <r>)
                           independent rates, or log-OU smoothing across bins (default indep)
   -<r>_prior <gid>:<prior>
                           per-bin prior for one bin group (mode indep only)
-  -<r>_ou_theta <med,sd>  OU level: theta ~ Normal(log(med), sd) (mode ou) (default 0.2,0.5)
-  -<r>_ou_sd <shape,rate> gamma prior on the OU log-SD (mode ou) (default 6,5)
-  -<r>_ou_nu <shape,rate> gamma prior on the OU reversion rate /Myr (mode ou)
-                          (default 4, rate ~11.2*median_bin_width)
+  -<r>_ou_theta <med,sd>  OU level: theta ~ Normal(log(med), sd) (mode ou) (default 0.2,1.6)
+  -<r>_ou_sd <prior>      prior on the OU log-SD, written as for -<r>_prior (mode ou) (default exp:3.3333)
+  -<r>_ou_nu <prior>      prior on the OU reversion rate /Myr, written as for -<r>_prior (mode ou) (default exp:10)
   -age_offset <t_min>     shift the skyline support to [t_min, inf); using this implies
                           assuming that the clade went extinct by t_min if t_min>0 (default 0)
 

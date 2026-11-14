@@ -205,12 +205,12 @@ mode      = indep
 [mu]
 time_bins = early:(0,30) | mid:(30,60) | old:(60,inf)
 mode      = ou
-ou_theta  = 0.2,0.5      # theta ~ Normal(log(median), sd)
-ou_sd     = 6,5          # gamma(shape,rate) on the OU log-SD
-ou_nu     = 4,20         # gamma(shape,rate) on the reversion rate
+ou_theta  = 0.2,1.6      # theta ~ Normal(log(median), sd)
+ou_sd     = exp:3.3333   # prior on the OU log-SD
+ou_nu     = exp:10       # prior on the reversion rate per Myr
 ```
 
-`ou` replaces the per-bin priors, so `prior` and `mode = ou` together give an error. `ou` also rejects union bins, because piecewise smoothing is not compatible with them. With one bin only, UFBD uses `indep` and gives a warning, because there is nothing to smooth. The three hyperparameters are optional, and each one takes both of its numbers. The default `ou_nu` rate is `4 * dt / -log(0.7)`, where `dt` is the median distance between the midpoints of consecutive bins. This puts the prior mean reversion rate at `-log(0.7) / dt`, so the correlation between adjacent bins is 0.7.
+`ou` replaces the per-bin priors, so `prior` and `mode = ou` together give an error. `ou` also rejects union bins, because piecewise smoothing is not compatible with them. With one bin only, UFBD uses `indep` and gives a warning, because there is nothing to smooth. The three hyperparameters are optional. `ou_theta` takes a median and an sd; `ou_sd` and `ou_nu` take a prior written as for `prior`, and a single number fixes them. The defaults are `ou_theta = 0.2,1.6`, `ou_sd = exp:3.3333` and `ou_nu = exp:10`. The default `ou_nu` does not depend on the bins, so the correlation between two bins depends only on the time between their midpoints.
 
 ### `[psi <type>]`
 
@@ -351,9 +351,9 @@ The same defaults hold in `[lambda]`, `[mu]` and every `[psi <type>]`:
 ```ini
 prior    = exp:5
 mode     = indep
-ou_theta = 0.2,0.5
-ou_sd    = 6,5
-ou_nu    =                       # shape 4, rate 4 * dt / -log(0.7) where dt is median bin length
+ou_theta = 0.2,1.6
+ou_sd    = exp:3.3333
+ou_nu    = exp:10
 ```
 
 ```ini
