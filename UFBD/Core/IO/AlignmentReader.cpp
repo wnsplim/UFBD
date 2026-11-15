@@ -94,7 +94,7 @@ void AlignmentReader::readAlignment(const std::string& file){
     else if(std::isdigit(c))
         readPhylip(f);
     else
-        Msg::error("unrecognized alignment format (use PHYLIP, FASTA, or NEXUS): " + file);
+        Msg::error("unrecognized alignment file format (please use PHYLIP, FASTA, or NEXUS): " + file);
 
     int nsite = matrix.empty() ? 0 : (int)matrix[0].size();
     for(const std::vector<int>& row : matrix)
@@ -109,10 +109,10 @@ void AlignmentReader::readPhylip(std::ifstream& f){
         std::stringstream hs(line);
         if(hs >> ntax >> nsite) break;
         for(char c : line) if(std::isspace((unsigned char)c) == false){ ntax = 0; break; }
-        if(ntax == 0) Msg::error("invalid PHYLIP header: expected '<ntax> <nsite>'");
+        if(ntax == 0) Msg::error("invalid PHYLIP header");
     }
     if(ntax <= 0 || nsite <= 0)
-        Msg::error("invalid PHYLIP header: expected '<ntax> <nsite>'");
+        Msg::error("invalid PHYLIP header");
 
     std::vector<std::string> lines;
     while(std::getline(f, line)){
@@ -144,14 +144,15 @@ void AlignmentReader::readPhylip(std::ifstream& f){
     std::vector<std::string> seq(ntax);
     if(sequential){
         int id = 0;
-        for(const std::string& l : lines){
-            if(id >= ntax)
-                Msg::error("PHYLIP alignment has more sequence data than " + std::to_string(ntax) + " taxa");
+        size_t li = 0;
+        for(; li < lines.size() && id < ntax; li++){
             size_t pos = 0;
-            if(seq[id].empty()) taxa[id] = takeLabel(l, pos);
-            appendSeqChars(seq[id], l, pos);
+            if(seq[id].empty()) taxa[id] = takeLabel(lines[li], pos);
+            appendSeqChars(seq[id], lines[li], pos);
             if((int)seq[id].size() >= nsite) id++;
         }
+        if(id != ntax || li != lines.size())
+            Msg::error("PHYLIP header gives " + std::to_string(ntax) + " sequences of " + std::to_string(nsite) + " sites; the file has " + std::to_string(id) + " complete sequences and " + std::to_string(lines.size() - li) + " lines after them");
     }else{
         int nblock = (int)lines.size() / ntax;
         for(int b = 0; b < nblock; b++)

@@ -842,7 +842,6 @@ void ParameterBranchRates::branchLikePrecision(int p, std::vector<double>& tauL,
         ellB.assign(numNodes, 0.0);
         return;
     }
-    // PNCP: halt — everything past here is detached dead code (PNCP is not selectable)
     if((int)sigTauL.size() != numClockGroups){
         sigTauL.assign(numClockGroups, std::vector<double>());
         sigEllB.assign(numClockGroups, std::vector<double>());

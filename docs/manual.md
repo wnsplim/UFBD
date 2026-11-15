@@ -152,7 +152,7 @@ A chain shorter than `swap_interval` never attempts a swap.
 
 ### Convergence
 
-This block applies only when `chain_length = auto`. The run stops when every parameter reaches `min_ess` bulk-ESS and `min_ess` tail-ESS, and its R-hat falls to `rhat` or lower. The run also stops at `max_gen`. UFBD leaves fixed parameters, the discrete variable `nSA`, and `posterior`, `likelihood` and `prior` out of the R-hat calculation.
+This block applies only when `chain_length = auto`. The run stops when every parameter reaches `min_ess` bulk-ESS and `min_ess` tail-ESS, and its R-hat falls to `rhat` or lower. The run also stops at `max_gen`. UFBD leaves fixed parameters and `posterior`, `likelihood` and `prior` out of the R-hat calculation.
 
 ```ini
 max_gen = 1000000000

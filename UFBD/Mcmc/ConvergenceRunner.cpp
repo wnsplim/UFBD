@@ -224,8 +224,6 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
     std::string frozenName;
 
     for(int p = 0; p < nP; p++){
-        if(names[p] == "nSA")
-            continue;
         if(p < (int)fixedMask.size() && fixedMask[p])
             continue;
         std::vector<std::vector<double>> chains;

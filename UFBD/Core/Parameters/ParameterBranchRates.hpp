@@ -28,7 +28,7 @@ class AdaptiveMixSelector {
         int                 nOps;
 };
 
-enum class ClockModel { UCLN, WN, GBM, CIR, GBMC }; // WN + CIR + GBMC: halt — detached, not selectable
+enum class ClockModel { UCLN, WN, GBM, CIR, GBMC }; // WN + CIR + GBMC: halt — detached, not selectable (guh)
 
 class BranchRateModel : public Parameter {
 

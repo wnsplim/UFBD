@@ -14,8 +14,6 @@
 #include "Serialize.hpp"
 #include "Tree.hpp"
 
-enum { OU_BIN = 0, OU_THETA = 1, OU_SDEQ = 2, OU_NU = 3 };
-
 ParameterOUField::ParameterOUField(double prob, PhylogeneticModel* m, int nB, const std::vector<double>& lo, double init0, ParameterDouble* orig, const OUHyperSpec& ou) : Parameter(prob, m, "rateField"){
     nBins = nB;
     loEdges = lo;
@@ -37,8 +35,10 @@ ParameterOUField::ParameterOUField(double prob, PhylogeneticModel* m, int nB, co
     hyperMoves.push_back(OU_THETA);
     if(isSdFixed() == false) hyperMoves.push_back(OU_SDEQ);
     if(isNuFixed() == false) hyperMoves.push_back(OU_NU);
+    if(isSdFixed() == false) hyperMoves.push_back(OU_JOINTSD);
+    if(isNuFixed() == false) hyperMoves.push_back(OU_NUNC);
 
-    for(int k = 0; k < 4; k++){ step[k] = 0.3; attW[k] = 0; accW[k] = 0; adaptN[k] = 0; moveAtt[k] = 0; moveAcc[k] = 0; }
+    for(int k = 0; k < OU_NMOVES; k++){ step[k] = 0.3; attW[k] = 0; accW[k] = 0; adaptN[k] = 0; moveAtt[k] = 0; moveAcc[k] = 0; }
     step[OU_BIN] = 0.5;
     lastMove = OU_BIN;
     lastBin = -1;
@@ -145,9 +145,47 @@ double ParameterOUField::update(void){
         sdEq[0] = sdEq[1] * c;
         return std::log(c);
     }
+    if(lastMove == OU_JOINTSD)
+        return jointSdScale();
+    if(lastMove == OU_NUNC)
+        return nuNonCentered();
     double c = std::exp(step[OU_NU] * bactrianDelta());
     nu[0] = nu[1] * c;
     return std::log(c);
+}
+
+double ParameterOUField::nuNonCentered(void){
+    double lnc = step[OU_NUNC] * bactrianDelta();
+    double nuOld = nu[1], nuNew = nuOld * std::exp(lnc);
+    nu[0] = nuNew;
+    double th = theta[1], sd = sdEq[1];
+    double h = lnc;
+    double xPrev = std::log(rateVal[1][0]), xPrevNew = xPrev;
+    for(int i = 1; i < nBins; i++){
+        double dt = binMid(i) - binMid(i - 1);
+        double q = -std::expm1(-2.0 * nuOld * dt), qNew = -std::expm1(-2.0 * nuNew * dt);
+        double x = std::log(rateVal[1][i]);
+        double u = (x - th - std::exp(-nuOld * dt) * (xPrev - th)) / (sd * std::sqrt(q));
+        double xn = th + std::exp(-nuNew * dt) * (xPrevNew - th) + sd * std::sqrt(qNew) * u;
+        h += (xn - x) + 0.5 * std::log(qNew / q);
+        rateVal[0][i] = std::exp(xn);
+        xPrev = x;
+        xPrevNew = xn;
+    }
+    return h;
+}
+
+double ParameterOUField::jointSdScale(void){
+    double c = std::exp(step[OU_JOINTSD] * bactrianDelta());
+    sdEq[0] = sdEq[1] * c;
+    double h = (double)(nBins + 1) * std::log(c);
+    for(int k = 0; k < nBins; k++){
+        double x = std::log(rateVal[1][k]);
+        double xn = theta[1] + c * (x - theta[1]);
+        rateVal[0][k] = std::exp(xn);
+        h += xn - x;
+    }
+    return h;
 }
 
 void ParameterOUField::adaptStep(int m, bool accepted){
@@ -221,10 +259,10 @@ void ParameterOUField::printPerBinAccept(std::ostream& os, const char* label) co
         os << k << ":" << (binAtt[k] > 0 ? (double)binAcc[k] / (double)binAtt[k] : 0.0)
            << "(" << binAcc[k] << "/" << binAtt[k] << ",step " << stepBin[k] << ") ";
     os << "]";
-    static const char* hyName[3] = {"theta", "sdEq", "nu"};
-    static const int hyMove[3] = {OU_THETA, OU_SDEQ, OU_NU};
+    static const char* hyName[5] = {"theta", "sdEq", "nu", "jointSd", "nuNC"};
+    static const int hyMove[5] = {OU_THETA, OU_SDEQ, OU_NU, OU_JOINTSD, OU_NUNC};
     os << " " << label << "_hyper[";
-    for(int h = 0; h < 3; h++){
+    for(int h = 0; h < 5; h++){
         int m = hyMove[h];
         os << hyName[h] << ":" << (moveAtt[m] > 0 ? (double)moveAcc[m] / (double)moveAtt[m] : 0.0)
            << "(" << moveAcc[m] << "/" << moveAtt[m] << ",step " << step[m] << ") ";
@@ -275,6 +313,8 @@ void ParameterOUField::writeState(std::ostream& os){
     Serialize::writeLVec(os, adaptNBin);
     for(int m = 0; m < 4; m++) os << attW[m] << ' ' << accW[m] << ' ' << adaptN[m] << ' ';
     os << '\n';
+    os << "jointsd " << step[OU_JOINTSD] << ' ' << attW[OU_JOINTSD] << ' ' << accW[OU_JOINTSD] << ' ' << adaptN[OU_JOINTSD] << '\n';
+    os << "nunc " << step[OU_NUNC] << ' ' << attW[OU_NUNC] << ' ' << accW[OU_NUNC] << ' ' << adaptN[OU_NUNC] << '\n';
 }
 
 bool ParameterOUField::readUntaggedPerBin(std::istream& is, size_t n){
@@ -331,6 +371,18 @@ void ParameterOUField::readState(std::istream& is){
         accWBin.assign(n, 0);
         adaptNBin.assign(n, 0);
         for(int m = 0; m < 4; m++){ attW[m] = 0; accW[m] = 0; adaptN[m] = 0; }
+    }
+    for(;;){
+        std::streampos at = is.tellg();
+        int m = -1;
+        if(is >> tag)
+            m = (tag == "jointsd") ? OU_JOINTSD : (tag == "nunc" ? OU_NUNC : -1);
+        if(m < 0){
+            is.clear();
+            is.seekg(at);
+            break;
+        }
+        is >> step[m] >> attW[m] >> accW[m] >> adaptN[m];
     }
     theta[0] = theta[1];
     sdEq[0] = sdEq[1];

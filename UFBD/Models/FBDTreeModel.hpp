@@ -33,6 +33,7 @@ class FBDTreeModel : public PhylogeneticModel {
         bool                        treeIncludesFossils(void) { return isResolved == false && backboneFossils.empty() == false; }
         std::vector<Node*>          getAgeLogNodes(void) { return isResolved ? parameterTree->getTree()->getBackboneAgeNodes() : parameterTree->getTree()->getAllAgeNodes(); }
         double                      lnLikelihood(void);
+        double                      lnSupport(void);
         double                      lnPriorProbability(void);
         void                        print(void);
         double                      update(void);

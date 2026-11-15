@@ -124,7 +124,7 @@ double ParameterUnresolvedFossils::proposeCore(int i, RandomVariable& rng, MoveK
     mk = SINGLE;
     if(ue[i]){
         sm = (i == spineIdx) ? SUB_NOOP : SUB_Z;
-        return updateAttachAge(i, rng);                     // a UE has no y and no SA state
+        return updateAttachAge(i, rng);                     // a UE has no y (always 0) and cannot have an SA state
     }
     double u = rng.uniformRv();
     if(u < 1.0/3.0){

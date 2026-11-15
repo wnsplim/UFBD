@@ -40,8 +40,12 @@ class ParameterOUField : public Parameter {
         void                        printPerBinAccept(std::ostream& os, const char* label) const;
 
     private:
+        enum OuMove { OU_BIN = 0, OU_THETA = 1, OU_SDEQ = 2, OU_NU = 3, OU_JOINTSD = 4, OU_NUNC = 5, OU_NMOVES = 6 };
+
         double                      binMid(int c);
         double                      bactrianDelta(void);
+        double                      jointSdScale(void);
+        double                      nuNonCentered(void);
         void                        adaptStep(int m, bool accepted);
         void                        adaptStepBin(int k, bool accepted);
 
@@ -58,9 +62,9 @@ class ParameterOUField : public Parameter {
         std::vector<int>            hyperMoves;
 
         int                         lastMove;
-        double                      step[4];
-        long                        attW[4], accW[4], adaptN[4];
-        long                        moveAtt[4], moveAcc[4];
+        double                      step[OU_NMOVES];
+        long                        attW[OU_NMOVES], accW[OU_NMOVES], adaptN[OU_NMOVES];
+        long                        moveAtt[OU_NMOVES], moveAcc[OU_NMOVES];
         long                        numAcc, numRej;
         int                         lastBin;
         std::vector<long>           binAtt, binAcc;

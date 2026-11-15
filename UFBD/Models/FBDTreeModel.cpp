@@ -500,7 +500,13 @@ std::vector<bool> FBDTreeModel::getParameterFixedMask(void){
         if(psiField[tp] != nullptr) appendFieldMask(m, psiField[tp], psiName[tp].size());
         else for(ParameterDouble* p : psi[tp]) m.push_back(p->getProposalProbability() == 0.0);
     }
-    if(unresolvedFossils != nullptr || isResolved) m.push_back(false);
+    if(unresolvedFossils != nullptr){
+        int nNonUE = 0;
+        for(int i = 0; i < unresolvedFossils->getNumFossils(); i++)
+            if(unresolvedFossils->isUE(i) == false) nNonUE++;
+        m.push_back(nNonUE <= (unresolvedFossils->getSpineIdx() >= 0 ? 1 : 0));
+    }else if(isResolved)
+        m.push_back(false);
     if(originAge != nullptr) m.push_back(originAge->getProposalProbability() == 0.0);
     std::vector<Node*> logNodes = getAgeLogNodes();
     Node* crownNode = parameterTree->getTree()->getCrown();
@@ -610,10 +616,33 @@ std::vector<std::string> FBDTreeModel::getZoneLegend(void){
 }
 
 double FBDTreeModel::lnLikelihood(void){
+    static const bool noLik = (std::getenv("FBD_NO_LIK") != nullptr);
+    if(noLik)
+        return lnSupport();
     double v = calculateFBDProbability();
     if(std::isfinite(v) == false)
         return -INFINITY;
     return v;
+}
+
+double FBDTreeModel::lnSupport(void){
+    if(isResolved)
+        return 0.0;
+    int nf = unresolvedFossils->getNumFossils();
+    if(UserSettings::userSettings().getConditioning() == Conditioning::ORIGIN){
+        double x0 = originAge->getValue();
+        if(x0 < parameterTree->getTree()->getCrown()->getTime())
+            return -INFINITY;
+        for(int i = 0; i < nf; i++)
+            if(unresolvedFossils->getFossilAge(i) > x0 || unresolvedFossils->getAttachAge(i) > x0)
+                return -INFINITY;
+    }
+    updateGammaCache();
+    int spineIdx = unresolvedFossils->getSpineIdx();
+    for(int i = 0; i < nf; i++)
+        if(i != spineIdx && std::isfinite(cachedGammaLn[i]) == false)
+            return -INFINITY;
+    return 0.0;
 }
 
 double FBDTreeModel::evaluateAtGeneratingState(const std::vector<double>& lam, const std::vector<double>& muV,
@@ -766,6 +795,10 @@ void FBDTreeModel::pickRateTarget(std::vector<ParameterDouble*>*& outVec, Parame
     for(int tp = 0; tp < numPsiTypes; tp++){
         if(psiField[tp] == nullptr && numFree(psi[tp]) >= 2) vcands.push_back(&psi[tp]);
     }
+    if(lambdaField != nullptr) fcands.push_back(lambdaField);
+    if(muField != nullptr) fcands.push_back(muField);
+    for(int tp = 0; tp < numPsiTypes; tp++)
+        if(psiField[tp] != nullptr) fcands.push_back(psiField[tp]);
     int n = (int)(vcands.size() + fcands.size());
     if(n == 0) return;
     int idx = (int)(rng.uniformRv() * n);
@@ -783,7 +816,7 @@ double FBDTreeModel::doRateVectorScale(void){
     double c = std::exp(rateVecStep * d);
     double h;
     if(lastRateField != nullptr){
-        h = lastRateField->scaleAllProposed(c);
+        h = lastRateField->scaleAllProposed(c, true);
     }else{
         int nFree = 0;
         for(ParameterDouble* p : *lastRateVec)
@@ -1004,10 +1037,10 @@ double FBDTreeModel::update(void){
         updateGammaCache();
 
     lastMoveKind = MK_PARAM;
-    bool haveIid = (lambdaField == nullptr && numFree(lambda) >= 2)
-                || (muField == nullptr && numFree(mu) >= 2);
+    bool haveIid = (lambdaField != nullptr || numFree(lambda) >= 2)
+                || (muField != nullptr || numFree(mu) >= 2);
     for(int tp = 0; tp < numPsiTypes && !haveIid; tp++)
-        if(psiField[tp] == nullptr && numFree(psi[tp]) >= 2) haveIid = true;
+        if(psiField[tp] != nullptr || numFree(psi[tp]) >= 2) haveIid = true;
     bool haveLMField = (lambdaField != nullptr || muField != nullptr);
     lastTreeMove = TM_NONE;
     if(haveIid && rng.uniformRv() < 0.20){
