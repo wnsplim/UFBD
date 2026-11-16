@@ -6,7 +6,7 @@ permalink: /sbc/
 
 # SBC manual
 
-`sbc` runs simulation-based calibration checking (Cook et al., 2006; Talts et al., 2020) of UFBD. For each replicate, it draws the parameters from the specified priors, simulates a dataset under the FBD process, analyzes the dataset with UFBD, and records the rank of each true value among the posterior samples. Building UFBD as in the [manual](manual.md#building) also builds `sbc`.
+`sbc` runs simulation-based calibration checking (Cook et al., 2006; Talts et al., 2020) of UFBD. For each replicate, it draws the parameters from the specified priors, simulates a dataset under the FBD process, analyzes the dataset with UFBD, and records the rank of each true value among the posterior samples. You can follow [manual](manual.md#building) instructions on building UFBD which also applies to `sbc`.
 
 ## Running
 
@@ -18,11 +18,11 @@ sbc -help
 
 `-sbc_mode simulate` only simulates the datasets, and `-sbc_mode emit` writes them as UFBD input files. `-sbc_ue <p>` makes each extant taxon an unsampled extant with probability `p`. The priors, the conditioning, the time bins and the MCMC settings take the same flags as `ufbd`.
 
-`-sbc_mode summarize` prints the summary below for rank files, for example the per-run files of a batch merged into one; node and fossil ranks files may carry a leading `chunk` column. Several comma-separated ranks files, with matching node and fossil ranks files, are summarized one after another, each under the last two directories of its path; each file is summarized exactly as it would be alone.
+`-sbc_mode summarize` prints the summary below for rank files, for example the per-run files of a batch merged into one.
 
 ## Summary
 
-For each quantity, `sbc` prints the p-value of the ECDF statistic γ (Säilynoja et al., 2022; Modrák et al., 2025) under uniform ranks (`p`), its Bonferroni (`p_Bonf`; Dunn, 1961), Benjamini–Hochberg (`p_BH`; Benjamini & Hochberg, 1995) and Benjamini–Yekutieli (`p_BY`; Benjamini & Yekutieli, 2001) adjustments over the quantities of the same ranks file, and `D`, the largest absolute difference between the ECDF of the ranks and the uniform CDF. The quantities are the columns of the ranks file, the origin (`x0`), the crown (`x1`), one internal node per replicate chosen at random (`random_node`), and, from the fossil ranks, the age of one fossil with a sampled age (`random_y`) and, with `-sbc_zone`, the attachment age of one fossil (`random_z`), each chosen at random per replicate. `-sbc_null <N>` sets the number of uniform rank sets used for the p-value (default 40,000). Please refer to the accompaying paper for further details.
+For each quantity, `sbc` prints the p-value of the ECDF statistic γ (Säilynoja et al., 2022) under uniform ranks (`p`), its Bonferroni (`p_Bonf`; Dunn, 1961), Benjamini–Hochberg (`p_BH`; Benjamini & Hochberg, 1995) and Benjamini–Yekutieli (`p_BY`; Benjamini & Yekutieli, 2001) adjustments over the quantities of the same ranks file. The quantities are the columns of the ranks file, the origin (`x0`), the crown (`x1`), one internal node per replicate chosen at random (`random_node`), and, from the fossil ranks, the age of one fossil with a sampled age (`random_y`) and, with `-sbc_zone`, the attachment age of one fossil (`random_z`), each chosen at random per replicate. `-sbc_null <N>` sets the number of uniform rank sets used for the p-value (default 40,000). Please refer to the accompaying paper for further details.
 
 ## Output
 

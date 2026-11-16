@@ -156,7 +156,7 @@ void FBDInput::readFossils(std::string path){
     if(rows.empty() == false && isHeaderRow(rows[0], "taxon"))
         rows.erase(rows.begin());
     for(std::vector<std::string>& row : rows){
-        if(row.size() < 5)
+        if(row.size() < 3)
             Msg::error("fossil row needs: taxon, min_age, max_age, clade, assignment");
         std::string taxon = row[0];
         double minAge = 0.0;
@@ -167,7 +167,7 @@ void FBDInput::readFossils(std::string path){
         }catch(...){
             Msg::error("fossil '" + taxon + "' has a non-numeric age");
         }
-        addFossil(taxon, minAge, maxAge, row[3], row[4], (row.size() >= 6) ? row[5] : "");
+        addFossil(taxon, minAge, maxAge, (row.size() >= 4) ? row[3] : "", (row.size() >= 5) ? row[4] : "", (row.size() >= 6) ? row[5] : "");
     }
 }
 
@@ -179,6 +179,17 @@ void FBDInput::addFossil(const std::string& taxon, double minAge, double maxAge,
         Msg::error("fossil '" + taxon + "' has min_age greater than max_age");
     if(minAge < 0.0)
         Msg::error("fossil '" + taxon + "' has a negative age");
+    double off = UserSettings::userSettings().getAgeOffset();
+    if(off > 0.0 && minAge < off)
+        Msg::error("fossil '" + taxon + "' youngest age " + std::to_string(minAge) + " is below the youngest rate-bin edge " + std::to_string(off) + ".");
+
+    Node* tip = tree->getTaxonNode(taxon);
+    if(tip != nullptr && tip->getIsTip() && UserSettings::userSettings().getModel() != Model::RFBD){
+        fossils.push_back(Fossil(taxon, minAge - off, maxAge - off, "", Assignment::TOTAL, typeName, true));
+        return;
+    }
+    if(cladeName.empty() || assignStr.empty())
+        Msg::error("fossil row needs: taxon, min_age, max_age, clade, assignment");
 
     Clade* clade = nullptr;
     for(Clade& c : clades)
@@ -215,9 +226,6 @@ void FBDInput::addFossil(const std::string& taxon, double minAge, double maxAge,
         assignment = Assignment::CROWN;
     }
 
-    double off = UserSettings::userSettings().getAgeOffset();
-    if(off > 0.0 && minAge < off)
-        Msg::error("fossil '" + taxon + "' youngest age " + std::to_string(minAge) + " is below the youngest rate-bin edge " + std::to_string(off) + ".");
     fossils.push_back(Fossil(taxon, minAge - off, maxAge - off, cladeName, assignment, typeName));
 }
 
@@ -276,6 +284,8 @@ void FBDInput::assignFossilAwareAges(void){
 
     std::map<Node*,double> minAges;
     for(Fossil& f : fossils){
+        if(f.getInBackbone())
+            continue;
         Clade* clade = nullptr;
         for(Clade& c : clades)
             if(c.getName() == f.getClade()){

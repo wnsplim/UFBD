@@ -82,8 +82,6 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     };
 
     std::vector<Fossil> unrFossils;
-    std::vector<std::string> bbClade;
-    std::vector<Assignment> bbAsg;
     if(isResolved == false){
         for(Fossil& f : fossils){
             Node* tip = t->getTaxonNode(f.getTaxon());
@@ -92,8 +90,6 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
             tip->setTime(0.5 * (f.getMinAge() + f.getMaxAge()));
             tip->setFossilAgeRange(f.getMinAge(), f.getMaxAge());
             backboneFossils.push_back({tip, f.getMinAge(), f.getMaxAge(), resolveType(f)});
-            bbClade.push_back(f.getClade());
-            bbAsg.push_back(f.getAssignment());
         }
         if(backboneFossils.empty() == false){
             t->liftInternalAgesAboveChildren();
@@ -114,14 +110,8 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
                     std::string fTaxon = fTip->getName();
                     double minCompat = std::numeric_limits<double>::infinity();
                     for(Fossil& g : fossils){
-                        if(g.getTaxon() == fTaxon) continue;
-                        std::map<std::string, Node*>::iterator ci = cladeCrown.find(g.getClade());
-                        if(ci == cladeCrown.end()) continue;
-                        if(isUnder(fTip, ci->second) == false) continue;
-                        if(g.getClade() == bbClade[k] &&
-                           ((bbAsg[k] == Assignment::CROWN && g.getAssignment() == Assignment::STEM) ||
-                            (bbAsg[k] == Assignment::STEM  && g.getAssignment() == Assignment::CROWN)))
-                            continue;
+                        if(g.getInBackbone() || g.getAssignment() == Assignment::STEM) continue;
+                        if(isUnder(fTip, cladeCrown[g.getClade()]) == false) continue;
                         if(g.getMinAge() < minCompat) minCompat = g.getMinAge();
                     }
                     if(backboneFossils[k].yMax >= minCompat)

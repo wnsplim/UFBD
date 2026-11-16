@@ -78,7 +78,7 @@ genus2	CROWN	500
 
 `backbone_tree` — NEWICK or NEXUS format. The tree must be rooted and bifurcating. UFBD holds the backbone topology fixed for the whole analysis. A backbone tip whose name matches a `fossils` file row becomes a non-contemporaneous tip. UFBD then draws its age uniformly between the `min_age` and the `max_age` of that fossil. A fossil in the backbone tree cannot become a sampled ancestor.
 
-If you want to fix where a fossil sits in the backbone tree (say, if fossil-only clade's position is very well known with regards to extant clades), put it in `backbone_tree` file as a tip and add it in a row in `fossils` file under the same name. Its `clade` must be defined in `clade_def` file, and its `assignment` follows the same rules as for an unresolved fossil. A clade in `clade_def` file can be defined only with fossil tips. Under `extinct` conditioning, the backbone tree (if given) can hold fossil tips only, with no sequence data.
+If you want to fix where a fossil sits in the backbone tree (say, if fossil-only clade's position is very well known with regards to extant clades), put it in `backbone_tree` file as a tip and add a row for it in `fossils` file under the same name, giving its `min_age` and `max_age`. UFBD does not read its `clade` and `assignment` columns, which can be left empty. A clade in `clade_def` file can be defined only with fossil tips. Under `extinct` conditioning, the backbone tree (if given) can hold fossil tips only, with no sequence data.
 
 `sequence` — FASTA, PHYLIP or NEXUS format.
 
@@ -208,11 +208,11 @@ ou_nu     = exp:2        # prior on the reversion rate per Myr
 
 `ou` replaces the per-bin priors, so `prior` and `mode = ou` together give an error. `ou` also errors when joined bins (e.g., `recent_old:(20,40)+(80,inf)` above) are set, as this makes piecewise smoothing incompatible.
 
-`ou_theta` sets the magnitude of the long-term rate. `normal:log(m),s` puts e^θ within m·e^(±2s) with 95% probability. The default `normal:log(0.2),1.6` give you about 0.009 to 4.6 events per lineage per Myr.
+`ou_theta` sets the magnitude of the long-term rate. `normal:log(m),s` puts $$e^\theta$$ within $$m e^{\pm 2s}$$ with 95% probability. The default `normal:log(0.2),1.6` covers about 0.009 to 4.6 events per lineage per Myr.
 
-`ou_sd` sets how far a bin's rate can sit with regards to the long-term rate e^θ. About 95% of bins lie within a factor e^(2σ) of it: σ = 0.35 allows a factor of 2, σ = 0.55 a factor of 3. The default `exp:3.3333` gives σ a mean of 0.3.
+`ou_sd` sets how far a bin's rate can sit with regards to the long-term rate $$e^\theta$$. About 95% of bins lie within a factor $$e^{2\sigma}$$ of it: $$\sigma = 0.35$$ allows a factor of 2, $$\sigma = 0.55$$ a factor of 3. The default `exp:3.3333` gives $$\sigma$$ a mean of 0.3. With this default, 95% of bins lie within a factor of 2.5 of $$e^\theta$$, and 99% within a factor of 5.4.
 
-`ou_nu` sets how strongly bins are tied. The log rates of two bins whose midpoints are Δ Myr apart have correlation e^(−νΔ). For a median correlation c between neighboring bins of width Δ, use `ou_nu = exp:r` with r = 0.693·Δ/(−ln c). For c = 0.7 this is r ≈ 1.94·Δ, close to the default `exp:2`. The data rarely inform ν, so this prior largely sets the smoothing.
+`ou_nu` sets how strongly bins are tied. The log rates of two bins whose midpoints are $$\Delta$$ Myr apart have correlation $$e^{-\nu\Delta}$$. For a median correlation $$c$$ between neighboring bins of width $$\Delta$$, use `ou_nu = exp:r` with $$r = 0.693\,\Delta/(-\ln c)$$. For $$c = 0.7$$ this is $$r \approx 1.94\,\Delta$$, close to the default `exp:2`. The data rarely inform $$\nu$$, so this prior largely sets the smoothing.
 
 ### `[psi <type>]`
 

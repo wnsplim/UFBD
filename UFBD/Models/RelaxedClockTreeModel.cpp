@@ -122,6 +122,8 @@ void RelaxedClockTreeModel::crownInitScale(Tree* t, std::vector<Clade>& clades, 
 
     std::map<Node*,double> floor;
     for(Fossil& f : fossils){
+        if(f.getInBackbone())
+            continue;
         Clade* clade = nullptr;
         for(Clade& c : clades)
             if(c.getName() == f.getClade()){ clade = &c; break; }
