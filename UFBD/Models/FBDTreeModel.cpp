@@ -485,7 +485,8 @@ std::vector<std::string> FBDTreeModel::getParameterNames(void){
 }
 
 void FBDTreeModel::appendFieldMask(std::vector<bool>& m, ParameterOUField* f, size_t nRates){
-    m.insert(m.end(), nRates + 1, false);
+    m.insert(m.end(), nRates, false);
+    m.push_back(f->isThetaFixed());
     m.push_back(f->isSdFixed());
     m.push_back(f->isNuFixed());
 }

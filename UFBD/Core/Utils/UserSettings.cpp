@@ -50,6 +50,22 @@ static bool isPriorFamilyKeyword(const std::string& s){
         || k == "normal" || k == "improper" || k == "empirical";
 }
 
+static bool parseGrammarNumber(const std::string& s, double& v){
+    std::string t = s;
+    while (t.empty() == false && std::isspace((unsigned char)t.back())) t.pop_back();
+    bool isLog = (t.size() > 5 && t.compare(0, 4, "log(") == 0 && t.back() == ')');
+    if (isLog) t = t.substr(4, t.size() - 5);
+    size_t used = 0;
+    try { v = std::stod(t, &used); }
+    catch (...) { return false; }
+    if (used != t.size()) return false;
+    if (isLog) {
+        if (v <= 0.0) return false;
+        v = std::log(v);
+    }
+    return true;
+}
+
 std::vector<double> UserSettings::getSkylineTimes(void){
     std::set<double> u;
     for(double t : lambdaSkylineTimes) u.insert(t);
@@ -72,7 +88,6 @@ std::vector<double> UserSettings::getPsiSkylineTimes(int t){
     if(psiTypeNames.empty() == false){
         std::map<std::string, std::vector<double>>::iterator it = psiTimesByName.find(psiTypeNames[t]);
         if(it != psiTimesByName.end()) return it->second;
-        return std::vector<double>();
     }
     return psiSkylineTimes;
 }
@@ -81,7 +96,6 @@ RateMode UserSettings::getPsiMode(int t){
     if(psiTypeNames.empty() == false){
         std::map<std::string, RateMode>::iterator it = psiModeByName.find(psiTypeNames[t]);
         if(it != psiModeByName.end()) return it->second;
-        return RateMode::INDEP;
     }
     return psiMode;
 }
@@ -90,7 +104,6 @@ OUHyperSpec UserSettings::getPsiOU(int t){
     if(psiTypeNames.empty() == false){
         std::map<std::string, OUHyperSpec>::iterator it = psiOUByName.find(psiTypeNames[t]);
         if(it != psiOUByName.end()) return it->second;
-        return OUHyperSpec();
     }
     return psiOU;
 }
@@ -399,25 +412,8 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 if (ms != "indep" && ms != "ou") Msg::error("flag \"-psi_prior_mode\" expects indep|ou, but got \"" + ms + "\".");
                 RateMode m = (ms == "ou") ? RateMode::OU : RateMode::INDEP;
                 if (nm.empty()) psiMode = m; else psiModeByName[nm] = m;
-            } else if (arg == "-lambda_ou_theta" || arg == "-mu_ou_theta" || arg == "-psi_ou_theta") {
-                bool isPsi = (arg.rfind("-psi_", 0) == 0);
-                std::string nm, body = val;
-                if (isPsi) {
-                    size_t c = val.find(':');
-                    if (c != std::string::npos) { nm = val.substr(0, c); body = val.substr(c + 1); }
-                }
-                OUHyperSpec* target;
-                if (arg.rfind("-lambda_", 0) == 0)   target = &lambdaOU;
-                else if (arg.rfind("-mu_", 0) == 0)   target = &muOU;
-                else                                  target = nm.empty() ? &psiOU : &psiOUByName[nm];
-                double med, sd;
-                size_t comma = body.find(',');
-                if (comma == std::string::npos) Msg::error("flag \"" + arg + "\" expects median,sd, but got \"" + val + "\".");
-                try { med = std::stod(body.substr(0, comma)); sd = std::stod(body.substr(comma + 1)); }
-                catch (...) { Msg::error("flag \"" + arg + "\" expects median,sd, but got \"" + val + "\"."); }
-                if (med <= 0.0 || sd <= 0.0) Msg::error("flag \"" + arg + "\" median and sd must be > 0.");
-                target->thetaSet = true; target->thetaMedian = med; target->thetaSd = sd;
-            } else if (arg == "-lambda_ou_sd" || arg == "-mu_ou_sd" || arg == "-psi_ou_sd"
+            } else if (arg == "-lambda_ou_theta" || arg == "-mu_ou_theta" || arg == "-psi_ou_theta"
+                    || arg == "-lambda_ou_sd" || arg == "-mu_ou_sd" || arg == "-psi_ou_sd"
                     || arg == "-lambda_ou_nu" || arg == "-mu_ou_nu" || arg == "-psi_ou_nu") {
                 bool isPsi = (arg.rfind("-psi_", 0) == 0);
                 std::string nm, body = val;
@@ -429,7 +425,8 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 if (arg.rfind("-lambda_", 0) == 0)   target = &lambdaOU;
                 else if (arg.rfind("-mu_", 0) == 0)   target = &muOU;
                 else                                  target = nm.empty() ? &psiOU : &psiOUByName[nm];
-                Probability::PriorSpec& ps = (arg.find("_ou_sd") != std::string::npos) ? target->sdPrior : target->nuPrior;
+                Probability::PriorSpec& ps = (arg.find("_ou_theta") != std::string::npos) ? target->thetaPrior
+                                           : (arg.find("_ou_sd") != std::string::npos) ? target->sdPrior : target->nuPrior;
                 parsePriorInto(body, ps.family, ps.p1, ps.p2, ps.p3);
                 ps.set = true;
             } else if (arg == "-age_offset") {
@@ -752,16 +749,13 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
 
 void UserSettings::parsePriorInto(const std::string& spec, Probability::PriorFamily& family, double& p1, double& p2, double& p3) {
     p3 = 0.0;
-    const std::string help = "prior must be a fixed number or a distribution written improper[:offset], exp:rate[,offset], gamma:shape,rate[,offset], lognormal:mu,sigma[,offset], unif:a,b, truncnormal:mean,sd[,offset], or empirical:file; got \"" + spec + "\".";
+    const std::string help = "prior must be a fixed number or a distribution written improper[:offset], exp:rate[,offset], gamma:shape,rate[,offset], lognormal:mu,sigma[,offset], unif:a,b, normal:mean,sd[,offset], truncnormal:mean,sd[,offset], or empirical:file; got \"" + spec + "\".";
     size_t cp = spec.find(':');
     if (cp == std::string::npos) {
         std::string s = spec;
         for (char& ch : s) ch = std::tolower((unsigned char)ch);
         if (s == "improper") { family = Probability::PriorFamily::IMPROPER; return; }
-        size_t used = 0;
-        try { p1 = std::stod(spec, &used); }
-        catch (...) { Msg::error(help); }
-        if (used != spec.size()) Msg::error(help);
+        if (parseGrammarNumber(spec, p1) == false) Msg::error(help);
         family = Probability::PriorFamily::FIXED;
         return;
     }
@@ -781,8 +775,9 @@ void UserSettings::parsePriorInto(const std::string& spec, Probability::PriorFam
     std::stringstream ss(spec.substr(cp + 1));
     std::string tok;
     while (std::getline(ss, tok, ',')) {
-        try { ps.push_back(std::stod(tok)); }
-        catch (...) { Msg::error("prior parameter \"" + tok + "\" is not a number in \"" + spec + "\"."); }
+        double x;
+        if (parseGrammarNumber(tok, x) == false) Msg::error("prior parameter \"" + tok + "\" is not a number or log(number) in \"" + spec + "\".");
+        ps.push_back(x);
     }
     if (fam == "exp" || fam == "exponential") {
         if ((ps.size() != 1 && ps.size() != 2) || ps[0] <= 0.0) Msg::error("exp prior needs one positive rate and an optional offset: exp:rate[,offset].");
@@ -863,7 +858,8 @@ setting appears in both, the config file is prioritized.
 
 A prior is written one of these ways:
   improper | <number> (fixed value) | exp:rate | gamma:shape,rate |
-  lognormal:mu,sigma | unif:a,b | truncnormal:mean,sd
+  lognormal:mu,sigma | unif:a,b | normal:mean,sd | truncnormal:mean,sd
+Any number may be written log(x), e.g. normal:log(0.2),1.6
 
 REQUIRED
   -fossils <file>         tab-separated: taxon, min age, max age, clade,
@@ -927,9 +923,9 @@ SKYLINE  (piecewise-constant rates; write lambda, mu, or psi for <r>)
                           independent rates, or log-OU smoothing across bins (default indep)
   -<r>_prior <gid>:<prior>
                           per-bin prior for one bin group (mode indep only)
-  -<r>_ou_theta <med,sd>  OU level: theta ~ Normal(log(med), sd) (mode ou) (default 0.2,1.6)
+  -<r>_ou_theta <prior>   prior on the OU level theta (a log rate), written as for -<r>_prior (mode ou) (default normal:log(0.2),1.6)
   -<r>_ou_sd <prior>      prior on the OU log-SD, written as for -<r>_prior (mode ou) (default exp:3.3333)
-  -<r>_ou_nu <prior>      prior on the OU reversion rate /Myr, written as for -<r>_prior (mode ou) (default exp:10)
+  -<r>_ou_nu <prior>      prior on the OU reversion rate /Myr, written as for -<r>_prior (mode ou) (default exp:2)
   -age_offset <t_min>     shift the skyline support to [t_min, inf); using this implies
                           assuming that the clade went extinct by t_min if t_min>0 (default 0)
 
@@ -939,7 +935,9 @@ MULTIPLE PRESERVATION TYPES  (split psi by type)
   Give per-type flags a 'name:' prefix, e.g.
     -psi_prior type1:unif:0.01,0.04
     -psi_skyline_times type1:20,40
-    -psi_prior_mode type1:indep
+    -psi_prior_mode type1:ou
+    -psi_ou_theta type1:normal:log(0.05),1
+  A -psi_* flag without a prefix applies to every type without one of its own.
 
 CLOCK & SUBSTITUTION MODEL
   -sequence <file>        alignment (FASTA / PHYLIP / NEXUS)

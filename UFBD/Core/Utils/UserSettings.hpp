@@ -16,8 +16,7 @@ enum class Sigma2Param { PNCP, C, NC }; // PNCP: halt — not selectable, detach
 enum class ClockPartitionMode { UNSET, ALL, SINGLE, MANUAL };
 
 struct OUHyperSpec {
-    bool   thetaSet = false; double thetaMedian = 0.0, thetaSd = 0.0;
-    Probability::PriorSpec sdPrior, nuPrior;
+    Probability::PriorSpec thetaPrior, sdPrior, nuPrior;
 };
 
 class UserSettings {

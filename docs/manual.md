@@ -44,6 +44,7 @@ truncnormal:55,2  truncnorm:55,2          # mean, sd, truncated at 0
 improper                                  # improper Unif[0,inf) distribution
 empirical:samples.txt                     # file of samples, one per line
 0.05                                      # a bare number for fixed value
+normal:log(0.2),1.6                       # any number may be written log(x) (treated as natural logarithm)
 ```
 
 Every family except `unif` and `empirical` accepts an offset. The offset moves the support of the distribution. For example, `exp:0.1,50.0` starts at 50.0, `truncnorm:55,2,50` is truncated at 50, and `improper:100` is flat above 100. `empirical` uses a file of samples as the prior. This lets you pass in the posterior of an earlier analysis with no parametric fit. Under `-age_offset`, UFBD shifts the samples with the rest of the model.
@@ -205,12 +206,12 @@ mode      = indep
 [mu]
 time_bins = early:(0,30) | mid:(30,60) | old:(60,inf)
 mode      = ou
-ou_theta  = 0.2,1.6      # theta ~ Normal(log(median), sd)
+ou_theta  = normal:log(0.2),1.6  # prior on the OU level theta (a log rate)
 ou_sd     = exp:3.3333   # prior on the OU log-SD
-ou_nu     = exp:10       # prior on the reversion rate per Myr
+ou_nu     = exp:2        # prior on the reversion rate per Myr
 ```
 
-`ou` replaces the per-bin priors, so `prior` and `mode = ou` together give an error. `ou` also rejects union bins, because piecewise smoothing is not compatible with them. With one bin only, UFBD uses `indep` and gives a warning, because there is nothing to smooth. The three hyperparameters are optional. `ou_theta` takes a median and an sd; `ou_sd` and `ou_nu` take a prior written as for `prior`, and a single number fixes them. The defaults are `ou_theta = 0.2,1.6`, `ou_sd = exp:3.3333` and `ou_nu = exp:10`. The default `ou_nu` does not depend on the bins, so the correlation between two bins depends only on the time between their midpoints.
+`ou` replaces the per-bin priors, so `prior` and `mode = ou` together give an error. `ou` also rejects union bins, because piecewise smoothing is not compatible with them. With one bin only, UFBD uses `indep` and gives a warning, because there is nothing to smooth. The three hyperparameters are optional. `ou_theta`, `ou_sd` and `ou_nu` take a prior written as for `prior`, and a single number fixes them. `ou_theta` is a prior on θ itself, the long-term mean of the log rate. The defaults are `ou_theta = normal:log(0.2),1.6`, `ou_sd = exp:3.3333` and `ou_nu = exp:2`. The default `ou_nu` does not depend on the bins, so the correlation between two bins depends only on the time between their midpoints.
 
 ### `[psi <type>]`
 
@@ -351,9 +352,9 @@ The same defaults hold in `[lambda]`, `[mu]` and every `[psi <type>]`:
 ```ini
 prior    = exp:5
 mode     = indep
-ou_theta = 0.2,1.6
+ou_theta = normal:log(0.2),1.6
 ou_sd    = exp:3.3333
-ou_nu    = exp:10
+ou_nu    = exp:2
 ```
 
 ```ini

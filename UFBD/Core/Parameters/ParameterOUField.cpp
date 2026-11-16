@@ -19,20 +19,18 @@ ParameterOUField::ParameterOUField(double prob, PhylogeneticModel* m, int nB, co
     loEdges = lo;
     originAge = orig;
 
-    double thMed = ou.thetaSet ? ou.thetaMedian : 0.2;
-    thetaMean = std::log(thMed);
-    thetaSd = ou.thetaSet ? ou.thetaSd : 1.6;
-    theta[0] = theta[1] = thetaMean;
+    thetaPrior = ou.thetaPrior.set ? ou.thetaPrior : Probability::PriorSpec{true, Probability::PriorFamily::NORMAL, std::log(0.2), 1.6, 0.0};
+    theta[0] = theta[1] = Probability::priorMean(thetaPrior.family, thetaPrior.p1, thetaPrior.p2, thetaPrior.p3);
 
-    double r0 = (init0 > 0.0) ? init0 : thMed;
+    double r0 = (init0 > 0.0) ? init0 : std::exp(theta[0]);
     rateVal[0].assign(nBins, r0);
     rateVal[1].assign(nBins, r0);
 
     sdPrior = ou.sdPrior.set ? ou.sdPrior : Probability::PriorSpec{true, Probability::PriorFamily::EXPONENTIAL, 1.0 / 0.3, 1.0, 0.0};
-    nuPrior = ou.nuPrior.set ? ou.nuPrior : Probability::PriorSpec{true, Probability::PriorFamily::EXPONENTIAL, 10.0, 1.0, 0.0};
+    nuPrior = ou.nuPrior.set ? ou.nuPrior : Probability::PriorSpec{true, Probability::PriorFamily::EXPONENTIAL, 2.0, 1.0, 0.0};
     sdEq[0] = sdEq[1] = Probability::priorMean(sdPrior.family, sdPrior.p1, sdPrior.p2, sdPrior.p3);
     nu[0] = nu[1] = Probability::priorMean(nuPrior.family, nuPrior.p1, nuPrior.p2, nuPrior.p3);
-    hyperMoves.push_back(OU_THETA);
+    if(isThetaFixed() == false) hyperMoves.push_back(OU_THETA);
     if(isSdFixed() == false) hyperMoves.push_back(OU_SDEQ);
     if(isNuFixed() == false) hyperMoves.push_back(OU_NU);
     if(isSdFixed() == false) hyperMoves.push_back(OU_JOINTSD);
@@ -58,7 +56,7 @@ double ParameterOUField::lnProbability(void){
     if(sd <= 0.0 || nuv <= 0.0)
         return -std::numeric_limits<double>::infinity();
 
-    double lp = Probability::Normal::lnPdf(thetaMean, thetaSd * thetaSd, th);
+    double lp = Probability::priorLnPdf(thetaPrior.family, thetaPrior.p1, thetaPrior.p2, th, -std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), thetaPrior.p3);
     lp += Probability::priorLnPdf(sdPrior.family, sdPrior.p1, sdPrior.p2, sd, 0.0, std::numeric_limits<double>::infinity(), sdPrior.p3);
     lp += Probability::priorLnPdf(nuPrior.family, nuPrior.p1, nuPrior.p2, nuv, 0.0, std::numeric_limits<double>::infinity(), nuPrior.p3);
 
@@ -89,7 +87,7 @@ double ParameterOUField::binMid(int c){
 }
 
 void ParameterOUField::drawFromPrior(RandomVariable* rng){
-    double th = Probability::Normal::rv(rng, thetaMean, thetaSd);
+    double th = Probability::priorRv(thetaPrior.family, thetaPrior.p1, thetaPrior.p2, rng, thetaPrior.p3);
     double sd = Probability::priorRv(sdPrior.family, sdPrior.p1, sdPrior.p2, rng, sdPrior.p3);
     double nuv = Probability::priorRv(nuPrior.family, nuPrior.p1, nuPrior.p2, rng, nuPrior.p3);
     std::vector<double> r(nBins);
@@ -273,7 +271,7 @@ void ParameterOUField::printPerBinAccept(std::ostream& os, const char* label) co
 double ParameterOUField::scaleAllProposed(double c, bool withTheta){
     for(int k = 0; k < nBins; k++)
         rateVal[0][k] = rateVal[1][k] * c;
-    if(withTheta)
+    if(withTheta && isThetaFixed() == false)
         theta[0] = theta[1] + std::log(c);
     return (double)nBins * std::log(c);
 }
@@ -298,7 +296,8 @@ double ParameterOUField::shiftRates(double d){
     double c = (rBar + d) / rBar;
     for(int k = 0; k < nBins; k++)
         rateVal[0][k] = rateVal[1][k] * c;
-    theta[0] = theta[1] + std::log(c);
+    if(isThetaFixed() == false)
+        theta[0] = theta[1] + std::log(c);
     return (double)(nBins - 1) * std::log(c);
 }
 
