@@ -210,7 +210,7 @@ ou_nu     = exp:2        # prior on the reversion rate per Myr
 
 `ou_theta` sets the magnitude of the long-term rate. `normal:log(m),s` puts $$e^\theta$$ within $$m e^{\pm 2s}$$ with 95% probability. The default `normal:log(0.2),1.6` covers about 0.009 to 4.6 events per lineage per Myr.
 
-`ou_sd` sets how far a bin's rate can sit with regards to the long-term rate $$e^\theta$$. About 95% of bins lie within a factor $$e^{2\sigma}$$ of it: $$\sigma = 0.35$$ allows a factor of 2, $$\sigma = 0.55$$ a factor of 3. The default `exp:3.3333` gives $$\sigma$$ a mean of 0.3. With this default, 95% of bins lie within a factor of 2.5 of $$e^\theta$$, and 99% within a factor of 5.4.
+`ou_sd` sets how far a bin's rate can sit with regards to the long-term rate $$e^\theta$$. About 95% of bins lie within a factor $$e^{2\sigma}$$ of it: $$\sigma = 0.35$$ allows a factor of 2, $$\sigma = 0.55$$ a factor of 3. The default `exp:3.3333` gives $$\sigma$$ a mean of 0.3. With this default, 50% of bins lie within a factor of 1.12 of $$e^\theta$$, and 95% within a factor of 2.5.
 
 `ou_nu` sets how strongly bins are tied. The log rates of two bins whose midpoints are $$\Delta$$ Myr apart have correlation $$e^{-\nu\Delta}$$. For a median correlation $$c$$ between neighboring bins of width $$\Delta$$, use `ou_nu = exp:r` with $$r = 0.693\,\Delta/(-\ln c)$$. For $$c = 0.7$$ this is $$r \approx 1.94\,\Delta$$, close to the default `exp:2`. The data rarely inform $$\nu$$, so this prior largely sets the smoothing.
 
