@@ -47,10 +47,6 @@ posterior quantiles. *Journal of Computational and Graphical Statistics, 15*(3),
 Dunn, O. J. (1961). Multiple comparisons among means. *Journal of the American Statistical Association,
 56*(293), 52–64. <https://doi.org/10.1080/01621459.1961.10482090>
 
-Modrák, M., Moon, A. H., Kim, S., Bürkner, P., Huurre, N., Faltejsková, K., Gelman, A., & Vehtari, A.
-(2025). Simulation-based calibration checking for Bayesian computation: The choice of test
-quantities shapes sensitivity. *Bayesian Analysis, 20*(2), 461–488. <https://doi.org/10.1214/23-BA1404>
-
 Säilynoja, T., Bürkner, P.-C., & Vehtari, A. (2022). Graphical test for discrete uniformity and its
 applications in goodness-of-fit evaluation and multiple sample comparison. *Statistics and
 Computing, 32*(2), 32. <https://doi.org/10.1007/s11222-022-10090-6>
