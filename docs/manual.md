@@ -37,7 +37,7 @@ Two options are available only as a command-line flag:
 ```
 exp:10            exponential:10          # rate
 gamma:2,3                                 # shape, rate
-lognormal:4.6,0.3                         # mu, sigma of the log
+lognormal:4.6,0.3                         # mu, sd of the log
 unif:0.03,0.06    uniform:0.03,0.06       # a, b
 normal:55,2                               # mean, sd
 truncnormal:55,2  truncnorm:55,2          # mean, sd, truncated at 0
