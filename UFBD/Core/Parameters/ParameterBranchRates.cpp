@@ -324,6 +324,7 @@ void BranchRateModel::writeState(std::ostream& os){
     Serialize::write2D(os, sigEllB);
     os << pncpFrozen << '\n';
     os << rasStep << ' ' << rasAccW << ' ' << rasAttW << '\n';
+    os << "ras " << rasAcc << ' ' << rasAtt << '\n';
 }
 
 void BranchRateModel::readState(std::istream& is){
@@ -353,6 +354,14 @@ void BranchRateModel::readState(std::istream& is){
     Serialize::read2D(is, sigEllB);
     is >> pncpFrozen;
     is >> rasStep >> rasAccW >> rasAttW;
+    std::streampos at = is.tellg();
+    std::string tag;
+    if((is >> tag) && tag == "ras")
+        is >> rasAcc >> rasAtt;
+    else{
+        is.clear();
+        is.seekg(at);
+    }
 }
 
 double BranchRateModel::constantDistanceMove(void){
