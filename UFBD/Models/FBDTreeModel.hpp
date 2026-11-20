@@ -67,7 +67,10 @@ class FBDTreeModel : public PhylogeneticModel {
         long                        getRelabelCross(void) { return relCross; }
         long                        getRelabelCrossSA(void) { return relCrossSA; }
     private:
-        double                      fossilTermLn(int i, int spineIdx, int ky = -1, int kz = -1);
+        double                      fossilTermLn(int i, int spineIdx, int ky = -1, int kz = -1, bool local = false);
+        double                      lnSurvDecParts(int i, double t, double& linear);
+        double                      lnDLocal(double t);
+        double                      lnDPlusDec(int i, double t);
         double                      term3Sum(void);
         double                      fossilSweepSequential(void);
         double                      fossilSweepParallel(void);
@@ -79,7 +82,6 @@ class FBDTreeModel : public PhylogeneticModel {
         int                         countResolvedSA(void);
         double                      lnD(double t);
         double                      fossilPqLn(double y, double z, int type, int ky = -1, int kz = -1);
-        double                      uePqLn(double z);
         double                      calculateLnSurvival(double t);
         double                      lnSurvivalWithin(int i, double t);
         double                      lnSurvDecrement(int i, double t);
@@ -92,6 +94,10 @@ class FBDTreeModel : public PhylogeneticModel {
         int                         findIndex(double t);
         double                      calculateLnQtAt(int i, double t);
         double                      calculateP0At(int i, double t);
+        double                      lnP0At(int i, double t);
+        double                      sampledAt(int i, double t);
+        double                      lnDenomAt(int i, double t);
+        double                      lnDBetween(int ky, int kz);
         double                      calculateP0(double t);
         double                      calculateP0HatAt(int i, double t);
         double                      calculateSurvivalAt(int i, double t);
@@ -173,14 +179,17 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<bool>           fossilIsCrown;
         double                      rho;
         std::vector<double>         c1Vec;
-        std::vector<double>         c2Vec;
+        std::vector<double>         cpbVec, cmbVec;
         std::vector<double>         ln2LambdaVec;
         std::vector<std::vector<double> > lnPsiTypeVec;
-        std::vector<double>         ePrev;
+        std::vector<double>         dPrev;
         std::vector<double>         lnDPrev;
+        std::vector<double>         lnDInc;
+        std::vector<double>         lamVec, muVec, psiTotVec, lnDenEnd;
+        std::vector<int>            ueFossils;
         std::vector<double>         lnSPrevHat;
         std::vector<double>         lnRPrev;
-        std::vector<double>         lnR2Prev;
+        std::vector<double>         lnDecInc, lnDecPair;
         double                      rhoVal;
         enum MoveKind { MK_PARAM, MK_AZGIBBS, MK_RATESHIFT, MK_RATEVEC, MK_UPDOWN, MK_JOINTSCALE };
         MoveKind                    lastMoveKind;
@@ -230,6 +239,7 @@ class FBDTreeModel : public PhylogeneticModel {
         bool                        cacheInit;
         std::vector<double>         fbdTermFoss;
         std::vector<double>         fbdTermNode;
+        std::vector<int>            fbdNodeBin, fbdDUses, fbdDecUses;
         std::vector<double>         fbdPrevGammaLn, fbdPrevFy, fbdPrevFz;
         std::vector<int>            fbdPrevKind;
         std::vector<int>            fbdKy, fbdKz;
