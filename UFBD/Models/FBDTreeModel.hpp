@@ -33,8 +33,6 @@ struct SkylineRates {
     std::vector<int>            lambdaIdx;
     std::vector<int>            muIdx;
     std::vector<std::vector<int>> psiIdx;
-    double                      rho;
-    double                      rhoVal;
     int                         numPsiTypes = 1;
     std::vector<std::string>    psiTypeNames;
     std::vector<int>            fossilType;
@@ -194,6 +192,7 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<std::string>    getRateNames(const SkylineRates& s);
         std::vector<double>         getRateString(const SkylineRates& s);
         SkylineRates                a;
+        double                      rho;
         bool                        haveIid = false, haveLMField = false;
         //ordered by memory footprint
         std::vector<std::pair<std::string,std::string>> rateMapRows;

@@ -200,6 +200,7 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     if(originAge != nullptr)
         parameters.push_back(originAge);
 
+    rho = UserSettings::userSettings().getRho();
     buildRates(UserSettings::userSettings(), a);
     for(Fossil& f : backboneDefs)
         a.backboneType.push_back(resolveType(f, a.psiTypeNames));
@@ -324,7 +325,6 @@ void FBDTreeModel::buildRates(UserSettings& us, SkylineRates& s){
         for(int& u : s.psiIdx[tp]) u = b2c[u];
         appendRateMap(psiTimes[tp], b2c, s.psiName[tp]);
     }
-    s.rho = us.getRho();
 }
 
 std::vector<int> FBDTreeModel::buildSkylineRates(const std::string& prefix, const std::string& sep, int nBins, const std::vector<double>& times, RateMode mode, const OUHyperSpec& ou, const Probability::PriorSpec& basePrior, double rate0, double avoid, const std::vector<int>& groupIds, const std::vector<std::string>& groupLabels, const std::map<int,Probability::PriorSpec>& groupPrior, std::vector<ParameterDouble*>& outVec, ParameterOUField*& outField, std::vector<std::string>& outNames){
@@ -1305,8 +1305,6 @@ double FBDTreeModel::calculateFBDProbability(void){
     double crownAge = tree->getCrown()->getTime();
     std::vector<Node*>& dpseq = tree->getDownPassSequence();
 
-    a.rhoVal = a.rho;
-
     prepareIntervals();
 
     if(isResolved)
@@ -1342,7 +1340,7 @@ double FBDTreeModel::calculateFBDProbability(void){
         }
     }else{
         int k = findIndex(crownAge);
-        fbdProb += a.lnRPrev[k] - std::log(a.rhoVal) + incDecLn(k, crownAge) + lnDPlusDec(k, crownAge);
+        fbdProb += a.lnRPrev[k] - std::log(rho) + incDecLn(k, crownAge) + lnDPlusDec(k, crownAge);
         lnDPrevUses[k]++;
         decUses[k]++;
     }
@@ -1374,7 +1372,7 @@ double FBDTreeModel::calculateFBDProbability(void){
         if(nodeBin[idx] >= 0)
             lnDPrevUses[nodeBin[idx]]++;
     }
-    fbdProb += numExtantTips * std::log(a.rhoVal);
+    fbdProb += numExtantTips * std::log(rho);
     dbgT12 = fbdProb;
 
     //term 3: fossil attachment
@@ -1382,13 +1380,12 @@ double FBDTreeModel::calculateFBDProbability(void){
     updateGammaCache();
     int spineIdx = unresolvedFossils->getSpineIdx();
     std::vector<double> sig;
-    sig.reserve((2 + a.numPsiTypes) * a.c1Vec.size() + 1);
+    sig.reserve((2 + a.numPsiTypes) * a.c1Vec.size());
     for(size_t q = 0; q < a.c1Vec.size(); q++){
         sig.push_back(a.lamVec[q]); sig.push_back(a.muVec[q]);
         for(int t = 0; t < a.numPsiTypes; t++)
             sig.push_back(a.lnPsiTypeVec[t][q]);
     }
-    sig.push_back(a.rhoVal);
     bool ratesSame = a.fbdMemoInit && sig == a.fbdRateSig;
     if(a.fbdMemoInit == false || (int)a.fbdTermFoss.size() != numFossils){
         a.fbdTermFoss.assign(numFossils, 0.0);
@@ -1508,7 +1505,7 @@ double FBDTreeModel::fossilTermLn(int i, int spineIdx, int ky, int kz, bool loca
         return 0.0;
     if(unresolvedFossils->isUE(i)){
         double z = unresolvedFossils->getAttachAge(i);
-        return std::log(a.rhoVal) + a.ln2LambdaVec[findIndex(z)] + (local ? lnDLocal(z) : lnD(z)) + cachedGammaLn[i];
+        return std::log(rho) + a.ln2LambdaVec[findIndex(z)] + (local ? lnDLocal(z) : lnD(z)) + cachedGammaLn[i];
     }
     if(i == spineIdx){
         double ys = unresolvedFossils->getFossilAge(i);
@@ -1567,7 +1564,6 @@ double FBDTreeModel::zoneTermSum(const std::vector<int>& fos, double x0, bool us
 double FBDTreeModel::fossilSweep(void){
     RandomVariable* prevRng = RandomVariable::getActiveInstance();
     RandomVariable::setActiveInstance(&rng);
-    a.rhoVal = a.rho;
     prepareIntervals();
     updateGammaCache();
     double r = (unresolvedFossils->getSpineIdx() < 0) ? fossilSweepParallel() : fossilSweepSequential();
@@ -1793,7 +1789,7 @@ double FBDTreeModel::calculateResolvedFBD(void){
             lnP += lnDDiff(n->getAncestor()->getTime(), n->getTime());
         if(n->getIsTip()){
             if(n->getIsFossil() == false)
-                lnP += std::log(a.rhoVal);
+                lnP += std::log(rho);
             else{
                 int ft = 0;
                 if(a.numPsiTypes > 1){ std::map<std::string,int>::iterator it = a.fossilTypeByName.find(n->getName()); if(it != a.fossilTypeByName.end()) ft = it->second; }
@@ -1952,7 +1948,7 @@ void FBDTreeModel::prepareIntervals(void){
             a.cpbVec[i] = 4*li*pi / a.cmbVec[i];
         }
         if(i == 0){
-            a.dPrev[0] = a.rhoVal;
+            a.dPrev[0] = rho;
             a.lnDPrev[0] = 0.0;
         }else{
             int j = (int)i - 1;
@@ -1979,8 +1975,8 @@ void FBDTreeModel::prepareIntervals(void){
     a.lnRPrev.assign(n, 0.0);
     a.lnDecInc.resize(n);
     a.lnDecPair.resize(n);
-    a.lnSPrevHat[0] = std::log(a.rhoVal);
-    a.lnRPrev[0] = -std::log(a.rhoVal);
+    a.lnSPrevHat[0] = std::log(rho);
+    a.lnRPrev[0] = -std::log(rho);
     for(size_t i = 1; i < n; i++){
         int j = (int)i - 1;
         double linear;
