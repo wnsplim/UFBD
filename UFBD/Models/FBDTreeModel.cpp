@@ -34,6 +34,8 @@ static double offsetFromLambda(double rate0, double lam0, const Probability::Pri
     return rate0;
 }
 
+static int numFree(const std::vector<ParameterDouble*>& v);
+
 FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, unsigned int seed) :
     PhylogeneticModel(){
 
@@ -58,9 +60,6 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     upDownTotal = 0;
     cacheInit = false;
     zoneInit = false;
-    lambdaField = nullptr;
-    muField = nullptr;
-    numPsiTypes = UserSettings::userSettings().getNumPsiTypes();
     rng.setSeed(seed);
     RandomVariable* prevRng = RandomVariable::getActiveInstance();
     RandomVariable::setActiveInstance(&rng);
@@ -68,20 +67,17 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     parameterTree = new ParameterTree(1.0, this);
     isResolved = (UserSettings::userSettings().getModel() == Model::RFBD);
 
-    const std::vector<std::string>& psiTypeNames = UserSettings::userSettings().getPsiTypeNames();
-    std::map<std::string,int> typeIdx;
-    for(size_t k = 0; k < psiTypeNames.size(); k++) typeIdx[psiTypeNames[k]] = (int)k;
-    auto resolveType = [&](Fossil& f) -> int {
-        if(psiTypeNames.empty() || f.getMaxAge() <= 0.0) return 0;
+    auto resolveType = [&](Fossil& f, const std::vector<std::string>& names) -> int {
+        if(names.empty() || f.getMaxAge() <= 0.0) return 0;
         if(f.getType().empty())
             Msg::error("fossil '" + f.getTaxon() + "' has no preservation type, but -psi_types declares multiple types.");
-        std::map<std::string,int>::const_iterator it = typeIdx.find(f.getType());
-        if(it == typeIdx.end())
+        std::vector<std::string>::const_iterator it = std::find(names.begin(), names.end(), f.getType());
+        if(it == names.end())
             Msg::error("fossil '" + f.getTaxon() + "' has preservation type '" + f.getType() + "' not listed in -psi_types.");
-        return it->second;
+        return (int)(it - names.begin());
     };
 
-    std::vector<Fossil> unrFossils;
+    std::vector<Fossil> unrFossils, backboneDefs;
     if(isResolved == false){
         for(Fossil& f : fossils){
             Node* tip = t->getTaxonNode(f.getTaxon());
@@ -89,7 +85,8 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
             tip->setIsFossil(true);
             tip->setTime(0.5 * (f.getMinAge() + f.getMaxAge()));
             tip->setFossilAgeRange(f.getMinAge(), f.getMaxAge());
-            backboneFossils.push_back({tip, f.getMinAge(), f.getMaxAge(), resolveType(f)});
+            backboneFossils.push_back({tip, f.getMinAge(), f.getMaxAge()});
+            backboneDefs.push_back(f);
         }
         if(backboneFossils.empty() == false){
             t->liftInternalAgesAboveChildren();
@@ -202,79 +199,14 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     parameters.push_back(parameterTree);
     if(originAge != nullptr)
         parameters.push_back(originAge);
-    
-    UserSettings& rateUs = UserSettings::userSettings();
-    std::vector<double> lambdaTimes, muTimes;
-    lambdaTimes.push_back(0.0);
-    for(double t : rateUs.getLambdaSkylineTimes()) lambdaTimes.push_back(t);
-    muTimes.push_back(0.0);
-    for(double t : rateUs.getMuSkylineTimes())     muTimes.push_back(t);
-    std::vector<std::vector<double>> psiTimes(numPsiTypes);
-    for(int tp = 0; tp < numPsiTypes; tp++){
-        psiTimes[tp].push_back(0.0);
-        for(double t : rateUs.getPsiSkylineTimes(tp)) psiTimes[tp].push_back(t);
-    }
-    intervalStart.push_back(0.0);
-    for(double t : rateUs.getSkylineTimes())
-        intervalStart.push_back(t);
-    psiIdx.assign(numPsiTypes, std::vector<int>());
-    for(double s : intervalStart){
-        int li = 0, mi = 0;
-        for(int k = 0; k < (int)lambdaTimes.size(); k++) if(lambdaTimes[k] <= s) li = k;
-        for(int k = 0; k < (int)muTimes.size(); k++)     if(muTimes[k] <= s)     mi = k;
-        lambdaIdx.push_back(li);
-        muIdx.push_back(mi);
-        for(int tp = 0; tp < numPsiTypes; tp++){
-            int pi = 0;
-            for(int k = 0; k < (int)psiTimes[tp].size(); k++) if(psiTimes[tp][k] <= s) pi = k;
-            psiIdx[tp].push_back(pi);
-        }
-    }
-    Probability::PriorSpec lp = rateUs.getLambdaPrior();
-    Probability::PriorSpec mp = rateUs.getMuPrior();
-    if(rateUs.getLambdaMode() == RateMode::OU && (lp.set || rateUs.getLambdaGroupPrior().empty() == false)) Msg::error("-lambda_prior is only used under mode=indep; under mode=ou set the OU level with -lambda_ou_theta.");
-    if(rateUs.getMuMode() == RateMode::OU && (mp.set || rateUs.getMuGroupPrior().empty() == false)) Msg::error("-mu_prior is only used under mode=indep; under mode=ou set the OU level with -mu_ou_theta.");
-    Probability::PriorSpec defRate{true, Probability::PriorFamily::EXPONENTIAL, 5.0, 1.0};
-    if(!lp.set) lp = defRate;
-    if(!mp.set) mp = defRate;
-    int nLambda = (int)lambdaTimes.size();
-    int nMu = (int)muTimes.size();
-    double lam0 = Probability::priorMean(lp.family, lp.p1, lp.p2, lp.p3);
-    if(!(lam0 > 0.0 && std::isfinite(lam0))) lam0 = 0.1;
-    double mu0 = Probability::priorMean(mp.family, mp.p1, mp.p2, mp.p3);
-    if(!(mu0 > 0.0 && std::isfinite(mu0))) mu0 = 0.1;
-    {
-        std::vector<int> b2c = buildSkylineRates("lambda", "", nLambda, lambdaTimes, rateUs.getLambdaMode(), rateUs.getLambdaOU(), lp, lam0, std::numeric_limits<double>::quiet_NaN(), rateUs.getLambdaGroups(), rateUs.getLambdaGroupNames(), rateUs.getLambdaGroupPrior(), lambda, lambdaField, lambdaName);
-        for(int& u : lambdaIdx) u = b2c[u];
-        appendRateMap(lambdaTimes, b2c, lambdaName);
-    }
-    {
-        std::vector<int> b2c = buildSkylineRates("mu", "", nMu, muTimes, rateUs.getMuMode(), rateUs.getMuOU(), mp, mu0, lam0, rateUs.getMuGroups(), rateUs.getMuGroupNames(), rateUs.getMuGroupPrior(), mu, muField, muName);
-        for(int& u : muIdx) u = b2c[u];
-        appendRateMap(muTimes, b2c, muName);
-    }
-    psi.assign(numPsiTypes, std::vector<ParameterDouble*>());
-    psiField.assign(numPsiTypes, nullptr);
-    psiName.assign(numPsiTypes, std::vector<std::string>());
-    for(int tp = 0; tp < numPsiTypes; tp++){
-        Probability::PriorSpec pp = rateUs.getPsiPrior(tp);
-        if(rateUs.getPsiMode(tp) == RateMode::OU && (pp.set || rateUs.getPsiGroupPrior(tp).empty() == false)) Msg::error("-psi_prior is only used under mode=indep; under mode=ou set the OU level with -psi_ou_theta.");
-        if(!pp.set) pp = defRate;
-        double psi0 = Probability::priorMean(pp.family, pp.p1, pp.p2, pp.p3);
-        if(!(psi0 > 0.0 && std::isfinite(psi0))) psi0 = 0.1;
-        int nPsi = (int)psiTimes[tp].size();
-        std::string prefix = (numPsiTypes > 1) ? ("psi_" + rateUs.getPsiTypeNames()[tp]) : "psi";
-        std::string sep = (numPsiTypes > 1) ? "_" : "";
-        std::vector<int> b2c = buildSkylineRates(prefix, sep, nPsi, psiTimes[tp], rateUs.getPsiMode(tp), rateUs.getPsiOU(tp), pp, psi0, lam0, rateUs.getPsiGroups(tp), rateUs.getPsiGroupNames(tp), rateUs.getPsiGroupPrior(tp), psi[tp], psiField[tp], psiName[tp]);
-        for(int& u : psiIdx[tp]) u = b2c[u];
-        appendRateMap(psiTimes[tp], b2c, psiName[tp]);
-    }
-    rho = UserSettings::userSettings().getRho();
-    fossilType.assign((int)unrFossils.size(), 0);
-    for(size_t i = 0; i < unrFossils.size(); i++){
-        fossilType[i] = resolveType(unrFossils[i]);
-        fossilTypeByName[unrFossils[i].getTaxon()] = fossilType[i];
-        unrFossilName.push_back(unrFossils[i].getTaxon());
+
+    buildRates(UserSettings::userSettings(), a);
+    for(Fossil& f : backboneDefs)
+        a.backboneType.push_back(resolveType(f, a.psiTypeNames));
+    for(Fossil& f : unrFossils){
+        a.fossilType.push_back(resolveType(f, a.psiTypeNames));
+        a.fossilTypeByName[f.getTaxon()] = a.fossilType.back();
+        unrFossilName.push_back(f.getTaxon());
     }
 
     unresolvedFossils = nullptr;
@@ -301,14 +233,14 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
 
     if(isResolved){
         parameterTree->setProposalProbability(78.0);
-        for(ParameterDouble* l : lambda) l->setProposalProbability(15.0);
-        for(ParameterDouble* m : mu)     m->setProposalProbability(15.0);
-        for(auto& pv : psi) for(ParameterDouble* p : pv) p->setProposalProbability(15.0);
+        for(ParameterDouble* l : a.lambda) l->setProposalProbability(15.0);
+        for(ParameterDouble* m : a.mu)     m->setProposalProbability(15.0);
+        for(auto& pv : a.psi) for(ParameterDouble* p : pv) p->setProposalProbability(15.0);
     }
     double fieldBase = (isResolved ? 15.0 : 1.0);
-    if(lambdaField) lambdaField->setProposalProbability(fieldBase * (double)lambdaField->getNumBins());
-    if(muField)     muField->setProposalProbability(fieldBase * (double)muField->getNumBins());
-    for(int tp = 0; tp < numPsiTypes; tp++) if(psiField[tp]) psiField[tp]->setProposalProbability(fieldBase * (double)psiField[tp]->getNumBins());
+    if(a.lambdaField) a.lambdaField->setProposalProbability(fieldBase * (double)a.lambdaField->getNumBins());
+    if(a.muField)     a.muField->setProposalProbability(fieldBase * (double)a.muField->getNumBins());
+    for(int tp = 0; tp < a.numPsiTypes; tp++) if(a.psiField[tp]) a.psiField[tp]->setProposalProbability(fieldBase * (double)a.psiField[tp]->getNumBins());
 
     double sum = 0.0;
     for(Parameter* p : parameters)
@@ -316,7 +248,83 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     for(Parameter* p : parameters)
         p->setProposalProbability(p->getProposalProbability() / sum);
 
+    haveIid = (a.lambdaField != nullptr || numFree(a.lambda) >= 2) || (a.muField != nullptr || numFree(a.mu) >= 2);
+    for(int tp = 0; tp < a.numPsiTypes; tp++)
+        if(a.psiField[tp] != nullptr || numFree(a.psi[tp]) >= 2) haveIid = true;
+    haveLMField = (a.lambdaField != nullptr || a.muField != nullptr);
+
     RandomVariable::setActiveInstance(prevRng);
+}
+
+void FBDTreeModel::buildRates(UserSettings& us, SkylineRates& s){
+    std::vector<double> lambdaTimes, muTimes;
+    lambdaTimes.push_back(0.0);
+    for(double t : us.getLambdaSkylineTimes()) lambdaTimes.push_back(t);
+    muTimes.push_back(0.0);
+    for(double t : us.getMuSkylineTimes())     muTimes.push_back(t);
+    s.numPsiTypes = us.getNumPsiTypes();
+    s.psiTypeNames = us.getPsiTypeNames();
+    std::vector<std::vector<double>> psiTimes(s.numPsiTypes);
+    for(int tp = 0; tp < s.numPsiTypes; tp++){
+        psiTimes[tp].push_back(0.0);
+        for(double t : us.getPsiSkylineTimes(tp)) psiTimes[tp].push_back(t);
+    }
+    s.intervalStart.push_back(0.0);
+    for(double t : us.getSkylineTimes())
+        s.intervalStart.push_back(t);
+    s.psiIdx.assign(s.numPsiTypes, std::vector<int>());
+    for(double st : s.intervalStart){
+        int li = 0, mi = 0;
+        for(int k = 0; k < (int)lambdaTimes.size(); k++) if(lambdaTimes[k] <= st) li = k;
+        for(int k = 0; k < (int)muTimes.size(); k++)     if(muTimes[k] <= st)     mi = k;
+        s.lambdaIdx.push_back(li);
+        s.muIdx.push_back(mi);
+        for(int tp = 0; tp < s.numPsiTypes; tp++){
+            int pi = 0;
+            for(int k = 0; k < (int)psiTimes[tp].size(); k++) if(psiTimes[tp][k] <= st) pi = k;
+            s.psiIdx[tp].push_back(pi);
+        }
+    }
+    Probability::PriorSpec lp = us.getLambdaPrior();
+    Probability::PriorSpec mp = us.getMuPrior();
+    if(us.getLambdaMode() == RateMode::OU && (lp.set || us.getLambdaGroupPrior().empty() == false)) Msg::error("-lambda_prior is only used under mode=indep; under mode=ou set the OU level with -lambda_ou_theta.");
+    if(us.getMuMode() == RateMode::OU && (mp.set || us.getMuGroupPrior().empty() == false)) Msg::error("-mu_prior is only used under mode=indep; under mode=ou set the OU level with -mu_ou_theta.");
+    Probability::PriorSpec defRate{true, Probability::PriorFamily::EXPONENTIAL, 5.0, 1.0};
+    if(!lp.set) lp = defRate;
+    if(!mp.set) mp = defRate;
+    int nLambda = (int)lambdaTimes.size();
+    int nMu = (int)muTimes.size();
+    double lam0 = Probability::priorMean(lp.family, lp.p1, lp.p2, lp.p3);
+    if(!(lam0 > 0.0 && std::isfinite(lam0))) lam0 = 0.1;
+    double mu0 = Probability::priorMean(mp.family, mp.p1, mp.p2, mp.p3);
+    if(!(mu0 > 0.0 && std::isfinite(mu0))) mu0 = 0.1;
+    {
+        std::vector<int> b2c = buildSkylineRates("lambda", "", nLambda, lambdaTimes, us.getLambdaMode(), us.getLambdaOU(), lp, lam0, std::numeric_limits<double>::quiet_NaN(), us.getLambdaGroups(), us.getLambdaGroupNames(), us.getLambdaGroupPrior(), s.lambda, s.lambdaField, s.lambdaName);
+        for(int& u : s.lambdaIdx) u = b2c[u];
+        appendRateMap(lambdaTimes, b2c, s.lambdaName);
+    }
+    {
+        std::vector<int> b2c = buildSkylineRates("mu", "", nMu, muTimes, us.getMuMode(), us.getMuOU(), mp, mu0, lam0, us.getMuGroups(), us.getMuGroupNames(), us.getMuGroupPrior(), s.mu, s.muField, s.muName);
+        for(int& u : s.muIdx) u = b2c[u];
+        appendRateMap(muTimes, b2c, s.muName);
+    }
+    s.psi.assign(s.numPsiTypes, std::vector<ParameterDouble*>());
+    s.psiField.assign(s.numPsiTypes, nullptr);
+    s.psiName.assign(s.numPsiTypes, std::vector<std::string>());
+    for(int tp = 0; tp < s.numPsiTypes; tp++){
+        Probability::PriorSpec pp = us.getPsiPrior(tp);
+        if(us.getPsiMode(tp) == RateMode::OU && (pp.set || us.getPsiGroupPrior(tp).empty() == false)) Msg::error("-psi_prior is only used under mode=indep; under mode=ou set the OU level with -psi_ou_theta.");
+        if(!pp.set) pp = defRate;
+        double psi0 = Probability::priorMean(pp.family, pp.p1, pp.p2, pp.p3);
+        if(!(psi0 > 0.0 && std::isfinite(psi0))) psi0 = 0.1;
+        int nPsi = (int)psiTimes[tp].size();
+        std::string prefix = (s.numPsiTypes > 1) ? ("psi_" + s.psiTypeNames[tp]) : "psi";
+        std::string sep = (s.numPsiTypes > 1) ? "_" : "";
+        std::vector<int> b2c = buildSkylineRates(prefix, sep, nPsi, psiTimes[tp], us.getPsiMode(tp), us.getPsiOU(tp), pp, psi0, lam0, us.getPsiGroups(tp), us.getPsiGroupNames(tp), us.getPsiGroupPrior(tp), s.psi[tp], s.psiField[tp], s.psiName[tp]);
+        for(int& u : s.psiIdx[tp]) u = b2c[u];
+        appendRateMap(psiTimes[tp], b2c, s.psiName[tp]);
+    }
+    s.rho = us.getRho();
 }
 
 std::vector<int> FBDTreeModel::buildSkylineRates(const std::string& prefix, const std::string& sep, int nBins, const std::vector<double>& times, RateMode mode, const OUHyperSpec& ou, const Probability::PriorSpec& basePrior, double rate0, double avoid, const std::vector<int>& groupIds, const std::vector<std::string>& groupLabels, const std::map<int,Probability::PriorSpec>& groupPrior, std::vector<ParameterDouble*>& outVec, ParameterOUField*& outField, std::vector<std::string>& outNames){
@@ -405,25 +413,25 @@ std::string FBDTreeModel::getRateMap(void){
 }
 
 double FBDTreeModel::lambdaAt(int i){
-    int j = lambdaIdx[i];
-    return (lambdaField != nullptr) ? lambdaField->getRate(j) : lambda[j]->getValue();
+    int j = a.lambdaIdx[i];
+    return (a.lambdaField != nullptr) ? a.lambdaField->getRate(j) : a.lambda[j]->getValue();
 }
 
 double FBDTreeModel::muAt(int i){
-    int j = muIdx[i];
-    if(muField != nullptr)
-        return muField->getRate(j);
-    return mu[j]->getValue();
+    int j = a.muIdx[i];
+    if(a.muField != nullptr)
+        return a.muField->getRate(j);
+    return a.mu[j]->getValue();
 }
 
 double FBDTreeModel::psiOfTypeAt(int type, int i){
-    int j = psiIdx[type][i];
-    return (psiField[type] != nullptr) ? psiField[type]->getRate(j) : psi[type][j]->getValue();
+    int j = a.psiIdx[type][i];
+    return (a.psiField[type] != nullptr) ? a.psiField[type]->getRate(j) : a.psi[type][j]->getValue();
 }
 
 double FBDTreeModel::psiTotalAt(int i){
     double s = 0.0;
-    for(int t = 0; t < numPsiTypes; t++)
+    for(int t = 0; t < a.numPsiTypes; t++)
         s += psiOfTypeAt(t, i);
     return s;
 }
@@ -447,26 +455,53 @@ static bool nodeOnStalk(Node* n, Node* crown, Node* origin){
     return false;
 }
 
-std::vector<std::string> FBDTreeModel::getParameterNames(void){
+std::vector<std::string> FBDTreeModel::getRateNames(const SkylineRates& s){
     std::vector<std::string> names;
-    if(lambdaField != nullptr){
-        for(const std::string& n : lambdaName) names.push_back(n);
+    if(s.lambdaField != nullptr){
+        for(const std::string& n : s.lambdaName) names.push_back(n);
         names.push_back("ou_lambda_theta"); names.push_back("ou_lambda_sdEq"); names.push_back("ou_lambda_nu");
     }else
-        for(ParameterDouble* p : lambda) names.push_back(p->getName());
-    if(muField != nullptr){
-        for(const std::string& n : muName) names.push_back(n);
+        for(ParameterDouble* p : s.lambda) names.push_back(p->getName());
+    if(s.muField != nullptr){
+        for(const std::string& n : s.muName) names.push_back(n);
         names.push_back("ou_mu_theta"); names.push_back("ou_mu_sdEq"); names.push_back("ou_mu_nu");
     }else
-        for(ParameterDouble* p : mu) names.push_back(p->getName());
-    for(int tp = 0; tp < numPsiTypes; tp++){
-        if(psiField[tp] != nullptr){
-            for(const std::string& n : psiName[tp]) names.push_back(n);
-            std::string pf = "ou_psi" + (numPsiTypes > 1 ? "_" + UserSettings::userSettings().getPsiTypeNames()[tp] : std::string(""));
+        for(ParameterDouble* p : s.mu) names.push_back(p->getName());
+    for(int tp = 0; tp < s.numPsiTypes; tp++){
+        if(s.psiField[tp] != nullptr){
+            for(const std::string& n : s.psiName[tp]) names.push_back(n);
+            std::string pf = "ou_psi" + (s.numPsiTypes > 1 ? "_" + s.psiTypeNames[tp] : std::string(""));
             names.push_back(pf + "_theta"); names.push_back(pf + "_sdEq"); names.push_back(pf + "_nu");
         }else
-            for(ParameterDouble* p : psi[tp]) names.push_back(p->getName());
+            for(ParameterDouble* p : s.psi[tp]) names.push_back(p->getName());
     }
+    return names;
+}
+
+std::vector<double> FBDTreeModel::getRateString(const SkylineRates& s){
+    std::vector<double> vals;
+    if(s.lambdaField != nullptr){
+        for(int i = 0; i < s.lambdaField->getNumBins(); i++) vals.push_back(s.lambdaField->getRate(i));
+        vals.push_back(s.lambdaField->getTheta()); vals.push_back(s.lambdaField->getSdEq()); vals.push_back(s.lambdaField->getNu());
+    }else
+        for(ParameterDouble* p : s.lambda) vals.push_back(p->getValue());
+    if(s.muField != nullptr){
+        for(int i = 0; i < s.muField->getNumBins(); i++) vals.push_back(s.muField->getRate(i));
+        vals.push_back(s.muField->getTheta()); vals.push_back(s.muField->getSdEq()); vals.push_back(s.muField->getNu());
+    }else
+        for(ParameterDouble* p : s.mu) vals.push_back(p->getValue());
+    for(int tp = 0; tp < s.numPsiTypes; tp++){
+        if(s.psiField[tp] != nullptr){
+            for(int i = 0; i < s.psiField[tp]->getNumBins(); i++) vals.push_back(s.psiField[tp]->getRate(i));
+            vals.push_back(s.psiField[tp]->getTheta()); vals.push_back(s.psiField[tp]->getSdEq()); vals.push_back(s.psiField[tp]->getNu());
+        }else
+            for(ParameterDouble* p : s.psi[tp]) vals.push_back(p->getValue());
+    }
+    return vals;
+}
+
+std::vector<std::string> FBDTreeModel::getParameterNames(void){
+    std::vector<std::string> names = getRateNames(a);
     if(unresolvedFossils != nullptr || isResolved)
         names.push_back("nSA");
     if(originAge != nullptr)
@@ -484,16 +519,20 @@ void FBDTreeModel::appendFieldMask(std::vector<bool>& m, ParameterOUField* f, si
     m.push_back(f->isNuFixed());
 }
 
+void FBDTreeModel::appendRateMask(std::vector<bool>& m, const SkylineRates& s){
+    if(s.lambdaField != nullptr) appendFieldMask(m, s.lambdaField, s.lambdaName.size());
+    else for(ParameterDouble* p : s.lambda) m.push_back(p->getProposalProbability() == 0.0);
+    if(s.muField != nullptr) appendFieldMask(m, s.muField, s.muName.size());
+    else for(ParameterDouble* p : s.mu) m.push_back(p->getProposalProbability() == 0.0);
+    for(int tp = 0; tp < s.numPsiTypes; tp++){
+        if(s.psiField[tp] != nullptr) appendFieldMask(m, s.psiField[tp], s.psiName[tp].size());
+        else for(ParameterDouble* p : s.psi[tp]) m.push_back(p->getProposalProbability() == 0.0);
+    }
+}
+
 std::vector<bool> FBDTreeModel::getParameterFixedMask(void){
     std::vector<bool> m;
-    if(lambdaField != nullptr) appendFieldMask(m, lambdaField, lambdaName.size());
-    else for(ParameterDouble* p : lambda) m.push_back(p->getProposalProbability() == 0.0);
-    if(muField != nullptr) appendFieldMask(m, muField, muName.size());
-    else for(ParameterDouble* p : mu) m.push_back(p->getProposalProbability() == 0.0);
-    for(int tp = 0; tp < numPsiTypes; tp++){
-        if(psiField[tp] != nullptr) appendFieldMask(m, psiField[tp], psiName[tp].size());
-        else for(ParameterDouble* p : psi[tp]) m.push_back(p->getProposalProbability() == 0.0);
-    }
+    appendRateMask(m, a);
     if(unresolvedFossils != nullptr){
         int nNonUE = 0;
         for(int i = 0; i < unresolvedFossils->getNumFossils(); i++)
@@ -519,24 +558,7 @@ int FBDTreeModel::countResolvedSA(void){
 }
 
 std::vector<double> FBDTreeModel::getParameterString(void){
-    std::vector<double> vals;
-    if(lambdaField != nullptr){
-        for(int i = 0; i < lambdaField->getNumBins(); i++) vals.push_back(lambdaField->getRate(i));
-        vals.push_back(lambdaField->getTheta()); vals.push_back(lambdaField->getSdEq()); vals.push_back(lambdaField->getNu());
-    }else
-        for(ParameterDouble* p : lambda) vals.push_back(p->getValue());
-    if(muField != nullptr){
-        for(int i = 0; i < muField->getNumBins(); i++) vals.push_back(muField->getRate(i));
-        vals.push_back(muField->getTheta()); vals.push_back(muField->getSdEq()); vals.push_back(muField->getNu());
-    }else
-        for(ParameterDouble* p : mu) vals.push_back(p->getValue());
-    for(int tp = 0; tp < numPsiTypes; tp++){
-        if(psiField[tp] != nullptr){
-            for(int i = 0; i < psiField[tp]->getNumBins(); i++) vals.push_back(psiField[tp]->getRate(i));
-            vals.push_back(psiField[tp]->getTheta()); vals.push_back(psiField[tp]->getSdEq()); vals.push_back(psiField[tp]->getNu());
-        }else
-            for(ParameterDouble* p : psi[tp]) vals.push_back(p->getValue());
-    }
+    std::vector<double> vals = getRateString(a);
     if(unresolvedFossils != nullptr)
         vals.push_back((double)unresolvedFossils->getNumSampledAncestors());
     else if(isResolved)
@@ -646,20 +668,20 @@ double FBDTreeModel::evaluateAtGeneratingState(const std::vector<double>& lam, c
                                                const std::vector<double>& nodeAges, const std::vector<double>& y,
                                                const std::vector<double>& z, const std::vector<char>& sa,
                                                const std::vector<int>& zoneNode, double& lnPriorOut){
-    for(size_t i = 0; i < lambda.size(); i++)
-        lambda[i]->setValue(lam[i]);
-    for(size_t i = 0; i < mu.size(); i++)
-        mu[i]->setValue(muV[i]);
-    for(size_t t = 0; t < psi.size(); t++)
-        for(size_t i = 0; i < psi[t].size(); i++)
-            psi[t][i]->setValue(psiV[t][i]);
-    if(lambdaField != nullptr)
-        lambdaField->setState(lam, lamOU[0], lamOU[1], lamOU[2]);
-    if(muField != nullptr)
-        muField->setState(muV, muOU[0], muOU[1], muOU[2]);
-    for(size_t t = 0; t < psiField.size(); t++)
-        if(psiField[t] != nullptr)
-            psiField[t]->setState(psiV[t], psiOU[t][0], psiOU[t][1], psiOU[t][2]);
+    for(size_t i = 0; i < a.lambda.size(); i++)
+        a.lambda[i]->setValue(lam[i]);
+    for(size_t i = 0; i < a.mu.size(); i++)
+        a.mu[i]->setValue(muV[i]);
+    for(size_t t = 0; t < a.psi.size(); t++)
+        for(size_t i = 0; i < a.psi[t].size(); i++)
+            a.psi[t][i]->setValue(psiV[t][i]);
+    if(a.lambdaField != nullptr)
+        a.lambdaField->setState(lam, lamOU[0], lamOU[1], lamOU[2]);
+    if(a.muField != nullptr)
+        a.muField->setState(muV, muOU[0], muOU[1], muOU[2]);
+    for(size_t t = 0; t < a.psiField.size(); t++)
+        if(a.psiField[t] != nullptr)
+            a.psiField[t]->setState(psiV[t], psiOU[t][0], psiOU[t][1], psiOU[t][2]);
 
     Tree* tr = parameterTree->getTree();
     if(originAge != nullptr){
@@ -740,10 +762,10 @@ void FBDTreeModel::print(void){
             std::cout << "\t";
         }
     }
-    if(lambdaField) lambdaField->printPerBinAccept(std::cout, "lambda");
-    if(muField) muField->printPerBinAccept(std::cout, "mu");
-    for(size_t t = 0; t < psiField.size(); t++)
-        if(psiField[t]) psiField[t]->printPerBinAccept(std::cout, "psi");
+    if(a.lambdaField) a.lambdaField->printPerBinAccept(std::cout, "lambda");
+    if(a.muField) a.muField->printPerBinAccept(std::cout, "mu");
+    for(size_t t = 0; t < a.psiField.size(); t++)
+        if(a.psiField[t]) a.psiField[t]->printPerBinAccept(std::cout, "psi");
     if(unresolvedFossils != nullptr)
         unresolvedFossils->print();
     static const char* tmName[TM_COUNT] = {"NE","WB","WE","treeScale","SARJ","upDown","jointScale","subtree","nodeAge","crown"};
@@ -784,15 +806,15 @@ void FBDTreeModel::pickRateTarget(std::vector<ParameterDouble*>*& outVec, Parame
     outFld = nullptr;
     std::vector<std::vector<ParameterDouble*>*> vcands;
     std::vector<ParameterOUField*> fcands;
-    if(lambdaField == nullptr && numFree(lambda) >= 2) vcands.push_back(&lambda);
-    if(muField == nullptr && numFree(mu) >= 2) vcands.push_back(&mu);
-    for(int tp = 0; tp < numPsiTypes; tp++){
-        if(psiField[tp] == nullptr && numFree(psi[tp]) >= 2) vcands.push_back(&psi[tp]);
+    if(a.lambdaField == nullptr && numFree(a.lambda) >= 2) vcands.push_back(&a.lambda);
+    if(a.muField == nullptr && numFree(a.mu) >= 2) vcands.push_back(&a.mu);
+    for(int tp = 0; tp < a.numPsiTypes; tp++){
+        if(a.psiField[tp] == nullptr && numFree(a.psi[tp]) >= 2) vcands.push_back(&a.psi[tp]);
     }
-    if(lambdaField != nullptr) fcands.push_back(lambdaField);
-    if(muField != nullptr) fcands.push_back(muField);
-    for(int tp = 0; tp < numPsiTypes; tp++)
-        if(psiField[tp] != nullptr) fcands.push_back(psiField[tp]);
+    if(a.lambdaField != nullptr) fcands.push_back(a.lambdaField);
+    if(a.muField != nullptr) fcands.push_back(a.muField);
+    for(int tp = 0; tp < a.numPsiTypes; tp++)
+        if(a.psiField[tp] != nullptr) fcands.push_back(a.psiField[tp]);
     int n = (int)(vcands.size() + fcands.size());
     if(n == 0) return;
     int idx = (int)(rng.uniformRv() * n);
@@ -904,26 +926,26 @@ double FBDTreeModel::doRateShift(void){
     }
 
     double lnH = 0.0;
-    if(lambdaField != nullptr){
-        double j = lambdaField->shiftRates(d);
+    if(a.lambdaField != nullptr){
+        double j = a.lambdaField->shiftRates(d);
         if(std::isinf(j)) return -std::numeric_limits<double>::infinity();
         lnH += j;
     }else{
-        for(ParameterDouble* l : lambda)
+        for(ParameterDouble* l : a.lambda)
             if(l->getValue() + d <= 0.0)
                 return -std::numeric_limits<double>::infinity();
-        for(ParameterDouble* l : lambda)
+        for(ParameterDouble* l : a.lambda)
             l->shiftProposed(d);
     }
-    if(muField != nullptr){
-        double j = muField->shiftRates(d);
+    if(a.muField != nullptr){
+        double j = a.muField->shiftRates(d);
         if(std::isinf(j)) return -std::numeric_limits<double>::infinity();
         lnH += j;
     }else{
-        for(ParameterDouble* mv : mu)
+        for(ParameterDouble* mv : a.mu)
             if(mv->getValue() + d <= 0.0)
                 return -std::numeric_limits<double>::infinity();
-        for(ParameterDouble* mv : mu)
+        for(ParameterDouble* mv : a.mu)
             mv->shiftProposed(d);
     }
 
@@ -1031,11 +1053,6 @@ double FBDTreeModel::update(void){
         updateGammaCache();
 
     lastMoveKind = MK_PARAM;
-    bool haveIid = (lambdaField != nullptr || numFree(lambda) >= 2)
-                || (muField != nullptr || numFree(mu) >= 2);
-    for(int tp = 0; tp < numPsiTypes && !haveIid; tp++)
-        if(psiField[tp] != nullptr || numFree(psi[tp]) >= 2) haveIid = true;
-    bool haveLMField = (lambdaField != nullptr || muField != nullptr);
     lastTreeMove = TM_NONE;
     if(haveIid && rng.uniformRv() < 0.20){
         double r = (rng.uniformRv() < 0.5) ? doRateVectorScale() : doRateShrinkExpand();
@@ -1167,10 +1184,10 @@ void FBDTreeModel::updateForAcceptance(void){
         return;
     }
     if(lastMoveKind == MK_RATESHIFT){
-        if(lambdaField != nullptr) lambdaField->commitProposed();
-        else for(ParameterDouble* l : lambda) l->commitProposed();
-        if(muField != nullptr) muField->commitProposed();
-        else for(ParameterDouble* m : mu) m->commitProposed();
+        if(a.lambdaField != nullptr) a.lambdaField->commitProposed();
+        else for(ParameterDouble* l : a.lambda) l->commitProposed();
+        if(a.muField != nullptr) a.muField->commitProposed();
+        else for(ParameterDouble* m : a.mu) m->commitProposed();
         if(unresolvedFossils != nullptr) unresolvedFossils->updateForAcceptance();
         rsAccW++;
         rsAcc++;
@@ -1183,12 +1200,12 @@ void FBDTreeModel::updateForAcceptance(void){
         return;
     }
     if(lastMoveKind == MK_UPDOWN){
-        for(ParameterDouble* l : lambda) l->commitProposed();
-        for(ParameterDouble* m : mu) m->commitProposed();
-        for(auto& pv : psi) for(ParameterDouble* p : pv) p->commitProposed();
-        if(lambdaField != nullptr) lambdaField->commitProposed();
-        if(muField != nullptr) muField->commitProposed();
-        for(int tp = 0; tp < numPsiTypes; tp++) if(psiField[tp] != nullptr) psiField[tp]->commitProposed();
+        for(ParameterDouble* l : a.lambda) l->commitProposed();
+        for(ParameterDouble* m : a.mu) m->commitProposed();
+        for(auto& pv : a.psi) for(ParameterDouble* p : pv) p->commitProposed();
+        if(a.lambdaField != nullptr) a.lambdaField->commitProposed();
+        if(a.muField != nullptr) a.muField->commitProposed();
+        for(int tp = 0; tp < a.numPsiTypes; tp++) if(a.psiField[tp] != nullptr) a.psiField[tp]->commitProposed();
         if(originAge != nullptr) originAge->commitProposed();
         parameterTree->updateForAcceptance();
         if(unresolvedFossils != nullptr) unresolvedFossils->updateForAcceptance();
@@ -1215,10 +1232,10 @@ void FBDTreeModel::updateForRejection(void){
         return;
     }
     if(lastMoveKind == MK_RATESHIFT){
-        if(lambdaField != nullptr) lambdaField->restoreProposed();
-        else for(ParameterDouble* l : lambda) l->restoreProposed();
-        if(muField != nullptr) muField->restoreProposed();
-        else for(ParameterDouble* m : mu) m->restoreProposed();
+        if(a.lambdaField != nullptr) a.lambdaField->restoreProposed();
+        else for(ParameterDouble* l : a.lambda) l->restoreProposed();
+        if(a.muField != nullptr) a.muField->restoreProposed();
+        else for(ParameterDouble* m : a.mu) m->restoreProposed();
         if(unresolvedFossils != nullptr){
             unresolvedFossils->updateForRejection();
             rebuildStalkIndex();
@@ -1231,12 +1248,12 @@ void FBDTreeModel::updateForRejection(void){
         return;
     }
     if(lastMoveKind == MK_UPDOWN){
-        for(ParameterDouble* l : lambda) l->restoreProposed();
-        for(ParameterDouble* m : mu) m->restoreProposed();
-        for(auto& pv : psi) for(ParameterDouble* p : pv) p->restoreProposed();
-        if(lambdaField != nullptr) lambdaField->restoreProposed();
-        if(muField != nullptr) muField->restoreProposed();
-        for(int tp = 0; tp < numPsiTypes; tp++) if(psiField[tp] != nullptr) psiField[tp]->restoreProposed();
+        for(ParameterDouble* l : a.lambda) l->restoreProposed();
+        for(ParameterDouble* m : a.mu) m->restoreProposed();
+        for(auto& pv : a.psi) for(ParameterDouble* p : pv) p->restoreProposed();
+        if(a.lambdaField != nullptr) a.lambdaField->restoreProposed();
+        if(a.muField != nullptr) a.muField->restoreProposed();
+        for(int tp = 0; tp < a.numPsiTypes; tp++) if(a.psiField[tp] != nullptr) a.psiField[tp]->restoreProposed();
         if(originAge != nullptr) originAge->restoreProposed();
         parameterTree->updateForRejection();
         if(unresolvedFossils != nullptr) unresolvedFossils->updateForRejection();
@@ -1287,8 +1304,8 @@ double FBDTreeModel::calculateFBDProbability(void){
     int numInternalNodes = tree->getNumNodes() - tree->getNumBackbone();
     double crownAge = tree->getCrown()->getTime();
     std::vector<Node*>& dpseq = tree->getDownPassSequence();
-    
-    rhoVal = rho;
+
+    a.rhoVal = a.rho;
 
     prepareIntervals();
 
@@ -1299,8 +1316,8 @@ double FBDTreeModel::calculateFBDProbability(void){
     double fbdProb = 0.0;
     static const bool fbdDbg = (std::getenv("FBD_DBG") != nullptr);
     double dbgT1 = 0.0, dbgT12 = 0.0;
-    fbdDUses.assign(intervalStart.size(), 0);
-    fbdDecUses.assign(intervalStart.size(), 0);
+    fbdDUses.assign(a.intervalStart.size(), 0);
+    fbdDecUses.assign(a.intervalStart.size(), 0);
     std::vector<int>& lnDPrevUses = fbdDUses;
     std::vector<int>& decUses = fbdDecUses;
     Node* crownCond = useOrigin ? nullptr : tree->getCrown();
@@ -1318,14 +1335,14 @@ double FBDTreeModel::calculateFBDProbability(void){
         }
         int k = findIndex(x0);
         if(UserSettings::userSettings().getConditioningEvent() == ConditioningEvent::SURVIVAL)
-            fbdProb += lnRPrev[k] + incDecLn(k, x0);
+            fbdProb += a.lnRPrev[k] + incDecLn(k, x0);
         else{
             fbdProb += lnDLocal(x0) - calculateLnConditioning(x0);
             lnDPrevUses[k]++;
         }
     }else{
         int k = findIndex(crownAge);
-        fbdProb += lnRPrev[k] - std::log(rhoVal) + incDecLn(k, crownAge) + lnDPlusDec(k, crownAge);
+        fbdProb += a.lnRPrev[k] - std::log(a.rhoVal) + incDecLn(k, crownAge) + lnDPlusDec(k, crownAge);
         lnDPrevUses[k]++;
         decUses[k]++;
     }
@@ -1348,7 +1365,7 @@ double FBDTreeModel::calculateFBDProbability(void){
                 if(c != n->getAncestor()){ hasChild = true; break; }
             if(hasChild){
                 nodeBin[idx] = findIndex(n->getTime());
-                termNode[idx] = std::log(lamVec[nodeBin[idx]]) + lnDLocal(n->getTime());
+                termNode[idx] = std::log(a.lamVec[nodeBin[idx]]) + lnDLocal(n->getTime());
             }
         }
     });
@@ -1357,7 +1374,7 @@ double FBDTreeModel::calculateFBDProbability(void){
         if(nodeBin[idx] >= 0)
             lnDPrevUses[nodeBin[idx]]++;
     }
-    fbdProb += numExtantTips * std::log(rhoVal);
+    fbdProb += numExtantTips * std::log(a.rhoVal);
     dbgT12 = fbdProb;
 
     //term 3: fossil attachment
@@ -1365,70 +1382,71 @@ double FBDTreeModel::calculateFBDProbability(void){
     updateGammaCache();
     int spineIdx = unresolvedFossils->getSpineIdx();
     std::vector<double> sig;
-    sig.reserve((2 + numPsiTypes) * c1Vec.size() + 1);
-    for(size_t q = 0; q < c1Vec.size(); q++){
-        sig.push_back(lamVec[q]); sig.push_back(muVec[q]);
-        for(int t = 0; t < numPsiTypes; t++)
-            sig.push_back(lnPsiTypeVec[t][q]);
+    sig.reserve((2 + a.numPsiTypes) * a.c1Vec.size() + 1);
+    for(size_t q = 0; q < a.c1Vec.size(); q++){
+        sig.push_back(a.lamVec[q]); sig.push_back(a.muVec[q]);
+        for(int t = 0; t < a.numPsiTypes; t++)
+            sig.push_back(a.lnPsiTypeVec[t][q]);
     }
-    sig.push_back(rhoVal);
-    bool ratesSame = fbdMemoInit && sig == fbdRateSig;
-    if(fbdMemoInit == false || (int)fbdTermFoss.size() != numFossils){
-        fbdTermFoss.assign(numFossils, 0.0);
-        fbdPrevGammaLn.assign(numFossils, std::numeric_limits<double>::quiet_NaN());
-        fbdPrevFy.assign(numFossils, std::numeric_limits<double>::quiet_NaN());
-        fbdPrevFz.assign(numFossils, std::numeric_limits<double>::quiet_NaN());
-        fbdPrevKind.assign(numFossils, -1);
-        fbdKy.assign(numFossils, 0);
-        fbdKz.assign(numFossils, 0);
+    sig.push_back(a.rhoVal);
+    bool ratesSame = a.fbdMemoInit && sig == a.fbdRateSig;
+    if(a.fbdMemoInit == false || (int)a.fbdTermFoss.size() != numFossils){
+        a.fbdTermFoss.assign(numFossils, 0.0);
+        a.fbdPrevGammaLn.assign(numFossils, std::numeric_limits<double>::quiet_NaN());
+        a.fbdPrevFy.assign(numFossils, std::numeric_limits<double>::quiet_NaN());
+        a.fbdPrevFz.assign(numFossils, std::numeric_limits<double>::quiet_NaN());
+        a.fbdPrevKind.assign(numFossils, -1);
+        a.fbdKy.assign(numFossils, 0);
+        a.fbdKz.assign(numFossils, 0);
         ratesSame = false;
-        fbdMemoInit = true;
+        a.fbdMemoInit = true;
     }
-    fbdRateSig.swap(sig);
+    a.fbdRateSig.swap(sig);
 
-    std::vector<double>& termFoss = fbdTermFoss;
+    std::vector<double>& termFoss = a.fbdTermFoss;
     ThreadPool::current().parallelFor(OP_FBD, numFossils, [&](int lo, int hi){
         for(int i = lo; i < hi; i++){
             double gy = unresolvedFossils->getFossilAge(i);
             double gz = unresolvedFossils->getAttachAge(i);
             int kind = (unresolvedFossils->isSA(i) ? 2 : 0) | (i == spineIdx ? 1 : 0);
-            if(ratesSame && cachedGammaLn[i] == fbdPrevGammaLn[i] && gy == fbdPrevFy[i]
-               && gz == fbdPrevFz[i] && kind == fbdPrevKind[i])
+            if(ratesSame && cachedGammaLn[i] == a.fbdPrevGammaLn[i] && gy == a.fbdPrevFy[i]
+               && gz == a.fbdPrevFz[i] && kind == a.fbdPrevKind[i])
                 continue;
-            int ky = (gy == fbdPrevFy[i]) ? fbdKy[i] : findIndex(gy);
-            int kz = (gz == fbdPrevFz[i]) ? fbdKz[i] : findIndex(gz);
+            int ky = (gy == a.fbdPrevFy[i]) ? a.fbdKy[i] : findIndex(gy);
+            int kz = (gz == a.fbdPrevFz[i]) ? a.fbdKz[i] : findIndex(gz);
             termFoss[i] = fossilTermLn(i, spineIdx, ky, kz, true);
-            fbdPrevGammaLn[i] = cachedGammaLn[i];
-            fbdPrevFy[i] = gy;
-            fbdPrevFz[i] = gz;
-            fbdKy[i] = ky;
-            fbdKz[i] = kz;
-            fbdPrevKind[i] = kind;
+            a.fbdPrevGammaLn[i] = cachedGammaLn[i];
+            a.fbdPrevFy[i] = gy;
+            a.fbdPrevFz[i] = gz;
+            a.fbdKy[i] = ky;
+            a.fbdKz[i] = kz;
+            a.fbdPrevKind[i] = kind;
         }
     });
     for(int i = 0; i < numFossils; i++)
         fbdProb += termFoss[i];
     for(int i : ueFossils)
         if(i != spineIdx && unresolvedFossils->isSA(i) == false)
-            lnDPrevUses[fbdKz[i]]++;
+            lnDPrevUses[a.fbdKz[i]]++;
     if(spineIdx >= 0 && unresolvedFossils->isUE(spineIdx) == false && unresolvedFossils->isSA(spineIdx) == false)
-        lnDPrevUses[fbdKy[spineIdx]]--;
-    for(const BackboneFossil& bf : backboneFossils){
-        double y = bf.tip->getTime();
-        fbdProb += std::log(psiOfTypeAt(bf.type, findIndex(y))) + lnP0At(findIndex(y), y) - lnDLocal(y);
+        lnDPrevUses[a.fbdKy[spineIdx]]--;
+    for(size_t k = 0; k < backboneFossils.size(); k++){
+        double y = backboneFossils[k].tip->getTime();
+        fbdProb += std::log(psiOfTypeAt(a.backboneType[k], findIndex(y))) + lnP0At(findIndex(y), y) - lnDLocal(y);
         lnDPrevUses[findIndex(y)]--;
     }
+    // count x lnDInc per bin so lnDPrev offsets that cancel never gets added; absolue lnD terms lose every digits when c1*dt is large
     int olderD = 0, olderDec = 0;
     for(int j = (int)lnDPrevUses.size() - 2; j >= 0; j--){
         olderD += lnDPrevUses[j + 1];
         olderDec += decUses[j + 1];
         int pairs = (olderD > 0) ? std::min(olderD, olderDec) : 0;
         if(pairs > 0)
-            fbdProb += pairs * lnDecPair[j];
+            fbdProb += pairs * a.lnDecPair[j];
         if(olderD != pairs)
-            fbdProb += (olderD - pairs) * lnDInc[j];
+            fbdProb += (olderD - pairs) * a.lnDInc[j];
         if(olderDec != pairs)
-            fbdProb += (olderDec - pairs) * lnDecInc[j];
+            fbdProb += (olderDec - pairs) * a.lnDecInc[j];
     }
     if(fbdDbg){
         double t2 = dbgT12 - dbgT1;
@@ -1444,16 +1462,16 @@ double FBDTreeModel::calculateFBDProbability(void){
         int fam = 0; double fv = -1e300;
         for(int i = 0; i < numFossils; i++) if(termFoss[i] > fv){ fv = termFoss[i]; fam = i; }
         double yy = unresolvedFossils->getFossilAge(fam), zz = unresolvedFossils->getAttachAge(fam);
-        int ty = fossilType[fam];
+        int ty = a.fossilType[fam];
         std::cout << "[FBD_DBG_FOSS] i=" << fam << " term=" << fv << " isSA=" << unresolvedFossils->isSA(fam) << " isUE=" << unresolvedFossils->isUE(fam)
                   << " y=" << yy << " z=" << zz << " biny=" << findIndex(yy) << " binz=" << findIndex(zz)
                   << " logPsiY=" << std::log(psiOfTypeAt(ty, findIndex(yy))) << " log2LamZ=" << std::log(2 * lambdaAt(findIndex(zz)))
                   << " logP0Y=" << std::log(calculateP0(yy)) << " lnDz=" << lnD(zz) << " lnDy=" << lnD(yy) << " gammaLn=" << cachedGammaLn[fam] << "\n";
-        int ni = (int)intervalStart.size();
+        int ni = (int)a.intervalStart.size();
         for(int i = 0; i < ni; i++){
-            double p0 = calculateP0At(i, (i + 1 < ni) ? intervalStart[i + 1] : intervalStart[i] + 1.0);
-            std::cout << "[FBD_DBG_IV] i=" << i << " start=" << intervalStart[i] << " lam=" << lambdaAt(i) << " mu=" << muAt(i) << " psi=" << psiTotalAt(i)
-                      << " c1=" << c1Vec[i] << " P0end=" << p0 << " dPrev=" << dPrev[i] << "\n";
+            double p0 = calculateP0At(i, (i + 1 < ni) ? a.intervalStart[i + 1] : a.intervalStart[i] + 1.0);
+            std::cout << "[FBD_DBG_IV] i=" << i << " start=" << a.intervalStart[i] << " lam=" << lambdaAt(i) << " mu=" << muAt(i) << " psi=" << psiTotalAt(i)
+                      << " c1=" << a.c1Vec[i] << " P0end=" << p0 << " dPrev=" << a.dPrev[i] << "\n";
         }
         std::vector<double> divc(ni, 0.0), stalk(ni, 0.0), fy(ni, 0.0);
         double xtop = useOrigin ? originAge->getValue() : crownAge;
@@ -1471,13 +1489,13 @@ double FBDTreeModel::calculateFBDProbability(void){
             double zv = unresolvedFossils->getAttachAge(i);
             int bz = findIndex(zv); if(bz < ni) divc[bz] += 1.0;
             for(int b = 0; b < ni; b++){
-                double blo = intervalStart[b], bhi = (b + 1 < ni) ? intervalStart[b + 1] : xtop;
+                double blo = a.intervalStart[b], bhi = (b + 1 < ni) ? a.intervalStart[b + 1] : xtop;
                 double ov = std::min(zv, bhi) - std::max(yv, blo);
                 if(ov > 0.0) stalk[b] += ov;
             }
         }
         for(int b = 0; b < ni; b++)
-            std::cout << "[FBD_BAL] i=" << b << " [" << intervalStart[b] << "," << ((b + 1 < ni) ? intervalStart[b + 1] : xtop) << ") lam=" << lambdaAt(b)
+            std::cout << "[FBD_BAL] i=" << b << " [" << a.intervalStart[b] << "," << ((b + 1 < ni) ? a.intervalStart[b + 1] : xtop) << ") lam=" << lambdaAt(b)
                       << " nDiv=" << divc[b] << " stalkLen=" << stalk[b] << " nFossilY=" << fy[b] << "\n";
     }
     return fbdProb;
@@ -1485,18 +1503,18 @@ double FBDTreeModel::calculateFBDProbability(void){
 
 double FBDTreeModel::fossilTermLn(int i, int spineIdx, int ky, int kz, bool local){
     if(unresolvedFossils->isSA(i))
-        return lnPsiTypeVec[fossilType[i]][ky >= 0 ? ky : findIndex(unresolvedFossils->getFossilAge(i))] + cachedGammaLn[i];
+        return a.lnPsiTypeVec[a.fossilType[i]][ky >= 0 ? ky : findIndex(unresolvedFossils->getFossilAge(i))] + cachedGammaLn[i];
     if(i == spineIdx && unresolvedFossils->isUE(i))
         return 0.0;
     if(unresolvedFossils->isUE(i)){
         double z = unresolvedFossils->getAttachAge(i);
-        return std::log(rhoVal) + ln2LambdaVec[findIndex(z)] + (local ? lnDLocal(z) : lnD(z)) + cachedGammaLn[i];
+        return std::log(a.rhoVal) + a.ln2LambdaVec[findIndex(z)] + (local ? lnDLocal(z) : lnD(z)) + cachedGammaLn[i];
     }
     if(i == spineIdx){
         double ys = unresolvedFossils->getFossilAge(i);
-        return lnPsiTypeVec[fossilType[i]][findIndex(ys)] + lnP0At(findIndex(ys), ys) - (local ? lnDLocal(ys) : lnD(ys));
+        return a.lnPsiTypeVec[a.fossilType[i]][findIndex(ys)] + lnP0At(findIndex(ys), ys) - (local ? lnDLocal(ys) : lnD(ys));
     }
-    return fossilPqLn(unresolvedFossils->getFossilAge(i), unresolvedFossils->getAttachAge(i), fossilType[i], ky, kz) + cachedGammaLn[i];
+    return fossilPqLn(unresolvedFossils->getFossilAge(i), unresolvedFossils->getAttachAge(i), a.fossilType[i], ky, kz) + cachedGammaLn[i];
 }
 
 double FBDTreeModel::term3Sum(void){
@@ -1549,7 +1567,7 @@ double FBDTreeModel::zoneTermSum(const std::vector<int>& fos, double x0, bool us
 double FBDTreeModel::fossilSweep(void){
     RandomVariable* prevRng = RandomVariable::getActiveInstance();
     RandomVariable::setActiveInstance(&rng);
-    rhoVal = rho;
+    a.rhoVal = a.rho;
     prepareIntervals();
     updateGammaCache();
     double r = (unresolvedFossils->getSpineIdx() < 0) ? fossilSweepParallel() : fossilSweepSequential();
@@ -1775,10 +1793,10 @@ double FBDTreeModel::calculateResolvedFBD(void){
             lnP += lnDDiff(n->getAncestor()->getTime(), n->getTime());
         if(n->getIsTip()){
             if(n->getIsFossil() == false)
-                lnP += std::log(rhoVal);
+                lnP += std::log(a.rhoVal);
             else{
                 int ft = 0;
-                if(numPsiTypes > 1){ std::map<std::string,int>::iterator it = fossilTypeByName.find(n->getName()); if(it != fossilTypeByName.end()) ft = it->second; }
+                if(a.numPsiTypes > 1){ std::map<std::string,int>::iterator it = a.fossilTypeByName.find(n->getName()); if(it != a.fossilTypeByName.end()) ft = it->second; }
                 if(n->getIsSA())
                     lnP += std::log(psiOfTypeAt(ft, findIndex(n->getTime())));
                 else
@@ -1790,20 +1808,20 @@ double FBDTreeModel::calculateResolvedFBD(void){
             for(Node* c : n->getNeighbors())
                 if(c != n->getAncestor() && c->getIsTip() && c->getIsFossil() && c->getIsSA()){ fakeSplit = true; break; }
             if(fakeSplit == false)
-                lnP += std::log(2.0 * lamVec[findIndex(n->getTime())]);
+                lnP += std::log(2.0 * a.lamVec[findIndex(n->getTime())]);
         }
     }
     return lnP;
 }
 
 double FBDTreeModel::lnD(double t){
-    return (t <= 0.0) ? 0.0 : lnDPrev[findIndex(t)] + std::log(4.0) - calculateLnQtAt(findIndex(t), t);
+    return (t <= 0.0) ? 0.0 : a.lnDPrev[findIndex(t)] + std::log(4.0) - calculateLnQtAt(findIndex(t), t);
 }
 
 double FBDTreeModel::fossilPqLn(double y, double z, int type, int ky, int kz){
     if(ky < 0) ky = findIndex(y);
     if(kz < 0) kz = findIndex(z);
-    return lnPsiTypeVec[type][ky] + ln2LambdaVec[kz] + lnP0At(ky, y)
+    return a.lnPsiTypeVec[type][ky] + a.ln2LambdaVec[kz] + lnP0At(ky, y)
            + calculateLnQtAt(ky, y) - calculateLnQtAt(kz, z) + lnDBetween(ky, kz);
 }
 
@@ -1811,12 +1829,13 @@ double FBDTreeModel::lnDLocal(double t){
     return (t <= 0.0) ? 0.0 : std::log(4.0) - calculateLnQtAt(findIndex(t), t);
 }
 
+// mu - lambda - c1 = -(psi + c1 + beta) to keep lnD + survival decrement exact at large mu
 double FBDTreeModel::lnDPlusDec(int i, double t){
     double linear;
     double lg = lnSurvDecParts(i, t, linear);
     if(linear == 0.0)
         return std::log(4.0) - calculateLnQtAt(i, t) + lg;
-    return std::log(4.0) - 2.0 * lnDenomAt(i, t) + lg - (psiTotVec[i] + cpbVec[i]) * (t - intervalStart[i]);
+    return std::log(4.0) - 2.0 * lnDenomAt(i, t) + lg - (a.psiTotVec[i] + a.cpbVec[i]) * (t - a.intervalStart[i]);
 }
 
 double FBDTreeModel::lnQBracket(int i, double t){
@@ -1830,11 +1849,11 @@ double FBDTreeModel::lnSurvDecrement(int i, double t){
 }
 
 double FBDTreeModel::lnSurvDecParts(int i, double t, double& linear){
-    double lam = lamVec[i], mu = muVec[i];
-    double tau = t - intervalStart[i];
+    double lam = a.lamVec[i], mu = a.muVec[i];
+    double tau = t - a.intervalStart[i];
     double c1 = std::abs(lam - mu);
     double u = (c1 > 0.0) ? -std::expm1(-c1 * tau) / c1 : tau;
-    double s = std::exp(lnSPrevHat[i]);
+    double s = std::exp(a.lnSPrevHat[i]);
     if(lam >= mu){
         linear = 0.0;
         return std::log(std::exp(-c1 * tau) + s * lam * u);
@@ -1844,14 +1863,14 @@ double FBDTreeModel::lnSurvDecParts(int i, double t, double& linear){
 }
 
 double FBDTreeModel::incDecLn(int i, double t){
-    double lam = lamVec[i], mu = muVec[i];
+    double lam = a.lamVec[i], mu = a.muVec[i];
     if(lam >= mu)
         return std::log(4.0) - calculateLnQtAt(i, t) + lnSurvDecrement(i, t);
-    double psi = psiTotVec[i], beta = lam - mu - psi;
-    double delta = (beta >= 0.0 ? c1Vec[i] + beta : 4.0 * lam * psi / (c1Vec[i] - beta)) + psi;
-    double tau = t - intervalStart[i], ch = mu - lam;
+    double psi = a.psiTotVec[i], beta = lam - mu - psi;
+    double delta = (beta >= 0.0 ? a.c1Vec[i] + beta : 4.0 * lam * psi / (a.c1Vec[i] - beta)) + psi;
+    double tau = t - a.intervalStart[i], ch = mu - lam;
     double u = -std::expm1(-ch * tau) / ch;
-    double s = std::exp(lnSPrevHat[i]);
+    double s = std::exp(a.lnSPrevHat[i]);
     return -delta * tau + std::log(4.0) - lnQBracket(i, t) + std::log1p(s * lam * u);
 }
 
@@ -1860,19 +1879,20 @@ double FBDTreeModel::lnDDiff(double zhi, double ylo){
     return calculateLnQtAt(ky, ylo) - calculateLnQtAt(kz, zhi) + lnDBetween(ky, kz);
 }
 
+// summed per bin: lnDprev[kz] - lnDPrev[ky] loses every digit when c1*dt gets very large
 double FBDTreeModel::lnDBetween(int ky, int kz){
     double v = 0.0;
     for(int j = ky; j < kz; j++)
-        v += lnDInc[j];
+        v += a.lnDInc[j];
     return v;
 }
 
 double FBDTreeModel::lnSurvivalWithin(int i, double t){
-    double lam = lamVec[i], mu = muVec[i];
-    double tau = t - intervalStart[i];
+    double lam = a.lamVec[i], mu = a.muVec[i];
+    double tau = t - a.intervalStart[i];
     double c1 = std::abs(lam - mu);
     double u = (c1 > 0.0) ? -std::expm1(-c1 * tau) / c1 : tau;
-    double lnS = lnSPrevHat[i];
+    double lnS = a.lnSPrevHat[i];
     double s = std::exp(lnS);
     if(lam >= mu)
         return lnS - std::log(std::exp(-c1 * tau) + s * lam * u);
@@ -1904,97 +1924,98 @@ double FBDTreeModel::calculateLnConditioning(double t){
 }
 
 void FBDTreeModel::prepareIntervals(void){
-    size_t n = intervalStart.size();
-    c1Vec.assign(n, 0.0);
-    cpbVec.resize(n);
-    cmbVec.resize(n);
-    dPrev.resize(n);
-    lnDPrev.assign(n, 0.0);
-    lnDInc.resize(n);
-    lnDenEnd.resize(n);
-    lamVec.resize(n);
-    muVec.resize(n);
-    psiTotVec.resize(n);
+    size_t n = a.intervalStart.size();
+    a.c1Vec.assign(n, 0.0);
+    a.cpbVec.resize(n);
+    a.cmbVec.resize(n);
+    a.dPrev.resize(n);
+    a.lnDPrev.assign(n, 0.0);
+    a.lnDInc.resize(n);
+    a.lnDenEnd.resize(n);
+    a.lamVec.resize(n);
+    a.muVec.resize(n);
+    a.psiTotVec.resize(n);
     for(size_t i = 0; i < n; i++){
         double li = lambdaAt(i);
         double mi = muAt(i);
         double pi = psiTotalAt(i);
-        lamVec[i] = li;
-        muVec[i] = mi;
-        psiTotVec[i] = pi;
+        a.lamVec[i] = li;
+        a.muVec[i] = mi;
+        a.psiTotVec[i] = pi;
         double beta = li - mi - pi;
-        c1Vec[i] = std::abs(std::sqrt(std::pow(beta, 2) + 4*li*pi));
+        a.c1Vec[i] = std::abs(std::sqrt(std::pow(beta, 2) + 4*li*pi));
         if(beta >= 0.0){
-            cpbVec[i] = c1Vec[i] + beta;
-            cmbVec[i] = 4*li*pi / cpbVec[i];
+            a.cpbVec[i] = a.c1Vec[i] + beta;
+            a.cmbVec[i] = 4*li*pi / a.cpbVec[i];
         }else{
-            cmbVec[i] = c1Vec[i] - beta;
-            cpbVec[i] = 4*li*pi / cmbVec[i];
+            a.cmbVec[i] = a.c1Vec[i] - beta;
+            a.cpbVec[i] = 4*li*pi / a.cmbVec[i];
         }
         if(i == 0){
-            dPrev[0] = rhoVal;
-            lnDPrev[0] = 0.0;
+            a.dPrev[0] = a.rhoVal;
+            a.lnDPrev[0] = 0.0;
         }else{
             int j = (int)i - 1;
-            double a = c1Vec[j] * (intervalStart[i] - intervalStart[j]);
-            double e = std::exp(-a), d = dPrev[j];
-            double ome = (a < 0.7) ? -std::expm1(-a) : 1.0 - e;
-            double den = cmbVec[j] + e * cpbVec[j] + 2.0 * d * lamVec[j] * ome;
-            dPrev[i] = (2.0 * psiTotVec[j] * ome + d * (cpbVec[j] + e * cmbVec[j])) / den;
-            lnDenEnd[j] = std::log(den / c1Vec[j]);
-            double lnQ = a + 2.0 * lnDenEnd[j];
-            lnDPrev[i] = lnDPrev[i-1] + std::log(4.0) - lnQ;
-            lnDInc[j] = std::log(4.0) - lnQ;
+            double x = a.c1Vec[j] * (a.intervalStart[i] - a.intervalStart[j]);
+            double e = std::exp(-x), d = a.dPrev[j];
+            double ome = (x < 0.7) ? -std::expm1(-x) : 1.0 - e;
+            double den = a.cmbVec[j] + e * a.cpbVec[j] + 2.0 * d * a.lamVec[j] * ome;
+            a.dPrev[i] = (2.0 * a.psiTotVec[j] * ome + d * (a.cpbVec[j] + e * a.cmbVec[j])) / den;
+            a.lnDenEnd[j] = std::log(den / a.c1Vec[j]);
+            double lnQ = x + 2.0 * a.lnDenEnd[j];
+            a.lnDPrev[i] = a.lnDPrev[i-1] + std::log(4.0) - lnQ;
+            a.lnDInc[j] = std::log(4.0) - lnQ;
         }
     }
-    ln2LambdaVec.assign(n, 0.0);
+    a.ln2LambdaVec.assign(n, 0.0);
     for(size_t i = 0; i < n; i++)
-        ln2LambdaVec[i] = std::log(2 * lamVec[i]);
-    lnPsiTypeVec.assign(numPsiTypes, std::vector<double>(n, 0.0));
-    for(int t = 0; t < numPsiTypes; t++)
+        a.ln2LambdaVec[i] = std::log(2 * a.lamVec[i]);
+    a.lnPsiTypeVec.assign(a.numPsiTypes, std::vector<double>(n, 0.0));
+    for(int t = 0; t < a.numPsiTypes; t++)
         for(size_t i = 0; i < n; i++)
-            lnPsiTypeVec[t][i] = std::log(psiOfTypeAt(t, (int)i));
+            a.lnPsiTypeVec[t][i] = std::log(psiOfTypeAt(t, (int)i));
 
-    lnSPrevHat.assign(n, 0.0);
-    lnRPrev.assign(n, 0.0);
-    lnDecInc.resize(n);
-    lnDecPair.resize(n);
-    lnSPrevHat[0] = std::log(rhoVal);
-    lnRPrev[0] = -std::log(rhoVal);
+    a.lnSPrevHat.assign(n, 0.0);
+    a.lnRPrev.assign(n, 0.0);
+    a.lnDecInc.resize(n);
+    a.lnDecPair.resize(n);
+    a.lnSPrevHat[0] = std::log(a.rhoVal);
+    a.lnRPrev[0] = -std::log(a.rhoVal);
     for(size_t i = 1; i < n; i++){
         int j = (int)i - 1;
         double linear;
-        double lg = lnSurvDecParts(j, intervalStart[i], linear);
+        double lg = lnSurvDecParts(j, a.intervalStart[i], linear);
         double dec = linear + lg;
-        double incdec = incDecLn(j, intervalStart[i]);
-        lnDecInc[j] = dec;
-        lnDecPair[j] = (linear == 0.0) ? lnDInc[j] + dec
-                     : std::log(4.0) - 2.0 * lnDenEnd[j] + lg - (psiTotVec[j] + cpbVec[j]) * (intervalStart[i] - intervalStart[j]);
-        lnRPrev[i] = lnRPrev[i-1] + incdec;
-        lnSPrevHat[i] = lnSPrevHat[i-1] - dec;
+        double incdec = incDecLn(j, a.intervalStart[i]);
+        a.lnDecInc[j] = dec;
+        a.lnDecPair[j] = (linear == 0.0) ? a.lnDInc[j] + dec
+                       : std::log(4.0) - 2.0 * a.lnDenEnd[j] + lg - (a.psiTotVec[j] + a.cpbVec[j]) * (a.intervalStart[i] - a.intervalStart[j]);
+        a.lnRPrev[i] = a.lnRPrev[i-1] + incdec;
+        a.lnSPrevHat[i] = a.lnSPrevHat[i-1] - dec;
     }
 }
 
 int FBDTreeModel::findIndex(double t){
-    int i = (int)(std::upper_bound(intervalStart.begin(), intervalStart.end(), t) - intervalStart.begin()) - 1;
+    int i = (int)(std::upper_bound(a.intervalStart.begin(), a.intervalStart.end(), t) - a.intervalStart.begin()) - 1;
     return (i > 0) ? i : 0;
 }
 
 double FBDTreeModel::calculateLnQtAt(int i, double t){
-    return c1Vec[i] * (t - intervalStart[i]) + 2.0 * lnDenomAt(i, t);
+    return a.c1Vec[i] * (t - a.intervalStart[i]) + 2.0 * lnDenomAt(i, t);
 }
 
+// d = 1 - E with nonnegative terms only; c2 cancels and rounds E to 1 when mu is very large
 double FBDTreeModel::lnDenomAt(int i, double t){
-    double e = std::exp(-c1Vec[i] * (t - intervalStart[i]));
-    return std::log((cmbVec[i] + e * cpbVec[i] + 2.0 * dPrev[i] * lamVec[i] * (1.0 - e)) / c1Vec[i]);
+    double e = std::exp(-a.c1Vec[i] * (t - a.intervalStart[i]));
+    return std::log((a.cmbVec[i] + e * a.cpbVec[i] + 2.0 * a.dPrev[i] * a.lamVec[i] * (1.0 - e)) / a.c1Vec[i]);
 }
 
 double FBDTreeModel::sampledAt(int i, double t){
-    double a = c1Vec[i] * (t - intervalStart[i]);
-    double e = std::exp(-a), d = dPrev[i];
-    double ome = (a < 0.7) ? -std::expm1(-a) : 1.0 - e;
-    return (2.0 * psiTotVec[i] * ome + d * (cpbVec[i] + e * cmbVec[i]))
-           / (cmbVec[i] + e * cpbVec[i] + 2.0 * d * lamVec[i] * ome);
+    double x = a.c1Vec[i] * (t - a.intervalStart[i]);
+    double e = std::exp(-x), d = a.dPrev[i];
+    double ome = (x < 0.7) ? -std::expm1(-x) : 1.0 - e;
+    return (2.0 * a.psiTotVec[i] * ome + d * (a.cpbVec[i] + e * a.cmbVec[i]))
+           / (a.cmbVec[i] + e * a.cpbVec[i] + 2.0 * d * a.lamVec[i] * ome);
 }
 
 double FBDTreeModel::calculateP0At(int i, double t){
@@ -3094,13 +3115,13 @@ double FBDTreeModel::doUpDownScale(void){
 
     int nUp = 0;
     double h = 0.0;
-    for(ParameterDouble* l : lambda) if(l->getProposalProbability() > 0.0){ l->scaleProposed(c); nUp++; }
-    for(ParameterDouble* m : mu) if(m->getProposalProbability() > 0.0){ m->scaleProposed(c); nUp++; }
-    for(auto& pv : psi) for(ParameterDouble* p : pv) if(p->getProposalProbability() > 0.0){ p->scaleProposed(c); nUp++; }
-    if(lambdaField != nullptr) h += lambdaField->scaleAllProposed(c, true);
-    if(muField != nullptr)     h += muField->scaleAllProposed(c, true);
-    for(int tp = 0; tp < numPsiTypes; tp++)
-        if(psiField[tp] != nullptr) h += psiField[tp]->scaleAllProposed(c, true);
+    for(ParameterDouble* l : a.lambda) if(l->getProposalProbability() > 0.0){ l->scaleProposed(c); nUp++; }
+    for(ParameterDouble* m : a.mu) if(m->getProposalProbability() > 0.0){ m->scaleProposed(c); nUp++; }
+    for(auto& pv : a.psi) for(ParameterDouble* p : pv) if(p->getProposalProbability() > 0.0){ p->scaleProposed(c); nUp++; }
+    if(a.lambdaField != nullptr) h += a.lambdaField->scaleAllProposed(c, true);
+    if(a.muField != nullptr)     h += a.muField->scaleAllProposed(c, true);
+    for(int tp = 0; tp < a.numPsiTypes; tp++)
+        if(a.psiField[tp] != nullptr) h += a.psiField[tp]->scaleAllProposed(c, true);
     h += nUp * lnc;
 
     Tree* t = parameterTree->getTree();

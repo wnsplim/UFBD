@@ -16,8 +16,48 @@
 class Parameter;
 class ParameterDouble;
 class ParameterOUField;
+class UserSettings;
 enum class RateMode;
 struct OUHyperSpec;
+
+struct SkylineRates {
+    std::vector<ParameterDouble*> lambda;
+    std::vector<ParameterDouble*> mu;
+    std::vector<std::vector<ParameterDouble*>> psi;
+    std::vector<std::string>    lambdaName, muName;
+    std::vector<std::vector<std::string>> psiName;
+    ParameterOUField*           lambdaField = nullptr;
+    ParameterOUField*           muField = nullptr;
+    std::vector<ParameterOUField*> psiField;
+    std::vector<double>           intervalStart;
+    std::vector<int>            lambdaIdx;
+    std::vector<int>            muIdx;
+    std::vector<std::vector<int>> psiIdx;
+    double                      rho;
+    double                      rhoVal;
+    int                         numPsiTypes = 1;
+    std::vector<std::string>    psiTypeNames;
+    std::vector<int>            fossilType;
+    std::vector<int>            backboneType;
+    std::map<std::string,int>   fossilTypeByName;
+    std::vector<double>         c1Vec;
+    std::vector<double>         cpbVec, cmbVec;
+    std::vector<double>         ln2LambdaVec;
+    std::vector<std::vector<double> > lnPsiTypeVec;
+    std::vector<double>         dPrev;
+    std::vector<double>         lnDInc;
+    std::vector<double>         lamVec, muVec, psiTotVec, lnDenEnd;
+    std::vector<double>         lnDPrev;
+    std::vector<double>         lnSPrevHat;
+    std::vector<double>         lnRPrev;
+    std::vector<double>         lnDecInc, lnDecPair;
+    std::vector<double>         fbdTermFoss;
+    std::vector<double>         fbdPrevGammaLn, fbdPrevFy, fbdPrevFz;
+    std::vector<int>            fbdPrevKind;
+    std::vector<int>            fbdKy, fbdKz;
+    std::vector<double>         fbdRateSig;
+    bool                        fbdMemoInit = false;
+};
 
 class FBDTreeModel : public PhylogeneticModel {
 
@@ -149,27 +189,18 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<int>            buildSkylineRates(const std::string& prefix, const std::string& sep, int nBins, const std::vector<double>& times, RateMode mode, const OUHyperSpec& ou, const Probability::PriorSpec& basePrior, double rate0, double avoid, const std::vector<int>& groupIds, const std::vector<std::string>& groupLabels, const std::map<int,Probability::PriorSpec>& groupPrior, std::vector<ParameterDouble*>& outVec, ParameterOUField*& outField, std::vector<std::string>& outNames);
         void                        appendRateMap(const std::vector<double>& times, const std::vector<int>& binToChunk, const std::vector<std::string>& names);
         void                        appendFieldMask(std::vector<bool>& m, ParameterOUField* f, size_t nRates);
+        void                        appendRateMask(std::vector<bool>& m, const SkylineRates& s);
+        void                        buildRates(UserSettings& us, SkylineRates& s);
+        std::vector<std::string>    getRateNames(const SkylineRates& s);
+        std::vector<double>         getRateString(const SkylineRates& s);
+        SkylineRates                a;
+        bool                        haveIid = false, haveLMField = false;
         //ordered by memory footprint
-        std::vector<ParameterDouble*> lambda;
-        std::vector<ParameterDouble*> mu;
-        std::vector<std::vector<ParameterDouble*>> psi;
-        std::vector<std::string>    lambdaName, muName;
-        std::vector<std::vector<std::string>> psiName;
         std::vector<std::pair<std::string,std::string>> rateMapRows;
-        ParameterOUField*           lambdaField;
-        ParameterOUField*           muField;
-        std::vector<ParameterOUField*> psiField;
-        int                         numPsiTypes;
         int                         numExtantTips;
-        std::vector<int>            fossilType;
-        std::map<std::string,int>   fossilTypeByName;
-        struct BackboneFossil { Node* tip; double yMin; double yMax; int type; };
+        struct BackboneFossil { Node* tip; double yMin; double yMax; };
         std::vector<BackboneFossil> backboneFossils;
         std::vector<std::string>    unrFossilName;
-        std::vector<double>           intervalStart;
-        std::vector<int>            lambdaIdx;
-        std::vector<int>            muIdx;
-        std::vector<std::vector<int>> psiIdx;
         ParameterDouble*            originAge;
         ParameterTree*              parameterTree;
         ParameterUnresolvedFossils* unresolvedFossils;
@@ -177,20 +208,7 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<Node*>          fossilCrown;
         std::vector<Node*>          fossilOrigin;
         std::vector<bool>           fossilIsCrown;
-        double                      rho;
-        std::vector<double>         c1Vec;
-        std::vector<double>         cpbVec, cmbVec;
-        std::vector<double>         ln2LambdaVec;
-        std::vector<std::vector<double> > lnPsiTypeVec;
-        std::vector<double>         dPrev;
-        std::vector<double>         lnDPrev;
-        std::vector<double>         lnDInc;
-        std::vector<double>         lamVec, muVec, psiTotVec, lnDenEnd;
         std::vector<int>            ueFossils;
-        std::vector<double>         lnSPrevHat;
-        std::vector<double>         lnRPrev;
-        std::vector<double>         lnDecInc, lnDecPair;
-        double                      rhoVal;
         enum MoveKind { MK_PARAM, MK_AZGIBBS, MK_RATESHIFT, MK_RATEVEC, MK_UPDOWN, MK_JOINTSCALE };
         MoveKind                    lastMoveKind;
         double                      shiftStep;
@@ -237,14 +255,8 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<double>         prevNodeAge;
         double                      prevX0;
         bool                        cacheInit;
-        std::vector<double>         fbdTermFoss;
         std::vector<double>         fbdTermNode;
         std::vector<int>            fbdNodeBin, fbdDUses, fbdDecUses;
-        std::vector<double>         fbdPrevGammaLn, fbdPrevFy, fbdPrevFz;
-        std::vector<int>            fbdPrevKind;
-        std::vector<int>            fbdKy, fbdKz;
-        std::vector<double>         fbdRateSig;
-        bool                        fbdMemoInit = false;
         bool                        stalkIndexBuilt = false;
         bool                        stalkIndexFresh = false;
         bool                        inNodeAgeSweep = false;
@@ -252,7 +264,7 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<double>         gammaLogTab;
         std::vector<std::vector<int> > flipsByZone;
     public:
-        void                        invalidateGammaCache(void){ cacheInit = false; fbdMemoInit = false; }
+        void                        invalidateGammaCache(void){ cacheInit = false; a.fbdMemoInit = false; }
     private:
         bool                        zoneInit;
         bool                        isResolved;
