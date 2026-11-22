@@ -281,8 +281,8 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     };
     knownFlags.insert("-fbd_model");
     valueFlags.insert("-fbd_model");
-    knownFlags.insert({"-bf_t", "-bf_pilot", "-bf_posterior", "-bf_pilot_frac", "-bf_pilot_nodes", "-bf_intervals", "-bf_bridge_tol", "-bf_bridge_iter", "-bf_batches", "-bf_cores"});
-    valueFlags.insert({"-bf_t", "-bf_posterior", "-bf_pilot_frac", "-bf_pilot_nodes", "-bf_intervals", "-bf_bridge_tol", "-bf_bridge_iter", "-bf_batches", "-bf_cores"});
+    knownFlags.insert({"-bf_t", "-bf_pilot", "-bf_posterior", "-bf_pilot_frac", "-bf_pilot_nodes", "-bf_intervals", "-bf_bridge_tol", "-bf_bridge_iter", "-bf_batches", "-bf_parallel_runs"});
+    valueFlags.insert({"-bf_t", "-bf_posterior", "-bf_pilot_frac", "-bf_pilot_nodes", "-bf_intervals", "-bf_bridge_tol", "-bf_bridge_iter", "-bf_batches", "-bf_parallel_runs"});
     auto parseTs = [](const std::string& flag, const std::string& val, const std::string& expects, std::vector<double>& ts, std::vector<std::string>& text) {
         ts.clear();
         text.clear();
@@ -424,8 +424,8 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                     bfBridgeIter = parseCount(arg, val, 1);
                 } else if (arg == "-bf_batches") {
                     bfBatches = parseCount(arg, val, 2);
-                } else if (arg == "-bf_cores") {
-                    bfCores = parseCount(arg, val, 1);
+                } else if (arg == "-bf_parallel_runs") {
+                    bfParallelRuns = parseCount(arg, val, 1);
                 } else if (val != "0" && val != "1") {
                     Msg::error("flag \"-bf_posterior\" expects 0 or 1, but got \"" + val + "\".");
                 }
@@ -1146,7 +1146,8 @@ by the MCMC for selected points, and then ln BF is calculated)
                           settings first, then [model 0] and [model 1], each a full model
                           config that may name an existing posterior with prior_log; the
                           models must differ only in the rate, clock and substitution sections
-  -bf_cores <n>           runs in parallel, each with -cores cores (default 1)
+  -bf_parallel_runs <n>   runs (posteriors, pilot runs, path points) in parallel, each with
+                          -cores cores, so n x cores cores in total (default 1)
   -bf_t <t|t1,t2,...>     run only the path point(s) t in [0,1] without pilot run
   -bf_pilot               with one -bf_t point: run it as a pilot run
   -bf_posterior <0|1>     run only the posterior of [model 0] or [model 1]

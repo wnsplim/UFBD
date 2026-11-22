@@ -64,7 +64,7 @@ const std::set<std::string> runKeys = {
     "max_gen","min_ess","rhat","delta_temperature","swap_interval"
 };
 const std::set<std::string> bfKeys = {
-    "bf_pilot_nodes","bf_pilot_frac","bf_intervals","bf_bridge_tol","bf_bridge_iter","bf_batches","bf_cores"
+    "bf_pilot_nodes","bf_pilot_frac","bf_intervals","bf_bridge_tol","bf_bridge_iter","bf_batches","bf_parallel_runs"
 };
 const std::set<std::string> substKeys = {
     "partition","datatype","n_states","ctmc_model","ctmc_gamma_cat","ctmc_inv","ctmc_freq"

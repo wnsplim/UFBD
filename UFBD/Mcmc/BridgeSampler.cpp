@@ -120,7 +120,7 @@ BridgeSampler::Job BridgeSampler::makeJob(const std::vector<std::string>& extra,
 }
 
 void BridgeSampler::runJobs(const std::vector<Job>& jobs){
-    int width = UserSettings::userSettings().getBfCores();
+    int width = UserSettings::userSettings().getBfParallelRuns();
     std::map<pid_t,size_t> running;
     size_t next = 0;
     std::string failed;

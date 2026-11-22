@@ -39,7 +39,7 @@ class UserSettings {
         double                      getBfBridgeTol(void) { return bfBridgeTol; }
         int                         getBfBridgeIter(void) { return bfBridgeIter; }
         int                         getBfBatches(void) { return bfBatches; }
-        int                         getBfCores(void) { return bfCores; }
+        int                         getBfParallelRuns(void) { return bfParallelRuns; }
         const std::string&          getBfConfigPath(void) { return bfConfigPath; }
         const std::vector<std::string>& getCliArgs(void) { return cliArgs; }
         bool                        getPriorLogGiven(int k) { return priorLogGiven[k]; }
@@ -222,7 +222,7 @@ class UserSettings {
         double                      bfBridgeTol = 1e-10;
         int                         bfBridgeIter = 10000;
         int                         bfBatches = 20;
-        int                         bfCores = 1;
+        int                         bfParallelRuns = 1;
         int                         bfPosterior = -1;
         std::string                 bfConfigPath;
         std::vector<std::string>    cliArgs;
