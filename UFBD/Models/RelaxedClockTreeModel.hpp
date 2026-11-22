@@ -5,6 +5,7 @@
 #include "ParameterBranchRates.hpp"
 #include "PhylogeneticModel.hpp"
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -18,10 +19,12 @@ class Tree;
 
 class RelaxedClockTreeModel : public PhylogeneticModel {
 
+    friend class PathModel;
+
     public:
                                     RelaxedClockTreeModel(void) = delete;
-                                    RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, const std::string& hessianFile, const std::string& mlTreeFile, int nStates, const std::vector<ClockModel>& clockModel, const double* rgeneParam, const double* sigma2Param, unsigned int seed);
-                                    RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, const std::string& sequenceFile, const std::string& partitionFile, int nStates, int numCats, const std::vector<ClockModel>& clockModel, const double* rgeneParam, const double* sigma2Param, unsigned int seed);
+                                    RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, const std::string& hessianFile, const std::string& mlTreeFile, int nStates, const std::vector<ClockModel>& clockModel, const double* rgeneParam, const double* sigma2Param, unsigned int seed, UserSettings* modelSettings = nullptr);
+                                    RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, const std::string& sequenceFile, const std::string& partitionFile, int nStates, int numCats, const std::vector<ClockModel>& clockModel, const double* rgeneParam, const double* sigma2Param, unsigned int seed, UserSettings* modelSettings = nullptr);
         std::vector<std::string>    getParameterNames(void);
         std::vector<double>         getParameterString(void);
         std::vector<std::string>    getLatentNames(void);
@@ -48,8 +51,10 @@ class RelaxedClockTreeModel : public PhylogeneticModel {
         void                        setChainLabel(int c) { clock->setChainLabel(c); }
         void                        setPncpReporter(bool b) { clock->setPncpReporter(b); }
 
+        std::function<double(void)> pathTarget;
+
     private:
-        void                        buildClock(const std::vector<ClockModel>& clockModel, const double* rgeneParam, const double* sigma2Param);
+        void                        buildClock(const std::vector<ClockModel>& clockModel, const double* rgeneParam, const double* sigma2Param, UserSettings& us);
         void                        crownInitScale(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils);
         void                        collectNodeAges(std::vector<std::string>* names, std::vector<double>* vals);
         double                      nodeAgeSweep(void);

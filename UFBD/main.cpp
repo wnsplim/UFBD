@@ -8,12 +8,17 @@
 #include "ParameterBranchRates.hpp"
 #include "RandomVariable.hpp"
 #include "RelaxedClockTreeModel.hpp"
+#include "PathModel.hpp"
+#include "BridgeSampler.hpp"
 #include "Tree.hpp"
 #include "UserSettings.hpp"
 
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <ctime>
 #include <filesystem>
+#include <iomanip>
 #include <fstream>
 #include <iostream>
 #include <random>
@@ -100,9 +105,13 @@ int main(int argc, const char* argv[]) {
 
     std::string logBase = settings.getParamOutput();
     std::string consolePath = "console.txt";
+    std::string bfBase;
+    bool ladder = settings.getModelBSettings() != nullptr && settings.getBfLadder().size() != 1;
     if(logBase.empty() == false){
         size_t p = logBase.rfind(".log");
-        consolePath = (p != std::string::npos ? logBase.substr(0, p) : logBase) + ".console.txt";
+        std::string stem = (p != std::string::npos ? logBase.substr(0, p) : logBase);
+        bfBase = stem;
+        consolePath = stem + (ladder ? "_bf" : "") + ".console.txt";
     }
     for(const std::string& pth : {settings.getParamOutput(), settings.getTreeOutput(), consolePath}){
         if(pth.empty()) continue;
@@ -128,8 +137,6 @@ int main(int argc, const char* argv[]) {
     }
     Msg::setDeferWarnings(false);
 
-    unsigned int masterSeed = settings.getSeed();
-
     bool seq = settings.getSequenceFile().empty() == false;
     bool hessian = settings.getHessianFile().empty() == false;
     if(seq && hessian)
@@ -146,7 +153,7 @@ int main(int argc, const char* argv[]) {
     bool autoStop = settings.getAutoChainLength();
     int thin = settings.getThinning();
 
-    auto makeModel = [&](unsigned int sd) -> PhylogeneticModel* {
+    auto makeModel = [&](unsigned int sd, int run) -> PhylogeneticModel* {
         PhylogeneticModel* model;
         if(seq)
             model = new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), settings.getSequenceFile(), settings.getPartitionFile(), settings.getModelNStates(), settings.getNumCats(), cm, settings.getRgeneGamma(), settings.getSigma2Gamma(), sd);
@@ -162,20 +169,39 @@ int main(int argc, const char* argv[]) {
             else if(RelaxedClockTreeModel* rc = dynamic_cast<RelaxedClockTreeModel*>(model)) rm = rc->getRateMap();
             if(rm.empty() == false) std::cout << "Rate intervals:\n" << rm;
         }
+        if(settings.getModelBSettings() != nullptr){
+            UserSettings* bs = settings.getModelBSettings();
+            unsigned int sdB = sd + 104729u;
+            std::vector<ClockModel> cmB;
+            for(const std::string& cn : bs->getClockModelNames())
+                cmB.push_back(cn == "gbm" ? ClockModel::GBM : ClockModel::UCLN);
+            PhylogeneticModel* mb;
+            if(seq)
+                mb = new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), bs->getSequenceFile(), bs->getPartitionFile(), bs->getModelNStates(), bs->getNumCats(), cmB, bs->getRgeneGamma(), bs->getSigma2Gamma(), sdB, bs);
+            else if(hessian)
+                mb = new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), bs->getHessianFile(), bs->getTreeFile(), bs->getModelNStates(), cmB, bs->getRgeneGamma(), bs->getSigma2Gamma(), sdB, bs);
+            else
+                mb = new FBDTreeModel(pt, input.getClades(), input.getFossils(), sdB, bs);
+            PathModel* path = new PathModel(model, mb, input.getFossils(), sd + 7919u);
+            path->setStart(run);
+            model = path;
+        }
         return model;
     };
 
+    auto runOnce = [&](){
     bool resume = settings.getResume();
+    unsigned int masterSeed = settings.getSeed() + (unsigned int)std::llround(settings.getPathT() * 1e6) * 1000003u + (settings.getPathPilot() ? 999983u : 0u);
 
     if(numRuns == 1 && autoStop == false){
         ChainRunner* mcmc;
         if(numCoupledChains > 1){
             std::vector<PhylogeneticModel*> models(numCoupledChains);
             for(int c = 0; c < numCoupledChains; c++)
-                models[c] = makeModel(masterSeed + (unsigned int)c);
+                models[c] = makeModel(masterSeed + (unsigned int)c, 0);
             mcmc = new MetropolisCoupledMcmc(settings.getChainLength(), thin, models, masterSeed);
         }else
-            mcmc = new Mcmc((int)settings.getChainLength(), thin, makeModel(masterSeed));
+            mcmc = new Mcmc((int)settings.getChainLength(), thin, makeModel(masterSeed, 0));
         mcmc->setVerbose(true);
         mcmc->setLabel(0);
         if(resume){
@@ -206,11 +232,11 @@ int main(int argc, const char* argv[]) {
             if(numCoupledChains > 1){
                 std::vector<PhylogeneticModel*> models(numCoupledChains);
                 for(int c = 0; c < numCoupledChains; c++)
-                    models[c] = makeModel(base + (unsigned int)c);
+                    models[c] = makeModel(base + (unsigned int)c, r);
                 reps.push_back(new MetropolisCoupledMcmc(ncyc, thin, models, base));
             }else{
                 int ng = (ncyc > 2000000000UL) ? 2000000000 : (int)ncyc;
-                reps.push_back(new Mcmc(ng, thin, makeModel(base)));
+                reps.push_back(new Mcmc(ng, thin, makeModel(base, r)));
             }
         }
         ConvergenceRunner cr(reps, settings.getParamOutput(), settings.getTreeOutput());
@@ -228,6 +254,14 @@ int main(int argc, const char* argv[]) {
     if(wrote(settings.getParamOutput())) std::cout << "MCMC log               -> " << settings.getParamOutput() << "\n";
     if(wrote(settings.getTreeOutput()))  std::cout << "tree log               -> " << settings.getTreeOutput() << "\n";
     if(wrote(base + ".tree"))            std::cout << "posterior summary tree -> " << base << ".tree\n";
+    };
+
+    if(settings.getPathPilot())
+        settings.setChainLength(BridgeSampler::pilotGenerations());
+    if(ladder)
+        BridgeSampler(bfBase).run();
+    else
+        runOnce();
 
     auto runEnd = std::chrono::system_clock::now();
     std::cout << "Run finished: " << clockString(runEnd)

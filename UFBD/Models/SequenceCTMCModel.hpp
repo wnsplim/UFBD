@@ -11,12 +11,13 @@ class ParameterSimplex;
 class PhylogeneticModel;
 class SequenceLikelihood;
 class Tree;
+class UserSettings;
 
 class SequenceCTMCModel {
 
     public:
                                         SequenceCTMCModel(PhylogeneticModel* owner, const std::string& sequenceFile, const std::string& partitionFile, int nStates, int numCats);
-        void                            buildParameters(void);
+        void                            buildParameters(UserSettings& us);
         double                          computeLnL(Tree* tree, const std::vector<std::vector<double> >& branchRates);
         void                            invalidateCache(void);
         double                          lnPrior(void);
@@ -26,6 +27,9 @@ class SequenceCTMCModel {
         void                            print(void);
         void                            appendParameterNames(std::vector<std::string>& names);
         void                            appendParameterValues(std::vector<double>& values);
+        void                            setParameterValues(const std::vector<double>& values);
+        double                          pseudoPriorCoords(const std::vector<double>& values, std::vector<double>& z);
+        void                            setFromPseudoPriorCoords(const std::vector<double>& z);
         void                            writeState(std::ostream& os);
         void                            readState(std::istream& is);
         int                             getNumPartitions(void) const;

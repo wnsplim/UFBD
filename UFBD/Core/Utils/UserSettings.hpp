@@ -28,6 +28,31 @@ class UserSettings {
                                         return us;
                                         }
         void                        initializeSettings(int argc, const char* argv[], bool sbcMode = false);
+        UserSettings*               getModelBSettings(void) { return modelBSettings; }
+        double                      getPathT(void) { return pathT; }
+        bool                        getPathPilot(void) { return pathPilot; }
+        const std::vector<double>&  getBfLadder(void) { return bfLadder; }
+        const std::vector<std::string>& getBfLadderText(void) { return bfLadderText; }
+        double                      getBfPilotFrac(void) { return bfPilotFrac; }
+        int                         getBfPilotNodes(void) { return bfPilotNodes; }
+        double                      getBfIntervals(void) { return bfIntervals; }
+        double                      getBfBridgeTol(void) { return bfBridgeTol; }
+        int                         getBfBridgeIter(void) { return bfBridgeIter; }
+        int                         getBfBatches(void) { return bfBatches; }
+        int                         getBfCores(void) { return bfCores; }
+        const std::string&          getBfConfigPath(void) { return bfConfigPath; }
+        const std::vector<std::string>& getCliArgs(void) { return cliArgs; }
+        bool                        getPriorLogGiven(int k) { return priorLogGiven[k]; }
+        void                        setPathPoint(double t, const std::string& text, bool pilot);
+        void                        setResume(bool r) { resume = r; }
+        void                        setChainLength(unsigned long n) { chainLength = n; }
+        std::string                 getPosteriorBaseA(void) { return posteriorBaseA; }
+        std::string                 getPosteriorBaseB(void) { return posteriorBaseB; }
+        bool                        getSharedLambda(void) { return sharedLambda; }
+        bool                        getSharedMu(void) { return sharedMu; }
+        bool                        getSharedPsi(void) { return sharedPsi; }
+        bool                        getSharedClock(void) { return sharedClock; }
+        bool                        getSharedSubst(void) { return sharedSubst; }
         unsigned long               getChainLength(void) { return chainLength; }
         int                         getNumCoupledChains(void) { return numCoupledChains; }
         int                         getNumRuns(void) { return numRuns; }
@@ -186,6 +211,26 @@ class UserSettings {
         int                         thinning;
         std::string                 hessianFile;
         std::string                 configFilePath;
+        UserSettings*               modelBSettings = nullptr;
+        double                      pathT = 0.0;
+        bool                        pathPilot = false;
+        std::vector<double>         bfLadder;
+        std::vector<std::string>    bfLadderText;
+        double                      bfPilotFrac = 0.2;
+        int                         bfPilotNodes = 8;
+        double                      bfIntervals = 2.0;
+        double                      bfBridgeTol = 1e-10;
+        int                         bfBridgeIter = 10000;
+        int                         bfBatches = 20;
+        int                         bfCores = 1;
+        int                         bfPosterior = -1;
+        std::string                 bfConfigPath;
+        std::vector<std::string>    cliArgs;
+        bool                        priorLogGiven[2] = {false, false};
+        std::string                 parametersOutBase, treeOutBase;
+        std::string                 posteriorBaseA;
+        std::string                 posteriorBaseB;
+        bool                        sharedLambda = false, sharedMu = false, sharedPsi = false, sharedClock = true, sharedSubst = true;
         std::string                 invocation;
         std::string                 clockModelName;
         std::vector<std::string>    clockModelNames = { "ucln" };

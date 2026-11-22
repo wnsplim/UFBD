@@ -46,7 +46,7 @@ bool ConvergenceRunner::run(void){
             replicates[r]->setVerbose(true);
             replicates[r]->setLabel(r);
         }
-    bool autoStop = s.getAutoChainLength();
+    bool autoStop = s.getAutoChainLength() && s.getPathPilot() == false;
     unsigned long maxGen = autoStop ? s.getMaxGen() : s.getChainLength();
 
     if(verbose && autoStop){
@@ -86,6 +86,16 @@ bool ConvergenceRunner::run(void){
         if(stale > 0)
             Msg::error("-parallel_chains " + std::to_string(replicates.size()) + " differs from the pre-resume -parallel_chains "
                        + std::to_string(replicates.size() + stale));
+        std::string missing;
+        int nMissing = 0;
+        for(const std::string& pf : repParamFiles)
+            if(std::ifstream(pf + ".ckp").good() == false)
+                missing += (nMissing++ > 0 ? ", " : "") + pf + ".ckp";
+        if(nMissing == (int)repParamFiles.size())
+            Msg::error("-resume: nothing to resume from.");
+        if(nMissing > 0)
+            Msg::error("-resume failed: " + std::to_string(repParamFiles.size() - nMissing) + " of " + std::to_string(repParamFiles.size())
+                       + " chains have a checkpoint, but " + missing + (nMissing > 1 ? " do" : " does") + " not exist.");
         for(ChainRunner* c : replicates){
             c->loadCheckpoint();
             c->resumeOutputs();
@@ -273,7 +283,7 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
         lastReportedGen = (long)gen;
     }
 
-    if(verbose && finalPass && nBelow > 0 && s.getAutoChainLength()){
+    if(verbose && finalPass && nBelow > 0 && s.getAutoChainLength() && s.getPathPilot() == false){
         std::string crit = multiChain ? ("R-hat > " + std::to_string(rhatMax) + " or bulk/tail ESS < " + std::to_string((int)essFloor))
                                       : ("bulk/tail ESS < " + std::to_string((int)essFloor));
         std::string msg = std::to_string(nBelow) + " of " + std::to_string(nP) + " metrics have " + crit + " : ";

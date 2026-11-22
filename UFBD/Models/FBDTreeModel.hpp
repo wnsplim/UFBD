@@ -10,6 +10,7 @@
 #include "Tree.hpp"
 
 #include <deque>
+#include <functional>
 #include <map>
 #include <vector>
 
@@ -59,9 +60,11 @@ struct SkylineRates {
 
 class FBDTreeModel : public PhylogeneticModel {
 
+    friend class PathModel;
+
     public:
                                     FBDTreeModel(void) = delete;
-                                    FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, unsigned int seed);
+                                    FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, unsigned int seed, UserSettings* rateSettings = nullptr);
         std::vector<std::string>    getParameterNames(void);
         std::vector<double>         getParameterString(void);
         std::vector<bool>           getParameterFixedMask(void);
@@ -94,6 +97,7 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      getOriginAgeValue(void);
         void                        setupNodeAgeFloors(void);
         double                      fossilSweep(void);
+        std::function<double(void)> pathTarget;
         double                      relabelAcrossNode(Node* n, double oldAge);
         void                        beginNodeAgeSweep(void){ rebuildStalkIndex(); inNodeAgeSweep = true; }
         void                        endNodeAgeSweep(void){ inNodeAgeSweep = false; }

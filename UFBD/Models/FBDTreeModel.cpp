@@ -36,7 +36,7 @@ static double offsetFromLambda(double rate0, double lam0, const Probability::Pri
 
 static int numFree(const std::vector<ParameterDouble*>& v);
 
-FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, unsigned int seed) :
+FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, unsigned int seed, UserSettings* rateSettings) :
     PhylogeneticModel(){
 
     lastMoveKind = MK_PARAM;
@@ -68,7 +68,7 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
     isResolved = (UserSettings::userSettings().getModel() == Model::RFBD);
 
     auto resolveType = [&](Fossil& f, const std::vector<std::string>& names) -> int {
-        if(names.empty() || f.getMaxAge() <= 0.0) return 0;
+        if(names.size() <= 1 || f.getMaxAge() <= 0.0) return 0;
         if(f.getType().empty())
             Msg::error("fossil '" + f.getTaxon() + "' has no preservation type, but -psi_types declares multiple types.");
         std::vector<std::string>::const_iterator it = std::find(names.begin(), names.end(), f.getType());
@@ -201,7 +201,7 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
         parameters.push_back(originAge);
 
     rho = UserSettings::userSettings().getRho();
-    buildRates(UserSettings::userSettings(), a);
+    buildRates(rateSettings != nullptr ? *rateSettings : UserSettings::userSettings(), a);
     for(Fossil& f : backboneDefs)
         a.backboneType.push_back(resolveType(f, a.psiTypeNames));
     for(Fossil& f : unrFossils){
@@ -572,6 +572,8 @@ std::vector<double> FBDTreeModel::getParameterString(void){
 }
 
 std::vector<std::string> FBDTreeModel::getLatentNames(void){
+    if(unresolvedFossils != nullptr && zoneIndexBuilt == false)
+        buildZoneIndex();
     std::vector<std::string> names;
     auto unrName = [&](int i){ return (i < (int)unrFossilName.size()) ? unrFossilName[i] : std::to_string(i); };
     int nUnr = (unresolvedFossils != nullptr) ? unresolvedFossils->getNumFossils() : 0;
@@ -1566,7 +1568,7 @@ double FBDTreeModel::fossilSweep(void){
     RandomVariable::setActiveInstance(&rng);
     prepareIntervals();
     updateGammaCache();
-    double r = (unresolvedFossils->getSpineIdx() < 0) ? fossilSweepParallel() : fossilSweepSequential();
+    double r = (pathTarget == nullptr && unresolvedFossils->getSpineIdx() < 0) ? fossilSweepParallel() : fossilSweepSequential();
     RandomVariable::setActiveInstance(prevRng);
     return r;
 }
@@ -1578,7 +1580,7 @@ double FBDTreeModel::fossilSweepSequential(void){
     for(int i = nf - 1; i > 0; i--)
         std::swap(order[i], order[(int)(rng.uniformRv() * (i + 1))]);
 
-    double t3 = term3Sum();
+    double t3 = (pathTarget != nullptr) ? pathTarget() : term3Sum();
     for(int idx : order){
         double ratio = unresolvedFossils->proposeOneFossil(idx);
         if(ratio == -INFINITY){
@@ -1586,7 +1588,7 @@ double FBDTreeModel::fossilSweepSequential(void){
             continue;
         }
         updateGammaCache();
-        double t3new = term3Sum();
+        double t3new = (pathTarget != nullptr) ? pathTarget() : term3Sum();
         if(std::log(rng.uniformRv()) < heat * (t3new - t3) + ratio){
             t3 = t3new;
             unresolvedFossils->updateForAcceptance();
@@ -2647,7 +2649,7 @@ void FBDTreeModel::updateGammaCache(void){
         prevNodeAge.assign(tree->getNumNodes(), -1.0);
         prevX0 = -1.0;
         cacheInit = true;
-        if(zoneInit == false){
+        if(zoneInit == false) [[unlikely]] {
             for(int i = 0; i < nf; i++){
                 std::vector<int>& dom = unresolvedFossils->getAttachmentZoneDomain(i);
                 double zi = unresolvedFossils->getAttachAge(i);

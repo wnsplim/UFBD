@@ -1,4 +1,5 @@
 #include <iostream>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <cstdlib>
@@ -126,6 +127,18 @@ std::vector<std::string> UserSettings::getPsiGroupNames(int t){
     return psiGroupNames;
 }
 
+void UserSettings::setPathPoint(double t, const std::string& text, bool pilot) {
+    pathT = t;
+    pathPilot = pilot;
+    std::string tag = (pilot ? "_pilot_t" : "_t") + text;
+    parametersOut = parametersOutBase;
+    size_t d = parametersOut.rfind(".log");
+    parametersOut.insert(d != std::string::npos ? d : parametersOut.size(), tag);
+    treeOut = treeOutBase;
+    if (treeOut.empty() == false)
+        treeOut.insert(treeOut.rfind(".trees"), tag);
+}
+
 std::map<int,Probability::PriorSpec> UserSettings::getPsiGroupPrior(int t){
     if(psiTypeNames.empty() == false){
         std::map<std::string, std::map<int,Probability::PriorSpec>>::iterator it = psiGroupPriorByName.find(psiTypeNames[t]);
@@ -196,17 +209,33 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     for (int i = 0; i < argc; i++)
         arguments.push_back(std::string(argv[i]));
 
+    BfConfig bf;
     if (sbcMode == false) {
         std::vector<std::string> cfgTokens;
         for (size_t i = 1; i < arguments.size(); ) {
-            if (arguments[i] == "-config") {
-                if (i + 1 >= arguments.size()) Msg::error("flag \"-config\" expects a file path.");
-                configFilePath = arguments[i + 1];
-                cfgTokens = ConfigReader::translate(configFilePath);
+            if (arguments[i] == "-config" || arguments[i] == "-config_bf") {
+                if (i + 1 >= arguments.size()) Msg::error("flag \"" + arguments[i] + "\" expects a file path.");
+                if (arguments[i] == "-config") {
+                    configFilePath = arguments[i + 1];
+                    cfgTokens = ConfigReader::translate(configFilePath);
+                } else {
+                    bfConfigPath = arguments[i + 1];
+                    bf = ConfigReader::translateBf(bfConfigPath);
+                }
                 arguments.erase(arguments.begin() + i, arguments.begin() + i + 2);
             } else {
                 i++;
             }
+        }
+        if (configFilePath.empty() == false && bfConfigPath.empty() == false)
+            Msg::error("-config_bf holds both models and the MCMC settings, so it replaces -config.");
+        cliArgs = arguments;
+        if (bfConfigPath.empty() == false) {
+            for (size_t i = 1; i + 1 < arguments.size(); i++)
+                if (arguments[i] == "-bf_posterior")
+                    bfPosterior = (arguments[i + 1] == "1") ? 1 : 0;
+            cfgTokens = bf.model[bfPosterior == 1 ? 1 : 0];
+            cfgTokens.insert(cfgTokens.end(), bf.shared.begin(), bf.shared.end());
         }
         for (size_t i = 0; i < cfgTokens.size(); i++)
             arguments.push_back(cfgTokens[i]);
@@ -252,6 +281,46 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     };
     knownFlags.insert("-fbd_model");
     valueFlags.insert("-fbd_model");
+    knownFlags.insert({"-bf_t", "-bf_pilot", "-bf_posterior", "-bf_pilot_frac", "-bf_pilot_nodes", "-bf_intervals", "-bf_bridge_tol", "-bf_bridge_iter", "-bf_batches", "-bf_cores"});
+    valueFlags.insert({"-bf_t", "-bf_posterior", "-bf_pilot_frac", "-bf_pilot_nodes", "-bf_intervals", "-bf_bridge_tol", "-bf_bridge_iter", "-bf_batches", "-bf_cores"});
+    auto parseTs = [](const std::string& flag, const std::string& val, const std::string& expects, std::vector<double>& ts, std::vector<std::string>& text) {
+        ts.clear();
+        text.clear();
+        std::istringstream in(val);
+        std::string tok;
+        while (std::getline(in, tok, ',')) {
+            double t = 0.0;
+            try {
+                t = std::stod(tok);
+            } catch (...) {
+                Msg::error("flag \"" + flag + "\" expects " + expects + ", but got \"" + val + "\".");
+            }
+            if (t < 0.0 || t > 1.0)
+                Msg::error("flag \"" + flag + "\": " + tok + " is not in [0, 1].");
+            if (ts.empty() == false && t <= ts.back())
+                Msg::error("flag \"" + flag + "\": the values must increase, but " + tok + " follows " + text.back() + ".");
+            ts.push_back(t);
+            text.push_back(tok);
+        }
+    };
+    auto parsePositive = [](const std::string& flag, const std::string& val) {
+        double x = 0.0;
+        try {
+            x = std::stod(val);
+        } catch (...) {
+            Msg::error("flag \"" + flag + "\" expects a positive number, but got \"" + val + "\".");
+        }
+        if (x <= 0.0)
+            Msg::error("flag \"" + flag + "\" expects a positive number, but got \"" + val + "\".");
+        return x;
+    };
+    auto parseCount = [&](const std::string& flag, const std::string& val, int least) {
+        double x = parsePositive(flag, val);
+        if (x != std::floor(x) || x < (double)least)
+            Msg::error("flag \"" + flag + "\" expects an integer of at least " + std::to_string(least) + ", but got \"" + val + "\".");
+        return (int)x;
+    };
+    std::string bfFlag;
 
     bool coupledChainsProvided = false;
     for (int i = 1; i < (int)arguments.size(); i++) {
@@ -263,6 +332,12 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
 
         if (knownFlags.find(arg) == knownFlags.end())
             Msg::error("unknown flag \"" + arg + "\".");
+
+        if (arg == "-bf_pilot") {
+            pathPilot = true;
+            bfFlag = arg;
+            continue;
+        }
 
         if (arg == "-resume") {
             resume = true;
@@ -331,6 +406,29 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 }
                 if (rho <= 0.0 || rho > 1.0)
                     Msg::error("flag \"-rho\" must be in (0, 1].");
+            } else if (arg.rfind("-bf_", 0) == 0) {
+                bfFlag = arg;
+                if (arg == "-bf_t") {
+                    parseTs(arg, val, "numbers separated by commas", bfLadder, bfLadderText);
+                } else if (arg == "-bf_pilot_frac") {
+                    bfPilotFrac = parsePositive(arg, val);
+                    if (bfPilotFrac > 1.0)
+                        Msg::error("flag \"" + arg + "\" expects a number in (0, 1], but got \"" + val + "\".");
+                } else if (arg == "-bf_pilot_nodes") {
+                    bfPilotNodes = parseCount(arg, val, 1);
+                } else if (arg == "-bf_intervals") {
+                    bfIntervals = parsePositive(arg, val);
+                } else if (arg == "-bf_bridge_tol") {
+                    bfBridgeTol = parsePositive(arg, val);
+                } else if (arg == "-bf_bridge_iter") {
+                    bfBridgeIter = parseCount(arg, val, 1);
+                } else if (arg == "-bf_batches") {
+                    bfBatches = parseCount(arg, val, 2);
+                } else if (arg == "-bf_cores") {
+                    bfCores = parseCount(arg, val, 1);
+                } else if (val != "0" && val != "1") {
+                    Msg::error("flag \"-bf_posterior\" expects 0 or 1, but got \"" + val + "\".");
+                }
             } else if (arg == "-seed") {
                 try {
                     seed = (unsigned int)std::stoul(val);
@@ -738,6 +836,89 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         }
     }
 
+    if (bfConfigPath.empty() && bfFlag.empty() == false)
+        Msg::error(bfFlag + " requires -config_bf.");
+    if (bfConfigPath.empty() == false) {
+        typedef std::vector<std::pair<std::string, std::vector<std::string>>> Groups;
+        auto groups = [&](const std::vector<std::string>& v, size_t from) {
+            Groups g;
+            for (size_t i = from; i < v.size(); i++) {
+                if (knownFlags.count(v[i]) > 0 || g.empty())
+                    g.push_back({v[i], {}});
+                else
+                    g.back().second.push_back(v[i]);
+            }
+            return g;
+        };
+        auto select = [&](const Groups& g, const std::string& section) {
+            Groups out;
+            for (const auto& x : g)
+                if (ConfigReader::sectionOf(x.first) == section && (section.empty() == false || (x.first != "-log_output" && x.first != "-tree_output")))
+                    out.push_back(x);
+            return out;
+        };
+        Groups ga = groups(bf.model[0], 0), gb = groups(bf.model[1], 0);
+        Groups na = select(ga, ""), nb = select(gb, "");
+        for (size_t i = 0; i < std::max(na.size(), nb.size()); i++)
+            if (i >= na.size() || i >= nb.size() || na[i] != nb[i])
+                Msg::error("-config_bf " + bfConfigPath + ": [model 1] differs from [model 0] apart from the rate, clock and substitution sections, at '"
+                           + (i < nb.size() ? nb[i].first : na[i].first) + "'; for now, the two models may differ only in [lambda], [mu], [psi <type>], [clock] and [substitution] blocks.");
+        sharedLambda = select(ga, "lambda") == select(gb, "lambda");
+        sharedMu = select(ga, "mu") == select(gb, "mu");
+        sharedPsi = select(ga, "psi") == select(gb, "psi");
+        auto partitionOf = [](const Groups& g) {
+            for (const auto& x : g)
+                if (x.first == "-partition") return x.second;
+            return std::vector<std::string>();
+        };
+        sharedClock = select(ga, "clock") == select(gb, "clock") && partitionOf(ga) == partitionOf(gb);
+        sharedSubst = select(ga, "substitution") == select(gb, "substitution");
+        if (parametersOut.empty())
+            Msg::error("-config_bf " + bfConfigPath + ": log_output is missing before [model 0]; every Bayes factor run writes under it.");
+        std::string logBase = parametersOut.substr(0, parametersOut.size() - 4);
+        for (int k = 0; k < 2; k++)
+            priorLogGiven[k] = bf.priorLog[k].empty() == false;
+        posteriorBaseA = priorLogGiven[0] ? bf.priorLog[0] : logBase + "_0";
+        posteriorBaseB = priorLogGiven[1] ? bf.priorLog[1] : logBase + "_1";
+        if (bfPosterior >= 0) {
+            std::string pb = (bfPosterior == 0) ? posteriorBaseA : posteriorBaseB;
+            parametersOut = pb + ".log";
+            if (treeOut.empty() == false)
+                treeOut = pb + ".trees";
+        } else {
+            std::vector<std::string> bArgs = {arguments[0]};
+            for (const auto& x : groups(cliArgs, 1)) {
+                if (x.first.rfind("-bf_", 0) == 0) continue;
+                bArgs.push_back(x.first);
+                bArgs.insert(bArgs.end(), x.second.begin(), x.second.end());
+            }
+            bArgs.insert(bArgs.end(), bf.model[1].begin(), bf.model[1].end());
+            for (const auto& x : groups(bf.shared, 0)) {
+                if (x.first.rfind("-bf_", 0) == 0) continue;
+                bArgs.push_back(x.first);
+                bArgs.insert(bArgs.end(), x.second.begin(), x.second.end());
+            }
+            std::vector<const char*> bArgv;
+            for (const std::string& s : bArgs)
+                bArgv.push_back(s.c_str());
+            modelBSettings = new UserSettings;
+            modelBSettings->initializeSettings((int)bArgv.size(), bArgv.data());
+            std::set<std::string> ta(psiTypeNames.begin(), psiTypeNames.end()), tb(modelBSettings->psiTypeNames.begin(), modelBSettings->psiTypeNames.end());
+            auto joined = [](const std::set<std::string>& x) {
+                std::string s;
+                for (const std::string& t : x) s += (s.empty() ? "" : ",") + t;
+                return s.empty() ? std::string("none") : s;
+            };
+            if (ta.size() > 1 && tb.size() > 1 && ta != tb)
+                Msg::error("-config_bf: when both configs have multipe psi types they must name the same types ([model 0] names "
+                           + joined(ta) + ", [model 1] names " + joined(tb) + "); to compare psi with single type vs multiple types, use one config with a single psi section.");
+            parametersOutBase = parametersOut;
+            treeOutBase = treeOut;
+            if (bfLadder.size() == 1)
+                setPathPoint(bfLadder[0], bfLadderText[0], pathPilot);
+        }
+    }
+
 
     if (sbcMode == false) {
         if (treeOut.empty())
@@ -856,48 +1037,44 @@ void UserSettings::printHelp(void){
 Every setting can be given as a flag (below) or in a config file. When a
 setting appears in both, the config file is prioritized.
 
-A prior is written one of these ways:
+Following prior distribution families are supported:
   improper | <number> (fixed value) | exp:rate | gamma:shape,rate |
   lognormal:mu,sigma | unif:a,b | normal:mean,sd | truncnormal:mean,sd
-Any number may be written log(x), e.g. normal:log(0.2),1.6
+Any number may be written log(x) (base e), e.g. normal:log(0.2),1.6
 
 REQUIRED
   -fossils <file>         tab-separated: taxon, min age, max age, clade,
                           CROWN|TOTAL|STEM, and an optional preservation type
   -conditioning <event> [prior]
                           event = crown | origin | anysample | extinct;
-                          the optional prior is the root-age prior
-                          (default improper)
+                          with the root-age prior (default improper)
 
 INPUT
   -backbone_tree <file>   rooted binary NEWICK or NEXUS tree; if not given,
                           every taxon is treated as unresolved
   -clade_def <file>       name<TAB>taxon,taxon,... ; a clade is all taxa under
-                          the MRCA of the listed ones
+                          the MRCA of the listed taxa
   -unsampled_extants <file>
                           clade<TAB>CROWN|TOTAL<TAB>number ; adds that many
-                          extant taxa of age 0 to the clade, named
-                          <clade>_<crown|total>_1 .. _<number>; UE can instead
-                          be listed one per row in -fossils with min age =
-                          max age = 0
+                          extant taxa of age 0 to the clade
 
-OUTPUT  (prefixes: the engine appends .log/.trees/.tree, _chainN per chain)
+OUTPUT  (prefixes: the engine writes .log/.trees/.tree, _chainN per chain)
   -log_output <prefix>    parameter log: merged across parallel chains as
                           <prefix>.log, per chain as <prefix>_chainN.log
   -tree_output <prefix>   per-sample trees (same naming) plus the posterior
                           mean tree <prefix>.tree
-                          The full console is also saved to
+                          The full console output is also saved to
                           <prefix>.console.txt
   -no_latent_log          suppress the <prefix>_latent.log per-sample latent
                           trace log
 
 MCMC
   -chain_length <N|auto>  number of generations, or 'auto' to stop on the
-                          convergence targets below
+                          convergence targets (see below)
   -thinning <N>           sample every N generations (default 1000)
   -burn_in <frac>         burn-in fraction (default 0.25)
-  -parallel_chains <N>    independent replicate runs (needed for split R-hat) (default 4)
-  -coupled_chains <N>     Metropolis-coupled chains per run (>1 enables MC3) (default 1)
+  -parallel_chains <N>    independent replicate runs (>=2 needed for R-hat) (default 4)
+  -coupled_chains <N>     Metropolis-coupled chains per run (>=2 enables MC3) (default 1)
   -delta_temperature <x>  MC3 initial temperature spacing (default 0.1); the range
                           self-tunes toward ~0.40 adjacent DEO swap acceptance
   -swap_interval <N>      MC3 generations between chain-swap attempts (default 1000)
@@ -930,8 +1107,7 @@ SKYLINE  (piecewise-constant rates; write lambda, mu, or psi for <r>)
                           assuming that the clade went extinct by t_min if t_min>0 (default 0)
 
 MULTIPLE PRESERVATION TYPES  (split psi by type)
-  -psi_types <name,...>   declare types; names must match the fossil table's
-                          6th column
+  -psi_types <name,...>   declare types; names must match the fossil table's 6th column
   Give per-type flags a 'name:' prefix, e.g.
     -psi_prior type1:unif:0.01,0.04
     -psi_skyline_times type1:20,40
@@ -962,6 +1138,26 @@ CLOCK & SUBSTITUTION MODEL
                           a = shape, b = rate, c = Dirichlet concentration; singleton = gamma(a,b)
   -sigma2_param <c|nc>    parameterization of the sigma2 move: centered (default) or
                           non-centered; or one per clock partition, "name:value | name:value"
+
+BAYES FACTOR (ln BF of [model 1] over [model 0], by bridge sampling along the model-switch
+path; without -bf_t: posterior runs for models without prior_log, tuning pilot runs, followed
+by the MCMC for selected points, and then ln BF is calculated)
+  -config_bf <file>       Bayes factor config, used instead of -config: MCMC and bf_*
+                          settings first, then [model 0] and [model 1], each a full model
+                          config that may name an existing posterior with prior_log; the
+                          models must differ only in the rate, clock and substitution sections
+  -bf_cores <n>           runs in parallel, each with -cores cores (default 1)
+  -bf_t <t|t1,t2,...>     run only the path point(s) t in [0,1] without pilot run
+  -bf_pilot               with one -bf_t point: run it as a pilot run
+  -bf_posterior <0|1>     run only the posterior of [model 0] or [model 1]
+  -bf_pilot_nodes <n>     number of Gauss-Legendre nodes for the pilot run (default 8)
+  -bf_pilot_frac <x>      pilot run length as a fraction of the generations in the posterior
+                          runs of the two models (default 0.2)
+  -bf_intervals <x>       path intervals per unit of thermodynamic length (default 2)
+  -bf_bridge_tol <x>      bridge iteration stops when ln BF changes by less than x
+                          (default 1e-10)
+  -bf_bridge_iter <n>     most bridge iterations (default 10000)
+  -bf_batches <n>         batches per run for the standard error (default 20)
 
 OTHER
   -config <file>          read a config file (its format is in README.md)

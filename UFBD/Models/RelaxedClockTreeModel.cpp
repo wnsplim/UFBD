@@ -18,9 +18,8 @@
 #include "Tree.hpp"
 #include "UserSettings.hpp"
 
-void RelaxedClockTreeModel::buildClock(const std::vector<ClockModel>& clockModel, const double* rgeneParam, const double* sigma2Param){
+void RelaxedClockTreeModel::buildClock(const std::vector<ClockModel>& clockModel, const double* rgeneParam, const double* sigma2Param, UserSettings& us){
     int nPart = (lik != nullptr) ? lik->getNumPartitions() : ctmc->getNumPartitions();
-    UserSettings& us = UserSettings::userSettings();
     std::vector<std::string> seqNames = (ctmc != nullptr) ? ctmc->getPartitionNames() : std::vector<std::string>();
     std::vector<int> pgroup;
     std::vector<std::string> groupNames;
@@ -163,34 +162,35 @@ double RelaxedClockTreeModel::nodeAgeJump2(void){
     return s;
 }
 
-RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, const std::string& hessianFile, const std::string& mlTreeFile, int nStates, const std::vector<ClockModel>& clockModel, const double* rgeneParam, const double* sigma2Param, unsigned int seed){
+RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, const std::string& hessianFile, const std::string& mlTreeFile, int nStates, const std::vector<ClockModel>& clockModel, const double* rgeneParam, const double* sigma2Param, unsigned int seed, UserSettings* modelSettings){
     rng.setSeed(seed);
     RandomVariable* prevRng = RandomVariable::getActiveInstance();
     RandomVariable::setActiveInstance(&rng);
     crownInitScale(t, clades, fossils);
-    fbd = new FBDTreeModel(t, clades, fossils, seed);
+    fbd = new FBDTreeModel(t, clades, fossils, seed, modelSettings);
     ctmc = nullptr;
     std::vector<std::string> rogue;
     for(Fossil& f : fossils)
         rogue.push_back(f.getTaxon());
     lik = new ApproxBranchLengthLikelihood(hessianFile, mlTreeFile, rogue, nStates);
-    buildClock(clockModel, rgeneParam, sigma2Param);
+    buildClock(clockModel, rgeneParam, sigma2Param, modelSettings != nullptr ? *modelSettings : UserSettings::userSettings());
     parameters.push_back(fbd->getParameterTree());
     lastMoveType = 2;
     RandomVariable::setActiveInstance(prevRng);
 }
 
-RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, const std::string& sequenceFile, const std::string& partitionFile, int nStates, int numCats, const std::vector<ClockModel>& clockModel, const double* rgeneParam, const double* sigma2Param, unsigned int seed){
+RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, const std::string& sequenceFile, const std::string& partitionFile, int nStates, int numCats, const std::vector<ClockModel>& clockModel, const double* rgeneParam, const double* sigma2Param, unsigned int seed, UserSettings* modelSettings){
     rng.setSeed(seed);
     RandomVariable* prevRng = RandomVariable::getActiveInstance();
     RandomVariable::setActiveInstance(&rng);
     crownInitScale(t, clades, fossils);
-    fbd = new FBDTreeModel(t, clades, fossils, seed);
+    fbd = new FBDTreeModel(t, clades, fossils, seed, modelSettings);
     lik = nullptr;
     ctmc = new SequenceCTMCModel(this, sequenceFile, partitionFile, nStates, numCats);
 
-    buildClock(clockModel, rgeneParam, sigma2Param);
-    ctmc->buildParameters();
+    UserSettings& us = modelSettings != nullptr ? *modelSettings : UserSettings::userSettings();
+    buildClock(clockModel, rgeneParam, sigma2Param, us);
+    ctmc->buildParameters(us);
 
     parameters.push_back(fbd->getParameterTree());
     lastMoveType = 2;
@@ -239,15 +239,15 @@ double RelaxedClockTreeModel::nodeAgeSweep(void){
         int j = (int)(r.uniformRv() * (i + 1));
         std::swap(nodes[i], nodes[j]);
     }
-    double curL = lnLikelihood();
-    double curP = lnPriorProbability();
+    double curL = (pathTarget != nullptr) ? pathTarget() : lnLikelihood();
+    double curP = (pathTarget != nullptr) ? 0.0 : lnPriorProbability();
     fbd->beginNodeAgeSweep();
     for(Node* n : nodes){
         double oldAge = n->getTime();
         double ratio = fbd->getTree()->updateNodeAgeOnNode(n, fbd->getParameterTree()->getNodeAgeStep());
         ratio += fbd->relabelAcrossNode(n, oldAge);
-        double newL = lnLikelihood();
-        double newP = lnPriorProbability();
+        double newL = (pathTarget != nullptr) ? pathTarget() : lnLikelihood();
+        double newP = (pathTarget != nullptr) ? 0.0 : lnPriorProbability();
         naSweepAtt++;
         if(std::log(r.uniformRv()) < heat * ((newL - curL) + (newP - curP)) + ratio){
             curL = newL;

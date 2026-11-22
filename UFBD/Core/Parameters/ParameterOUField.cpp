@@ -136,11 +136,15 @@ double ParameterOUField::update(void){
     lastMove = hyperMoves[(int)(rng.uniformRv() * nHyper)];
     if(lastMove == OU_THETA){
         theta[0] = theta[1] + step[OU_THETA] * bactrianDelta();
+        if(partner != nullptr)
+            partner->theta[0] = theta[0];
         return 0.0;
     }
     if(lastMove == OU_SDEQ){
         double c = std::exp(step[OU_SDEQ] * bactrianDelta());
         sdEq[0] = sdEq[1] * c;
+        if(partner != nullptr)
+            partner->sdEq[0] = sdEq[0];
         return std::log(c);
     }
     if(lastMove == OU_JOINTSD)
@@ -149,15 +153,64 @@ double ParameterOUField::update(void){
         return nuNonCentered();
     double c = std::exp(step[OU_NU] * bactrianDelta());
     nu[0] = nu[1] * c;
+    if(partner != nullptr)
+        partner->nu[0] = nu[0];
     return std::log(c);
+}
+
+double ParameterOUField::standardizedDeviations(std::vector<double>& u){
+    return standardizedDeviations(rateVal[0], theta[0], sdEq[0], nu[0], u);
+}
+
+double ParameterOUField::standardizedDeviations(const std::vector<double>& rates, double th, double sd, double nuv, std::vector<double>& u){
+    u.resize(nBins);
+    double xPrev = std::log(rates[0]);
+    u[0] = (xPrev - th) / sd;
+    double lnJac = -xPrev - (double)nBins * std::log(sd);
+    for(int i = 1; i < nBins; i++){
+        double dt = binMid(i) - binMid(i - 1);
+        double q = -std::expm1(-2.0 * nuv * dt);
+        double x = std::log(rates[i]);
+        u[i] = (x - th - std::exp(-nuv * dt) * (xPrev - th)) / (sd * std::sqrt(q));
+        lnJac -= x + 0.5 * std::log(q);
+        xPrev = x;
+    }
+    return lnJac;
+}
+
+void ParameterOUField::setStandardizedDeviations(const std::vector<double>& u){
+    double th = theta[0], sd = sdEq[0];
+    double x = th + sd * u[0];
+    rateVal[0][0] = std::exp(x);
+    for(int i = 1; i < nBins; i++){
+        double dt = binMid(i) - binMid(i - 1);
+        x = th + std::exp(-nu[0] * dt) * (x - th) + sd * std::sqrt(-std::expm1(-2.0 * nu[0] * dt)) * u[i];
+        rateVal[0][i] = std::exp(x);
+    }
+    commitProposed();
+}
+
+void ParameterOUField::shareHyperparameters(ParameterOUField* p){
+    p->copyHyper(*this);
+    p->hyperMoves.clear();
+    p->partner = this;
+    partner = p;
 }
 
 double ParameterOUField::nuNonCentered(void){
     double lnc = step[OU_NUNC] * bactrianDelta();
     double nuOld = nu[1], nuNew = nuOld * std::exp(lnc);
     nu[0] = nuNew;
+    double h = nuNonCenteredRates(nuOld, nuNew, lnc);
+    if(partner != nullptr){
+        partner->nu[0] = nuNew;
+        h = partner->nuNonCenteredRates(nuOld, nuNew, h);
+    }
+    return h;
+}
+
+double ParameterOUField::nuNonCenteredRates(double nuOld, double nuNew, double h){
     double th = theta[1], sd = sdEq[1];
-    double h = lnc;
     double xPrev = std::log(rateVal[1][0]), xPrevNew = xPrev;
     for(int i = 1; i < nBins; i++){
         double dt = binMid(i) - binMid(i - 1);
@@ -176,7 +229,15 @@ double ParameterOUField::nuNonCentered(void){
 double ParameterOUField::jointSdScale(void){
     double c = std::exp(step[OU_JOINTSD] * bactrianDelta());
     sdEq[0] = sdEq[1] * c;
-    double h = (double)(nBins + 1) * std::log(c);
+    double h = jointSdScaleRates(c, (double)(nBins + 1) * std::log(c));
+    if(partner != nullptr){
+        partner->sdEq[0] = sdEq[0];
+        h = partner->jointSdScaleRates(c, h + (double)partner->nBins * std::log(c));
+    }
+    return h;
+}
+
+double ParameterOUField::jointSdScaleRates(double c, double h){
     for(int k = 0; k < nBins; k++){
         double x = std::log(rateVal[1][k]);
         double xn = theta[1] + c * (x - theta[1]);
@@ -219,6 +280,10 @@ void ParameterOUField::commitProposed(void){
     theta[1] = theta[0];
     sdEq[1] = sdEq[0];
     nu[1] = nu[0];
+    if(partner != nullptr){
+        partner->rateVal[1] = partner->rateVal[0];
+        partner->copyHyper(*this);
+    }
 }
 
 void ParameterOUField::restoreProposed(void){
@@ -226,6 +291,10 @@ void ParameterOUField::restoreProposed(void){
     theta[0] = theta[1];
     sdEq[0] = sdEq[1];
     nu[0] = nu[1];
+    if(partner != nullptr){
+        partner->rateVal[0] = partner->rateVal[1];
+        partner->copyHyper(*this);
+    }
 }
 
 void ParameterOUField::updateForAcceptance(void){
@@ -271,8 +340,11 @@ void ParameterOUField::printPerBinAccept(std::ostream& os, const char* label) co
 double ParameterOUField::scaleAllProposed(double c, bool withTheta){
     for(int k = 0; k < nBins; k++)
         rateVal[0][k] = rateVal[1][k] * c;
-    if(withTheta && isThetaFixed() == false)
+    if(withTheta && isThetaFixed() == false){
         theta[0] = theta[1] + std::log(c);
+        if(partner != nullptr)
+            partner->theta[0] = theta[0];
+    }
     return (double)nBins * std::log(c);
 }
 
@@ -296,8 +368,11 @@ double ParameterOUField::shiftRates(double d){
     double c = (rBar + d) / rBar;
     for(int k = 0; k < nBins; k++)
         rateVal[0][k] = rateVal[1][k] * c;
-    if(isThetaFixed() == false)
+    if(isThetaFixed() == false){
         theta[0] = theta[1] + std::log(c);
+        if(partner != nullptr)
+            partner->theta[0] = theta[0];
+    }
     return (double)(nBins - 1) * std::log(c);
 }
 

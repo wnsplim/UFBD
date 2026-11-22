@@ -22,6 +22,7 @@ class ParameterOUField : public Parameter {
         double                      shrinkExpandProposed(double a);
         void                        commitProposed(void);
         void                        restoreProposed(void);
+        void                        copyState(const ParameterOUField& o) { rateVal[0] = o.rateVal[0]; rateVal[1] = o.rateVal[1]; copyHyper(o); }
         int                         getNumBins(void) { return nBins; }
         double                      getTheta(void) { return theta[0]; }
         double                      getSdEq(void) { return sdEq[0]; }
@@ -29,6 +30,11 @@ class ParameterOUField : public Parameter {
         bool                        isThetaFixed(void) { return thetaPrior.family == Probability::PriorFamily::FIXED; }
         bool                        isSdFixed(void) { return sdPrior.family == Probability::PriorFamily::FIXED; }
         bool                        isNuFixed(void) { return nuPrior.family == Probability::PriorFamily::FIXED; }
+        double                      standardizedDeviations(std::vector<double>& u);
+        double                      standardizedDeviations(const std::vector<double>& rates, double th, double sd, double nuv, std::vector<double>& u);
+        void                        setStandardizedDeviations(const std::vector<double>& u);
+        void                        shareHyperparameters(ParameterOUField* p);
+        bool                        sharesHyperparameters(void) { return partner != nullptr; }
         double                      getAcceptanceRatio(void) { return (numAcc + numRej > 0) ? (double)numAcc / (double)(numAcc + numRej) : 0.0; }
         double                      lnProbability(void);
         void                        print(void) {}
@@ -46,7 +52,10 @@ class ParameterOUField : public Parameter {
         double                      binMid(int c);
         double                      bactrianDelta(void);
         double                      jointSdScale(void);
+        double                      jointSdScaleRates(double c, double h);
         double                      nuNonCentered(void);
+        double                      nuNonCenteredRates(double nuOld, double nuNew, double h);
+        void                        copyHyper(const ParameterOUField& o) { for(int k = 0; k < 2; k++){ theta[k] = o.theta[k]; sdEq[k] = o.sdEq[k]; nu[k] = o.nu[k]; } }
         void                        adaptStep(int m, bool accepted);
         void                        adaptStepBin(int k, bool accepted);
 
@@ -56,6 +65,7 @@ class ParameterOUField : public Parameter {
         double                      theta[2];
         double                      sdEq[2];
         double                      nu[2];
+        ParameterOUField*           partner = nullptr;
         ParameterDouble*            originAge;
 
         Probability::PriorSpec      thetaPrior, sdPrior, nuPrior;

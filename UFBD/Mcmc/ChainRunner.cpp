@@ -10,7 +10,7 @@
 std::ifstream ChainRunner::openCheckpoint(const std::string& path) {
     std::ifstream is(path);
     if(is.is_open() == false)
-        Msg::error("could not open checkpoint file for -resume: " + path);
+        Msg::error("-resume: nothing to resume from.");
     return is;
 }
 
