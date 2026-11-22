@@ -28,6 +28,10 @@
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
+#include <unistd.h>
+#ifdef __linux__
+#include <sys/prctl.h>
+#endif
 
 static void crashBacktrace(int sig){
     void* frames[64];
@@ -79,6 +83,13 @@ static std::string elapsedString(double secs){
 
 int main(int argc, const char* argv[]) {
 
+#ifdef __linux__
+    if(const char* parent = std::getenv("UFBD_BF_PARENT")){
+        prctl(PR_SET_PDEATHSIG, SIGKILL);
+        if(getppid() != (pid_t)std::atol(parent))
+            return 1;
+    }
+#endif
     signal(SIGSEGV, crashBacktrace);
     signal(SIGABRT, crashBacktrace);
 

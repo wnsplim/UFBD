@@ -14,6 +14,7 @@
 #include <spawn.h>
 #include <sstream>
 #include <sys/wait.h>
+#include <unistd.h>
 
 extern char** environ;
 
@@ -91,6 +92,7 @@ BridgeSampler::BridgeSampler(const std::string& base) : base(base) {
     resumeAll = s.getResume();
     perChain = (s.getNumRuns() == 1 && s.getAutoChainLength() == false) == false;
     burn = perChain ? 0.0 : s.getBurninFraction();
+    setenv("UFBD_BF_PARENT", std::to_string(getpid()).c_str(), 1);
     const std::vector<std::string>& cli = s.getCliArgs();
     childArgs = {cli[0], "-config_bf", s.getBfConfigPath()};
     for(size_t i = 1; i < cli.size(); i++){
