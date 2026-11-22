@@ -88,19 +88,27 @@ bool ConvergenceRunner::run(void){
                        + std::to_string(replicates.size() + stale));
         std::string missing;
         int nMissing = 0;
-        for(const std::string& pf : repParamFiles)
-            if(std::ifstream(pf + ".ckp").good() == false)
+        std::vector<bool> fresh;
+        for(const std::string& pf : repParamFiles){
+            fresh.push_back(std::ifstream(pf + ".ckp").good() == false);
+            if(fresh.back())
                 missing += (nMissing++ > 0 ? ", " : "") + pf + ".ckp";
+        }
         if(nMissing == (int)repParamFiles.size())
             Msg::error("-resume: nothing to resume from.");
-        if(nMissing > 0)
-            Msg::error("-resume failed: " + std::to_string(repParamFiles.size() - nMissing) + " of " + std::to_string(repParamFiles.size())
-                       + " chains have a checkpoint, but " + missing + (nMissing > 1 ? " do" : " does") + " not exist.");
-        for(ChainRunner* c : replicates){
-            c->loadCheckpoint();
-            c->resumeOutputs();
-            gen = std::max(gen, c->currentGen());
+        for(size_t r = 0; r < replicates.size(); r++){
+            if(fresh[r])
+                continue;
+            replicates[r]->loadCheckpoint();
+            replicates[r]->resumeOutputs();
+            gen = std::max(gen, replicates[r]->currentGen());
         }
+        if(nMissing > 0)
+            Msg::warning("-resume: " + missing + (nMissing > 1 ? " do" : " does") + " not exist, so " + (nMissing > 1 ? "those chains start" : "that chain starts")
+                         + " fresh and " + (nMissing > 1 ? "are" : "is") + " advanced to generation " + std::to_string(gen) + " before the run continues.");
+        for(size_t r = 0; r < replicates.size(); r++)
+            if(fresh[r])
+                replicates[r]->init();
         for(ChainRunner* c : replicates){
             unsigned long cg = c->currentGen();
             if(cg < gen)

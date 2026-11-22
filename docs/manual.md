@@ -24,7 +24,7 @@ ufbd -config config_file.cfg
 ufbd -help
 ```
 
-You can set the options in a config file, or as flags on the command line. If you give both, the config file is prioritized. UFBD reads every path relative to the directory you run the command from.
+You can set the options in a config file, or as flags on the command line. If you give both, the config file is prioritized. UFBD reads a relative path in a config file relative to that file's directory, and a relative path given as a flag relative to the directory you run the command from.
 
 Two options are available only as a command-line flag:
 
