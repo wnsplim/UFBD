@@ -213,8 +213,6 @@ void Mcmc::sample(unsigned long n, double lnL, double lnP) {
             lcn.insert(lcn.end(), latNames.begin(), latNames.end());
             latent.addColumnNamesTSV(lcn);
             writeLatent = true;
-            latentNms = latNames;
-            latentCols.assign(latNames.size(), std::vector<double>());
             std::vector<std::string> zleg = model->getZoneLegend();
             if(zleg.empty() == false){
                 std::string zp = paramOut;
@@ -224,6 +222,10 @@ void Mcmc::sample(unsigned long n, double lnL, double lnP) {
                 std::ofstream zf(zp);
                 for(const std::string& line : zleg) zf << line << "\n";
             }
+        }
+        if(writeLatent || keepLatent){
+            latentNms = latNames;
+            latentCols.assign(latNames.size(), std::vector<double>());
         }
 
         if(writeTrees){
@@ -251,11 +253,13 @@ void Mcmc::sample(unsigned long n, double lnL, double lnP) {
         dat.push_back((double)std::clock() / CLOCKS_PER_SEC);
     params.appendDataTSV(dat);
 
-    if(writeLatent){
+    if(latentNms.empty() == false){
         std::vector<double> ls = model->getLatentString();
-        std::vector<double> ldat = {(double)n};
-        ldat.insert(ldat.end(), ls.begin(), ls.end());
-        latent.appendDataTSV(ldat);
+        if(writeLatent){
+            std::vector<double> ldat = {(double)n};
+            ldat.insert(ldat.end(), ls.begin(), ls.end());
+            latent.appendDataTSV(ldat);
+        }
         for(size_t j = 0; j < latentCols.size() && j < ls.size(); j++)
             latentCols[j].push_back(ls[j]);
     }

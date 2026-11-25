@@ -444,28 +444,33 @@ void Sbc::runSummarize(void){
             }
             addNodeQuantities(perRep, ranks, names);
         }
-        if(f < cfg.fossilRanksPaths.size()){
+        if(f < cfg.fossilRanksPaths.size() && cfg.fossilRanksPaths[f].empty() == false){
             std::ifstream ff(cfg.fossilRanksPaths[f]);
             if(ff.is_open() == false)
                 Msg::error("cannot open " + cfg.fossilRanksPaths[f]);
             std::getline(ff, line);
             bool chunked = line.rfind("chunk", 0) == 0;
+            double nan = std::numeric_limits<double>::quiet_NaN();
             std::vector<std::vector<std::pair<double, double>>> perRep;
             std::string lastKey;
             while(std::getline(ff, line)){
                 std::stringstream ls(line);
-                std::string chunk, rep, fossil, y, z;
+                std::string chunk, rep, quantity, rank;
                 if(chunked)
                     std::getline(ls, chunk, '\t');
                 std::getline(ls, rep, '\t');
-                std::getline(ls, fossil, '\t');
-                std::getline(ls, y, '\t');
-                std::getline(ls, z, '\t');
+                std::getline(ls, quantity, '\t');
+                std::getline(ls, rank, '\t');
                 std::string key = chunk + ":" + rep;
                 if(perRep.empty() || key != lastKey)
                     perRep.push_back({});
                 lastKey = key;
-                perRep.back().push_back({ std::stod(y), std::stod(z) });
+                if(quantity.rfind("y_", 0) == 0)
+                    perRep.back().push_back({ std::stod(rank), nan });
+                else if(quantity.rfind("z_", 0) == 0)
+                    perRep.back().push_back({ nan, std::stod(rank) });
+                else
+                    Msg::error("unknown quantity " + quantity + " in " + cfg.fossilRanksPaths[f]);
             }
             addFossilQuantities(perRep, ranks, names);
         }
@@ -616,8 +621,10 @@ void Sbc::runInference(void){
                                                         truth.lambdaOU, truth.muOU, truth.psiOU, truth.startAge,
                                                         r.backboneNodeAges, yTrue, zTrue, saTrue, zoneNode, truthLnPrior);
             models.push_back(model);
-            chains.push_back(new Mcmc(ng, thin, model));
-            chains.back()->setWriteCheckpoints(false);
+            Mcmc* chain = new Mcmc(ng, thin, model);
+            chain->setWriteCheckpoints(false);
+            chain->setKeepLatent(true);
+            chains.push_back(chain);
         }
         std::map<std::string, double> truthVal;
         std::vector<std::string> truthNames = models[0]->getParameterNames();
@@ -729,14 +736,21 @@ void Sbc::runInference(void){
             for(const std::pair<std::string, double>& nr : nodeRank)
                 nodeOut << rep << "\t" << nr.first << "\t" << nr.second << "\n";
             nodeOut.flush();
-            if(fossilRank.empty() == false && fossilOut.is_open() == false){
-                fossilOut.open(cfg.dumpPrefix + "_fossilranks.tsv");
-                fossilOut.precision(17);
-                fossilOut << "rep\tfossil\ty\tz\n";
+            for(size_t i = 0; i < fossilRank.size(); i++){
+                const std::string& nm = fossils[i].getTaxon();
+                for(const std::pair<std::string, double>& q : { std::make_pair("y_" + nm, fossilRank[i].first), std::make_pair("z_" + nm, fossilRank[i].second) }){
+                    if(std::isnan(q.second))
+                        continue;
+                    if(fossilOut.is_open() == false){
+                        fossilOut.open(cfg.dumpPrefix + "_fossilranks.tsv");
+                        fossilOut.precision(17);
+                        fossilOut << "rep\tquantity\trank\n";
+                    }
+                    fossilOut << rep << "\t" << q.first << "\t" << q.second << "\n";
+                }
             }
-            for(size_t i = 0; i < fossilRank.size(); i++)
-                fossilOut << rep << "\t" << fossils[i].getTaxon() << "\t" << fossilRank[i].first << "\t" << fossilRank[i].second << "\n";
-            fossilOut.flush();
+            if(fossilOut.is_open())
+                fossilOut.flush();
             for(size_t c = 0; c < outCols.size(); c++){
                 std::map<std::string, double>::iterator f = thisRep.find(outCols[c]);
                 rankOut << (c ? "\t" : "") << (f != thisRep.end() ? f->second : std::numeric_limits<double>::quiet_NaN());

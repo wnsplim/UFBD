@@ -24,6 +24,7 @@ class Mcmc : public ChainRunner {
         Tree*                   getTree(void);
         void                    setVerbose(bool b) { verbose = b; }
         void                    setLabel(int i) { runLabel = i; }
+        void                    setKeepLatent(bool k) { keepLatent = k; }
 
     protected:
         RandomVariable*         resumeRng(void);
@@ -35,6 +36,7 @@ class Mcmc : public ChainRunner {
         void                    checkCheckpointRoundTrip(const std::string& path);
         PhylogeneticModel*      model;
         bool                    verbose = false;
+        bool                    keepLatent = false;
         int                     runLabel = 0;
         int                     numCycles;
         int                     thinning;

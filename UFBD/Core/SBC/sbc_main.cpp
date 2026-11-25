@@ -37,7 +37,8 @@ SBC FLAGS
                           <prefix>_noderanks.tsv, optional leading chunk column)
   -sbc_fossilranks <file,...>
                           matching fossil ranks files (format of
-                          <prefix>_fossilranks.tsv, optional leading chunk column)
+                          <prefix>_fossilranks.tsv, optional leading chunk column;
+                          an empty entry for a ranks file without fossil ranks)
   -sbc_ue <prob>          probability that each extant taxon is designated an
                           unsampled extant (UE) (default 0; a value > 0 is
                           incompatible with crown conditioning)
@@ -106,11 +107,12 @@ int main(int argc, const char* argv[]){
         Msg::error("-sbc_null must be >= 1.");
     auto splitList = [](const std::string& s){
         std::vector<std::string> v;
-        std::stringstream ss(s);
-        std::string tok;
-        while(std::getline(ss, tok, ','))
-            if(tok.empty() == false)
-                v.push_back(tok);
+        if(s.empty())
+            return v;
+        size_t a = 0;
+        for(size_t b = s.find(','); b != std::string::npos; a = b + 1, b = s.find(',', a))
+            v.push_back(s.substr(a, b - a));
+        v.push_back(s.substr(a));
         return v;
     };
 
