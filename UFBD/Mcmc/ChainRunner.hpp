@@ -59,6 +59,7 @@ class ChainRunner {
         virtual RandomVariable*                 resumeRng(void) = 0;
         virtual std::vector<std::string>        resumeParameterNames(void) = 0;
         virtual std::vector<std::string>        resumeLatentNames(void) = 0;
+        virtual std::vector<bool>               resumeFixedMask(void) = 0;
         void                                    resumeLatentOutput(void);
 
         WriteTSV                                params;

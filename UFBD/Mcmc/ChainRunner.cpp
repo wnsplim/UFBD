@@ -73,6 +73,9 @@ void ChainRunner::resumeOutputs(void) {
     for(const std::string& s : headStr)
         traceNms.push_back(s);
     traceCols.assign(traceNms.size(), std::vector<double>());
+    fixedMask.assign(3, false);
+    for(bool fb : resumeFixedMask())
+        fixedMask.push_back(fb);
 
     std::ifstream pin(paramOut);
     std::string header;
@@ -80,7 +83,7 @@ void ChainRunner::resumeOutputs(void) {
     if(pin.is_open()){
         std::getline(pin, header);
         std::string line;
-        while(std::getline(pin, line)){
+        while(std::getline(pin, line) && pin.eof() == false){
             if(line.empty())
                 continue;
             std::stringstream ss(line);
@@ -114,7 +117,7 @@ void ChainRunner::resumeOutputs(void) {
         std::vector<std::string> tkeep;
         std::string tline;
         size_t nTree = 0;
-        while(std::getline(tin, tline)){
+        while(std::getline(tin, tline) && tin.eof() == false){
             bool isTreeLine = (tline.find("TREE STATE_") != std::string::npos);
             if(isTreeLine){
                 if(nTree < keep.size()){ tkeep.push_back(tline); nTree++; }
@@ -154,7 +157,7 @@ void ChainRunner::openTuneLog(PhylogeneticModel* m, bool resumed) {
     std::string header, line;
     std::vector<std::string> keep;
     std::getline(in, header);
-    while(std::getline(in, line)){
+    while(std::getline(in, line) && in.eof() == false){
         if(line.empty())
             continue;
         if((unsigned long)std::stod(line.substr(0, line.find('\t'))) > gen)
@@ -192,7 +195,7 @@ void ChainRunner::resumeLatentOutput(void) {
     if(lin.is_open()){
         std::getline(lin, header);
         std::string line;
-        while(std::getline(lin, line)){
+        while(std::getline(lin, line) && lin.eof() == false){
             if(line.empty())
                 continue;
             std::stringstream ss(line);

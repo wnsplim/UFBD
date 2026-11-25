@@ -34,6 +34,7 @@ class MetropolisCoupledMcmc : public ChainRunner {
         RandomVariable*                     resumeRng(void);
         std::vector<std::string>            resumeParameterNames(void);
         std::vector<std::string>            resumeLatentNames(void);
+        std::vector<bool>                   resumeFixedMask(void);
 
     private:
         //functions

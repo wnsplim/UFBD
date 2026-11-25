@@ -156,9 +156,9 @@ bool ConvergenceRunner::run(void){
     long blockGens = 50L * (long)s.getThinning();
     if(blockGens < 1) blockGens = 1;
 
-    bool stoppedEarly = false;
-    while(gen < maxGen){
-        unsigned long step = (unsigned long)blockGens;
+    bool stoppedEarly = autoStop && gen > 0 && gen % (unsigned long)blockGens == 0 && report(gen, false);
+    while(stoppedEarly == false && gen < maxGen){
+        unsigned long step = (unsigned long)blockGens - gen % (unsigned long)blockGens;
         if(gen + step > maxGen) step = maxGen - gen;
         if(parallelRuns){
             std::vector<std::thread> workers;

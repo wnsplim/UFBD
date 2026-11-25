@@ -31,6 +31,7 @@ class Mcmc : public ChainRunner {
         RandomVariable*         resumeRng(void);
         std::vector<std::string> resumeParameterNames(void);
         std::vector<std::string> resumeLatentNames(void);
+        std::vector<bool>        resumeFixedMask(void);
 
     private:
         void                    sample(unsigned long n, double lnL, double lnP);

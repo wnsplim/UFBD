@@ -27,6 +27,7 @@ struct PseudoPrior {
     std::vector<std::pair<ParameterOUField*,int>> fields;
     Eigen::MatrixXd             K;
     Eigen::VectorXd             wMean;
+    Eigen::MatrixXd             cov;
 };
 
 class PathModel : public PhylogeneticModel {
@@ -58,6 +59,8 @@ class PathModel : public PhylogeneticModel {
         static std::map<std::string,double> readLastRow(const std::string& path);
         static void                 fitRatePseudoPrior(FBDTreeModel* fm, PseudoPrior& d, const std::vector<bool>& spec, const std::string& path, double burn, const std::string& model);
         static double               lnPseudoPrior(FBDTreeModel* f, const PseudoPrior& d);
+        static void                 writePseudoPriorState(std::ostream& os, const PseudoPrior& d);
+        static int                  readPseudoPriorState(std::istream& is, PseudoPrior& d);
 
     private:
         double                      dataPart(int k);

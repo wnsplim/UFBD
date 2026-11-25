@@ -552,6 +552,10 @@ std::vector<std::string> MetropolisCoupledMcmc::resumeLatentNames(void) {
     return models[coldModelIdx]->getLatentNames();
 }
 
+std::vector<bool> MetropolisCoupledMcmc::resumeFixedMask(void) {
+    return models[coldModelIdx]->getParameterFixedMask();
+}
+
 void MetropolisCoupledMcmc::adaptLadder(bool swapAccepted) {
     swapAdaptAtt++;
     if(swapAccepted)

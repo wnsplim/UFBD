@@ -285,6 +285,14 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
         PathModel::fitRatePseudoPrior(this, *psiPseudo, spec, base + ".log", burn, "the psi sets that model 1 does not use");
         psiRjCheck = us.getResampleEvery();
         psiRjWeight = -psiRjLab;
+        size_t nm = psiShiftCoords().size();
+        psiRjShift.assign(nm, 0.0);
+        psiRjSum[0].assign(nm, 0.0);
+        psiRjSum[1].assign(nm, 0.0);
+        psiRjShiftable.assign(nm, 1);
+        if(a.psiField[psiRjMain] == nullptr)
+            for(size_t b = 0; b < nm; b++)
+                psiRjShiftable[b] = a.psi[psiRjMain][b]->getProposalProbability() > 0.0;
     }
 
     RandomVariable::setActiveInstance(prevRng);
@@ -303,6 +311,71 @@ void FBDTreeModel::applyPsiModel(int m){
     a.fbdMemoInit = false;
 }
 
+std::vector<double> FBDTreeModel::psiMainValues(void){
+    std::vector<double> v;
+    if(ParameterOUField* f = a.psiField[psiRjMain]){
+        for(int b = 0; b < f->getNumBins(); b++)
+            v.push_back(f->getRate(b));
+        v.push_back(f->getTheta());
+    }else
+        for(ParameterDouble* p : a.psi[psiRjMain])
+            v.push_back(p->getValue());
+    return v;
+}
+
+void FBDTreeModel::setPsiMainValues(const std::vector<double>& v){
+    if(ParameterOUField* f = a.psiField[psiRjMain])
+        f->setState(std::vector<double>(v.begin(), v.end() - 1), v.back(), f->getSdEq(), f->getNu());
+    else
+        for(size_t b = 0; b < v.size(); b++)
+            a.psi[psiRjMain][b]->setValue(v[b]);
+}
+
+std::vector<double> FBDTreeModel::psiShiftCoords(void){
+    std::vector<double> v;
+    if(ParameterOUField* f = a.psiField[psiRjMain]){
+        if(f->isThetaFixed() == false)
+            v.push_back(f->getTheta());
+    }else
+        for(ParameterDouble* p : a.psi[psiRjMain])
+            v.push_back(std::log(p->getValue()));
+    return v;
+}
+
+double FBDTreeModel::psiRjJacobian(void){
+    if(ParameterOUField* f = a.psiField[psiRjMain])
+        return psiRjShift.empty() ? 0.0 : f->getNumBins() * psiRjShift[0];
+    double j = 0.0;
+    for(double s : psiRjShift)
+        j += s;
+    return j;
+}
+
+double FBDTreeModel::lnPsiMainPrior(void){
+    if(psiRjShift.empty())
+        return 0.0;
+    if(a.psiField[psiRjMain] != nullptr)
+        return a.psiField[psiRjMain]->lnProbability();
+    double lp = 0.0;
+    for(ParameterDouble* p : a.psi[psiRjMain])
+        lp += p->lnProbability();
+    return lp;
+}
+
+void FBDTreeModel::scalePsiMain(double sgn){
+    psiRjSaved = psiMainValues();
+    std::vector<double> v = psiRjSaved;
+    if(a.psiField[psiRjMain] != nullptr){
+        double s = psiRjShift.empty() ? 0.0 : psiRjShift[0];
+        for(size_t b = 0; b + 1 < v.size(); b++)
+            v[b] *= std::exp(sgn * s);
+        v.back() += sgn * s;
+    }else
+        for(size_t b = 0; b < v.size(); b++)
+            v[b] *= std::exp(sgn * psiRjShift[b]);
+    setPsiMainValues(v);
+}
+
 double FBDTreeModel::lnPsiRjTerm(void){
     if(psiModel == 0)
         return 0.0;
@@ -319,9 +392,23 @@ double FBDTreeModel::psiRjAdapt(unsigned long k){
     if(psiRjTuning() == false)
         return 0.0;
     psiRjVisits[psiModel]++;
+    psiRjN[psiModel]++;
+    std::vector<double> v = psiShiftCoords();
+    for(size_t b = 0; b < v.size(); b++)
+        if(psiRjShiftable[b])
+            psiRjSum[psiModel][b] += v[b];
     double d = (psiModel == 0) ? psiRjStep : -psiRjStep;
     psiRjWeight += d;
     if(k % psiRjCheck == 0 && std::min(psiRjVisits[0], psiRjVisits[1]) >= 0.4 * (psiRjVisits[0] + psiRjVisits[1])){
+        for(size_t b = 0; b < psiRjShift.size(); b++)
+            psiRjShift[b] = psiRjShiftable[b] ? psiRjSum[1][b] / psiRjN[1] - psiRjSum[0][b] / psiRjN[0] : 0.0;
+        psiRjShiftSum = psiRjJacobian();
+        if(psiRjStage == 0)
+            for(int m = 0; m < 2; m++){
+                std::fill(psiRjSum[m].begin(), psiRjSum[m].end(), 0.0);
+                psiRjN[m] = 0.0;
+            }
+        psiRjStage++;
         psiRjStep = (psiRjStep * (psiRjVisits[0] + psiRjVisits[1]) <= std::log(2.0)) ? 0.0 : 0.5 * psiRjStep;
         psiRjVisits[0] = psiRjVisits[1] = 0.0;
     }
@@ -329,7 +416,11 @@ double FBDTreeModel::psiRjAdapt(unsigned long k){
 }
 
 std::vector<double> FBDTreeModel::getPsiRjState(void){
-    return {psiRjWeight, psiRjStep, psiRjVisits[0], psiRjVisits[1]};
+    std::vector<double> s = {psiRjWeight, psiRjStep, psiRjVisits[0], psiRjVisits[1], (double)psiRjStage, psiRjN[0], psiRjN[1]};
+    s.insert(s.end(), psiRjShift.begin(), psiRjShift.end());
+    s.insert(s.end(), psiRjSum[0].begin(), psiRjSum[0].end());
+    s.insert(s.end(), psiRjSum[1].begin(), psiRjSum[1].end());
+    return s;
 }
 
 double FBDTreeModel::setPsiRjState(const std::vector<double>& s){
@@ -338,6 +429,16 @@ double FBDTreeModel::setPsiRjState(const std::vector<double>& s){
     psiRjStep = s[1];
     psiRjVisits[0] = s[2];
     psiRjVisits[1] = s[3];
+    psiRjStage = (int)s[4];
+    psiRjN[0] = s[5];
+    psiRjN[1] = s[6];
+    size_t nm = psiRjShift.size();
+    for(size_t b = 0; b < nm; b++){
+        psiRjShift[b] = s[7 + b];
+        psiRjSum[0][b] = s[7 + nm + b];
+        psiRjSum[1][b] = s[7 + 2 * nm + b];
+    }
+    psiRjShiftSum = psiRjJacobian();
     return d;
 }
 
@@ -650,10 +751,19 @@ std::vector<double> FBDTreeModel::getParameterString(void){
     std::vector<double> vals = getRateString(a);
     if(psiRjMain >= 0){
         int cur = psiModel;
-        applyPsiModel(0);
-        double j0 = calculateFBDProbability();
-        applyPsiModel(1);
-        double j1 = calculateFBDProbability() + psiRjLab + lnPsiRjTerm() - psiRjWeight;
+        auto at0 = [&](){ applyPsiModel(0); return lnLikelihood() + lnPsiMainPrior(); };
+        auto at1 = [&](){ applyPsiModel(1); return lnLikelihood() + lnPsiRjTerm() - psiRjWeight + lnPsiMainPrior() + psiRjShiftSum; };
+        double j0, j1;
+        if(cur == 0){
+            j0 = at0();
+            scalePsiMain(1.0);
+            j1 = at1();
+        }else{
+            j1 = at1();
+            scalePsiMain(-1.0);
+            j0 = at0();
+        }
+        setPsiMainValues(psiRjSaved);
         applyPsiModel(cur);
         vals.insert(vals.end(), {(double)cur, j1 - j0, psiRjWeight});
     }
@@ -1162,9 +1272,11 @@ double FBDTreeModel::update(void){
         lastMoveKind = MK_PSIRJ;
         prevPsiModel = psiModel;
         applyPsiModel(1 - psiModel);
+        double sgn = (prevPsiModel == 0) ? 1.0 : -1.0;
+        scalePsiMain(sgn);
         rjAtt++;
         RandomVariable::setActiveInstance(prevRng);
-        return 0.0;
+        return sgn * psiRjShiftSum;
     }
     if(haveIid && rng.uniformRv() < 0.20){
         double r = (rng.uniformRv() < 0.5) ? doRateVectorScale() : doRateShrinkExpand();
@@ -1341,6 +1453,7 @@ void FBDTreeModel::updateForAcceptance(void){
 void FBDTreeModel::updateForRejection(void){
     if(lastMoveKind == MK_PSIRJ){
         applyPsiModel(prevPsiModel);
+        setPsiMainValues(psiRjSaved);
         return;
     }
     if(lastTreeMove != TM_NONE) tmAtt[lastTreeMove]++;
@@ -1400,8 +1513,13 @@ void FBDTreeModel::writeState(std::ostream& os){
     for(int i = 0; i < TM_COUNT; i++) os << tmAcc[i] << ' ' << tmAtt[i] << ' ';
     os << '\n';
     os << subtreeStep << ' ' << subtreeAccW << ' ' << subtreeAttW << ' ' << subtreeAdapt << ' ' << jointScaleStep << ' ' << jointScaleAccW << ' ' << jointScaleAttW << ' ' << jointScaleAdapt << '\n';
-    if(psiRjMain >= 0)
-        os << "psi_rj " << psiModel << ' ' << psiRjWeight << ' ' << psiRjStep << ' ' << psiRjVisits[0] << ' ' << psiRjVisits[1] << ' ' << rjAcc << ' ' << rjAtt << '\n';
+    if(psiRjMain >= 0){
+        os << "psi_rj " << psiModel << ' ' << rjAcc << ' ' << rjAtt;
+        for(double x : getPsiRjState())
+            os << ' ' << x;
+        os << '\n';
+        PathModel::writePseudoPriorState(os, *psiPseudo);
+    }
 }
 
 void FBDTreeModel::readState(std::istream& is){
@@ -1416,9 +1534,20 @@ void FBDTreeModel::readState(std::istream& is){
     if(psiRjMain >= 0){
         std::string tag;
         int m;
-        is >> tag >> m >> psiRjWeight >> psiRjStep >> psiRjVisits[0] >> psiRjVisits[1] >> rjAcc >> rjAtt;
+        is >> tag >> m >> rjAcc >> rjAtt;
         if(tag != "psi_rj")
             Msg::error("the checkpoint has no psi_rj line; it was not written by a psi_rj_main run.");
+        std::vector<double> st(7 + 3 * psiRjShift.size());
+        for(double& x : st)
+            is >> x;
+        int q = PathModel::readPseudoPriorState(is, *psiPseudo);
+        if(q < 0)
+            Msg::error("the checkpoint's psi_rj lines were written by an earlier version of psi_rj_main; rerun without -resume.");
+        static bool warned = false;
+        if(q > 0 && warned == false)
+            Msg::warning("the posterior log that fits the psi_rj pseudo-prior has changed since the checkpoint was written; the resumed run keeps the checkpoint's pseudo-prior.");
+        warned = warned || q > 0;
+        setPsiRjState(st);
         applyPsiModel(m);
     }
     cacheInit = false;

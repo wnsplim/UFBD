@@ -29,6 +29,7 @@ static bool fromCache(PseudoPrior& d, const std::string& key){
     d.K = hit->second.K;
     d.wMean = hit->second.wMean;
     d.chol = hit->second.chol;
+    d.cov = hit->second.cov;
     return true;
 }
 
@@ -59,6 +60,7 @@ static void fitMvn(PseudoPrior& d, const std::vector<Eigen::VectorXd>& rows, con
         d.K = cw.solve(cov.bottomLeftCorner(q, k)).transpose();
         czz -= d.K * cov.bottomLeftCorner(q, k);
     }
+    d.cov = czz;
     d.chol.compute(czz);
     if(d.chol.info() != Eigen::Success)
         Msg::error(what + ": the covariance of the " + std::to_string(k) + " coordinates over " + std::to_string(n) + " rows is not positive definite.");
@@ -487,6 +489,38 @@ double PathModel::lnPseudoPrior(FBDTreeModel* fm, const PseudoPrior& d){
         z(i) = x;
     }
     return lnMvn(d, z, Eigen::VectorXd()) + jac;
+}
+
+void PathModel::writePseudoPriorState(std::ostream& os, const PseudoPrior& d){
+    int k = (int)d.mean.size();
+    os << "pseudo_prior " << k;
+    for(int i = 0; i < k; i++)
+        os << ' ' << d.mean(i);
+    for(int i = 0; i < k; i++)
+        for(int j = 0; j < k; j++)
+            os << ' ' << d.cov(i, j);
+    os << '\n';
+}
+
+int PathModel::readPseudoPriorState(std::istream& is, PseudoPrior& d){
+    std::string tag;
+    int k = -1;
+    is >> tag >> k;
+    if(tag != "pseudo_prior" || k != (int)d.mean.size())
+        return -1;
+    Eigen::VectorXd mean(k);
+    Eigen::MatrixXd cov(k, k);
+    for(int i = 0; i < k; i++)
+        is >> mean(i);
+    for(int i = 0; i < k; i++)
+        for(int j = 0; j < k; j++)
+            is >> cov(i, j);
+    if(mean == d.mean && cov == d.cov)
+        return 0;
+    d.mean = mean;
+    d.cov = cov;
+    d.chol.compute(cov);
+    return 1;
 }
 
 void PathModel::readPseudoPrior(int km, const std::string& path, double burn){

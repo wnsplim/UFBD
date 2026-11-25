@@ -392,3 +392,7 @@ std::vector<std::string> Mcmc::resumeParameterNames(void) {
 std::vector<std::string> Mcmc::resumeLatentNames(void) {
     return model->getLatentNames();
 }
+
+std::vector<bool> Mcmc::resumeFixedMask(void) {
+    return model->getParameterFixedMask();
+}

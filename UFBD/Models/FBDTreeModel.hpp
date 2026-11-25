@@ -116,6 +116,16 @@ class FBDTreeModel : public PhylogeneticModel {
     private:
         void                        applyPsiModel(int m);
         double                      lnPsiRjTerm(void);
+        std::vector<double>         psiMainValues(void);
+        void                        setPsiMainValues(const std::vector<double>& v);
+        double                      lnPsiMainPrior(void);
+        std::vector<double>         psiShiftCoords(void);
+        double                      psiRjJacobian(void);
+        void                        scalePsiMain(double sgn);
+        std::vector<double>         psiRjShift, psiRjSaved, psiRjSum[2];
+        std::vector<char>           psiRjShiftable;
+        double                      psiRjShiftSum = 0.0, psiRjN[2] = {0.0, 0.0};
+        int                         psiRjStage = 0;
         int                         psiRjMain = -1;
         int                         psiModel = 0, prevPsiModel = 0;
         long                        rjAcc = 0, rjAtt = 0;
