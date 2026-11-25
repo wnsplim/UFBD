@@ -57,7 +57,7 @@ void emit(std::vector<std::string>& out, const std::string& flag, const std::str
 }
 
 const std::set<std::string> modelKeys = {
-    "backbone_tree","fossils","unsampled_extants","clade_def","sequence","hessian","conditioning","rho"
+    "backbone_tree","fossils","unsampled_extants","clade_def","sequence","hessian","conditioning","rho","psi_rj_main"
 };
 const std::set<std::string> runKeys = {
     "log_output","tree_output","chain_length","parallel_chains","thinning","burn_in","coupled_chains","cores","seed",

@@ -282,6 +282,8 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     knownFlags.insert("-fbd_model");
     valueFlags.insert("-fbd_model");
     knownFlags.insert({"-bf_t", "-bf_pilot", "-bf_posterior", "-bf_pilot_frac", "-bf_pilot_nodes", "-bf_intervals", "-bf_bridge_tol", "-bf_bridge_iter", "-bf_batches", "-bf_parallel_runs"});
+    knownFlags.insert("-psi_rj_main");
+    valueFlags.insert("-psi_rj_main");
     valueFlags.insert({"-bf_t", "-bf_posterior", "-bf_pilot_frac", "-bf_pilot_nodes", "-bf_intervals", "-bf_bridge_tol", "-bf_bridge_iter", "-bf_batches", "-bf_parallel_runs"});
     auto parseTs = [](const std::string& flag, const std::string& val, const std::string& expects, std::vector<double>& ts, std::vector<std::string>& text) {
         ts.clear();
@@ -429,6 +431,8 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 } else if (val != "0" && val != "1") {
                     Msg::error("flag \"-bf_posterior\" expects 0 or 1, but got \"" + val + "\".");
                 }
+            } else if (arg == "-psi_rj_main") {
+                psiRjMainName = val;
             } else if (arg == "-seed") {
                 try {
                     seed = (unsigned int)std::stoul(val);
@@ -918,6 +922,22 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 setPathPoint(bfLadder[0], bfLadderText[0], pathPilot);
         }
     }
+    if (psiRjMainName.empty() == false) {
+        if (bfConfigPath.empty() == false)
+            Msg::error("psi_rj_main cannot be combined with -config_bf.");
+        std::vector<std::string>::iterator it = std::find(psiTypeNames.begin(), psiTypeNames.end(), psiRjMainName);
+        if (psiTypeNames.size() < 2 || it == psiTypeNames.end())
+            Msg::error("psi_rj_main = " + psiRjMainName + " must name one of two or more [psi <type>] sections.");
+        if (parametersOut.empty())
+            Msg::error("psi_rj_main needs log_output, whose posterior log fits the pseudo-prior.");
+        psiRjMain = (int)(it - psiTypeNames.begin());
+        posteriorBaseA = parametersOut.substr(0, parametersOut.size() - 4);
+        parametersOutBase = parametersOut;
+        treeOutBase = treeOut;
+        parametersOut.insert(parametersOut.size() - 4, "_rj");
+        if (treeOut.empty() == false)
+            treeOut.insert(treeOut.rfind(".trees"), "_rj");
+    }
 
 
     if (sbcMode == false) {
@@ -1114,6 +1134,10 @@ MULTIPLE PRESERVATION TYPES  (split psi by type)
     -psi_prior_mode type1:ou
     -psi_ou_theta type1:normal:log(0.05),1
   A -psi_* flag without a prefix applies to every type without one of its own.
+  -psi_rj_main <name>     reversible jump between model 0 (each type its own psi) and model 1
+                          (every fossil under the psi of type <name>); needs the posterior
+                          <log_output>.log of the same config; tunes the prior odds of model 1
+                          (<log_output>_rj_tune.log), then writes <log_output>_rj.log
 
 CLOCK & SUBSTITUTION MODEL
   -sequence <file>        alignment (FASTA / PHYLIP / NEXUS)

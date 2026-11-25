@@ -56,12 +56,13 @@ class PathModel : public PhylogeneticModel {
         void                        readState(std::istream& is);
         void                        setStart(int run);
         static std::map<std::string,double> readLastRow(const std::string& path);
+        static void                 fitRatePseudoPrior(FBDTreeModel* fm, PseudoPrior& d, const std::vector<bool>& spec, const std::string& path, double burn, const std::string& model);
+        static double               lnPseudoPrior(FBDTreeModel* f, const PseudoPrior& d);
 
     private:
         double                      dataPart(int k);
         std::vector<bool>           specificMask(FBDTreeModel* f);
         double                      lnRatePrior(FBDTreeModel* f);
-        double                      lnPseudoPrior(FBDTreeModel* f, const PseudoPrior& d);
         double                      lnPseudoPriorTerm(int k);
         void                        readPseudoPrior(int k, const std::string& path, double burn);
         double                      lnTypeLabels(FBDTreeModel* f, std::vector<Fossil>& fossils);

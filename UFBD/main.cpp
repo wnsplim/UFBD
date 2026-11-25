@@ -215,7 +215,9 @@ int main(int argc, const char* argv[]) {
             mcmc = new Mcmc((int)settings.getChainLength(), thin, makeModel(masterSeed, 0));
         mcmc->setVerbose(true);
         mcmc->setLabel(0);
-        if(resume){
+        if(resume && std::ifstream(settings.getParamOutput() + ".ckp").good() == false && std::ifstream(ChainRunner::tunePath(settings.getParamOutput()) + ".ckp").good() == false)
+            Msg::error("-resume: nothing to resume from.");
+        if(resume && std::ifstream(settings.getParamOutput() + ".ckp").good()){
             mcmc->loadCheckpoint();
             mcmc->resumeOutputs();
             unsigned long g = mcmc->currentGen();

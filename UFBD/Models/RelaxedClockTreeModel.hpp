@@ -50,6 +50,10 @@ class RelaxedClockTreeModel : public PhylogeneticModel {
         void                        freezePncpTuning(void) { clock->freezePncp(); }
         void                        setChainLabel(int c) { clock->setChainLabel(c); }
         void                        setPncpReporter(bool b) { clock->setPncpReporter(b); }
+        double                      psiRjAdapt(unsigned long k);
+        bool                        psiRjTuning(void);
+        std::vector<double>         getPsiRjState(void);
+        double                      setPsiRjState(const std::vector<double>& s);
 
         std::function<double(void)> pathTarget;
 

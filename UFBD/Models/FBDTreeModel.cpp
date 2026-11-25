@@ -6,6 +6,7 @@
 #include "ParameterDouble.hpp"
 #include "ParameterOUField.hpp"
 #include "FBDTreeModel.hpp"
+#include "PathModel.hpp"
 #include "PhylogeneticModel.hpp"
 #include "RandomVariable.hpp"
 #include "Serialize.hpp"
@@ -254,7 +255,90 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
         if(a.psiField[tp] != nullptr || numFree(a.psi[tp]) >= 2) haveIid = true;
     haveLMField = (a.lambdaField != nullptr || a.muField != nullptr);
 
+    UserSettings& us = UserSettings::userSettings();
+    psiActive.assign(a.numPsiTypes, 1);
+    if(rateSettings == nullptr && us.getPsiRjMain() >= 0){
+        psiRjMain = us.getPsiRjMain();
+        fossilTypeOrig = a.fossilType;
+        backboneTypeOrig = a.backboneType;
+        std::vector<int> count(a.numPsiTypes, 0);
+        int n = 0;
+        for(Fossil& f : fossils)
+            if(f.getMaxAge() > 0.0){
+                count[resolveType(f, a.psiTypeNames)]++;
+                n++;
+            }
+        psiRjLab = std::lgamma((double)a.numPsiTypes) - std::lgamma((double)(n + a.numPsiTypes));
+        for(int c : count)
+            psiRjLab += std::lgamma(c + 1.0);
+        std::vector<bool> spec(getRateNames(a).size(), false);
+        size_t off = (a.lambdaField != nullptr ? a.lambdaName.size() + 3 : a.lambda.size()) + (a.muField != nullptr ? a.muName.size() + 3 : a.mu.size());
+        for(int t = 0; t < a.numPsiTypes; t++){
+            size_t len = a.psiField[t] != nullptr ? a.psiName[t].size() + 3 : a.psi[t].size();
+            if(t != psiRjMain)
+                std::fill(spec.begin() + off, spec.begin() + off + len, true);
+            off += len;
+        }
+        std::string base = us.getPosteriorBaseA();
+        double burn = std::ifstream(base + "_chain0.log").good() ? 0.0 : us.getBurninFraction();
+        psiPseudo = new PseudoPrior;
+        PathModel::fitRatePseudoPrior(this, *psiPseudo, spec, base + ".log", burn, "the psi sets that model 1 does not use");
+        psiRjCheck = us.getResampleEvery();
+        psiRjWeight = -psiRjLab;
+    }
+
     RandomVariable::setActiveInstance(prevRng);
+}
+
+void FBDTreeModel::applyPsiModel(int m){
+    psiModel = m;
+    for(size_t i = 0; i < fossilTypeOrig.size(); i++){
+        a.fossilType[i] = (m == 1) ? psiRjMain : fossilTypeOrig[i];
+        a.fossilTypeByName[unrFossilName[i]] = a.fossilType[i];
+    }
+    for(size_t k = 0; k < backboneTypeOrig.size(); k++)
+        a.backboneType[k] = (m == 1) ? psiRjMain : backboneTypeOrig[k];
+    for(int t = 0; t < a.numPsiTypes; t++)
+        psiActive[t] = (m == 0 || t == psiRjMain);
+    a.fbdMemoInit = false;
+}
+
+double FBDTreeModel::lnPsiRjTerm(void){
+    if(psiModel == 0)
+        return 0.0;
+    double lp = PathModel::lnPseudoPrior(this, *psiPseudo) + psiRjWeight;
+    for(int t = 0; t < a.numPsiTypes; t++){
+        if(t == psiRjMain) continue;
+        for(ParameterDouble* p : a.psi[t]) lp -= p->lnProbability();
+        if(a.psiField[t] != nullptr) lp -= a.psiField[t]->lnProbability();
+    }
+    return lp;
+}
+
+double FBDTreeModel::psiRjAdapt(unsigned long k){
+    if(psiRjTuning() == false)
+        return 0.0;
+    psiRjVisits[psiModel]++;
+    double d = (psiModel == 0) ? psiRjStep : -psiRjStep;
+    psiRjWeight += d;
+    if(k % psiRjCheck == 0 && std::min(psiRjVisits[0], psiRjVisits[1]) >= 0.4 * (psiRjVisits[0] + psiRjVisits[1])){
+        psiRjStep = (psiRjStep * (psiRjVisits[0] + psiRjVisits[1]) <= std::log(2.0)) ? 0.0 : 0.5 * psiRjStep;
+        psiRjVisits[0] = psiRjVisits[1] = 0.0;
+    }
+    return (psiModel == 1) ? d : 0.0;
+}
+
+std::vector<double> FBDTreeModel::getPsiRjState(void){
+    return {psiRjWeight, psiRjStep, psiRjVisits[0], psiRjVisits[1]};
+}
+
+double FBDTreeModel::setPsiRjState(const std::vector<double>& s){
+    double d = (psiModel == 1) ? s[0] - psiRjWeight : 0.0;
+    psiRjWeight = s[0];
+    psiRjStep = s[1];
+    psiRjVisits[0] = s[2];
+    psiRjVisits[1] = s[3];
+    return d;
 }
 
 void FBDTreeModel::buildRates(UserSettings& us, SkylineRates& s){
@@ -432,7 +516,8 @@ double FBDTreeModel::psiOfTypeAt(int type, int i){
 double FBDTreeModel::psiTotalAt(int i){
     double s = 0.0;
     for(int t = 0; t < a.numPsiTypes; t++)
-        s += psiOfTypeAt(t, i);
+        if(psiActive[t])
+            s += psiOfTypeAt(t, i);
     return s;
 }
 
@@ -502,6 +587,8 @@ std::vector<double> FBDTreeModel::getRateString(const SkylineRates& s){
 
 std::vector<std::string> FBDTreeModel::getParameterNames(void){
     std::vector<std::string> names = getRateNames(a);
+    if(psiRjMain >= 0)
+        names.insert(names.end(), {"model", "delta", "log_prior_odds"});
     if(unresolvedFossils != nullptr || isResolved)
         names.push_back("nSA");
     if(originAge != nullptr)
@@ -533,6 +620,8 @@ void FBDTreeModel::appendRateMask(std::vector<bool>& m, const SkylineRates& s){
 std::vector<bool> FBDTreeModel::getParameterFixedMask(void){
     std::vector<bool> m;
     appendRateMask(m, a);
+    if(psiRjMain >= 0)
+        m.insert(m.end(), {false, false, true});
     if(unresolvedFossils != nullptr){
         int nNonUE = 0;
         for(int i = 0; i < unresolvedFossils->getNumFossils(); i++)
@@ -559,6 +648,15 @@ int FBDTreeModel::countResolvedSA(void){
 
 std::vector<double> FBDTreeModel::getParameterString(void){
     std::vector<double> vals = getRateString(a);
+    if(psiRjMain >= 0){
+        int cur = psiModel;
+        applyPsiModel(0);
+        double j0 = calculateFBDProbability();
+        applyPsiModel(1);
+        double j1 = calculateFBDProbability() + psiRjLab + lnPsiRjTerm() - psiRjWeight;
+        applyPsiModel(cur);
+        vals.insert(vals.end(), {(double)cur, j1 - j0, psiRjWeight});
+    }
     if(unresolvedFossils != nullptr)
         vals.push_back((double)unresolvedFossils->getNumSampledAncestors());
     else if(isResolved)
@@ -640,7 +738,7 @@ double FBDTreeModel::lnLikelihood(void){
     double v = calculateFBDProbability();
     if(std::isfinite(v) == false)
         return -INFINITY;
-    return v;
+    return (psiModel == 1) ? v + psiRjLab : v;
 }
 
 double FBDTreeModel::lnSupport(void){
@@ -745,6 +843,8 @@ double FBDTreeModel::lnPriorProbability(void){
         double crownAge = parameterTree->getTree()->getCrown()->getTime();
         lnP += Probability::priorLnPdf(us.getConditionAgePrior(), us.getConditionAgePriorP1(), us.getConditionAgePriorP2(), crownAge, 0.0, std::numeric_limits<double>::max(), us.getConditionAgePriorP3());
     }
+    if(psiRjMain >= 0)
+        lnP += lnPsiRjTerm();
 
     return lnP;
 }
@@ -787,6 +887,8 @@ void FBDTreeModel::print(void){
         std::cout << " rateShrinkExpand[A/R:" << (double)seAcc / (double)seAtt << " " << seAcc << "/" << seAtt << " step:" << shrinkStep << "]";
     if(azAtt > 0)
         std::cout << " azGibbs[A/R:" << (double)azAcc / (double)azAtt << " " << azAcc << "/" << azAtt << "]";
+    if(rjAtt > 0)
+        std::cout << " psiRj[A/R:" << (double)rjAcc / (double)rjAtt << " " << rjAcc << "/" << rjAtt << "]";
     if(gammaStaleCalls > 0)
         std::cout << " gammaStale[mean:" << (double)gammaStaleTot / (double)gammaStaleCalls
                   << " of " << unresolvedFossils->getNumFossils() << "]";
@@ -1056,6 +1158,14 @@ double FBDTreeModel::update(void){
 
     lastMoveKind = MK_PARAM;
     lastTreeMove = TM_NONE;
+    if(psiRjMain >= 0 && rng.uniformRv() < 0.05){
+        lastMoveKind = MK_PSIRJ;
+        prevPsiModel = psiModel;
+        applyPsiModel(1 - psiModel);
+        rjAtt++;
+        RandomVariable::setActiveInstance(prevRng);
+        return 0.0;
+    }
     if(haveIid && rng.uniformRv() < 0.20){
         double r = (rng.uniformRv() < 0.5) ? doRateVectorScale() : doRateShrinkExpand();
         RandomVariable::setActiveInstance(prevRng);
@@ -1175,6 +1285,10 @@ double FBDTreeModel::update(void){
 }
 
 void FBDTreeModel::updateForAcceptance(void){
+    if(lastMoveKind == MK_PSIRJ){
+        rjAcc++;
+        return;
+    }
     if(lastTreeMove != TM_NONE){ tmAtt[lastTreeMove]++; tmAcc[lastTreeMove]++; }
     if(lastTreeMove == TM_SUBTREE) subtreeAccW++;
     else if(lastTreeMove == TM_JOINTSCALE) jointScaleAccW++;
@@ -1225,6 +1339,10 @@ void FBDTreeModel::updateForAcceptance(void){
 }
 
 void FBDTreeModel::updateForRejection(void){
+    if(lastMoveKind == MK_PSIRJ){
+        applyPsiModel(prevPsiModel);
+        return;
+    }
     if(lastTreeMove != TM_NONE) tmAtt[lastTreeMove]++;
     if(lastTreeMove == TM_NODEAGE){ parameterTree->recordNodeAgeMove(false); restoreZoneBlock(); }
     if(lastTreeMove == TM_CROWN) restoreZoneBlock();
@@ -1282,6 +1400,8 @@ void FBDTreeModel::writeState(std::ostream& os){
     for(int i = 0; i < TM_COUNT; i++) os << tmAcc[i] << ' ' << tmAtt[i] << ' ';
     os << '\n';
     os << subtreeStep << ' ' << subtreeAccW << ' ' << subtreeAttW << ' ' << subtreeAdapt << ' ' << jointScaleStep << ' ' << jointScaleAccW << ' ' << jointScaleAttW << ' ' << jointScaleAdapt << '\n';
+    if(psiRjMain >= 0)
+        os << "psi_rj " << psiModel << ' ' << psiRjWeight << ' ' << psiRjStep << ' ' << psiRjVisits[0] << ' ' << psiRjVisits[1] << ' ' << rjAcc << ' ' << rjAtt << '\n';
 }
 
 void FBDTreeModel::readState(std::istream& is){
@@ -1293,6 +1413,14 @@ void FBDTreeModel::readState(std::istream& is){
     Serialize::readBoolDeque(is, upDownRecent);
     for(int i = 0; i < TM_COUNT; i++) is >> tmAcc[i] >> tmAtt[i];
     is >> subtreeStep >> subtreeAccW >> subtreeAttW >> subtreeAdapt >> jointScaleStep >> jointScaleAccW >> jointScaleAttW >> jointScaleAdapt;
+    if(psiRjMain >= 0){
+        std::string tag;
+        int m;
+        is >> tag >> m >> psiRjWeight >> psiRjStep >> psiRjVisits[0] >> psiRjVisits[1] >> rjAcc >> rjAtt;
+        if(tag != "psi_rj")
+            Msg::error("the checkpoint has no psi_rj line; it was not written by a psi_rj_main run.");
+        applyPsiModel(m);
+    }
     cacheInit = false;
     zoneInit = true;
 }

@@ -21,6 +21,8 @@ class Mcmc : public ChainRunner {
         void                    printMoveDiagnostics(int rep);
         void                    writeCheckpoint(void);
         bool                    loadCheckpoint(void);
+        std::vector<double>     psiRjState(void);
+        void                    setPsiRjWeight(double w);
         Tree*                   getTree(void);
         void                    setVerbose(bool b) { verbose = b; }
         void                    setLabel(int i) { runLabel = i; }

@@ -490,12 +490,13 @@ double PathModel::lnPseudoPrior(FBDTreeModel* fm, const PseudoPrior& d){
 }
 
 void PathModel::readPseudoPrior(int km, const std::string& path, double burn){
-    FBDTreeModel* fm = f[km];
-    PseudoPrior& d = pp[km];
+    fitRatePseudoPrior(f[km], pp[km], specificMask(f[km]), path, burn, "model " + std::to_string(km));
+}
+
+void PathModel::fitRatePseudoPrior(FBDTreeModel* fm, PseudoPrior& d, const std::vector<bool>& spec, const std::string& path, double burn, const std::string& model){
     SkylineRates& s = fm->a;
-    std::string model = std::to_string(km);
     std::vector<std::string> own = fm->getRateNames(s);
-    std::vector<bool> fixed, sharedHyper(own.size(), false), spec = specificMask(fm);
+    std::vector<bool> fixed, sharedHyper(own.size(), false);
     fm->appendRateMask(fixed, s);
     auto addField = [&](ParameterOUField* fld, const std::vector<std::string>& binNames){
         if(fld == nullptr || fld->sharesHyperparameters() == false) return;
@@ -528,7 +529,7 @@ void PathModel::readPseudoPrior(int km, const std::string& path, double burn){
     std::vector<std::string> cols;
     for(size_t j = 0; j < own.size(); j++)
         if(needed[j]) cols.push_back(own[j]);
-    std::vector<std::vector<double>> table = readColumns(path, cols, "model " + model + " posterior log " + path);
+    std::vector<std::vector<double>> table = readColumns(path, cols, model + " posterior log " + path);
     table.erase(table.begin(), table.begin() + (size_t)(burn * (double)table.size()));
     std::vector<Eigen::VectorXd> rows;
     for(const std::vector<double>& r : table){
@@ -546,9 +547,9 @@ void PathModel::readPseudoPrior(int km, const std::string& path, double burn){
             z(i) = d.coord[i] == PseudoPriorCoord::LOG ? std::log(v[d.index[i]]) : v[d.index[i]];
         rows.push_back(z);
     }
-    fitMvn(d, rows, {}, "model " + model + " rate pseudo-prior from posterior log " + path);
+    fitMvn(d, rows, {}, model + " rate pseudo-prior from posterior log " + path);
     fitted["rates\t" + model + "\t" + path] = d;
-    std::cout << "Pseudo-prior of model " << model << ": " << k << " parameters fitted to the " << rows.size() << " rows of " << path << "\n";
+    std::cout << "Pseudo-prior of " << model << ": " << k << " parameters fitted to the " << rows.size() << " rows of " << path << "\n";
 }
 
 double PathModel::lnSubstPseudoPrior(int k){

@@ -24,6 +24,8 @@ class MetropolisCoupledMcmc : public ChainRunner {
         void                                printMoveDiagnostics(int rep);
         void                                writeCheckpoint(void);
         bool                                loadCheckpoint(void);
+        std::vector<double>                 psiRjState(void);
+        void                                setPsiRjWeight(double w);
         void                                setVerbose(bool b) { verbose = b; }
         void                                setLabel(int i) { runLabel = i; }
         Tree*                               getTree(void);

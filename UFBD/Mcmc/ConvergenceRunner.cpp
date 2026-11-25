@@ -69,6 +69,25 @@ bool ConvergenceRunner::run(void){
         runPools.push_back(new ThreadPool(per));
     }
 
+    auto commonWeight = [&](const std::vector<bool>& fresh){
+        if(replicates[0]->psiRjState().empty())
+            return;
+        double w = 0.0;
+        int loaded = 0;
+        for(size_t r = 0; r < replicates.size(); r++)
+            if(fresh[r] == false && loaded++ == 0)
+                w = replicates[r]->psiRjState()[0];
+        if(loaded == 0){
+            for(ChainRunner* c : replicates)
+                w += c->psiRjState()[0] / (double)replicates.size();
+            if(verbose)
+                std::cout << "psi_rj: every chain's main run uses log prior odds " << w << ", the mean of the " << replicates.size() << " chains' tuned values\n";
+        }
+        for(size_t r = 0; r < replicates.size(); r++)
+            if(fresh[r])
+                replicates[r]->setPsiRjWeight(w);
+    };
+
     unsigned long gen = 0;
     if(s.getResume()){
         int stale = 0;
@@ -91,7 +110,7 @@ bool ConvergenceRunner::run(void){
         std::vector<bool> fresh;
         for(const std::string& pf : repParamFiles){
             fresh.push_back(std::ifstream(pf + ".ckp").good() == false);
-            if(fresh.back())
+            if(fresh.back() && std::ifstream(ChainRunner::tunePath(pf) + ".ckp").good() == false)
                 missing += (nMissing++ > 0 ? ", " : "") + pf + ".ckp";
         }
         if(nMissing == (int)repParamFiles.size())
@@ -109,6 +128,7 @@ bool ConvergenceRunner::run(void){
         for(size_t r = 0; r < replicates.size(); r++)
             if(fresh[r])
                 replicates[r]->init();
+        commonWeight(fresh);
         for(ChainRunner* c : replicates){
             unsigned long cg = c->currentGen();
             if(cg < gen)
@@ -130,6 +150,8 @@ bool ConvergenceRunner::run(void){
         for(ChainRunner* c : replicates)
             c->init();
     }
+    if(s.getResume() == false)
+        commonWeight(std::vector<bool>(replicates.size(), true));
 
     long blockGens = 50L * (long)s.getThinning();
     if(blockGens < 1) blockGens = 1;

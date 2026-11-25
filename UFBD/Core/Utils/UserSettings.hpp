@@ -48,6 +48,7 @@ class UserSettings {
         void                        setChainLength(unsigned long n) { chainLength = n; }
         std::string                 getPosteriorBaseA(void) { return posteriorBaseA; }
         std::string                 getPosteriorBaseB(void) { return posteriorBaseB; }
+        int                         getPsiRjMain(void) { return psiRjMain; }
         bool                        getSharedLambda(void) { return sharedLambda; }
         bool                        getSharedMu(void) { return sharedMu; }
         bool                        getSharedPsi(void) { return sharedPsi; }
@@ -230,6 +231,8 @@ class UserSettings {
         std::string                 parametersOutBase, treeOutBase;
         std::string                 posteriorBaseA;
         std::string                 posteriorBaseB;
+        std::string                 psiRjMainName;
+        int                         psiRjMain = -1;
         bool                        sharedLambda = false, sharedMu = false, sharedPsi = false, sharedClock = true, sharedSubst = true;
         std::string                 invocation;
         std::string                 clockModelName;

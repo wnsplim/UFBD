@@ -457,6 +457,14 @@ bool RelaxedClockTreeModel::treeIncludesFossils(void){ return fbd->treeIncludesF
 
 std::string RelaxedClockTreeModel::getRateMap(void){ return fbd->getRateMap(); }
 
+double RelaxedClockTreeModel::psiRjAdapt(unsigned long k){ return fbd->psiRjAdapt(k); }
+
+bool RelaxedClockTreeModel::psiRjTuning(void){ return fbd->psiRjTuning(); }
+
+std::vector<double> RelaxedClockTreeModel::getPsiRjState(void){ return fbd->getPsiRjState(); }
+
+double RelaxedClockTreeModel::setPsiRjState(const std::vector<double>& s){ return fbd->setPsiRjState(s); }
+
 std::vector<std::string> RelaxedClockTreeModel::getLatentNames(void){
     std::vector<std::string> n = fbd->getLatentNames();
     Tree* tr = fbd->getTree();

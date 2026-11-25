@@ -20,6 +20,7 @@ class ParameterOUField;
 class UserSettings;
 enum class RateMode;
 struct OUHyperSpec;
+struct PseudoPrior;
 
 struct SkylineRates {
     std::vector<ParameterDouble*> lambda;
@@ -108,7 +109,22 @@ class FBDTreeModel : public PhylogeneticModel {
         long                        getRelabelSize(void) { return relSize; }
         long                        getRelabelCross(void) { return relCross; }
         long                        getRelabelCrossSA(void) { return relCrossSA; }
+        double                      psiRjAdapt(unsigned long k);
+        bool                        psiRjTuning(void) { return psiRjMain >= 0 && psiRjStep > 0.0; }
+        std::vector<double>         getPsiRjState(void);
+        double                      setPsiRjState(const std::vector<double>& s);
     private:
+        void                        applyPsiModel(int m);
+        double                      lnPsiRjTerm(void);
+        int                         psiRjMain = -1;
+        int                         psiModel = 0, prevPsiModel = 0;
+        long                        rjAcc = 0, rjAtt = 0;
+        double                      psiRjWeight = 0.0, psiRjLab = 0.0, psiRjStep = 1.0;
+        double                      psiRjVisits[2] = {0.0, 0.0};
+        unsigned long               psiRjCheck = 1;
+        std::vector<char>           psiActive;
+        std::vector<int>            fossilTypeOrig, backboneTypeOrig;
+        PseudoPrior*                psiPseudo = nullptr;
         double                      fossilTermLn(int i, int spineIdx, int ky = -1, int kz = -1, bool local = false);
         double                      lnSurvDecParts(int i, double t, double& linear);
         double                      lnDLocal(double t);
@@ -212,7 +228,7 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<Node*>          fossilOrigin;
         std::vector<bool>           fossilIsCrown;
         std::vector<int>            ueFossils;
-        enum MoveKind { MK_PARAM, MK_AZGIBBS, MK_RATESHIFT, MK_RATEVEC, MK_UPDOWN, MK_JOINTSCALE };
+        enum MoveKind { MK_PARAM, MK_AZGIBBS, MK_RATESHIFT, MK_RATEVEC, MK_UPDOWN, MK_JOINTSCALE, MK_PSIRJ };
         MoveKind                    lastMoveKind;
         double                      shiftStep;
         int                         saBatch;

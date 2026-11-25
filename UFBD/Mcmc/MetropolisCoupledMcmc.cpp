@@ -137,6 +137,22 @@ void MetropolisCoupledMcmc::init(void) {
         tuning = false;
         gen = 0;
     }
+    if(models[0]->psiRjTuning()){
+        rjTuning = true;
+        tuneOut = tunePath(paramOut);
+        bool resumed = settings.getResume() && std::ifstream(checkpointPath()).good();
+        if(resumed)
+            loadCheckpoint();
+        openTuneLog(models[0], resumed);
+        while(models[0]->psiRjTuning())
+            advance(thinning);
+        tune.closeTSV();
+        std::ostringstream os;
+        os << std::setprecision(10) << "chain " << runLabel << ": psi_rj tuning finished after " << gen << " generations, log prior odds " << models[0]->getPsiRjState()[0] << "\n";
+        ChainRunner::logLine(os.str());
+        rjTuning = false;
+        gen = 0;
+    }
 }
 
 void MetropolisCoupledMcmc::finalize(void) {
@@ -232,7 +248,7 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
         if(indices[i] == 0){ coldModelIdx = i; break; }
 
     unsigned long target = gen + nGens;
-    if(gen == 0 && tuning == false)
+    if(gen == 0 && tuning == false && rjTuning == false)
         sample(0);
 
     bool canParallel = (numModels > 1 && threadPool.size() > 1);
@@ -295,8 +311,14 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
                         }
                     }
                 }
-                if(cold && tuning == false && (gen0 + b) % (unsigned long)thinning == 0)
-                    writeColdSample(gen0 + b);
+                if(cold && rjTuning)
+                    currLnP[i] += models[i]->psiRjAdapt(gen0 + b);
+                if(cold && tuning == false && (gen0 + b) % (unsigned long)thinning == 0){
+                    if(rjTuning)
+                        writeTuneRow(models[i], gen0 + b, currLnL[i] + currLnP[i]);
+                    else
+                        writeColdSample(gen0 + b);
+                }
             }
             ThreadPool::setCurrent(nullptr);
         };
@@ -312,6 +334,11 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
                 runBlock(i);
         }
         gen += blockLen;
+        if(rjTuning){
+            std::vector<double> w = models[coldModelIdx]->getPsiRjState();
+            for(int i = 0; i < numModels; i++)
+                currLnP[i] += models[i]->setPsiRjState(w);
+        }
 
         if(verbose && tuning == false && gen % (unsigned long)thinning == 0){
             double acceptanceRate = 0.0;
@@ -438,8 +465,20 @@ void MetropolisCoupledMcmc::writeColdSample(unsigned long n) {
         traceCols[j].push_back(tv[j]);
 }
 
+std::vector<double> MetropolisCoupledMcmc::psiRjState(void) {
+    return models[0]->getPsiRjState();
+}
+
+void MetropolisCoupledMcmc::setPsiRjWeight(double w) {
+    for(int i = 0; i < numModels; i++){
+        std::vector<double> s = models[i]->getPsiRjState();
+        s[0] = w;
+        currLnP[i] += models[i]->setPsiRjState(s);
+    }
+}
+
 void MetropolisCoupledMcmc::writeCheckpoint(void) {
-    std::string path = paramOut + ".ckp";
+    std::string path = checkpointPath();
     std::string tmp = path + ".tmp";
     std::ofstream os(tmp);
     os << std::setprecision(17);
@@ -466,7 +505,7 @@ void MetropolisCoupledMcmc::writeCheckpoint(void) {
 }
 
 bool MetropolisCoupledMcmc::loadCheckpoint(void) {
-    std::string path = paramOut + ".ckp";
+    std::string path = checkpointPath();
     std::ifstream is = openCheckpoint(path);
     int nm, storedSf;
     is >> gen >> storedSf;

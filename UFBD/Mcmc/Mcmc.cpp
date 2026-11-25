@@ -57,6 +57,22 @@ void Mcmc::init(void) {
         tuning = false;
         gen = 0;
     }
+    if(model->psiRjTuning()){
+        rjTuning = true;
+        tuneOut = tunePath(paramOut);
+        bool resumed = settings.getResume() && std::ifstream(checkpointPath()).good();
+        if(resumed)
+            loadCheckpoint();
+        openTuneLog(model, resumed);
+        while(model->psiRjTuning())
+            advance(thinning);
+        tune.closeTSV();
+        std::ostringstream os;
+        os << std::setprecision(10) << "chain " << runLabel << ": psi_rj tuning finished after " << gen << " generations, log prior odds " << model->getPsiRjState()[0] << "\n";
+        ChainRunner::logLine(os.str());
+        rjTuning = false;
+        gen = 0;
+    }
 }
 
 void Mcmc::advance(unsigned long nGens) {
@@ -65,7 +81,7 @@ void Mcmc::advance(unsigned long nGens) {
     RelaxedClockTreeModel* relaxed = tuning ? dynamic_cast<RelaxedClockTreeModel*>(model) : nullptr;
 
     unsigned long target = gen + nGens;
-    if(gen == 0 && tuning == false)
+    if(gen == 0 && tuning == false && rjTuning == false)
         sample(0, curLnL, curLnP);
     while (gen < target) {
         gen++;
@@ -167,6 +183,9 @@ void Mcmc::advance(unsigned long nGens) {
             }
         }
 
+        if(rjTuning)
+            curLnP += model->psiRjAdapt(gen);
+
         static const bool trc = (getenv("FBD_TRACE") != nullptr);
         if(trc)
             fprintf(stderr, "[t] %lu mv=%d h=%.17g curL=%.17g curP=%.17g a=%d\n", gen,
@@ -178,7 +197,13 @@ void Mcmc::advance(unsigned long nGens) {
             ChainRunner::logLine(os.str());
         }
 
-        if (tuning == false && n % thinning == 0)
+        if (tuning == false && rjTuning && n % thinning == 0){
+            writeTuneRow(model, n, curLnL + curLnP);
+            if(writeCheckpoints)
+                writeCheckpoint();
+            model->invalidateLikelihoodCache();
+            model->invalidatePriorCache();
+        }else if (tuning == false && n % thinning == 0)
             sample(n, curLnL, curLnP);
     }
 }
@@ -274,8 +299,18 @@ void Mcmc::sample(unsigned long n, double lnL, double lnP) {
     model->invalidatePriorCache();
 }
 
+std::vector<double> Mcmc::psiRjState(void) {
+    return model->getPsiRjState();
+}
+
+void Mcmc::setPsiRjWeight(double w) {
+    std::vector<double> s = model->getPsiRjState();
+    s[0] = w;
+    curLnP += model->setPsiRjState(s);
+}
+
 void Mcmc::writeCheckpoint(void) {
-    std::string path = paramOut + ".ckp";
+    std::string path = checkpointPath();
     std::string tmp = path + ".tmp";
     std::ofstream os(tmp);
     os << std::setprecision(17);
@@ -290,7 +325,7 @@ void Mcmc::writeCheckpoint(void) {
 }
 
 bool Mcmc::loadCheckpoint(void) {
-    std::string path = paramOut + ".ckp";
+    std::string path = checkpointPath();
     std::ifstream is = openCheckpoint(path);
     int storedSf;
     is >> gen >> storedSf;
