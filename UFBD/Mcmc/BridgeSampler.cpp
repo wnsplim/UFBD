@@ -5,18 +5,10 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
-#include <fcntl.h>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <map>
-#include <spawn.h>
 #include <sstream>
-#include <sys/wait.h>
-#include <unistd.h>
-
-extern char** environ;
 
 static std::string pointText(double t){
     std::ostringstream os;
@@ -92,7 +84,6 @@ BridgeSampler::BridgeSampler(const std::string& base) : base(base) {
     resumeAll = s.getResume();
     perChain = s.getNumRuns() > 1;
     burn = perChain ? 0.0 : s.getBurninFraction();
-    setenv("UFBD_BF_PARENT", std::to_string(getpid()).c_str(), 1);
     const std::vector<std::string>& cli = s.getCliArgs();
     childArgs = {cli[0], "-config_bf", s.getBfConfigPath()};
     for(size_t i = 1; i < cli.size(); i++){
@@ -120,41 +111,7 @@ BridgeSampler::Job BridgeSampler::makeJob(const std::vector<std::string>& extra,
 }
 
 void BridgeSampler::runJobs(const std::vector<Job>& jobs){
-    int width = UserSettings::userSettings().getBfParallelRuns();
-    std::map<pid_t,size_t> running;
-    size_t next = 0;
-    std::string failed;
-    while(next < jobs.size() || running.empty() == false){
-        while(failed.empty() && next < jobs.size() && (int)running.size() < width){
-            std::vector<char*> argv;
-            for(const std::string& a : jobs[next].args)
-                argv.push_back(const_cast<char*>(a.c_str()));
-            argv.push_back(nullptr);
-            posix_spawn_file_actions_t fa;
-            posix_spawn_file_actions_init(&fa);
-            posix_spawn_file_actions_addopen(&fa, 1, "/dev/null", O_WRONLY, 0);
-            posix_spawn_file_actions_adddup2(&fa, 1, 2);
-            pid_t pid;
-            int rc = posix_spawnp(&pid, argv[0], &fa, nullptr, argv.data(), environ);
-            posix_spawn_file_actions_destroy(&fa);
-            if(rc != 0)
-                Msg::error("bridge sampling: could not start " + jobs[next].label + ": " + std::strerror(rc));
-            std::cout << "started  " << jobs[next].label << "\n" << std::flush;
-            running[pid] = next++;
-        }
-        if(running.empty())
-            break;
-        int status = 0;
-        pid_t pid = waitpid(-1, &status, 0);
-        size_t i = running[pid];
-        running.erase(pid);
-        if(WIFEXITED(status) && WEXITSTATUS(status) == 0)
-            std::cout << "finished " << jobs[i].label << "\n" << std::flush;
-        else if(failed.empty())
-            failed = jobs[i].label + " failed (" + (WIFEXITED(status) ? "exit status " + std::to_string(WEXITSTATUS(status)) : "signal " + std::to_string(WTERMSIG(status))) + "); its console is " + jobs[i].console;
-    }
-    if(failed.empty() == false)
-        Msg::error("bridge sampling: " + failed + ".");
+    runChildJobs(jobs, UserSettings::userSettings().getBfParallelRuns(), "bridge sampling");
 }
 
 std::vector<double> BridgeSampler::readPoint(double t, const std::string& text, bool pilot){

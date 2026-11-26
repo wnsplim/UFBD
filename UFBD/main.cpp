@@ -84,7 +84,7 @@ static std::string elapsedString(double secs){
 int main(int argc, const char* argv[]) {
 
 #ifdef __linux__
-    if(const char* parent = std::getenv("UFBD_BF_PARENT")){
+    if(const char* parent = std::getenv("UFBD_PARENT")){
         prctl(PR_SET_PDEATHSIG, SIGKILL);
         if(getppid() != (pid_t)std::atol(parent))
             return 1;

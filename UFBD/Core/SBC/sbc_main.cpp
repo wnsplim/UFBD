@@ -1,15 +1,23 @@
 #ifdef BUILD_SBC
 
+#include "ChildJobs.hpp"
 #include "Msg.hpp"
 #include "Probability.hpp"
 #include "RandomVariable.hpp"
 #include "Sbc.hpp"
 #include "UserSettings.hpp"
 
+#include <csignal>
 #include <cstdio>
+#include <cstdlib>
+#include <fcntl.h>
+#include <filesystem>
+#include <fstream>
 #include <random>
 #include <sstream>
 #include <string>
+#include <sys/prctl.h>
+#include <unistd.h>
 #include <vector>
 
 static void printSbcHelp(){
@@ -41,7 +49,13 @@ SBC FLAGS
   -sbc_ue <prob>          probability that each extant taxon is designated an
                           unsampled extant (UE) (default 0; a value > 0 is
                           incompatible with crown conditioning)
-  -sbc_out <prefix>       output prefix (required for -sbc_mode emit)
+  -sbc_out <prefix>       output prefix (required for -sbc_mode emit and -sbc_chunks)
+  -sbc_chunks <K>         run K chunks of -sbc_reps replicates as separate processes
+                          (infer mode); chunk k uses seed -seed + k and writes to
+                          chunks/c<k>/ in the directory of the prefix; a rerun skips
+                          finished chunks; the merged rank files and their summary
+                          are written to <prefix>_*.tsv and <prefix>_summary.txt
+  -sbc_jobs <N>           number of chunks run at a time (with -sbc_chunks)
   -sbc_age_range <width>  give each fossil an age range of this width placed
                           uniformly at random around its simulated age and
                           truncated at the present, so fossil ages are sampled
@@ -70,6 +84,12 @@ int main(int argc, const char* argv[]){
     for(int i = 1; i < argc; i++)
         if(std::string(argv[i]) == "-help" || std::string(argv[i]) == "-h"){ printSbcHelp(); return 0; }
 
+    if(const char* parent = std::getenv("UFBD_PARENT")){
+        prctl(PR_SET_PDEATHSIG, SIGKILL);
+        if(getppid() != (pid_t)std::atol(parent))
+            return 1;
+    }
+
     std::string invocation;
     for(int i = 0; i < argc; i++){
         std::string a = argv[i];
@@ -81,13 +101,23 @@ int main(int argc, const char* argv[]){
 
     std::string mode, out, ranksList, nodeRanksList, fossilRanksList;
     bool repsSet = false;
-    int reps = 0, numNull = SbcConfig().numNull;
+    int reps = 0, numNull = SbcConfig().numNull, chunks = 0, jobs = 0;
     double ue = 0.0, ageRange = 0.0, zone = -1.0;
     std::vector<const char*> rest;
+    std::vector<std::string> childArgs = {argv[0]};
+    for(int i = 1; i < argc; i++){
+        std::string a = argv[i];
+        if(a == "-sbc_chunks" || a == "-sbc_jobs" || a == "-seed" || a == "-sbc_out")
+            i++;
+        else
+            childArgs.push_back(a);
+    }
     rest.push_back(argv[0]);
     for(int i = 1; i < argc; i++){
         std::string a = argv[i];
-        if(a == "-sbc_mode" && i + 1 < argc)        mode = argv[++i];
+        if(a == "-sbc_chunks" && i + 1 < argc)      chunks = std::stoi(argv[++i]);
+        else if(a == "-sbc_jobs" && i + 1 < argc)   jobs = std::stoi(argv[++i]);
+        else if(a == "-sbc_mode" && i + 1 < argc)        mode = argv[++i];
         else if(a == "-sbc_reps" && i + 1 < argc){  reps = std::stoi(argv[++i]); repsSet = true; }
         else if(a == "-sbc_ue" && i + 1 < argc)     ue = std::stod(argv[++i]);
         else if(a == "-sbc_age_range" && i + 1 < argc) ageRange = std::stod(argv[++i]);
@@ -215,6 +245,69 @@ int main(int argc, const char* argv[]){
     cfg.seed = seed;
     RandomVariable rng(seed);
     RandomVariable::setActiveInstance(&rng);
+
+    if(chunks > 0){
+        if(mode != "infer")
+            Msg::error("-sbc_chunks needs -sbc_mode infer.");
+        if(out.empty())
+            Msg::error("-sbc_chunks needs -sbc_out.");
+        if(jobs < 1)
+            Msg::error("-sbc_chunks needs -sbc_jobs >= 1.");
+        std::filesystem::path dir = std::filesystem::path(out).parent_path();
+        auto prefix = [&](int k){ return (dir / "chunks" / ("c" + std::to_string(k)) / "c").string(); };
+        auto lines = [](const std::string& f){
+            std::vector<std::string> v;
+            std::ifstream in(f);
+            for(std::string l; std::getline(in, l); )
+                v.push_back(l);
+            return v;
+        };
+        std::vector<ChildJob> todo;
+        for(int k = 0; k < chunks; k++){
+            if(lines(prefix(k) + "_ranks.tsv").size() == (size_t)reps + 1)
+                continue;
+            std::filesystem::create_directories(std::filesystem::path(prefix(k)).parent_path());
+            ChildJob j{childArgs, "chunk " + std::to_string(k), prefix(k) + ".log", true};
+            j.args.insert(j.args.end(), {"-seed", std::to_string(seed + (unsigned int)k), "-sbc_out", prefix(k)});
+            todo.push_back(j);
+        }
+        runChildJobs(todo, jobs, "sbc");
+        auto merge = [&](const std::string& suffix, bool chunkColumn){
+            if(std::filesystem::exists(prefix(0) + suffix) == false)
+                return std::string();
+            std::ofstream m(out + suffix);
+            for(int k = 0; k < chunks; k++){
+                std::vector<std::string> v = lines(prefix(k) + suffix);
+                for(size_t i = (k == 0) ? 0 : 1; i < v.size(); i++){
+                    if(chunkColumn)
+                        m << (i == 0 ? std::string("chunk") : std::to_string(k)) << "\t";
+                    m << v[i] << "\n";
+                }
+            }
+            return out + suffix;
+        };
+        SbcConfig sc;
+        sc.summarize = true;
+        sc.ranksPaths = {merge("_ranks.tsv", false)};
+        std::string nodePath = merge("_noderanks.tsv", true), fossilPath = merge("_fossilranks.tsv", true);
+        if(nodePath.empty() == false)
+            sc.nodeRanksPaths = {nodePath};
+        if(fossilPath.empty() == false)
+            sc.fossilRanksPaths = {fossilPath};
+        sc.numNull = numNull;
+        sc.seed = seed;
+        fflush(stdout);
+        int console = dup(1);
+        int fd = open((out + "_summary.txt").c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        dup2(fd, 1);
+        close(fd);
+        Sbc(sc, &rng).run();
+        fflush(stdout);
+        dup2(console, 1);
+        close(console);
+        printf("merged %d chunks into %s_ranks.tsv; summary in %s_summary.txt\n", chunks, out.c_str(), out.c_str());
+        return 0;
+    }
 
     Sbc sbc(cfg, &rng);
     sbc.run();

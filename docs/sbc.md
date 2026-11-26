@@ -12,11 +12,14 @@ permalink: /sbc/
 
 ```
 sbc -sbc_mode infer -sbc_reps <N> -sbc_out <prefix> [flags]
+sbc -sbc_mode infer -sbc_reps <N> -sbc_chunks <K> -sbc_jobs <J> -sbc_out <prefix> [flags]
 sbc -sbc_mode summarize -sbc_ranks <file,...> [-sbc_noderanks <file,...>] [-sbc_fossilranks <file,...>] [flags]
 sbc -help
 ```
 
 `-sbc_mode simulate` only simulates the datasets, and `-sbc_mode emit` writes them as UFBD input files. `-sbc_ue <p>` makes each extant taxon an unsampled extant with probability `p`. The priors, the conditioning, the time bins and the MCMC settings take the same flags as `ufbd`.
+
+`-sbc_chunks <K>` runs `K` chunks of `-sbc_reps` replicates as separate processes, `-sbc_jobs` of them at a time. Chunk `k` uses seed `-seed` + `k` and writes to `chunks/c<k>/` in the directory of `<prefix>`. Rerunning the same command skips finished chunks. When all chunks are finished, their rank files are merged into `<prefix>_ranks.tsv`, `<prefix>_noderanks.tsv` and `<prefix>_fossilranks.tsv`, and the summary is written to `<prefix>_summary.txt`.
 
 `-sbc_mode summarize` prints the summary below for rank files, for example the per-run files of a batch merged into one.
 
@@ -30,6 +33,8 @@ For each quantity, `sbc` prints the p-value of the ECDF statistic γ (Säilynoja
 * `<prefix>_noderanks.tsv` — one row per node per replicate. `x0` is the origin and `x1` ... `xK` are the backbone nodes
 * `<prefix>_fossilranks.tsv` — one row per fossil per replicate, with the rank of its true age `y` (fossils with an age range) and of its true attachment age `z` (with `-sbc_zone`); written when the latent log is on
 * `<prefix>_rep<k>.log` and `<prefix>_rep<k>.trees` — the chain of replicate `k`
+* `chunks/c<k>/c_*` and `chunks/c<k>/c.log` — the files above and the console of chunk `k` (with `-sbc_chunks`)
+* `<prefix>_summary.txt` — the summary of the merged rank files (with `-sbc_chunks`); the merged node and fossil rank files start with a `chunk` column
 
 ## References
 

@@ -1,6 +1,8 @@
 #ifndef BridgeSampler_hpp
 #define BridgeSampler_hpp
 
+#include "ChildJobs.hpp"
+
 #include <string>
 #include <vector>
 
@@ -13,12 +15,8 @@ class BridgeSampler {
         static unsigned long        pilotGenerations(void);
 
     private:
-        struct Job {
-            std::vector<std::string> args;
-            std::string             label;
-            std::string             console;
-        };
-        Job                         makeJob(const std::vector<std::string>& extra, const std::string& logPath, const std::string& label);
+        typedef ChildJob Job;
+        Job                        makeJob(const std::vector<std::string>& extra, const std::string& logPath, const std::string& label);
         void                        runJobs(const std::vector<Job>& jobs);
         std::vector<Job>            pointJobs(const std::vector<double>& pts, const std::vector<std::string>& text, bool pilot);
         std::vector<double>         readPoint(double t, const std::string& text, bool pilot);
