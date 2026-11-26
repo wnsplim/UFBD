@@ -19,6 +19,8 @@ sbc -help
 
 `-sbc_mode simulate` only simulates the datasets, and `-sbc_mode emit` writes them as UFBD input files. `-sbc_ue <p>` makes each extant taxon an unsampled extant with probability `p`. The priors, the conditioning, the time bins and the MCMC settings take the same flags as `ufbd`.
 
+With `-psi_types` and `-psi_rj_main <type>`, each replicate is simulated under model 0 (each type its own ψ) or model 1 (every fossil under the ψ of `<type>`) with probability 1/2, and analyzed with reversible jump between the two models. Before ranking, the posterior draws are resampled from the tuned prior odds to prior odds 1:1, and `model` is ranked with the other quantities. The ψ of the other types are drawn from their prior in model 1, both in the simulation and in the analysis, so they are ranked as they are.
+
 `-sbc_chunks <K>` runs `K` chunks of `-sbc_reps` replicates as separate processes, `-sbc_jobs` of them at a time. Chunk `k` uses seed `-seed` + `k` and writes to `chunks/c<k>/` in the directory of `<prefix>`. Rerunning the same command skips finished chunks. When all chunks are finished, their rank files are merged into `<prefix>_ranks.tsv`, `<prefix>_noderanks.tsv` and `<prefix>_fossilranks.tsv`, and the summary is written to `<prefix>_summary.txt`.
 
 `-sbc_mode summarize` prints the summary below for rank files, for example the per-run files of a batch merged into one.

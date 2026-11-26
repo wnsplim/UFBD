@@ -872,7 +872,9 @@ double FBDTreeModel::evaluateAtGeneratingState(const std::vector<double>& lam, c
                                                const std::vector<std::vector<double>>& psiOU, double x0,
                                                const std::vector<double>& nodeAges, const std::vector<double>& y,
                                                const std::vector<double>& z, const std::vector<char>& sa,
-                                               const std::vector<int>& zoneNode, double& lnPriorOut){
+                                               const std::vector<int>& zoneNode, int model, double& lnPriorOut){
+    if(psiRjMain >= 0)
+        applyPsiModel(model);
     for(size_t i = 0; i < a.lambda.size(); i++)
         a.lambda[i]->setValue(lam[i]);
     for(size_t i = 0; i < a.mu.size(); i++)
@@ -933,7 +935,7 @@ double FBDTreeModel::evaluateAtGeneratingState(const std::vector<double>& lam, c
         zoneInit = true;
     }
 
-    lnPriorOut = lnPriorProbability();
+    lnPriorOut = lnPriorProbability() - lnPsiRjTerm();
     return lnLikelihood();
 }
 

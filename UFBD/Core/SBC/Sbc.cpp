@@ -629,7 +629,7 @@ void Sbc::runInference(void){
             FBDTreeModel* model = new FBDTreeModel(tree, clades, fossils, modelSeed);
             truthLnL = model->evaluateAtGeneratingState(truth.lambda, truth.mu, truth.psi,
                                                         truth.lambdaOU, truth.muOU, truth.psiOU, truth.startAge,
-                                                        r.backboneNodeAges, yTrue, zTrue, saTrue, zoneNode, truthLnPrior);
+                                                        r.backboneNodeAges, yTrue, zTrue, saTrue, zoneNode, truth.model, truthLnPrior);
             models.push_back(model);
             chains.push_back(new Mcmc(ng, thin, model));
             chains.back()->setWriteCheckpoints(false);
@@ -685,7 +685,31 @@ void Sbc::runInference(void){
             if(names[c] == "prior")      iPri = (int)c;
             colOf[names[c]] = (int)c;
         }
+        if(cfg.psiRjMain >= 0){
+            const std::vector<double>& m = post[colOf["model"]];
+            double theta = post[colOf["log_prior_odds"]].back();
+            std::vector<double> cum;
+            double tot = 0.0;
+            for(double v : m){
+                tot += (v == 1.0) ? std::exp(-theta) : 1.0;
+                cum.push_back(tot);
+            }
+            std::vector<size_t> pick(cum.size());
+            for(size_t i = 0; i < pick.size(); i++)
+                pick[i] = std::lower_bound(cum.begin(), cum.end(), rng->uniformRv() * tot) - cum.begin();
+            for(std::vector<double>& col : post){
+                std::vector<double> res(pick.size());
+                for(size_t i = 0; i < pick.size(); i++)
+                    res[i] = col[pick[i]];
+                col = res;
+            }
+            for(size_t i = 0; i < post[iPri].size(); i++)
+                if(post[colOf["model"]][i] == 1.0)
+                    post[iPri][i] -= theta;
+        }
         for(size_t c = 0; c < names.size(); c++){
+            if(names[c] == "delta" || names[c] == "log_prior_odds")
+                continue;
             std::map<std::string, double>::iterator t = truthVal.find(names[c]);
             if(t != truthVal.end() && isRankedName(names[c]))
                 addQuantity(names[c], post[c], t->second);
