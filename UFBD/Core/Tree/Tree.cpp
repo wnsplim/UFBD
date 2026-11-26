@@ -622,10 +622,10 @@ void Tree::validateBackbone(void){
 bool Tree::isValidNewick(const std::string& s){
     size_t begin = s.find_first_not_of(" \t\n\r");
     size_t end = s.find_last_not_of(" \t\n\r");
-    if(begin == std::string::npos)
+    if(begin == std::string::npos || s[end] != ';')
         return false;
-    if(s[begin] != '(' || s[end] != ';')
-        return false;
+    if(s[begin] != '(')
+        return end > begin && s.find_first_of("(),: \t\n\r", begin) >= end;
     int depth = 0;
     for(char c : s){
         if(c == '(')

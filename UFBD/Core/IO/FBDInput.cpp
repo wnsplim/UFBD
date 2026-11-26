@@ -90,6 +90,11 @@ static std::string extractNewick(std::string content){
         }
     }
     size_t lp = content.find('(', searchStart);
+    if(lp == std::string::npos && nexus == false){
+        size_t first = content.find_first_not_of(" \t\n\r");
+        size_t end = content.find(';');
+        return (first == std::string::npos || end == std::string::npos) ? "" : content.substr(first, end - first + 1);
+    }
     size_t semi = (lp == std::string::npos) ? std::string::npos : content.find(';', lp);
     if(lp == std::string::npos || semi == std::string::npos)
         return "";
