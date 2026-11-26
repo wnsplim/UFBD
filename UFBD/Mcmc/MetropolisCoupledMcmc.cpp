@@ -23,14 +23,14 @@
 #include <mutex>
 #include <sstream>
 
-MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int thin, std::vector<PhylogeneticModel*> m, unsigned int masterSeed) : numCycles(ng), thinning(thin),
+MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int thin, std::vector<PhylogeneticModel*> m, unsigned int swapSeed) : numCycles(ng), thinning(thin),
     models(m),
     numModels(models.size()),
     coldModelIdx(-1),
     deltaT(UserSettings::userSettings().getDeltaTemperature()),
     resampleEvery(UserSettings::userSettings().getResampleEvery()),
     threadPool(std::max(1, std::min((int)m.size(), UserSettings::userSettings().getNumCores()))){
-    swapRng.setSeed(masterSeed + numModels);
+    swapRng.setSeed(swapSeed);
     currLnL.reserve(numModels); //needs to be reserve for pushback
     newLnL.resize(numModels);
     currLnP.reserve(numModels); //needs to be reserve for pushback

@@ -205,16 +205,17 @@ int main(int argc, const char* argv[]) {
     auto runOnce = [&](){
     bool resume = settings.getResume();
     unsigned int masterSeed = settings.getSeed() + (unsigned int)std::llround(settings.getPathT() * 1e6) * 1000003u + (settings.getPathPilot() ? 999983u : 0u);
+    auto chainSeed = [&](int r, int c){ return masterSeed + (unsigned int)r * 1000033u + (unsigned int)c * 1000037u; };
 
     if(numRuns == 1 && autoStop == false){
         ChainRunner* mcmc;
         if(numCoupledChains > 1){
             std::vector<PhylogeneticModel*> models(numCoupledChains);
             for(int c = 0; c < numCoupledChains; c++)
-                models[c] = makeModel(masterSeed + (unsigned int)c, 0);
-            mcmc = new MetropolisCoupledMcmc(settings.getChainLength(), thin, models, masterSeed);
+                models[c] = makeModel(chainSeed(0, c), 0);
+            mcmc = new MetropolisCoupledMcmc(settings.getChainLength(), thin, models, chainSeed(0, numCoupledChains));
         }else
-            mcmc = new Mcmc((int)settings.getChainLength(), thin, makeModel(masterSeed, 0));
+            mcmc = new Mcmc((int)settings.getChainLength(), thin, makeModel(chainSeed(0, 0), 0));
         mcmc->setVerbose(true);
         mcmc->setLabel(0);
         if(resume && std::ifstream(settings.getParamOutput() + ".ckp").good() == false && std::ifstream(ChainRunner::tunePath(settings.getParamOutput()) + ".ckp").good() == false)
@@ -243,15 +244,14 @@ int main(int argc, const char* argv[]) {
         unsigned long ncyc = autoStop ? settings.getMaxGen() : settings.getChainLength();
         std::vector<ChainRunner*> reps;
         for(int r = 0; r < numRuns; r++){
-            unsigned int base = masterSeed + (unsigned int)(r * (numCoupledChains + 1));
             if(numCoupledChains > 1){
                 std::vector<PhylogeneticModel*> models(numCoupledChains);
                 for(int c = 0; c < numCoupledChains; c++)
-                    models[c] = makeModel(base + (unsigned int)c, r);
-                reps.push_back(new MetropolisCoupledMcmc(ncyc, thin, models, base));
+                    models[c] = makeModel(chainSeed(r, c), r);
+                reps.push_back(new MetropolisCoupledMcmc(ncyc, thin, models, chainSeed(r, numCoupledChains)));
             }else{
                 int ng = (ncyc > 2000000000UL) ? 2000000000 : (int)ncyc;
-                reps.push_back(new Mcmc(ng, thin, makeModel(base, r)));
+                reps.push_back(new Mcmc(ng, thin, makeModel(chainSeed(r, 0), r)));
             }
         }
         ConvergenceRunner cr(reps, settings.getParamOutput(), settings.getTreeOutput());
