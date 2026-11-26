@@ -1033,7 +1033,7 @@ void UserSettings::print(void) {
         std::cout << "Mean tree output file:        " << base << ".tree" << std::endl;
     }
     std::cout << "Random number seed:           " << seed << std::endl;
-    if (autoChainLength)
+    if (autoChainLength && pathPilot == false)
         std::cout << "Maximum chain length:         " << maxGen << std::endl;
     else
         std::cout << "Chain length:                 " << chainLength << std::endl;

@@ -141,6 +141,8 @@ int main(int argc, const char* argv[]) {
     FBDInput input(settings.getTreeFile(), settings.getCladesFile(), settings.getFossilFile(), settings.getUnsampledExtantsFile());
     Tree* pt = input.getTree();
 
+    if(settings.getPathPilot())
+        settings.setChainLength(BridgeSampler::pilotGenerations());
     settings.print();
     if(Msg::hasDeferredWarnings()){
         Msg::flushWarnings();
@@ -269,8 +271,6 @@ int main(int argc, const char* argv[]) {
     if(wrote(base + ".tree"))            std::cout << "posterior summary tree -> " << base << ".tree\n";
     };
 
-    if(settings.getPathPilot())
-        settings.setChainLength(BridgeSampler::pilotGenerations());
     if(ladder)
         BridgeSampler(bfBase).run();
     else
