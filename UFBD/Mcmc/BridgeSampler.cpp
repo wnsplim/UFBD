@@ -90,7 +90,7 @@ static double bridgeLogR(const std::vector<double>& lx, const std::vector<double
 BridgeSampler::BridgeSampler(const std::string& base) : base(base) {
     UserSettings& s = UserSettings::userSettings();
     resumeAll = s.getResume();
-    perChain = (s.getNumRuns() == 1 && s.getAutoChainLength() == false) == false;
+    perChain = s.getNumRuns() > 1;
     burn = perChain ? 0.0 : s.getBurninFraction();
     setenv("UFBD_BF_PARENT", std::to_string(getpid()).c_str(), 1);
     const std::vector<std::string>& cli = s.getCliArgs();

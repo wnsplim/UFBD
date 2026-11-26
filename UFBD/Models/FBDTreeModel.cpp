@@ -1758,19 +1758,30 @@ double FBDTreeModel::calculateFBDProbability(void){
 }
 
 double FBDTreeModel::fossilTermLn(int i, int spineIdx, int ky, int kz, bool local){
-    if(unresolvedFossils->isSA(i))
-        return a.lnPsiTypeVec[a.fossilType[i]][ky >= 0 ? ky : findIndex(unresolvedFossils->getFossilAge(i))] + cachedGammaLn[i];
-    if(i == spineIdx && unresolvedFossils->isUE(i))
+    return fossilTermLn(unresolvedFossils, cachedGammaLn[i], i, spineIdx, ky, kz, local);
+}
+
+double FBDTreeModel::fossilTermLn(ParameterUnresolvedFossils* uf, double gLn, int i, int spineIdx, int ky, int kz, bool local){
+    if(uf->isSA(i))
+        return a.lnPsiTypeVec[a.fossilType[i]][ky >= 0 ? ky : findIndex(uf->getFossilAge(i))] + gLn;
+    if(i == spineIdx && uf->isUE(i))
         return 0.0;
-    if(unresolvedFossils->isUE(i)){
-        double z = unresolvedFossils->getAttachAge(i);
-        return std::log(rho) + a.ln2LambdaVec[findIndex(z)] + (local ? lnDLocal(z) : lnD(z)) + cachedGammaLn[i];
+    if(uf->isUE(i)){
+        double z = uf->getAttachAge(i);
+        return std::log(rho) + a.ln2LambdaVec[findIndex(z)] + (local ? lnDLocal(z) : lnD(z)) + gLn;
     }
     if(i == spineIdx){
-        double ys = unresolvedFossils->getFossilAge(i);
+        double ys = uf->getFossilAge(i);
         return a.lnPsiTypeVec[a.fossilType[i]][findIndex(ys)] + lnP0At(findIndex(ys), ys) - (local ? lnDLocal(ys) : lnD(ys));
     }
-    return fossilPqLn(unresolvedFossils->getFossilAge(i), unresolvedFossils->getAttachAge(i), a.fossilType[i], ky, kz) + cachedGammaLn[i];
+    return fossilPqLn(uf->getFossilAge(i), uf->getAttachAge(i), a.fossilType[i], ky, kz) + gLn;
+}
+
+double FBDTreeModel::sweepTermLn(int i){
+    double t = fossilTermLn(i, -1);
+    if(pathPartner == nullptr)
+        return t;
+    return pathSelfW * t + pathPartnerW * pathPartner->fossilTermLn(unresolvedFossils, cachedGammaLn[i], i, -1, -1, -1, false);
 }
 
 double FBDTreeModel::term3Sum(void){
@@ -1825,7 +1836,9 @@ double FBDTreeModel::fossilSweep(void){
     RandomVariable::setActiveInstance(&rng);
     prepareIntervals();
     updateGammaCache();
-    double r = (pathTarget == nullptr && unresolvedFossils->getSpineIdx() < 0) ? fossilSweepParallel() : fossilSweepSequential();
+    if(pathPartner != nullptr)
+        pathPartner->prepareIntervals();
+    double r = (unresolvedFossils->getSpineIdx() < 0) ? fossilSweepParallel() : fossilSweepSequential();
     RandomVariable::setActiveInstance(prevRng);
     return r;
 }
@@ -1897,7 +1910,7 @@ double FBDTreeModel::fossilSweepParallel(void){
             double zt = 0.0;
             for(int i : fos){
                 gammaVal[i] = computeGamma(unresolvedFossils->getAttachAge(i), i);
-                zoneTerm[i] = fossilTermLn(i, -1);
+                zoneTerm[i] = sweepTermLn(i);
                 zt += zoneTerm[i];
                 zIdx.push_back(std::make_pair(unresolvedFossils->getAttachAge(i), i));
             }
@@ -1970,7 +1983,7 @@ double FBDTreeModel::fossilSweepParallel(void){
                     if(a == idx){
                         gammaVal[a] = computeGamma(q, a);
                         cachedGammaLn[a] = (gammaVal[a] > 0.0) ? std::log(gammaVal[a]) : -INFINITY;
-                        double t = fossilTermLn(a, -1);
+                        double t = sweepTermLn(a);
                         dz += t - zoneTerm[a];
                         zoneTerm[a] = t;
                     }else{

@@ -132,6 +132,9 @@ PathModel::PathModel(PhylogeneticModel* a, PhylogeneticModel* b, std::vector<Fos
             rc[k]->pathTarget = [this](){ sync(mover); return lnLikelihood() + lnPriorProbability(); };
             f[k]->pathTarget = rc[k]->pathTarget;
         }
+        f[k]->pathPartner = f[1 - k];
+        f[k]->pathSelfW = (k == 0) ? 1.0 - pathT : pathT;
+        f[k]->pathPartnerW = (k == 0) ? pathT : 1.0 - pathT;
     }
 
     SkylineRates& sa = fa->a;
@@ -420,7 +423,6 @@ void PathModel::sync(int from){
             rc[from]->ctmc->appendParameterValues(cv);
             rc[1 - from]->ctmc->setParameterValues(cv);
         }
-        m[1 - from]->invalidateLikelihoodCache();
     }
     SkylineRates& s = src->a;
     SkylineRates& d = dst->a;
@@ -437,10 +439,6 @@ void PathModel::sync(int from){
             if(s.psiField[tp] != nullptr) d.psiField[tp]->copyState(*s.psiField[tp]);
             else for(size_t i = 0; i < s.psi[tp].size(); i++) d.psi[tp][i]->copyState(*s.psi[tp][i]);
         }
-    dst->invalidateGammaCache();
-    dst->zoneIndexBuilt = false;
-    dst->eulerBuilt = false;
-    dst->stalkIndexBuilt = false;
     dst->zoneInit = true;
 }
 
@@ -773,7 +771,7 @@ void PathModel::setStart(int run){
 }
 
 double PathModel::dataPart(int k){
-    double v = m[k]->lnLikelihood();
+    double v = m[(rc[k] != nullptr && sharedClock && sharedSubst) ? mover : k]->lnLikelihood();
     if(m[k] != f[k])
         v += f[k]->lnLikelihood();
     return v + lab[k];
@@ -787,9 +785,12 @@ double PathModel::lnLikelihood(void){
 }
 
 double PathModel::lnPriorProbability(void){
-    double p = m[0]->lnPriorProbability();
-    if(m[0] != f[0])
-        p -= f[0]->lnLikelihood();
+    double p = f[0]->lnPriorProbability();
+    if(rc[0] != nullptr){
+        p += rc[0]->clock->lnProbability();
+        if(rc[0]->ctmc != nullptr)
+            p += rc[0]->ctmc->lnPrior();
+    }
     return p + specificPrior(1) + pathT * lnPseudoPriorTerm(0) + (1.0 - pathT) * lnPseudoPriorTerm(1);
 }
 

@@ -99,6 +99,8 @@ class FBDTreeModel : public PhylogeneticModel {
         void                        setupNodeAgeFloors(void);
         double                      fossilSweep(void);
         std::function<double(void)> pathTarget;
+        FBDTreeModel*               pathPartner = nullptr;
+        double                      pathSelfW = 1.0, pathPartnerW = 0.0;
         double                      relabelAcrossNode(Node* n, double oldAge);
         void                        beginNodeAgeSweep(void){ rebuildStalkIndex(); inNodeAgeSweep = true; }
         void                        endNodeAgeSweep(void){ inNodeAgeSweep = false; }
@@ -136,6 +138,8 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<int>            fossilTypeOrig, backboneTypeOrig;
         PseudoPrior*                psiPseudo = nullptr;
         double                      fossilTermLn(int i, int spineIdx, int ky = -1, int kz = -1, bool local = false);
+        double                      fossilTermLn(ParameterUnresolvedFossils* uf, double gLn, int i, int spineIdx, int ky, int kz, bool local);
+        double                      sweepTermLn(int i);
         double                      lnSurvDecParts(int i, double t, double& linear);
         double                      lnDLocal(double t);
         double                      lnDPlusDec(int i, double t);
