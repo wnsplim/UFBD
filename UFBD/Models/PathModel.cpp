@@ -112,6 +112,14 @@ double PathModel::posteriorBurn(const std::string& base){
     return std::ifstream(base + "_chain0.log").good() ? 0.0 : UserSettings::userSettings().getBurninFraction();
 }
 
+static double toSupportCoord(double x, double lo, double hi){
+    return std::isinf(hi) ? std::log(x - lo) : std::log((x - lo) / (hi - x));
+}
+
+static double lnSupportJacobian(double x, double lo, double hi){
+    return std::isinf(hi) ? -std::log(x - lo) : std::log(hi - lo) - std::log(x - lo) - std::log(hi - x);
+}
+
 static double lnMvn(const PseudoPrior& d, const Eigen::VectorXd& z, const Eigen::VectorXd& w){
     Eigen::VectorXd y = d.chol.matrixL().solve(z - d.mean - d.K * (w - d.wMean));
     return -0.5 * y.squaredNorm() - d.chol.matrixLLT().diagonal().array().log().sum() - 0.5 * (double)z.size() * std::log(2.0 * M_PI);
@@ -453,8 +461,8 @@ double PathModel::lnPseudoPrior(FBDTreeModel* fm, const PseudoPrior& d){
     for(int i = 0; i < k; i++){
         double x = v[d.index[i]];
         if(d.coord[i] == PseudoPriorCoord::LOG){
-            x = std::log(x);
-            jac -= x;
+            jac += lnSupportJacobian(x, d.lo[i], d.hi[i]);
+            x = toSupportCoord(x, d.lo[i], d.hi[i]);
         }
         z(i) = x;
     }
@@ -507,6 +515,7 @@ void PathModel::fitRatePseudoPrior(FBDTreeModel* fm, PseudoPrior& d, const std::
     addField(s.lambdaField, s.lambdaName);
     addField(s.muField, s.muName);
     for(int tp = 0; tp < s.numPsiTypes; tp++) addField(s.psiField[tp], s.psiName[tp]);
+    std::vector<std::pair<double,double>> sup = fm->getRateSupports(s);
     for(size_t j = 0; j < own.size(); j++){
         if(fixed[j] || sharedHyper[j] || spec[j] == false) continue;
         const std::string& n = own[j];
@@ -516,6 +525,8 @@ void PathModel::fitRatePseudoPrior(FBDTreeModel* fm, PseudoPrior& d, const std::
         d.names.push_back(n);
         d.index.push_back((int)j);
         d.coord.push_back(c);
+        d.lo.push_back(sup[j].first);
+        d.hi.push_back(sup[j].second);
     }
     int k = (int)d.names.size();
     if(k == 0)
@@ -544,7 +555,7 @@ void PathModel::fitRatePseudoPrior(FBDTreeModel* fm, PseudoPrior& d, const std::
         }
         Eigen::VectorXd z(k);
         for(int i = 0; i < k; i++)
-            z(i) = d.coord[i] == PseudoPriorCoord::LOG ? std::log(v[d.index[i]]) : v[d.index[i]];
+            z(i) = d.coord[i] == PseudoPriorCoord::LOG ? toSupportCoord(v[d.index[i]], d.lo[i], d.hi[i]) : v[d.index[i]];
         rows.push_back(z);
     }
     fitMvn(d, rows, {}, model + " rate pseudo-prior from posterior log " + path);
@@ -720,7 +731,12 @@ void PathModel::setStart(int run){
         Eigen::MatrixXd L = d.chol.matrixL();
         for(size_t i = 0; i < d.names.size(); i++){
             double mi = d.mean((int)i);
-            v[d.index[i]] = d.coord[i] == PseudoPriorCoord::LOG ? std::exp(mi + 0.5 * L.row((int)i).squaredNorm()) : mi;
+            if(d.coord[i] != PseudoPriorCoord::LOG)
+                v[d.index[i]] = mi;
+            else if(std::isinf(d.hi[i]))
+                v[d.index[i]] = d.lo[i] + std::exp(mi + 0.5 * L.row((int)i).squaredNorm());
+            else
+                v[d.index[i]] = d.lo[i] + (d.hi[i] - d.lo[i]) / (1.0 + std::exp(-mi));
         }
         setRateString(o->a, v);
         for(const std::pair<ParameterOUField*,int>& fl : d.fields)

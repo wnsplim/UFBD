@@ -23,6 +23,7 @@ struct PseudoPrior {
     Eigen::VectorXd             mean;
     Eigen::LLT<Eigen::MatrixXd> chol;
     std::vector<PseudoPriorCoord> coord;
+    std::vector<double>         lo, hi;
     std::vector<int>            index;
     std::vector<std::pair<ParameterOUField*,int>> fields;
     Eigen::MatrixXd             K;

@@ -1,6 +1,7 @@
 #ifndef ParameterOUField_hpp
 #define ParameterOUField_hpp
 
+#include <cmath>
 #include <vector>
 
 #include "Parameter.hpp"
@@ -30,6 +31,8 @@ class ParameterOUField : public Parameter {
         bool                        isThetaFixed(void) { return thetaPrior.family == Probability::PriorFamily::FIXED; }
         bool                        isSdFixed(void) { return sdPrior.family == Probability::PriorFamily::FIXED; }
         bool                        isNuFixed(void) { return nuPrior.family == Probability::PriorFamily::FIXED; }
+        std::pair<double,double>    sdSupport(void) { return Probability::priorSupport(sdPrior.family, sdPrior.p1, sdPrior.p2, 0.0, INFINITY, sdPrior.p3); }
+        std::pair<double,double>    nuSupport(void) { return Probability::priorSupport(nuPrior.family, nuPrior.p1, nuPrior.p2, 0.0, INFINITY, nuPrior.p3); }
         double                      standardizedDeviations(std::vector<double>& u);
         double                      standardizedDeviations(const std::vector<double>& rates, double th, double sd, double nuv, std::vector<double>& u);
         void                        setStandardizedDeviations(const std::vector<double>& u);

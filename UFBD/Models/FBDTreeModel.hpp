@@ -225,6 +225,7 @@ class FBDTreeModel : public PhylogeneticModel {
         void                        buildRates(UserSettings& us, SkylineRates& s);
         std::vector<std::string>    getRateNames(const SkylineRates& s);
         std::vector<double>         getRateString(const SkylineRates& s);
+        std::vector<std::pair<double,double>> getRateSupports(const SkylineRates& s);
         std::vector<size_t>         rateBlockSizes(const SkylineRates& s);
         SkylineRates                a;
         double                      rho;

@@ -672,6 +672,23 @@ std::vector<double> FBDTreeModel::getRateString(const SkylineRates& s){
     return vals;
 }
 
+std::vector<std::pair<double,double>> FBDTreeModel::getRateSupports(const SkylineRates& s){
+    std::vector<std::pair<double,double>> sup;
+    auto add = [&](ParameterOUField* f, const std::vector<ParameterDouble*>& v){
+        if(f != nullptr){
+            sup.insert(sup.end(), f->getNumBins() + 1, {-INFINITY, INFINITY});
+            sup.push_back(f->sdSupport());
+            sup.push_back(f->nuSupport());
+        }else
+            for(ParameterDouble* p : v) sup.push_back(p->support());
+    };
+    add(s.lambdaField, s.lambda);
+    add(s.muField, s.mu);
+    for(int tp = 0; tp < s.numPsiTypes; tp++)
+        add(s.psiField[tp], s.psi[tp]);
+    return sup;
+}
+
 std::vector<size_t> FBDTreeModel::rateBlockSizes(const SkylineRates& s){
     std::vector<size_t> b = {s.lambdaField != nullptr ? s.lambdaName.size() + 3 : s.lambda.size(), s.muField != nullptr ? s.muName.size() + 3 : s.mu.size()};
     for(int tp = 0; tp < s.numPsiTypes; tp++)
