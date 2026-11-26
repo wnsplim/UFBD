@@ -216,20 +216,9 @@ void BridgeSampler::run(void){
 
 std::vector<double> BridgeSampler::readDelta(void){
     std::string path = UserSettings::userSettings().getParamOutput();
-    std::ifstream f(path);
-    std::string line, tok;
-    std::getline(f, line);
-    std::istringstream hs(line);
-    int col = 0;
-    while(std::getline(hs, tok, '\t') && tok != "delta")
-        col++;
     std::vector<double> d;
-    while(std::getline(f, line)){
-        std::istringstream rs(line);
-        for(int k = 0; k <= col; k++)
-            std::getline(rs, tok, '\t');
-        d.push_back(std::stod(tok));
-    }
+    for(const std::vector<double>& r : PathModel::readColumns(path, {"delta"}, "path point log " + path))
+        d.push_back(r[0]);
     d.erase(d.begin(), d.begin() + (size_t)(burn * (double)d.size()));
     return d;
 }

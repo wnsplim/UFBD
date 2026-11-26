@@ -42,6 +42,7 @@ class ChainRunner {
         virtual void                            setPsiRjWeight(double w) {}
 
     protected:
+        void                                    runPsiRjTuning(PhylogeneticModel* m, unsigned long every, int label);
         void                                    openTuneLog(PhylogeneticModel* m, bool resumed);
         void                                    writeTuneRow(PhylogeneticModel* m, unsigned long n, double lnPost);
         std::string                             checkpointPath(void) { return (rjTuning ? tuneOut : paramOut) + ".ckp"; }

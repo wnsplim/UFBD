@@ -914,8 +914,8 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 return s.empty() ? std::string("none") : s;
             };
             if (ta.size() > 1 && tb.size() > 1 && ta != tb)
-                Msg::error("-config_bf: when both configs have multipe psi types they must name the same types ([model 0] names "
-                           + joined(ta) + ", [model 1] names " + joined(tb) + "); to compare psi with single type vs multiple types, use one config with a single psi section.");
+                Msg::error("-config_bf: when both models have multiple psi types they must name the same types ([model 0] names "
+                           + joined(ta) + ", [model 1] names " + joined(tb) + "); to compare one psi against several types, give one model a single [psi] section.");
             parametersOutBase = parametersOut;
             treeOutBase = treeOut;
             if (bfLadder.size() == 1)

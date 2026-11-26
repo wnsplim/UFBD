@@ -57,22 +57,8 @@ void Mcmc::init(void) {
         tuning = false;
         gen = 0;
     }
-    if(model->psiRjTuning()){
-        rjTuning = true;
-        tuneOut = tunePath(paramOut);
-        bool resumed = settings.getResume() && std::ifstream(checkpointPath()).good();
-        if(resumed)
-            loadCheckpoint();
-        openTuneLog(model, resumed);
-        while(model->psiRjTuning())
-            advance(thinning);
-        tune.closeTSV();
-        std::ostringstream os;
-        os << std::setprecision(10) << "chain " << runLabel << ": psi_rj tuning finished after " << gen << " generations, log prior odds " << model->getPsiRjState()[0] << "\n";
-        ChainRunner::logLine(os.str());
-        rjTuning = false;
-        gen = 0;
-    }
+    if(model->psiRjTuning())
+        runPsiRjTuning(model, thinning, runLabel);
 }
 
 void Mcmc::advance(unsigned long nGens) {

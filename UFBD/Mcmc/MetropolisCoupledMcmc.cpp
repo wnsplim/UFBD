@@ -137,22 +137,8 @@ void MetropolisCoupledMcmc::init(void) {
         tuning = false;
         gen = 0;
     }
-    if(models[0]->psiRjTuning()){
-        rjTuning = true;
-        tuneOut = tunePath(paramOut);
-        bool resumed = settings.getResume() && std::ifstream(checkpointPath()).good();
-        if(resumed)
-            loadCheckpoint();
-        openTuneLog(models[0], resumed);
-        while(models[0]->psiRjTuning())
-            advance(thinning);
-        tune.closeTSV();
-        std::ostringstream os;
-        os << std::setprecision(10) << "chain " << runLabel << ": psi_rj tuning finished after " << gen << " generations, log prior odds " << models[0]->getPsiRjState()[0] << "\n";
-        ChainRunner::logLine(os.str());
-        rjTuning = false;
-        gen = 0;
-    }
+    if(models[0]->psiRjTuning())
+        runPsiRjTuning(models[0], thinning, runLabel);
 }
 
 void MetropolisCoupledMcmc::finalize(void) {

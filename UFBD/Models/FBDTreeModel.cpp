@@ -261,28 +261,14 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
         psiRjMain = us.getPsiRjMain();
         fossilTypeOrig = a.fossilType;
         backboneTypeOrig = a.backboneType;
-        std::vector<int> count(a.numPsiTypes, 0);
-        int n = 0;
-        for(Fossil& f : fossils)
-            if(f.getMaxAge() > 0.0){
-                count[resolveType(f, a.psiTypeNames)]++;
-                n++;
-            }
-        psiRjLab = std::lgamma((double)a.numPsiTypes) - std::lgamma((double)(n + a.numPsiTypes));
-        for(int c : count)
-            psiRjLab += std::lgamma(c + 1.0);
-        std::vector<bool> spec(getRateNames(a).size(), false);
-        size_t off = (a.lambdaField != nullptr ? a.lambdaName.size() + 3 : a.lambda.size()) + (a.muField != nullptr ? a.muName.size() + 3 : a.mu.size());
-        for(int t = 0; t < a.numPsiTypes; t++){
-            size_t len = a.psiField[t] != nullptr ? a.psiName[t].size() + 3 : a.psi[t].size();
-            if(t != psiRjMain)
-                std::fill(spec.begin() + off, spec.begin() + off + len, true);
-            off += len;
-        }
+        psiRjLab = PathModel::lnTypeLabels(a.psiTypeNames, fossils);
+        std::vector<size_t> blocks = rateBlockSizes(a);
+        std::vector<bool> spec;
+        for(size_t j = 0; j < blocks.size(); j++)
+            spec.insert(spec.end(), blocks[j], j >= 2 && (int)j - 2 != psiRjMain);
         std::string base = us.getPosteriorBaseA();
-        double burn = std::ifstream(base + "_chain0.log").good() ? 0.0 : us.getBurninFraction();
         psiPseudo = new PseudoPrior;
-        PathModel::fitRatePseudoPrior(this, *psiPseudo, spec, base + ".log", burn, "the psi sets that model 1 does not use");
+        PathModel::fitRatePseudoPrior(this, *psiPseudo, spec, base + ".log", PathModel::posteriorBurn(base), "the psi sets that model 1 does not use");
         psiRjCheck = us.getResampleEvery();
         psiRjWeight = -psiRjLab;
         size_t nm = psiShiftCoords().size();
@@ -684,6 +670,13 @@ std::vector<double> FBDTreeModel::getRateString(const SkylineRates& s){
             for(ParameterDouble* p : s.psi[tp]) vals.push_back(p->getValue());
     }
     return vals;
+}
+
+std::vector<size_t> FBDTreeModel::rateBlockSizes(const SkylineRates& s){
+    std::vector<size_t> b = {s.lambdaField != nullptr ? s.lambdaName.size() + 3 : s.lambda.size(), s.muField != nullptr ? s.muName.size() + 3 : s.mu.size()};
+    for(int tp = 0; tp < s.numPsiTypes; tp++)
+        b.push_back(s.psiField[tp] != nullptr ? s.psiName[tp].size() + 3 : s.psi[tp].size());
+    return b;
 }
 
 std::vector<std::string> FBDTreeModel::getParameterNames(void){

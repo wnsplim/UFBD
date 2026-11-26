@@ -16,7 +16,6 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
-#include <set>
 #include <sstream>
 
 static std::map<std::string, PseudoPrior> fitted;
@@ -66,7 +65,7 @@ static void fitMvn(PseudoPrior& d, const std::vector<Eigen::VectorXd>& rows, con
         Msg::error(what + ": the covariance of the " + std::to_string(k) + " coordinates over " + std::to_string(n) + " rows is not positive definite.");
 }
 
-static std::vector<std::vector<double>> readColumns(const std::string& path, const std::vector<std::string>& names, const std::string& key){
+std::vector<std::vector<double>> PathModel::readColumns(const std::string& path, const std::vector<std::string>& names, const std::string& key){
     std::ifstream in(path);
     if(in.is_open() == false)
         Msg::error("could not open " + key + ".");
@@ -100,6 +99,17 @@ static std::vector<std::vector<double>> readColumns(const std::string& path, con
         out.push_back(v);
     }
     return out;
+}
+
+static double column(const std::map<std::string,double>& row, const std::string& name, const std::string& path){
+    std::map<std::string,double>::const_iterator it = row.find(name);
+    if(it == row.end())
+        Msg::error("start log " + path + " has no column '" + name + "'.");
+    return it->second;
+}
+
+double PathModel::posteriorBurn(const std::string& base){
+    return std::ifstream(base + "_chain0.log").good() ? 0.0 : UserSettings::userSettings().getBurninFraction();
 }
 
 static double lnMvn(const PseudoPrior& d, const Eigen::VectorXd& z, const Eigen::VectorXd& w){
@@ -153,18 +163,20 @@ PathModel::PathModel(PhylogeneticModel* a, PhylogeneticModel* b, std::vector<Fos
         if(fa == nullptr || fb == nullptr) continue;
         if(fa->isThetaFixed() != fb->isThetaFixed() || fa->isSdFixed() != fb->isSdFixed() || fa->isNuFixed() != fb->isNuFixed()
            || (fa->isThetaFixed() && fa->getTheta() != fb->getTheta()) || (fa->isSdFixed() && fa->getSdEq() != fb->getSdEq()) || (fa->isNuFixed() && fa->getNu() != fb->getNu()))
-                Msg::error("-config and -config_bf both put an OU prior on " + rate + "; the two models then share its hyperparameters theta, sdEq and nu, so each must be free in both configs or fixed to the same value in both.");
+                Msg::error("[model 0] and [model 1] both put an OU prior on " + rate + "; the two models then share its hyperparameters theta, sdEq and nu, so each must be free in both models or fixed to the same value in both.");
         fa->shareHyperparameters(fb);
     }
 
-    lab[0] = lnTypeLabels(fa, fossils);
-    lab[1] = lnTypeLabels(fb, fossils);
+    for(int k = 0; k < 2; k++){
+        const std::vector<std::string>& other = f[1 - k]->a.psiTypeNames;
+        lab[k] = (f[k]->a.psiTypeNames.size() <= 1 && other.size() > 1) ? lnTypeLabels(other, fossils) : 0.0;
+    }
     std::string base[2] = {us.getPosteriorBaseA(), us.getPosteriorBaseB()};
     double burn[2];
     for(int k = 0; k < 2; k++)
-        burn[k] = std::ifstream(base[k] + "_chain0.log").good() ? 0.0 : us.getBurninFraction();
+        burn[k] = posteriorBurn(base[k]);
     for(int k = 0; k < 2; k++)
-        readPseudoPrior(k, base[k] + ".log", burn[k]);
+        fitRatePseudoPrior(f[k], pp[k], specificMask(f[k]), base[k] + ".log", burn[k], "model " + std::to_string(k));
     if(sharedClock == false)
         for(int k = 0; k < 2; k++)
             readClockPseudoPrior(k, base[k], burn[k]);
@@ -280,64 +292,35 @@ void PathModel::readClockPseudoPrior(int k, const std::string& base, double burn
     std::vector<double> t0;
     for(Node* nd : dp)
         t0.push_back(nd->getTime());
-    auto readLog = [&](const std::string& path, std::vector<std::string>& header, std::vector<std::vector<double>>& rows){
-        std::ifstream in(path);
-        if(in.is_open() == false)
-            return false;
-        std::string line, tok;
-        std::getline(in, line);
-        std::istringstream hs(line);
-        while(std::getline(hs, tok, '\t'))
-            header.push_back(tok);
-        while(std::getline(in, line)){
-            if(line.empty()) continue;
-            std::istringstream rs(line);
-            std::vector<double> r;
-            while(std::getline(rs, tok, '\t'))
-                r.push_back(std::stod(tok));
-            rows.push_back(r);
+    std::vector<std::string> mainCols(d.names.begin(), d.names.begin() + 2 * ng), latCols(d.names.begin() + 2 * ng, d.names.end());
+    for(size_t i = 0; i < ageNodes.size(); i++)
+        mainCols.push_back("x" + std::to_string(i + 1));
+    std::vector<Node*> yNodes;
+    for(const FBDTreeModel::BackboneFossil& bf : fm->backboneFossils)
+        if(bf.yMin < bf.yMax){
+            latCols.push_back("y_" + bf.tip->getName());
+            yNodes.push_back(bf.tip);
         }
-        return true;
-    };
-    auto column = [&](const std::vector<std::string>& header, const std::string& name, const std::string& path){
-        std::vector<std::string>::const_iterator it = std::find(header.begin(), header.end(), name);
-        if(it == header.end())
-            Msg::error("model " + model + " posterior log " + path + " has no column '" + name + "'.");
-        return (int)(it - header.begin());
-    };
     std::vector<Eigen::VectorXd> rows, ws;
     auto addLogs = [&](const std::string& mainPath, const std::string& latPath, double drop){
-        std::vector<std::string> hm, hl;
-        std::vector<std::vector<double>> rm, rl;
-        if(readLog(latPath, hl, rl) == false)
+        if(std::ifstream(latPath).good() == false)
             return false;
-        if(readLog(mainPath, hm, rm) == false)
-            Msg::error("could not open model " + model + " posterior log: " + mainPath);
+        std::vector<std::vector<double>> rm = readColumns(mainPath, mainCols, "model " + model + " posterior log " + mainPath);
+        std::vector<std::vector<double>> rl = readColumns(latPath, latCols, "model " + model + " posterior log " + latPath);
         if(rm.size() != rl.size())
             Msg::error("model " + model + " posterior logs " + mainPath + " and " + latPath + " have " + std::to_string(rm.size()) + " and " + std::to_string(rl.size()) + " rows; each row needs its latent row.");
-        std::vector<int> cm, cl, ca;
-        std::vector<std::pair<Node*,int>> cy;
-        for(int i = 0; i < 2 * ng; i++)
-            cm.push_back(column(hm, d.names[i], mainPath));
-        for(int i = 2 * ng; i < n; i++)
-            cl.push_back(column(hl, d.names[i], latPath));
-        for(size_t i = 0; i < ageNodes.size(); i++)
-            ca.push_back(column(hm, "x" + std::to_string(i + 1), mainPath));
-        for(const FBDTreeModel::BackboneFossil& bf : fm->backboneFossils)
-            if(bf.yMin < bf.yMax)
-                cy.push_back({bf.tip, column(hl, "y_" + bf.tip->getName(), latPath)});
         for(size_t j = (size_t)(drop * (double)rm.size()); j < rm.size(); j++){
             for(size_t i = 0; i < ageNodes.size(); i++)
-                ageNodes[i]->setTime(rm[j][ca[i]] - off);
-            for(const std::pair<Node*,int>& y : cy)
-                y.first->setTime(rl[j][y.second] - off);
+                ageNodes[i]->setTime(rm[j][2 * ng + i] - off);
+            for(size_t i = 0; i < yNodes.size(); i++)
+                yNodes[i]->setTime(rl[j][n - 2 * ng + i] - off);
             std::vector<double> muV(ng), s2V(ng);
             std::vector<std::vector<double>> r(ng, std::vector<double>(nb));
             for(int g = 0; g < ng; g++){
-                muV[g] = rm[j][cm[2 * g]];
-                s2V[g] = rm[j][cm[2 * g + 1]];
+                muV[g] = rm[j][2 * g];
+                s2V[g] = rm[j][2 * g + 1];
                 for(int i = 0; i < nb; i++)
-                    r[g][i] = rl[j][cl[g * nb + i]];
+                    r[g][i] = rl[j][g * nb + i];
             }
             Eigen::VectorXd z;
             clockCoords(k, muV, s2V, r, z);
@@ -355,36 +338,25 @@ void PathModel::readClockPseudoPrior(int k, const std::string& base, double burn
     std::cout << "Pseudo-prior of model " << model << ": " << n << " clock coordinates, conditional on " << ws[0].size() << " log node ages, fitted to " << rows.size() << " rows of its posterior logs\n";
 }
 
-double PathModel::lnTypeLabels(FBDTreeModel* fm, std::vector<Fossil>& fossils){
-    const std::vector<std::string>& names = fm->a.psiTypeNames;
-    std::map<int, std::map<std::string, int>> counts;
-    for(Fossil& fo : fossils){
-        if(fo.getMaxAge() <= 0.0 || fo.getType().empty()) continue;
-        int g = 0;
-        if(names.size() > 1)
-            g = (int)(std::find(names.begin(), names.end(), fo.getType()) - names.begin());
-        counts[g][fo.getType()]++;
-    }
-    double lp = 0.0;
-    for(auto& [group, byType] : counts){
-        int n = 0;
-        for(auto& [type, c] : byType){
-            lp += std::lgamma(c + 1.0);
-            n += c;
+double PathModel::lnTypeLabels(const std::vector<std::string>& types, std::vector<Fossil>& fossils){
+    std::vector<int> count(types.size(), 0);
+    int n = 0;
+    for(Fossil& fo : fossils)
+        if(fo.getMaxAge() > 0.0){
+            count[std::find(types.begin(), types.end(), fo.getType()) - types.begin()]++;
+            n++;
         }
-        lp += std::lgamma((double)byType.size()) - std::lgamma((double)(n + byType.size()));
-    }
+    double lp = std::lgamma((double)types.size()) - std::lgamma((double)(n + types.size()));
+    for(int c : count)
+        lp += std::lgamma(c + 1.0);
     return lp;
 }
 
 std::vector<bool> PathModel::specificMask(FBDTreeModel* fm){
-    SkylineRates& s = fm->a;
+    std::vector<size_t> blocks = fm->rateBlockSizes(fm->a);
     std::vector<bool> spec;
-    auto mark = [&](bool sh, size_t n){ spec.insert(spec.end(), n, sh == false); };
-    mark(shared[0], s.lambdaField != nullptr ? s.lambdaName.size() + 3 : s.lambda.size());
-    mark(shared[1], s.muField != nullptr ? s.muName.size() + 3 : s.mu.size());
-    for(int tp = 0; tp < s.numPsiTypes; tp++)
-        mark(shared[2], s.psiField[tp] != nullptr ? s.psiName[tp].size() + 3 : s.psi[tp].size());
+    for(size_t j = 0; j < blocks.size(); j++)
+        spec.insert(spec.end(), blocks[j], shared[std::min(j, (size_t)2)] == false);
     return spec;
 }
 
@@ -521,10 +493,6 @@ int PathModel::readPseudoPriorState(std::istream& is, PseudoPrior& d){
     return 1;
 }
 
-void PathModel::readPseudoPrior(int km, const std::string& path, double burn){
-    fitRatePseudoPrior(f[km], pp[km], specificMask(f[km]), path, burn, "model " + std::to_string(km));
-}
-
 void PathModel::fitRatePseudoPrior(FBDTreeModel* fm, PseudoPrior& d, const std::vector<bool>& spec, const std::string& path, double burn, const std::string& model){
     SkylineRates& s = fm->a;
     std::vector<std::string> own = fm->getRateNames(s);
@@ -639,21 +607,18 @@ std::map<std::string,double> PathModel::readLastRow(const std::string& path){
     return row;
 }
 
-void PathModel::setState(int km, std::map<std::string,double>& mainRow, std::map<std::string,double>& latRow, const std::string& latentLog){
+void PathModel::setState(int km, const std::map<std::string,double>& mainRow, const std::map<std::string,double>& latRow, const std::string& mainLog, const std::string& latentLog){
     FBDTreeModel* fm = f[km];
     double off = UserSettings::userSettings().getAgeOffset();
     std::vector<std::string> names = fm->getRateNames(fm->a);
-    std::vector<double> v = fm->getRateString(fm->a);
-    for(size_t i = 0; i < names.size(); i++){
-        if(mainRow.count(names[i]) == 0)
-            Msg::error("start log has no column for rate parameter '" + names[i] + "'.");
-        v[i] = mainRow[names[i]];
-    }
+    std::vector<double> v(names.size());
+    for(size_t i = 0; i < names.size(); i++)
+        v[i] = column(mainRow, names[i], mainLog);
     setRateString(fm->a, v);
 
     Tree* tr = fm->parameterTree->getTree();
     if(fm->originAge != nullptr){
-        double x0 = mainRow["originAge"] - off;
+        double x0 = column(mainRow, rc[km] != nullptr ? "x0" : "originAge", mainLog) - off;
         fm->originAge->setValue(x0);
         Node* rt = tr->getRoot();
         if(rt->getDescendants().size() == 1)
@@ -661,10 +626,10 @@ void PathModel::setState(int km, std::map<std::string,double>& mainRow, std::map
     }
     std::vector<Node*> ageNodes = fm->getAgeLogNodes();
     for(size_t i = 0; i < ageNodes.size(); i++)
-        ageNodes[i]->setTime(mainRow["x" + std::to_string(i + 1)] - off);
+        ageNodes[i]->setTime(column(mainRow, "x" + std::to_string(i + 1), mainLog) - off);
     for(const FBDTreeModel::BackboneFossil& bf : fm->backboneFossils)
         if(bf.yMin < bf.yMax)
-            bf.tip->setTime(latRow["y_" + bf.tip->getName()] - off);
+            bf.tip->setTime(column(latRow, "y_" + bf.tip->getName(), latentLog) - off);
     fm->parameterTree->commitTree();
 
     RandomVariable* prevRng = RandomVariable::getActiveInstance();
@@ -673,23 +638,21 @@ void PathModel::setState(int km, std::map<std::string,double>& mainRow, std::map
     if(uf != nullptr){
         int nf = uf->getNumFossils();
         std::vector<double> yv(nf);
-        for(int i = 0; i < nf; i++){
-            std::map<std::string,double>::iterator it = latRow.find("y_" + fm->unrFossilName[i]);
-            yv[i] = (it != latRow.end()) ? it->second - off : uf->getFossilAge(i);
-        }
+        for(int i = 0; i < nf; i++)
+            yv[i] = (uf->isUE(i) == false && uf->getYMin(i) < uf->getYMax(i)) ? column(latRow, "y_" + fm->unrFossilName[i], latentLog) - off : uf->getFossilAge(i);
         uf->setFossilAges(yv);
         for(int i = 0; i < nf; i++){
-            std::map<std::string,double>::iterator sit = latRow.find("sa_" + fm->unrFossilName[i]);
-            if(sit != latRow.end() && sit->second != 0.0)
+            const std::string& nm = fm->unrFossilName[i];
+            if(uf->isUE(i) == false && column(latRow, "sa_" + nm, latentLog) != 0.0)
                 uf->flipSA(i, true);
             else
-                uf->setAttachAge(i, latRow["z_" + fm->unrFossilName[i]] - off);
+                uf->setAttachAge(i, column(latRow, "z_" + nm, latentLog) - off);
             std::vector<int>& dom = uf->getAttachmentZoneDomain(i);
             int zone = dom[0];
             if(dom.size() > 1){
-                zone = (int)latRow["az_" + fm->unrFossilName[i]];
+                zone = (int)column(latRow, "az_" + nm, latentLog);
                 if(std::find(dom.begin(), dom.end(), zone) == dom.end())
-                    Msg::error("start log " + latentLog + ": az_" + fm->unrFossilName[i] + " = " + std::to_string(zone) + " is not an attachment zone of this fossil.");
+                    Msg::error("start log " + latentLog + ": az_" + nm + " = " + std::to_string(zone) + " is not an attachment zone of this fossil.");
             }
             uf->initAttachmentZone(i, zone);
             uf->acceptFossil(i);
@@ -714,23 +677,19 @@ void PathModel::setStart(int run){
     std::map<std::string,double> mainRow = readLastRow(log), latRow = readLastRow(latent);
     if(f[k]->unresolvedFossils != nullptr && f[k]->zoneIndexBuilt == false)
         f[k]->buildZoneIndex();
-    if(rc[k] != nullptr && f[k]->originAge != nullptr)
-        mainRow["originAge"] = mainRow["x0"];
-    setState(k, mainRow, latRow, latent);
+    setState(k, mainRow, latRow, log, latent);
     if(rc[k] != nullptr){
         std::vector<std::string> cn = clockNames(k);
         std::vector<double> cv;
-        for(const std::string& s : cn){
-            std::map<std::string,double>::iterator it = mainRow.find(s);
-            cv.push_back(it != mainRow.end() ? it->second : latRow[s]);
-        }
+        for(const std::string& s : cn)
+            cv.push_back(mainRow.count(s) > 0 ? mainRow[s] : column(latRow, s, latent));
         setClockValues(k, cv);
         if(rc[k]->ctmc != nullptr){
             std::vector<std::string> sn;
             rc[k]->ctmc->appendParameterNames(sn);
             std::vector<double> sv;
             for(const std::string& s : sn)
-                sv.push_back(mainRow[s]);
+                sv.push_back(column(mainRow, s, log));
             rc[k]->ctmc->setParameterValues(sv);
         }
         m[k]->invalidatePriorCache();
@@ -794,10 +753,14 @@ double PathModel::lnPriorProbability(void){
     return p + specificPrior(1) + pathT * lnPseudoPriorTerm(0) + (1.0 - pathT) * lnPseudoPriorTerm(1);
 }
 
+size_t PathModel::rateEnd(void){
+    std::vector<std::string> names = m[0]->getParameterNames(), ra = f[0]->getRateNames(f[0]->a);
+    return (size_t)(std::find(names.begin(), names.end(), ra[0]) - names.begin()) + ra.size();
+}
+
 std::vector<std::string> PathModel::getParameterNames(void){
     std::vector<std::string> names = m[0]->getParameterNames();
-    std::vector<std::string> ra = f[0]->getRateNames(f[0]->a);
-    size_t n = (size_t)(std::find(names.begin(), names.end(), ra[0]) - names.begin()) + ra.size();
+    size_t n = rateEnd();
     std::vector<std::string> rb = f[1]->getRateNames(f[1]->a), ins;
     std::vector<bool> spec = specificMask(f[1]);
     for(size_t i = 0; i < rb.size(); i++)
@@ -812,8 +775,7 @@ std::vector<std::string> PathModel::getParameterNames(void){
 
 std::vector<double> PathModel::getParameterString(void){
     std::vector<double> vals = m[0]->getParameterString();
-    std::vector<std::string> names = m[0]->getParameterNames(), ra = f[0]->getRateNames(f[0]->a);
-    size_t n = (size_t)(std::find(names.begin(), names.end(), ra[0]) - names.begin()) + ra.size();
+    size_t n = rateEnd();
     std::vector<double> rb = f[1]->getRateString(f[1]->a), ins;
     std::vector<bool> spec = specificMask(f[1]);
     for(size_t i = 0; i < rb.size(); i++)
@@ -829,8 +791,7 @@ std::vector<double> PathModel::getParameterString(void){
 
 std::vector<bool> PathModel::getParameterFixedMask(void){
     std::vector<bool> mask = m[0]->getParameterFixedMask();
-    std::vector<std::string> names = m[0]->getParameterNames(), ra = f[0]->getRateNames(f[0]->a);
-    size_t n = (size_t)(std::find(names.begin(), names.end(), ra[0]) - names.begin()) + ra.size();
+    size_t n = rateEnd();
     std::vector<bool> mb, ins;
     f[1]->appendRateMask(mb, f[1]->a);
     std::vector<bool> spec = specificMask(f[1]);

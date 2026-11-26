@@ -57,6 +57,9 @@ class PathModel : public PhylogeneticModel {
         void                        readState(std::istream& is);
         void                        setStart(int run);
         static std::map<std::string,double> readLastRow(const std::string& path);
+        static std::vector<std::vector<double>> readColumns(const std::string& path, const std::vector<std::string>& names, const std::string& key);
+        static double               posteriorBurn(const std::string& base);
+        static double               lnTypeLabels(const std::vector<std::string>& types, std::vector<Fossil>& fossils);
         static void                 fitRatePseudoPrior(FBDTreeModel* fm, PseudoPrior& d, const std::vector<bool>& spec, const std::string& path, double burn, const std::string& model);
         static double               lnPseudoPrior(FBDTreeModel* f, const PseudoPrior& d);
         static void                 writePseudoPriorState(std::ostream& os, const PseudoPrior& d);
@@ -64,13 +67,12 @@ class PathModel : public PhylogeneticModel {
 
     private:
         double                      dataPart(int k);
+        size_t                      rateEnd(void);
         std::vector<bool>           specificMask(FBDTreeModel* f);
         double                      lnRatePrior(FBDTreeModel* f);
         double                      lnPseudoPriorTerm(int k);
-        void                        readPseudoPrior(int k, const std::string& path, double burn);
-        double                      lnTypeLabels(FBDTreeModel* f, std::vector<Fossil>& fossils);
         void                        sync(int from);
-        void                        setState(int k, std::map<std::string,double>& mainRow, std::map<std::string,double>& latRow, const std::string& latentLog);
+        void                        setState(int k, const std::map<std::string,double>& mainRow, const std::map<std::string,double>& latRow, const std::string& mainLog, const std::string& latentLog);
         static void                 setRateString(SkylineRates& s, const std::vector<double>& v);
         std::vector<std::string>    clockNames(int k);
         std::vector<double>         clockValues(int k);
