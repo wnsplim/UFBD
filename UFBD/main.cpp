@@ -155,7 +155,7 @@ int main(int argc, const char* argv[]) {
     if(seq && hessian)
         Msg::error("-sequence and -hessian flags are mutually exclusive.");
     if(settings.clockOrCtmcConfigured() && seq == false && hessian == false)
-        Msg::warning("no -sequence or -hessian given, so the clock and substitution settings are ignored.");
+        Msg::warning("neither -sequence nor -hessian was given, so the clock and substitution settings are ignored.");
     std::vector<ClockModel> cm;
     for(const std::string& cn : settings.getClockModelNames())
         cm.push_back(cn == "gbm" ? ClockModel::GBM : ClockModel::UCLN);
@@ -219,7 +219,7 @@ int main(int argc, const char* argv[]) {
         mcmc->setVerbose(true);
         mcmc->setLabel(0);
         if(resume && std::ifstream(settings.getParamOutput() + ".ckp").good() == false && std::ifstream(ChainRunner::tunePath(settings.getParamOutput()) + ".ckp").good() == false)
-            Msg::error("-resume: nothing to resume from.");
+            Msg::error("-resume: no checkpoint exists (" + settings.getParamOutput() + ".ckp), so there is nothing to resume from.");
         if(resume && std::ifstream(settings.getParamOutput() + ".ckp").good()){
             mcmc->loadCheckpoint();
             mcmc->resumeOutputs();

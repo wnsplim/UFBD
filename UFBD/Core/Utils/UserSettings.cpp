@@ -803,17 +803,17 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         if (seqDataType == "aa" && empiricalModel == false)
             Msg::warning("amino-acid data (-datatype aa) with -ctmc_model gtr estimates 190 exchangeability parameters.");
         if (nstatesProvided)
-            Msg::warning("-n_states applies to the approximate-dating (-hessian) path only; ignoring it.");
+            Msg::warning("-n_states applies only with -hessian, so it is ignored with -sequence.");
     }
     if (hessianFile.empty() == false && nstatesProvided && datatypeProvided) {
         int implied = (seqDataType == "aa" ? 20 : 4);
         if (implied != nStates)
-            Msg::warning("-datatype implies " + std::to_string(implied) + " states but -n_states is " + std::to_string(nStates) + "; using " + std::to_string(nStates) + ".");
+            Msg::warning("-datatype implies " + std::to_string(implied) + " states, but -n_states is " + std::to_string(nStates) + ", so " + std::to_string(nStates) + " states are used.");
     }
     if (hessianFile.empty() == false && partitionFile.empty() == false)
-        Msg::warning("-partition (NEXUS charset) applies to the sequence path only; ignoring it under -hessian.");
+        Msg::warning("-partition applies only with -sequence, so it is ignored with -hessian.");
     if (hessianFile.empty() == false && (empiricalModel || numCats != 4 || useInvariant || freqMode != "model"))
-        Msg::warning("-ctmc_model, -ctmc_gamma_cat, -ctmc_inv and -ctmc_freq apply to the sequence path only; ignoring them under -hessian.");
+        Msg::warning("-ctmc_model, -ctmc_gamma_cat, -ctmc_inv and -ctmc_freq apply only with -sequence, so they are ignored with -hessian.");
 
     if (ageOffset > 0.0) {
         if (conditioningEvent != ConditioningEvent::EXTINCT)
@@ -826,7 +826,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         for (std::vector<double>* v : cutVecs)
             for (double t : *v) { if (haveCut == false || t < minCut) { minCut = t; haveCut = true; } }
         if (haveCut && ageOffset >= minCut)
-            Msg::error("-age_offset (" + std::to_string(ageOffset) + ") must be younger than the youngest rate change-time (" + std::to_string(minCut) + ").");
+            Msg::error("-age_offset (" + std::to_string(ageOffset) + ") must be younger than the youngest skyline time (" + std::to_string(minCut) + ").");
         for (std::vector<double>* v : cutVecs)
             for (double& t : *v) t -= ageOffset;
         if (conditionAgePriorSet) {
@@ -867,8 +867,8 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         Groups na = select(ga, ""), nb = select(gb, "");
         for (size_t i = 0; i < std::max(na.size(), nb.size()); i++)
             if (i >= na.size() || i >= nb.size() || na[i] != nb[i])
-                Msg::error("-config_bf " + bfConfigPath + ": [model 1] differs from [model 0] apart from the rate, clock and substitution sections, at '"
-                           + (i < nb.size() ? nb[i].first : na[i].first) + "'; for now, the two models may differ only in [lambda], [mu], [psi <type>], [clock] and [substitution] blocks.");
+                Msg::error("-config_bf " + bfConfigPath + ": [model 1] and [model 0] differ at '" + (i < nb.size() ? nb[i].first : na[i].first)
+                           + "', outside the rate, clock and substitution sections. The two models may differ only in the [lambda], [mu], [psi <type>], [clock] and [substitution] sections.");
         sharedLambda = select(ga, "lambda") == select(gb, "lambda");
         sharedMu = select(ga, "mu") == select(gb, "mu");
         sharedPsi = select(ga, "psi") == select(gb, "psi");
@@ -880,7 +880,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         sharedClock = select(ga, "clock") == select(gb, "clock") && partitionOf(ga) == partitionOf(gb);
         sharedSubst = select(ga, "substitution") == select(gb, "substitution");
         if (parametersOut.empty())
-            Msg::error("-config_bf " + bfConfigPath + ": log_output is missing before [model 0]; every Bayes factor run writes under it.");
+            Msg::error("-config_bf " + bfConfigPath + ": set log_output before [model 0]. Every run of the Bayes factor calculation writes its output files under that prefix.");
         std::string logBase = parametersOut.substr(0, parametersOut.size() - 4);
         for (int k = 0; k < 2; k++)
             priorLogGiven[k] = bf.priorLog[k].empty() == false;
@@ -916,8 +916,8 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 return s.empty() ? std::string("none") : s;
             };
             if (ta.size() > 1 && tb.size() > 1 && ta != tb)
-                Msg::error("-config_bf: when both models have multiple psi types they must name the same types ([model 0] names "
-                           + joined(ta) + ", [model 1] names " + joined(tb) + "); to compare one psi against several types, give one model a single [psi] section.");
+                Msg::error("-config_bf: when both models have several psi types, they must name the same types, but [model 0] names "
+                           + joined(ta) + " and [model 1] names " + joined(tb) + ". To compare one psi with several types, give one model a single [psi] section.");
             parametersOutBase = parametersOut;
             treeOutBase = treeOut;
             if (bfLadder.size() == 1)
@@ -929,16 +929,16 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
             Msg::error("psi_rj_main cannot be combined with -config_bf.");
         std::vector<std::string>::iterator it = std::find(psiTypeNames.begin(), psiTypeNames.end(), psiRjMainName);
         if (psiTypeNames.size() < 2 || it == psiTypeNames.end())
-            Msg::error("psi_rj_main = " + psiRjMainName + " must name one of two or more [psi <type>] sections.");
+            Msg::error("psi_rj_main = " + psiRjMainName + " must name one of the [psi <type>] sections, and there must be at least two such sections.");
         psiRjMain = (int)(it - psiTypeNames.begin());
     }
 
 
     if (sbcMode == false) {
         if (treeOut.empty())
-            Msg::warning("no tree output file specified (-tree_output).");
+            Msg::warning("no tree output file was specified (-tree_output).");
         if (parametersOut.empty())
-            Msg::warning("no parameter output file specified (-log_output).");
+            Msg::warning("no parameter output file was specified (-log_output).");
     }
 }
 
@@ -958,7 +958,7 @@ void UserSettings::parsePriorInto(const std::string& spec, Probability::PriorFam
     for (char& ch : fam) ch = std::tolower((unsigned char)ch);
     if (fam == "empirical") {
         std::string path = spec.substr(cp + 1);
-        if (path.empty()) Msg::error("empirical prior needs a file with numbers, one per line.");
+        if (path.empty()) Msg::error("empirical prior \"" + spec + "\" names no file. Write empirical:<file>, where the file holds one number per line.");
         family = Probability::PriorFamily::EMPIRICAL;
         int idx = Probability::Empirical::load(path);
         p1 = (double)idx;
@@ -971,7 +971,7 @@ void UserSettings::parsePriorInto(const std::string& spec, Probability::PriorFam
     std::string tok;
     while (std::getline(ss, tok, ',')) {
         double x;
-        if (parseGrammarNumber(tok, x) == false) Msg::error("prior parameter \"" + tok + "\" is not a number or log(number) in \"" + spec + "\".");
+        if (parseGrammarNumber(tok, x) == false) Msg::error("prior parameter \"" + tok + "\" in \"" + spec + "\" is not a number or log(number).");
         ps.push_back(x);
     }
     if (fam == "exp" || fam == "exponential") {
@@ -984,13 +984,13 @@ void UserSettings::parsePriorInto(const std::string& spec, Probability::PriorFam
         if ((ps.size() != 2 && ps.size() != 3) || ps[1] <= 0.0) Msg::error("lognormal prior needs mu,sigma with sigma>0 and an optional offset: lognormal:mu,sigma[,offset].");
         family = Probability::PriorFamily::LOGNORMAL; p1 = ps[0]; p2 = ps[1]; if (ps.size() == 3) p3 = ps[2];
     } else if (fam == "unif" || fam == "uniform") {
-        if (ps.size() != 2 || ps[0] >= ps[1]) Msg::error("unif prior needs a<b: unif:a,b.");
+        if (ps.size() != 2 || ps[0] >= ps[1]) Msg::error("unif prior \"" + spec + "\" needs two numbers a < b, written unif:a,b.");
         family = Probability::PriorFamily::UNIFORM; p1 = ps[0]; p2 = ps[1];
     } else if (fam == "normal") {
         if ((ps.size() != 2 && ps.size() != 3) || ps[1] <= 0.0) Msg::error("normal prior needs mean,sd with sd>0 and an optional offset: normal:mean,sd[,offset].");
         family = Probability::PriorFamily::NORMAL; p1 = ps[0]; p2 = ps[1]; if (ps.size() == 3) p3 = ps[2];
     } else if (fam == "truncnormal" || fam == "truncnorm") {
-        if ((ps.size() != 2 && ps.size() != 3) || ps[1] <= 0.0) Msg::error("truncnormal prior needs mean,sd with sd>0 and an optional lower/offset: truncnormal:mean,sd[,offset].");
+        if ((ps.size() != 2 && ps.size() != 3) || ps[1] <= 0.0) Msg::error("truncnormal prior \"" + spec + "\" needs mean and sd with sd > 0, and optionally an offset that sets the lower truncation point, written truncnormal:mean,sd[,offset].");
         family = Probability::PriorFamily::TRUNCATED_NORMAL; p1 = ps[0]; p2 = ps[1]; if (ps.size() == 3) p3 = ps[2];
     } else if (fam == "improper") {
         if (ps.size() > 1) Msg::error("improper prior takes at most an offset: improper[:offset].");
@@ -1051,7 +1051,7 @@ void UserSettings::printHelp(void){
 Every setting can be given as a flag (below) or in a config file. When a
 setting appears in both, the config file is prioritized.
 
-Following prior distribution families are supported:
+The following prior distribution families are supported:
   improper | <number> (fixed value) | exp:rate | gamma:shape,rate |
   lognormal:mu,sigma | unif:a,b | normal:mean,sd | truncnormal:mean,sd
 Any number may be written log(x) (base e), e.g. normal:log(0.2),1.6
@@ -1061,7 +1061,7 @@ REQUIRED
                           CROWN|TOTAL|STEM, and an optional preservation type
   -conditioning <event> [prior]
                           event = crown | origin | anysample | extinct;
-                          with the root-age prior (default improper)
+                          prior = the prior on the root age (default improper)
 
 INPUT
   -backbone_tree <file>   rooted binary NEWICK or NEXUS tree; if not given,
@@ -1074,11 +1074,11 @@ INPUT
 
 OUTPUT  (prefixes: the engine writes .log/.trees/.tree, _chainN per chain)
   -log_output <prefix>    parameter log: merged across parallel chains as
-                          <prefix>.log, per chain as <prefix>_chainN.log
-  -tree_output <prefix>   per-sample trees (same naming) plus the posterior
-                          mean tree <prefix>.tree
-                          The full console output is also saved to
-                          <prefix>.console.txt
+                          <prefix>.log, per chain as <prefix>_chainN.log;
+                          also the posterior mean tree <prefix>.tree and the
+                          full console output <prefix>.console.txt
+  -tree_output <prefix>   per-sample trees, named the same way as the
+                          parameter log (<prefix>.trees, <prefix>_chainN.trees)
   -no_latent_log          suppress the <prefix>_latent.log per-sample latent
                           trace log
 
@@ -1089,15 +1089,16 @@ MCMC
   -burn_in <frac>         burn-in fraction (default 0.25)
   -parallel_chains <N>    independent replicate runs (>=2 needed for R-hat) (default 4)
   -coupled_chains <N>     Metropolis-coupled chains per run (>=2 enables MC3) (default 1)
-  -delta_temperature <x>  MC3 initial temperature spacing (default 0.1); the range
-                          self-tunes toward ~0.40 adjacent DEO swap acceptance
+  -delta_temperature <x>  MC3 initial temperature spacing (default 0.1); the ladder then
+                          tunes itself toward a swap acceptance of about 0.40 between
+                          adjacent chains (DEO swaps)
   -swap_interval <N>      MC3 generations between chain-swap attempts (default 1000)
   -cores <N>              number of threads (default 1)
   -seed <N>               random number seed (default random)
 
 CONVERGENCE  (used only with -chain_length auto)
-  -max_gen <N>            hard generation cap (default 1000000000)
-  -min_ess <N>            pooled bulk-ESS and tail-ESS floor (default 100 x parallel_chains)
+  -max_gen <N>            maximum number of generations (default 1000000000)
+  -min_ess <N>            minimum pooled bulk-ESS and tail-ESS (default 100 x parallel_chains)
   -rhat <x>               target maximum rank-normalized split R-hat (default 1.01)
 
 FBD RATES
@@ -1111,14 +1112,16 @@ SKYLINE  (piecewise-constant rates; write lambda, mu, or psi for <r>)
                           interior time boundaries (k boundaries -> k+1 bins)
   -<r>_groups <g,...>     group id per bin; bins sharing an id share a rate
   -<r>_prior_mode <indep|ou>
-                          independent rates, or log-OU smoothing across bins (default indep)
+                          independent rates, or an OU prior on the log rates across bins
+                          (default indep)
   -<r>_prior <gid>:<prior>
-                          per-bin prior for one bin group (mode indep only)
+                          prior for the bins of group <gid> (mode indep only)
   -<r>_ou_theta <prior>   prior on the OU level theta (a log rate), written as for -<r>_prior (mode ou) (default normal:log(0.2),1.6)
   -<r>_ou_sd <prior>      prior on the OU log-SD, written as for -<r>_prior (mode ou) (default exp:3.3333)
   -<r>_ou_nu <prior>      prior on the OU reversion rate /Myr, written as for -<r>_prior (mode ou) (default exp:2)
-  -age_offset <t_min>     shift the skyline support to [t_min, inf); using this implies
-                          assuming that the clade went extinct by t_min if t_min>0 (default 0)
+  -age_offset <t_min>     shift the skyline support to [t_min, inf); a t_min > 0 assumes that
+                          the clade went extinct by t_min and requires -conditioning extinct
+                          (default 0)
 
 MULTIPLE PRESERVATION TYPES  (split psi by type)
   -psi_types <name,...>   declare types; names must match the fossil table's 6th column
@@ -1128,8 +1131,8 @@ MULTIPLE PRESERVATION TYPES  (split psi by type)
     -psi_prior_mode type1:ou
     -psi_ou_theta type1:normal:log(0.05),1
   A -psi_* flag without a prefix applies to every type without one of its own.
-  -psi_rj_main <name>     reversible jump between model 0 (each type its own psi) and model 1
-                          (every fossil under the psi of type <name>); tunes the prior odds of
+  -psi_rj_main <name>     reversible jump between model 0 (each type has its own psi) and model 1
+                          (all fossils share the psi of type <name>); tunes the prior odds of
                           model 1 (<log_output>_tune.log), then writes <log_output>.log
 
 CLOCK & SUBSTITUTION MODEL
@@ -1144,7 +1147,7 @@ CLOCK & SUBSTITUTION MODEL
   -ctmc_freq <model|empirical|estimated>
                           equilibrium frequencies (default model)
   -clock_partitions <all|single|name:(part,...)|...>
-                          sequence partitions sharing one clock. all (default) = one clock per
+                          sequence partitions sharing one clock; all (default) = one clock per
                           sequence partition, single = one clock for all sequence partitions
   -clock_model <ucln|gbm> uncorrelated lognormal, or geometric Brownian motion (default ucln);
                           or one per clock partition, "name:value | name:value"
@@ -1152,21 +1155,24 @@ CLOCK & SUBSTITUTION MODEL
                           (default 2,2000,1)
   -sigma2_gamma <a,b,c>   gamma-Dirichlet prior on the rate variances across clock partitions
                           (default 1,10,1)
-                          a = shape, b = rate, c = Dirichlet concentration; singleton = gamma(a,b)
+                          a = shape, b = rate, c = Dirichlet concentration; with one clock
+                          partition, the prior is gamma(a,b)
   -sigma2_param <c|nc>    parameterization of the sigma2 move: centered (default) or
                           non-centered; or one per clock partition, "name:value | name:value"
 
 BAYES FACTOR (ln BF of [model 1] over [model 0], by bridge sampling along the model-switch
-path; without -bf_t: posterior runs for models without prior_log, tuning pilot runs, followed
-by the MCMC for selected points, and then ln BF is calculated)
-  -config_bf <file>       Bayes factor config, used instead of -config: MCMC and bf_*
-                          settings first, then [model 0] and [model 1], each a full model
-                          config that may name an existing posterior with prior_log; the
+path. Without -bf_t, UFBD runs the posterior of each model that has no prior_log, then the
+pilot runs, then the MCMC at the selected path points, and then calculates ln BF.)
+  -config_bf <file>       Bayes factor config, used instead of -config. It holds the MCMC and
+                          bf_* settings first, then [model 0] and [model 1], each a full model
+                          config that may name an existing posterior with prior_log. The
                           models must differ only in the rate, clock and substitution sections
-  -bf_parallel_runs <n>   runs (posteriors, pilot runs, path points) in parallel, each with
-                          -cores cores, so n x cores cores in total (default 1)
-  -bf_t <t|t1,t2,...>     run only the path point(s) t in [0,1] without pilot run
-  -bf_pilot               with one -bf_t point: run it as a pilot run
+  -bf_parallel_runs <n>   number of runs (posteriors, pilot runs, path points) to run in
+                          parallel, each with -cores cores, so n x cores cores in total
+                          (default 1)
+  -bf_t <t|t1,t2,...>     run only the path point(s) t in [0,1], without a pilot run; several
+                          points must start at 0 and end at 1
+  -bf_pilot               with one -bf_t point, run it as a pilot run
   -bf_posterior <0|1>     run only the posterior of [model 0] or [model 1]
   -bf_pilot_nodes <n>     number of Gauss-Legendre nodes for the pilot run (default 8)
   -bf_pilot_frac <x>      pilot run length as a fraction of the generations in the posterior
@@ -1174,7 +1180,7 @@ by the MCMC for selected points, and then ln BF is calculated)
   -bf_intervals <x>       path intervals per unit of thermodynamic length (default 2)
   -bf_bridge_tol <x>      bridge iteration stops when ln BF changes by less than x
                           (default 1e-10)
-  -bf_bridge_iter <n>     most bridge iterations (default 10000)
+  -bf_bridge_iter <n>     maximum number of bridge iterations (default 10000)
   -bf_batches <n>         batches per run for the standard error (default 20)
 
 OTHER

@@ -30,7 +30,7 @@ MODES
   emit       write N simulated datasets to disk
   simulate   simulate N datasets and print summary statistics only
   infer      draw -> simulate -> infer -> rank; outputs <prefix>_ranks.tsv
-  summarize  ECDF gamma summary of rank files (e.g. chunk files merged)
+  summarize  ECDF gamma summary of rank files (e.g. merged chunk files)
 
 SBC FLAGS
   -sbc_mode <emit|simulate|infer|summarize>
@@ -174,7 +174,7 @@ int main(int argc, const char* argv[]){
     if(repsSet == false)
         Msg::error("-sbc_reps is required.");
     if(mode == "emit" && out.empty())
-        Msg::error("-sbc_out (output file prefix) is required.");
+        Msg::error("-sbc_out (output file prefix) is required with -sbc_mode emit.");
 
     Probability::PriorSpec lambdaPrior = s.getLambdaPrior();
     Probability::PriorSpec muPrior     = s.getMuPrior();

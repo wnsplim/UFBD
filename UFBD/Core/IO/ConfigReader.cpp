@@ -134,7 +134,7 @@ void translateTimeBins(const std::string& spec, std::map<std::string,int>& nameT
         for(const Iv& iv : ivs)
             if(iv.lo <= mid && mid < iv.hi){ found = iv.gid; count++; }
         if(count == 0)
-            Msg::error("config time_bins leave a gap on [" + fmtNum(los[b]) + ", " + fmtNum(his[b]) + "); bins must tile [" + fmtNum(tmin) + ", inf).");
+            Msg::error("config time_bins leave a gap on [" + fmtNum(los[b]) + ", " + fmtNum(his[b]) + "); the bins must cover [" + fmtNum(tmin) + ", inf) with no gaps.");
         if(count > 1)
             Msg::error("config time_bins overlap on [" + fmtNum(los[b]) + ", " + fmtNum(his[b]) + "); bins must be disjoint.");
         groups.push_back(found);

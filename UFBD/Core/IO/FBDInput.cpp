@@ -140,7 +140,7 @@ void FBDInput::readClades(std::string path){
         rows.erase(rows.begin());
     for(std::vector<std::string>& row : rows){
         if(row.size() < 2)
-            Msg::error("clade row needs a name and a comma-separated taxon list");
+            Msg::error("clade_def row '" + row[0] + "' needs two tab-separated columns, a clade name and a comma-separated list of taxa.");
         std::string name = row[0];
         std::vector<std::string> taxa = splitOnComma(row[1]);
         if(taxa.empty()){
@@ -162,7 +162,7 @@ void FBDInput::readFossils(std::string path){
         rows.erase(rows.begin());
     for(std::vector<std::string>& row : rows){
         if(row.size() < 3)
-            Msg::error("fossil row needs: taxon, min_age, max_age, clade, assignment");
+            Msg::error("fossils row '" + row[0] + "' needs at least the tab-separated columns taxon, min_age, and max_age.");
         std::string taxon = row[0];
         double minAge = 0.0;
         double maxAge = 0.0;
@@ -186,7 +186,7 @@ void FBDInput::addFossil(const std::string& taxon, double minAge, double maxAge,
         Msg::error("fossil '" + taxon + "' has a negative age");
     double off = UserSettings::userSettings().getAgeOffset();
     if(off > 0.0 && minAge < off)
-        Msg::error("fossil '" + taxon + "' youngest age " + std::to_string(minAge) + " is below the youngest rate-bin edge " + std::to_string(off) + ".");
+        Msg::error("fossil '" + taxon + "' has min_age " + std::to_string(minAge) + ", which is younger than the youngest time_bins edge (-age_offset " + std::to_string(off) + ").");
 
     Node* tip = tree->getTaxonNode(taxon);
     if(tip != nullptr && tip->getIsTip() && UserSettings::userSettings().getModel() != Model::RFBD){
@@ -194,7 +194,7 @@ void FBDInput::addFossil(const std::string& taxon, double minAge, double maxAge,
         return;
     }
     if(cladeName.empty() || assignStr.empty())
-        Msg::error("fossil row needs: taxon, min_age, max_age, clade, assignment");
+        Msg::error("fossil '" + taxon + "' needs both a clade and an assignment.");
 
     Clade* clade = nullptr;
     for(Clade& c : clades)
@@ -212,22 +212,22 @@ void FBDInput::addFossil(const std::string& taxon, double minAge, double maxAge,
                           :                          Assignment::TOTAL;
 
     if(assignment == Assignment::STEM && maxAge == 0.0)
-        Msg::error("fossil '" + taxon + "' is an unresolved extant assigned STEM; UE can only be CROWN or TOTAL.");
+        Msg::error("fossil '" + taxon + "' has max_age 0, which makes it an unsampled extant, and an unsampled extant can only be CROWN or TOTAL.");
 
     if(assignment == Assignment::CROWN && clade->getCrown()->getIsTip()){
-        Msg::warning("fossil '" + taxon + "' assigned CROWN to singleton clade '" + cladeName + "'; treating as TOTAL");
+        Msg::warning("fossil '" + taxon + "' is assigned CROWN in clade '" + cladeName + "', which has a single taxon, so it is treated as TOTAL.");
         assignment = Assignment::TOTAL;
     }
     if(assignment == Assignment::STEM && clade->getCrown()->getIsTip()){
-        Msg::warning("fossil '" + taxon + "' assigned STEM to singleton clade '" + cladeName + "'; treating as TOTAL");
+        Msg::warning("fossil '" + taxon + "' is assigned STEM in clade '" + cladeName + "', which has a single taxon, so it is treated as TOTAL.");
         assignment = Assignment::TOTAL;
     }
     if(assignment == Assignment::STEM && clade->getCrown() == tree->getCrown()
        && UserSettings::userSettings().getConditioning() == Conditioning::CROWN)
-        Msg::error("conditioning on crown node but fossil '" + taxon + "' is STEM on the whole-tree clade '" + cladeName + "'.");
+        Msg::error("with -conditioning crown, fossil '" + taxon + "' cannot be assigned STEM in clade '" + cladeName + "', because that clade covers the whole tree.");
     if(UserSettings::userSettings().getConditioning() == Conditioning::CROWN
        && assignment == Assignment::TOTAL && clade->getCrown() == tree->getCrown()){
-        Msg::warning("conditioning on crown node but fossil '" + taxon + "' is TOTAL on the whole-tree clade '" + cladeName + "'; treating as CROWN");
+        Msg::warning("with -conditioning crown, fossil '" + taxon + "' is assigned TOTAL in clade '" + cladeName + "', which covers the whole tree, so it is treated as CROWN.");
         assignment = Assignment::CROWN;
     }
 
@@ -250,13 +250,13 @@ void FBDInput::readUnsampledExtants(std::string path){
     std::set<std::string> seen;
     for(std::vector<std::string>& row : rows){
         if(row.size() < 3)
-            Msg::error("unsampled extant row needs: clade, assignment, number of UE");
+            Msg::error("unsampled_extants row '" + row[0] + "' needs the tab-separated columns clade, assignment, and number.");
         std::string cladeName = row[0];
         std::string assignStr = row[1];
         for(char& ch : assignStr)
             ch = (char)std::toupper((unsigned char)ch);
         if(assignStr == "STEM")
-            Msg::error("unsampled extants of clade '" + cladeName + "' are assigned STEM; UE can only be CROWN or TOTAL.");
+            Msg::error("unsampled extants of clade '" + cladeName + "' are assigned STEM, but unsampled extants can only be CROWN or TOTAL.");
         if(assignStr != "CROWN" && assignStr != "TOTAL")
             Msg::error("unsampled extants of clade '" + cladeName + "' have unknown assignment '" + row[1] + "'");
 
@@ -313,7 +313,7 @@ void FBDInput::assignFossilAwareAges(void){
                         us.getConditionAgePrior() == Probability::PriorFamily::EMPIRICAL);
         double hi = bounded ? us.getConditionAgePriorP2() : std::numeric_limits<double>::max();
         if(bounded && hi < maxBound)
-            Msg::error("conditioning age prior upper bound (" + std::to_string(hi) + ") is younger than the oldest fossil (" + std::to_string(maxBound) + ")");
+            Msg::error("the upper bound " + std::to_string(hi + us.getAgeOffset()) + " of the -conditioning age prior is younger than the oldest fossil age " + std::to_string(maxBound + us.getAgeOffset()) + ".");
         if(origin == false){
             double mean = Probability::priorMean(us.getConditionAgePrior(), us.getConditionAgePriorP1(), us.getConditionAgePriorP2(), us.getConditionAgePriorP3());
             double target = mean;
