@@ -103,8 +103,8 @@ bool ConvergenceRunner::run(void){
             stale++;
         }
         if(stale > 0)
-            Msg::error("-parallel_chains " + std::to_string(replicates.size()) + " differs from the pre-resume -parallel_chains "
-                       + std::to_string(replicates.size() + stale));
+            Msg::error("-parallel_chains " + std::to_string(replicates.size()) + " differs from the -parallel_chains " + std::to_string(replicates.size() + stale)
+                       + " the checkpoints were written with. Resume with -parallel_chains " + std::to_string(replicates.size() + stale) + ".");
         std::string missing;
         int nMissing = 0;
         std::vector<bool> fresh;
@@ -114,7 +114,7 @@ bool ConvergenceRunner::run(void){
                 missing += (nMissing++ > 0 ? ", " : "") + pf + ".ckp";
         }
         if(nMissing == (int)repParamFiles.size())
-            Msg::error("-resume: nothing to resume from.");
+            Msg::error("-resume: no checkpoint exists (" + missing + "), so there is nothing to resume from.");
         for(size_t r = 0; r < replicates.size(); r++){
             if(fresh[r])
                 continue;
@@ -222,9 +222,9 @@ bool ConvergenceRunner::run(void){
     if(verbose && autoStop){
         std::string crit = (replicates.size() >= 2) ? "R-hat/ESS" : "ESS";
         if(stoppedEarly)
-            std::cout << "Auto-stop at generation " << gen << ": " << crit << " stopping thresholds reached for all logged metrics.\n";
+            std::cout << "Auto-stop at generation " << gen << ": all logged metrics met the " << crit << " thresholds.\n";
         else
-            Msg::warning("reached the -max-gen limit (" + std::to_string(maxGen) + ") with convergence metric(s) still below the " + crit + " thresholds.");
+            Msg::warning("the run reached -max_gen " + std::to_string(maxGen) + " before all logged metrics met the " + crit + " thresholds.");
     }
     return met;
 }
@@ -317,7 +317,7 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
     if(verbose && finalPass && nBelow > 0 && s.getAutoChainLength() && s.getPathPilot() == false){
         std::string crit = multiChain ? ("R-hat > " + std::to_string(rhatMax) + " or bulk/tail ESS < " + std::to_string((int)essFloor))
                                       : ("bulk/tail ESS < " + std::to_string((int)essFloor));
-        std::string msg = std::to_string(nBelow) + " of " + std::to_string(nP) + " metrics have " + crit + " : ";
+        std::string msg = std::to_string(nBelow) + " of " + std::to_string(nP) + " metrics have " + crit + ": ";
         for(size_t i = 0; i < bad.size(); i++){ msg += bad[i]; if(i + 1 < bad.size()) msg += ", "; }
         if((int)bad.size() < nBelow) msg += ", ...";
         Msg::warning(msg);

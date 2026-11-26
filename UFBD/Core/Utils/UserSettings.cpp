@@ -30,7 +30,7 @@ static void parseSkylineTimes(const std::string& flag, const std::string& val, s
         if (t <= 0.0)
             Msg::error("flag \"" + flag + "\" values must be positive, but got \"" + tok + "\".");
         if (out.empty() == false && t <= out.back())
-            Msg::error("flag \"" + flag + "\" must be strictly increasing.");
+            Msg::error("flag \"" + flag + "\": the times must be strictly increasing, but \"" + tok + "\" is not larger than the time before it.");
         out.push_back(t);
     }
 }
@@ -228,7 +228,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
             }
         }
         if (configFilePath.empty() == false && bfConfigPath.empty() == false)
-            Msg::error("-config_bf holds both models and the MCMC settings, so it replaces -config.");
+            Msg::error("-config and -config_bf cannot be used together. -config_bf holds both models and the MCMC settings, so it replaces -config.");
         cliArgs = arguments;
         if (bfConfigPath.empty() == false) {
             for (size_t i = 1; i + 1 < arguments.size(); i++)
@@ -412,6 +412,8 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 bfFlag = arg;
                 if (arg == "-bf_t") {
                     parseTs(arg, val, "numbers separated by commas", bfLadder, bfLadderText);
+                    if (bfLadder.size() > 1 && (bfLadder.front() != 0.0 || bfLadder.back() != 1.0))
+                        Msg::error("flag \"-bf_t\": with several values, the first must be 0 and the last 1, but they are " + bfLadderText.front() + " and " + bfLadderText.back() + ".");
                 } else if (arg == "-bf_pilot_frac") {
                     bfPilotFrac = parsePositive(arg, val);
                     if (bfPilotFrac > 1.0)
@@ -502,7 +504,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
             } else if (arg == "-lambda_prior_mode" || arg == "-mu_prior_mode") {
                 std::string v = val;
                 for (char& ch : v) ch = std::tolower((unsigned char)ch);
-                if (v != "indep" && v != "ou") Msg::error("flag \"" + arg + "\" expects indep|ou, but got \"" + val + "\".");
+                if (v != "indep" && v != "ou") Msg::error("flag \"" + arg + "\" expects indep or ou, but got \"" + val + "\".");
                 RateMode m = (v == "ou") ? RateMode::OU : RateMode::INDEP;
                 if (arg == "-lambda_prior_mode") lambdaMode = m;
                 else muMode = m;
@@ -511,7 +513,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 size_t c = val.find(':');
                 if (c != std::string::npos) { nm = val.substr(0, c); ms = val.substr(c + 1); }
                 for (char& ch : ms) ch = std::tolower((unsigned char)ch);
-                if (ms != "indep" && ms != "ou") Msg::error("flag \"-psi_prior_mode\" expects indep|ou, but got \"" + ms + "\".");
+                if (ms != "indep" && ms != "ou") Msg::error("flag \"-psi_prior_mode\" expects indep or ou, but got \"" + ms + "\".");
                 RateMode m = (ms == "ou") ? RateMode::OU : RateMode::INDEP;
                 if (nm.empty()) psiMode = m; else psiModeByName[nm] = m;
             } else if (arg == "-lambda_ou_theta" || arg == "-mu_ou_theta" || arg == "-psi_ou_theta"
@@ -602,7 +604,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                     clockGroupMembers.push_back(members);
                 }
                 if (clockGroupLabels.empty())
-                    Msg::error("flag \"-clock_partitions\" expects all, single, or \"label:members | label:members\".");
+                    Msg::error("flag \"-clock_partitions\" expects all, single, or \"name:(part,part) | name:(part)\", but got \"" + val + "\".");
             } else if (arg == "-clock_model") {
                 clockModelNames.clear();
                 clockModelByLabel.clear();
@@ -626,7 +628,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 if (clockModelNames.empty() && clockModelByLabel.empty())
                     Msg::error("flag \"-clock_model\" expects ucln or gbm, or \"name:value | name:value\" per clock partition.");
                 if (clockModelNames.empty() == false && clockModelByLabel.empty() == false)
-                    Msg::error("flag \"-clock_model\" got \"" + val + "\". Use one value for every clock partition,"
+                    Msg::error("flag \"-clock_model\" got \"" + val + "\", which mixes a value without a name and values with names. Use one value for every clock partition,"
                                " or one value per clock partition by name.");
                 if (clockModelNames.empty() == false)
                     clockModelName = clockModelNames[0];
@@ -659,7 +661,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 if (sigma2ParamList.empty() && sigma2ParamByLabel.empty())
                     Msg::error("flag \"-sigma2_param\" expects c or nc, or \"name:value | name:value\" per clock partition.");
                 if (sigma2ParamList.empty() == false && sigma2ParamByLabel.empty() == false)
-                    Msg::error("flag \"-sigma2_param\" got \"" + val + "\". Use one value for every clock partition,"
+                    Msg::error("flag \"-sigma2_param\" got \"" + val + "\", which mixes a value without a name and values with names. Use one value for every clock partition,"
                                " or one value per clock partition by name.");
             } else if (arg == "-datatype") {
                 datatypeProvided = true;
@@ -758,13 +760,13 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         seed = std::random_device{}();
 
     if (conditioningEvent == ConditioningEvent::EXTINCT && rho != 1.0) {
-        Msg::warning("extinct conditioning has no extant sampling; forcing rho = 1 (was " + std::to_string(rho) + ").");
+        Msg::warning("with -conditioning extinct, no extant taxa are sampled, so rho is set to 1 (it was " + std::to_string(rho) + ").");
         rho = 1.0;
     }
 
     int maxNumThreads = (int)std::thread::hardware_concurrency();
     if (maxNumThreads <= 0) {
-        Msg::warning("could not determine hardware thread count; using single thread.");
+        Msg::warning("could not determine the number of hardware threads, so only one core is used.");
         maxNumThreads = 1;
     }
 
@@ -781,7 +783,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         Msg::error("flag \"-chain_length\" must be a positive integer (or \"auto\").");
 
     if (sbcMode == false && autoChainLength == false && (essThresholdSet || rhatThresholdSet))
-        Msg::warning("-min_ess / -rhat apply only under -chain_length auto; ignored for a fixed chain length.");
+        Msg::warning("-min_ess and -rhat apply only with -chain_length auto, so they are ignored for a fixed chain length.");
 
     if (thinning < 1)
         Msg::error("flag \"-thinning\" must be a positive integer.");
@@ -790,14 +792,14 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         if (coresProvided)
             Msg::warning("requested " + std::to_string(numCores) +
                          " cores, but only " + std::to_string(maxNumThreads) +
-                         " available; capping at " + std::to_string(maxNumThreads) + ".");
+                         " are available, so the run uses " + std::to_string(maxNumThreads) + ".");
         numCores = maxNumThreads;
     }
 
     bool empiricalModel = (substModel != "gtr");
     if (sequenceFile.empty() == false) {
         if (empiricalModel && seqDataType == "nt")
-            Msg::error("empirical rate matrix (-ctmc_model " + substModel + ") is for amino-acid; use -datatype aa.");
+            Msg::error("-ctmc_model " + substModel + " (a PAML matrix file for amino acids) requires -datatype aa.");
         if (seqDataType == "aa" && empiricalModel == false)
             Msg::warning("amino-acid data (-datatype aa) with -ctmc_model gtr estimates 190 exchangeability parameters.");
         if (nstatesProvided)

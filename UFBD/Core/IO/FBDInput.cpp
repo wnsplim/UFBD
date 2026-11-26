@@ -18,7 +18,7 @@
 
 FBDInput::FBDInput(std::string treePath, std::string cladesPath, std::string fossilPath, std::string uePath){
     if(treePath.empty()){
-        Msg::warning("no backbone tree supplied (-backbone_tree): running with an empty backbone (every taxon unresolved).");
+        Msg::warning("no backbone tree was given (-backbone_tree), so every taxon is treated as unresolved.");
         tree = new Tree("");
         clades.push_back(Clade("whole", std::vector<std::string>(), tree->getCrown(), tree->getCrown()->getAncestor()));
     }else{

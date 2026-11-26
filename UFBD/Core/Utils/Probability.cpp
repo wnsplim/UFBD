@@ -152,8 +152,8 @@ std::pair<double,double> Probability::priorSupport(PriorFamily family, double p1
     switch(family){
         case PriorFamily::UNIFORM:          return {p1, p2};
         case PriorFamily::TRUNCATED_NORMAL: return {(lower > offset) ? lower : offset, upper};
-        case PriorFamily::NORMAL:
-        case PriorFamily::EMPIRICAL:        return {-INFINITY, INFINITY};
+        case PriorFamily::NORMAL:           return {lower, upper};
+        case PriorFamily::EMPIRICAL:        return {offset, p2};
         default:                            return {offset, INFINITY};
     }
 }

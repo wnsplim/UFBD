@@ -41,8 +41,8 @@ void Mcmc::init(void) {
     curLnP = model->lnPriorProbability();
     if(std::isfinite(curLnL) == false || std::isfinite(curLnP) == false){
         std::ostringstream os;
-        os << std::setprecision(6) << "the initial state has lnLikelihood " << curLnL
-           << " and lnPrior " << curLnP;
+        os << std::setprecision(6) << "the MCMC cannot start because the initial state has log likelihood " << curLnL
+           << " and log prior " << curLnP << "; both must be finite.";
         Msg::error(os.str());
     }
     gen = 0;
@@ -317,7 +317,7 @@ bool Mcmc::loadCheckpoint(void) {
     is >> gen >> storedSf;
     reconcileThinning(storedSf, thinning);
     if(checkpointIsCoupled(is))
-        Msg::error("-coupled_chains 1 but the checkpoint was written with Metropolis coupling");
+        Msg::error("-coupled_chains is 1, but the checkpoint was written with Metropolis coupling. Resume with the -coupled_chains of the original run.");
     checkDataShape(is, model);
     is >> curLnL >> curLnP;
     model->getRng()->readState(is);

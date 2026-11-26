@@ -75,7 +75,7 @@ ApproxBranchLengthLikelihood::ApproxBranchLengthLikelihood(const std::string& he
     cachedRoot(nullptr)
 {
     if(nStates < 2)
-        Msg::error("nStates must be >= 2");
+        Msg::error("-n_states must be at least 2, but it is " + std::to_string(nStates) + ".");
 
     readHessianFile(hessianFile);
 
@@ -161,10 +161,10 @@ void ApproxBranchLengthLikelihood::readHessianFile(const std::string& fn){
     };
     auto parseHeader = [&](size_t& idx, int& nsOut, std::string& newickOut){
         if(nextNonEmpty(idx) == false)
-            Msg::error("missing taxon count in hessian file");
+            Msg::error("the hessian file '" + fn + "' is empty.");
         std::istringstream iss(lines[idx]);
         if(!(iss >> nsOut))
-            Msg::error("invalid taxon count in hessian file");
+            Msg::error("the hessian file must start with the taxon count, but its first line is '" + lines[idx] + "'.");
         idx++;
         newickOut.clear();
         while(idx < lines.size()){
@@ -172,7 +172,7 @@ void ApproxBranchLengthLikelihood::readHessianFile(const std::string& fn){
             idx++;
         }
         if(newickOut.empty())
-            Msg::error("no Newick in hessian file");
+            Msg::error("the hessian file has no Newick tree after the taxon count.");
     };
 
     size_t idx = 0;
@@ -180,7 +180,7 @@ void ApproxBranchLengthLikelihood::readHessianFile(const std::string& fn){
     std::string newick;
     parseHeader(idx, ns, newick);
     if(ns < 3)
-        Msg::error("invalid taxon count in hessian file");
+        Msg::error("the hessian file gives " + std::to_string(ns) + " taxa; it needs at least 3.");
     nb = 2 * ns - 3;
 
     blMle.clear();
@@ -197,19 +197,19 @@ void ApproxBranchLengthLikelihood::readHessianFile(const std::string& fn){
         }
         if(bl.empty()) break;
         if((int)bl.size() != nb)
-            Msg::error("wrong MLE branch length count");
+            Msg::error("partition " + std::to_string(nPartitions + 1) + " of the hessian file has " + std::to_string(bl.size()) + " MLE branch lengths, but " + std::to_string(ns) + " taxa need " + std::to_string(nb) + ".");
         while((int)grad.size() < nb && idx < lines.size()){
             if(isHeaderAt(idx)) break;
             parseNumbers(lines[idx++], grad);
         }
         if((int)grad.size() != nb)
-            Msg::error("wrong gradient count");
+            Msg::error("partition " + std::to_string(nPartitions + 1) + " of the hessian file has " + std::to_string(grad.size()) + " gradient values, but " + std::to_string(ns) + " taxa need " + std::to_string(nb) + ".");
         while((int)hess.size() < nb * nb && idx < lines.size()){
             if(isHeaderAt(idx)) break;
             parseNumbers(lines[idx++], hess);
         }
         if((int)hess.size() != nb * nb)
-            Msg::error("wrong Hessian count");
+            Msg::error("partition " + std::to_string(nPartitions + 1) + " of the hessian file has " + std::to_string(hess.size()) + " Hessian values, but " + std::to_string(ns) + " taxa need " + std::to_string(nb * nb) + ".");
 
         blMle.push_back(bl);
         gradient.push_back(grad);
@@ -221,7 +221,7 @@ void ApproxBranchLengthLikelihood::readHessianFile(const std::string& fn){
             int nsNext = 0;
             parseHeader(idx, nsNext, newick);
             if(nsNext != ns)
-                Msg::error("taxon count differs between partitions");
+                Msg::error("partition " + std::to_string(nPartitions + 1) + " of the hessian file has " + std::to_string(nsNext) + " taxa, but partition 1 has " + std::to_string(ns) + ".");
         }
     }
 }
@@ -344,8 +344,8 @@ void ApproxBranchLengthLikelihood::resolveBranchOrder(void){
                 continue;
             for(const std::string& t : bipartitions[b])
                 if(hessTips.count(t) == 0)
-                    Msg::error("backbone tip '" + t + "' not in the Hessian tree");
-            Msg::error("backbone topology does not match the Hessian tree");
+                    Msg::error("backbone tip '" + t + "' is not in the tree of the hessian file.");
+            Msg::error("the backbone tree does not have the same topology as the tree of the hessian file.");
         }
     }
 
@@ -369,7 +369,7 @@ void ApproxBranchLengthLikelihood::resolveBranchOrder(void){
             if(used[k] == false && fits(b, k))
                 pick = k;
         if(pick < 0)
-            Msg::error("hessian file branch " + std::to_string(b + 1) + " has no branch of the same length in its own tree");
+            Msg::error("MLE branch length " + std::to_string(b + 1) + " in the hessian file does not match the length of any branch of the tree in that file.");
         used[pick] = true;
         ordered[b] = bipartitions[pick];
     }

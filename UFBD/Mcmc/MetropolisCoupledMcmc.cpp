@@ -110,7 +110,7 @@ double MetropolisCoupledMcmc::calcHeating(int idx){
 
 void MetropolisCoupledMcmc::init(void) {
     if(numCycles >= std::numeric_limits<unsigned long>::max())
-        Msg::error("number of cycles requested is greater than the largest possible value");
+        Msg::error("the number of generations requested is greater than the largest possible value.");
     RandomVariable::setActiveInstance(&swapRng);
     int idx = 0;
     for(PhylogeneticModel* m : models){
@@ -497,13 +497,13 @@ bool MetropolisCoupledMcmc::loadCheckpoint(void) {
     is >> gen >> storedSf;
     reconcileThinning(storedSf, thinning);
     if(checkpointIsCoupled(is) == false)
-        Msg::error("-coupled_chains " + std::to_string(numModels) + " but the checkpoint was written without Metropolis coupling");
+        Msg::error("-coupled_chains is " + std::to_string(numModels) + ", but the checkpoint was written without Metropolis coupling. Resume with -coupled_chains 1.");
     is >> deltaT >> nm >> swapAdaptCount >> swapAdaptAcc >> swapAdaptAtt
        >> numSwapSweeps >> roundTrips >> chainDecision;
     checkDataShape(is, models[0]);
     if(nm != numModels)
-        Msg::error("-coupled_chains " + std::to_string(numModels) + " differs from the pre-resume -coupled_chains "
-                   + std::to_string(nm));
+        Msg::error("-coupled_chains " + std::to_string(numModels) + " differs from the -coupled_chains " + std::to_string(nm)
+                   + " the checkpoint was written with. Resume with -coupled_chains " + std::to_string(nm) + ".");
     indices.assign(nm, 0);
     coldModelIdx = -1;
     for(int i = 0; i < nm; i++){

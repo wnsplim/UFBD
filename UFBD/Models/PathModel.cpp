@@ -35,7 +35,7 @@ static bool fromCache(PseudoPrior& d, const std::string& key){
 static void fitMvn(PseudoPrior& d, const std::vector<Eigen::VectorXd>& rows, const std::vector<Eigen::VectorXd>& ws, const std::string& what){
     int n = (int)rows.size(), k = (int)rows[0].size(), q = ws.empty() ? 0 : (int)ws[0].size();
     if(n <= k + q)
-        Msg::error(what + ": " + std::to_string(n) + " rows for " + std::to_string(k + q) + " coordinates; it needs more than " + std::to_string(k + q) + ".");
+        Msg::error(what + ": " + std::to_string(n) + " rows are too few to fit " + std::to_string(k + q) + " coordinates; the fit needs more than " + std::to_string(k + q) + " rows.");
     std::vector<Eigen::VectorXd> x(n, Eigen::VectorXd(k + q));
     Eigen::VectorXd mean = Eigen::VectorXd::Zero(k + q);
     for(int i = 0; i < n; i++){
@@ -92,7 +92,7 @@ std::vector<std::vector<double>> PathModel::readColumns(const std::string& path,
             catch(...) { Msg::error(key + ": '" + tok + "' is not a number."); }
         }
         if(r.size() != header.size())
-            Msg::error(key + ": a row has " + std::to_string(r.size()) + " values, the header has " + std::to_string(header.size()) + " names.");
+            Msg::error(key + ": a row has " + std::to_string(r.size()) + " values, but the header has " + std::to_string(header.size()) + " names.");
         std::vector<double> v;
         for(int c : col)
             v.push_back(r[c]);
@@ -316,7 +316,7 @@ void PathModel::readClockPseudoPrior(int k, const std::string& base, double burn
         std::vector<std::vector<double>> rm = readColumns(mainPath, mainCols, "model " + model + " posterior log " + mainPath);
         std::vector<std::vector<double>> rl = readColumns(latPath, latCols, "model " + model + " posterior log " + latPath);
         if(rm.size() != rl.size())
-            Msg::error("model " + model + " posterior logs " + mainPath + " and " + latPath + " have " + std::to_string(rm.size()) + " and " + std::to_string(rl.size()) + " rows; each row needs its latent row.");
+            Msg::error("model " + model + " posterior logs " + mainPath + " and " + latPath + " have " + std::to_string(rm.size()) + " and " + std::to_string(rl.size()) + " rows; " + latPath + " must have one row for each row of " + mainPath + ".");
         for(size_t j = (size_t)(drop * (double)rm.size()); j < rm.size(); j++){
             for(size_t i = 0; i < ageNodes.size(); i++)
                 ageNodes[i]->setTime(rm[j][2 * ng + i] - off);
@@ -579,7 +579,7 @@ std::map<std::string,double> PathModel::readLastRow(const std::string& path){
         catch(...) { Msg::error("start log " + path + ": '" + tok + "' in the last row is not a number."); }
     }
     if(vals.size() != header.size())
-        Msg::error("start log " + path + ": the last row has " + std::to_string(vals.size()) + " values, the header has " + std::to_string(header.size()) + " names.");
+        Msg::error("start log " + path + ": the last row has " + std::to_string(vals.size()) + " values, but the header has " + std::to_string(header.size()) + " names.");
     std::map<std::string,double> row;
     for(size_t i = 0; i < header.size(); i++)
         row[header[i]] = vals[i];

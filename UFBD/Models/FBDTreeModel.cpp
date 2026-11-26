@@ -113,7 +113,7 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
                         if(g.getMinAge() < minCompat) minCompat = g.getMinAge();
                     }
                     if(backboneFossils[k].yMax >= minCompat)
-                        Msg::warning("backbone fossil '" + fTaxon + "' is not the absolute youngest among clade-compatible fossils; it is blocked from being a sampled ancestor.");
+                        Msg::warning("backbone fossil '" + fTaxon + "' may be older than another fossil in a clade that contains it, so it cannot be a sampled ancestor.");
                 }
             }
         }
@@ -444,8 +444,8 @@ void FBDTreeModel::buildRates(UserSettings& us, SkylineRates& s){
     }
     Probability::PriorSpec lp = us.getLambdaPrior();
     Probability::PriorSpec mp = us.getMuPrior();
-    if(us.getLambdaMode() == RateMode::OU && (lp.set || us.getLambdaGroupPrior().empty() == false)) Msg::error("-lambda_prior is only used under mode=indep; under mode=ou set the OU level with -lambda_ou_theta.");
-    if(us.getMuMode() == RateMode::OU && (mp.set || us.getMuGroupPrior().empty() == false)) Msg::error("-mu_prior is only used under mode=indep; under mode=ou set the OU level with -mu_ou_theta.");
+    if(us.getLambdaMode() == RateMode::OU && (lp.set || us.getLambdaGroupPrior().empty() == false)) Msg::error("-lambda_prior applies only with -lambda_prior_mode indep. With -lambda_prior_mode ou, set the prior on the OU level theta with -lambda_ou_theta.");
+    if(us.getMuMode() == RateMode::OU && (mp.set || us.getMuGroupPrior().empty() == false)) Msg::error("-mu_prior applies only with -mu_prior_mode indep. With -mu_prior_mode ou, set the prior on the OU level theta with -mu_ou_theta.");
     Probability::PriorSpec defRate{true, Probability::PriorFamily::EXPONENTIAL, 5.0, 1.0};
     if(!lp.set) lp = defRate;
     if(!mp.set) mp = defRate;
@@ -470,7 +470,7 @@ void FBDTreeModel::buildRates(UserSettings& us, SkylineRates& s){
     s.psiName.assign(s.numPsiTypes, std::vector<std::string>());
     for(int tp = 0; tp < s.numPsiTypes; tp++){
         Probability::PriorSpec pp = us.getPsiPrior(tp);
-        if(us.getPsiMode(tp) == RateMode::OU && (pp.set || us.getPsiGroupPrior(tp).empty() == false)) Msg::error("-psi_prior is only used under mode=indep; under mode=ou set the OU level with -psi_ou_theta.");
+        if(us.getPsiMode(tp) == RateMode::OU && (pp.set || us.getPsiGroupPrior(tp).empty() == false)) Msg::error("-psi_prior applies only with -psi_prior_mode indep. With -psi_prior_mode ou, set the prior on the OU level theta with -psi_ou_theta.");
         if(!pp.set) pp = defRate;
         double psi0 = Probability::priorMean(pp.family, pp.p1, pp.p2, pp.p3);
         if(!(psi0 > 0.0 && std::isfinite(psi0))) psi0 = 0.1;
@@ -506,7 +506,7 @@ std::vector<int> FBDTreeModel::buildSkylineRates(const std::string& prefix, cons
 
     bool useOu = (mode == RateMode::OU);
     if(useOu && nChunks < 2){
-        Msg::warning("prior_mode=ou set for " + prefix + " but there is only one rate interval; using an independent per-bin prior instead.");
+        Msg::warning(prefix + " has mode ou but only one bin; using mode indep instead.");
         useOu = false;
     }
     if(useOu){
@@ -514,7 +514,7 @@ std::vector<int> FBDTreeModel::buildSkylineRates(const std::string& prefix, cons
         for(int i = 0; i < nBins; i++){ chunkLastBin[binToChunk[i]] = i; chunkCount[binToChunk[i]]++; }
         for(int c = 0; c < nChunks; c++)
             if(chunkLastBin[c] - chunkMinBin[c] + 1 != chunkCount[c])
-                Msg::error("prior_mode=ou requires contiguous bins; " + prefix + " has a union bin.");
+                Msg::error(prefix + " has a bin that joins non-adjacent intervals; mode ou needs every bin to be one contiguous interval.");
         std::vector<double> loEdges(nChunks);
         for(int c = 0; c < nChunks; c++)
             loEdges[c] = times[chunkMinBin[c]];
@@ -661,7 +661,8 @@ std::vector<std::pair<double,double>> FBDTreeModel::getRateSupports(const Skylin
     std::vector<std::pair<double,double>> sup;
     auto add = [&](ParameterOUField* f, const std::vector<ParameterDouble*>& v){
         if(f != nullptr){
-            sup.insert(sup.end(), f->getNumBins() + 1, {-INFINITY, INFINITY});
+            sup.insert(sup.end(), f->getNumBins(), {0.0, INFINITY});
+            sup.push_back({-INFINITY, INFINITY});
             sup.push_back(f->sdSupport());
             sup.push_back(f->nuSupport());
         }else

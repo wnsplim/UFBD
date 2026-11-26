@@ -13,7 +13,7 @@
 std::ifstream ChainRunner::openCheckpoint(const std::string& path) {
     std::ifstream is(path);
     if(is.is_open() == false)
-        Msg::error("-resume: nothing to resume from.");
+        Msg::error("-resume: cannot open the checkpoint " + path + ", so there is nothing to resume from.");
     return is;
 }
 
@@ -22,7 +22,7 @@ bool ChainRunner::thinningWarned = false;
 void ChainRunner::reconcileThinning(int storedSf, int& thinning) {
     if(storedSf != thinning){
         if(thinningWarned == false){
-            Msg::warning("-thinning " + std::to_string(thinning) + " differs from the pre-resume thinning " + std::to_string(storedSf) + "; forcing " + std::to_string(storedSf));
+            Msg::warning("-thinning " + std::to_string(thinning) + " differs from the -thinning " + std::to_string(storedSf) + " the checkpoint was written with; the resumed run uses -thinning " + std::to_string(storedSf) + ".");
             thinningWarned = true;
         }
         thinning = storedSf;
@@ -60,7 +60,7 @@ bool ChainRunner::checkpointIsCoupled(std::istream& is) {
 
 void ChainRunner::requireCheckpointIntact(std::istream& is, const std::string& path) {
     if(is.fail())
-        Msg::error("checkpoint file is truncated or corrupt: " + path);
+        Msg::error("the checkpoint file " + path + " is truncated or corrupt.");
 }
 
 void ChainRunner::resumeOutputs(void) {
