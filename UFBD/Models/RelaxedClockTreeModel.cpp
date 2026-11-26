@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <limits>
+#include <map>
 #include "ApproxBranchLengthLikelihood.hpp"
 #include "FBDTreeModel.hpp"
 #include "Msg.hpp"
@@ -434,6 +435,26 @@ std::vector<std::string> RelaxedClockTreeModel::getParameterNames(void){
     if(ctmc != nullptr)
         ctmc->appendParameterNames(n);
     return n;
+}
+
+std::vector<bool> RelaxedClockTreeModel::getParameterFixedMask(void){
+    std::vector<std::string> fbdN = fbd->getParameterNames();
+    std::vector<bool> fbdM = fbd->getParameterFixedMask();
+    std::map<std::string,bool> fixedOf;
+    for(size_t i = 0; i < fbdN.size(); i++)
+        fixedOf[fbdN[i] == "originAge" ? "x0" : fbdN[i]] = fbdM[i];
+    std::vector<std::string> ages;
+    collectNodeAges(&ages, nullptr);
+    std::vector<bool> m;
+    for(const std::string& s : ages)
+        m.push_back(fixedOf[s]);
+    for(size_t i = 0; i < fbdN.size(); i++)
+        if(fbdN[i] != "originAge" && isNodeAgeName(fbdN[i]) == false)
+            m.push_back(fbdM[i]);
+    m.insert(m.end(), 2 * clock->getNumClockGroups(), false);
+    if(ctmc != nullptr)
+        ctmc->appendParameterFixedMask(m);
+    return m;
 }
 
 std::vector<double> RelaxedClockTreeModel::getParameterString(void){

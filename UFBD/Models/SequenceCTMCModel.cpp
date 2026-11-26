@@ -159,6 +159,15 @@ void SequenceCTMCModel::appendParameterNames(std::vector<std::string>& names){
     }
 }
 
+void SequenceCTMCModel::appendParameterFixedMask(std::vector<bool>& mask){
+    for(int p = 0; p < seqLik->getNumPartitions(); p++){
+        mask.insert(mask.end(), exch[p]->getValue().size(), empirical);
+        mask.insert(mask.end(), freq[p]->getValue().size(), freqEstimated == false);
+        if(useGammaHet) mask.push_back(false);
+        if(useInvariant) mask.push_back(false);
+    }
+}
+
 void SequenceCTMCModel::appendParameterValues(std::vector<double>& values){
     for(int p = 0; p < seqLik->getNumPartitions(); p++){
         for(double x : exch[p]->getValue())

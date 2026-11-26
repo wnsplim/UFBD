@@ -26,6 +26,7 @@ class SequenceCTMCModel {
         void                            updateForRejection(void);
         void                            print(void);
         void                            appendParameterNames(std::vector<std::string>& names);
+        void                            appendParameterFixedMask(std::vector<bool>& mask);
         void                            appendParameterValues(std::vector<double>& values);
         void                            setParameterValues(const std::vector<double>& values);
         double                          pseudoPriorCoords(const std::vector<double>& values, std::vector<double>& z);

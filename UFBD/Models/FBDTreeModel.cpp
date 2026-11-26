@@ -718,7 +718,7 @@ std::vector<bool> FBDTreeModel::getParameterFixedMask(void){
     std::vector<bool> m;
     appendRateMask(m, a);
     if(psiRjMain >= 0)
-        m.insert(m.end(), {false, true, true});
+        m.insert(m.end(), {true, true, true});
     if(unresolvedFossils != nullptr){
         int nNonUE = 0;
         for(int i = 0; i < unresolvedFossils->getNumFossils(); i++)
