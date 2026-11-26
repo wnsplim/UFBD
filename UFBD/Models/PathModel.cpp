@@ -653,7 +653,9 @@ void PathModel::setStart(int run){
         chains++;
     std::string log = (chains > 0) ? base + "_chain" + std::to_string(run % chains) + ".log" : base + ".log";
     std::string latent = log.substr(0, log.size() - 4) + "_latent.log";
-    std::map<std::string,double> mainRow = readLastRow(log), latRow = readLastRow(latent);
+    std::map<std::string,double> mainRow = readLastRow(log), latRow;
+    if(m[k]->getLatentNames().empty() == false)
+        latRow = readLastRow(latent);
     if(f[k]->unresolvedFossils != nullptr && f[k]->zoneIndexBuilt == false)
         f[k]->buildZoneIndex();
     setState(k, mainRow, latRow, log, latent);
