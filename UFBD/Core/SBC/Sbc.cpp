@@ -322,6 +322,13 @@ SimParams Sbc::drawParams(void){
             p.psiIdx[t].push_back(pi);
         }
     }
+    if(cfg.psiRjMain >= 0){
+        p.psiRjMain = cfg.psiRjMain;
+        p.model = (rng->uniformRv() < 0.5) ? 1 : 0;
+        if(p.model == 1)
+            for(int t = 0; t < nT; t++)
+                p.typeWeight.push_back(Probability::Exponential::rv(rng, 1.0));
+    }
     return p;
 }
 
@@ -510,15 +517,23 @@ void Sbc::runEmit(void){
         ff.close();
 
         std::ofstream xf(base + ".truth");
+        if(cfg.psiRjMain >= 0)
+            xf << "model\t" << truth.model << "\n";
         xf << "lambda0\t" << truth.lambda[0] << "\nmu0\t" << truth.mu[0];
-        for(int t = 0; t < cfg.numPsiTypes; t++)
+        for(int t = 0; t < cfg.numPsiTypes; t++){
+            if(truth.model == 1 && t != truth.psiRjMain)
+                continue;
             for(size_t b = 0; b < truth.psi[t].size(); b++){
                 std::string lab = (cfg.numPsiTypes > 1)
                     ? ("psi_" + cfg.psiTypeNames[t] + (truth.psi[t].size() > 1 ? "_" + std::to_string(b) : ""))
                     : ("psi" + std::to_string(b));
                 xf << "\n" << lab << "\t" << truth.psi[t][b];
             }
-        xf << "\nx\t" << truth.startAge << '\n';
+        }
+        xf << "\nx\t" << truth.startAge;
+        if(r.backboneNodeAges.empty() == false)
+            xf << "\ncrown\t" << r.backboneNodeAges[0];
+        xf << "\nnSA\t" << std::count(r.fossilIsSA.begin(), r.fossilIsSA.end(), 1) << '\n';
         xf.close();
 
         printf("emit rep %d: %d backbone, %zu fossil, %d UE -> %s.{tree,clades,fossils,truth}\n",

@@ -25,6 +25,7 @@ struct SbcConfig {
     std::vector<double>     lambdaTimes;
     std::vector<double>     muTimes;
     int                     numPsiTypes;
+    int                     psiRjMain = -1;
     std::vector<std::string>            psiTypeNames;
     std::vector<std::vector<double>>    psiTimes;
     std::vector<Probability::PriorSpec> psiPriors;

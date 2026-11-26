@@ -216,12 +216,15 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
             ii--;
 
         int numTypes = (int)p.psi.size();
+        double typeWeightSum = 0.0;
+        for(double w : p.typeWeight) typeWeightSum += w;
         double curAge = p.startAge;
         while(curAge > 0.0 && active.empty() == false){
             double lam = p.lambda[p.lambdaIdx[ii]];
             double m   = p.mu[p.muIdx[ii]];
             double ps  = 0.0;
-            for(int t = 0; t < numTypes; t++) ps += p.psi[t][p.psiIdx[t][ii]];
+            if(p.model == 1) ps = p.psi[p.psiRjMain][p.psiIdx[p.psiRjMain][ii]];
+            else for(int t = 0; t < numTypes; t++) ps += p.psi[t][p.psiIdx[t][ii]];
             double sum = lam + m + ps;
             int N = (int)active.size();
             double younger = p.intervalStart[ii];
@@ -248,7 +251,11 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
                 active.pop_back();
             }else{
                 int ftype = 0;
-                if(numTypes > 1){
+                if(p.model == 1){
+                    double uu = rng->uniformRv() * typeWeightSum;
+                    double acc = 0.0;
+                    for(int t = 0; t < numTypes; t++){ acc += p.typeWeight[t]; if(uu < acc){ ftype = t; break; } }
+                }else if(numTypes > 1){
                     double uu = rng->uniformRv() * ps;
                     double acc = 0.0;
                     for(int t = 0; t < numTypes; t++){ acc += p.psi[t][p.psiIdx[t][ii]]; if(uu < acc){ ftype = t; break; } }

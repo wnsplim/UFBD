@@ -928,15 +928,17 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         std::vector<std::string>::iterator it = std::find(psiTypeNames.begin(), psiTypeNames.end(), psiRjMainName);
         if (psiTypeNames.size() < 2 || it == psiTypeNames.end())
             Msg::error("psi_rj_main = " + psiRjMainName + " must name one of two or more [psi <type>] sections.");
-        if (parametersOut.empty())
-            Msg::error("psi_rj_main needs log_output, whose posterior log fits the pseudo-prior.");
         psiRjMain = (int)(it - psiTypeNames.begin());
-        posteriorBaseA = parametersOut.substr(0, parametersOut.size() - 4);
-        parametersOutBase = parametersOut;
-        treeOutBase = treeOut;
-        parametersOut.insert(parametersOut.size() - 4, "_rj");
-        if (treeOut.empty() == false)
-            treeOut.insert(treeOut.rfind(".trees"), "_rj");
+        if (sbcMode == false) {
+            if (parametersOut.empty())
+                Msg::error("psi_rj_main needs log_output, whose posterior log fits the pseudo-prior.");
+            posteriorBaseA = parametersOut.substr(0, parametersOut.size() - 4);
+            parametersOutBase = parametersOut;
+            treeOutBase = treeOut;
+            parametersOut.insert(parametersOut.size() - 4, "_rj");
+            if (treeOut.empty() == false)
+                treeOut.insert(treeOut.rfind(".trees"), "_rj");
+        }
     }
 
 

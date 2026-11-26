@@ -184,6 +184,7 @@ int main(int argc, const char* argv[]){
     cfg.muTimes.push_back(0.0);
     for(double t : s.getMuSkylineTimes())     cfg.muTimes.push_back(t);
     cfg.numPsiTypes = s.getNumPsiTypes();
+    cfg.psiRjMain = s.getPsiRjMain();
     cfg.psiTypeNames = s.getPsiTypeNames();
     for(int t = 0; t < cfg.numPsiTypes; t++){
         std::vector<double> times;
