@@ -234,6 +234,7 @@ int main(int argc, const char* argv[]) {
         }
         if(settings.getArLog())
             mcmc->printMoveDiagnostics(0);
+        ConvergenceRunner::printPsiRjBf({mcmc});
         std::string sbase = settings.getParamOutput();
         size_t sdp = sbase.rfind(".log"); if(sdp != std::string::npos) sbase = sbase.substr(0, sdp);
         if(sbase.empty()) sbase = "out";

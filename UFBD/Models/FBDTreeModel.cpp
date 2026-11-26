@@ -262,13 +262,6 @@ FBDTreeModel::FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Foss
         fossilTypeOrig = a.fossilType;
         backboneTypeOrig = a.backboneType;
         psiRjLab = PathModel::lnTypeLabels(a.psiTypeNames, fossils);
-        std::vector<size_t> blocks = rateBlockSizes(a);
-        std::vector<bool> spec;
-        for(size_t j = 0; j < blocks.size(); j++)
-            spec.insert(spec.end(), blocks[j], j >= 2 && (int)j - 2 != psiRjMain);
-        std::string base = us.getPosteriorBaseA();
-        psiPseudo = new PseudoPrior;
-        PathModel::fitRatePseudoPrior(this, *psiPseudo, spec, base + ".log", PathModel::posteriorBurn(base), "the psi sets that model 1 does not use");
         psiRjCheck = us.getResampleEvery();
         psiRjWeight = -psiRjLab;
         size_t nm = psiShiftCoords().size();
@@ -363,15 +356,7 @@ void FBDTreeModel::scalePsiMain(double sgn){
 }
 
 double FBDTreeModel::lnPsiRjTerm(void){
-    if(psiModel == 0)
-        return 0.0;
-    double lp = PathModel::lnPseudoPrior(this, *psiPseudo) + psiRjWeight;
-    for(int t = 0; t < a.numPsiTypes; t++){
-        if(t == psiRjMain) continue;
-        for(ParameterDouble* p : a.psi[t]) lp -= p->lnProbability();
-        if(a.psiField[t] != nullptr) lp -= a.psiField[t]->lnProbability();
-    }
-    return lp;
+    return (psiModel == 0) ? 0.0 : psiRjWeight;
 }
 
 double FBDTreeModel::psiRjAdapt(unsigned long k){
@@ -1528,7 +1513,6 @@ void FBDTreeModel::writeState(std::ostream& os){
         for(double x : getPsiRjState())
             os << ' ' << x;
         os << '\n';
-        PathModel::writePseudoPriorState(os, *psiPseudo);
     }
 }
 
@@ -1550,13 +1534,6 @@ void FBDTreeModel::readState(std::istream& is){
         std::vector<double> st(7 + 3 * psiRjShift.size());
         for(double& x : st)
             is >> x;
-        int q = PathModel::readPseudoPriorState(is, *psiPseudo);
-        if(q < 0)
-            Msg::error("the checkpoint's psi_rj lines were written by an earlier version of psi_rj_main; rerun without -resume.");
-        static bool warned = false;
-        if(q > 0 && warned == false)
-            Msg::warning("the posterior log that fits the psi_rj pseudo-prior has changed since the checkpoint was written; the resumed run keeps the checkpoint's pseudo-prior.");
-        warned = warned || q > 0;
         setPsiRjState(st);
         applyPsiModel(m);
     }

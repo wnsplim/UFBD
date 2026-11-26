@@ -469,38 +469,6 @@ double PathModel::lnPseudoPrior(FBDTreeModel* fm, const PseudoPrior& d){
     return lnMvn(d, z, Eigen::VectorXd()) + jac;
 }
 
-void PathModel::writePseudoPriorState(std::ostream& os, const PseudoPrior& d){
-    int k = (int)d.mean.size();
-    os << "pseudo_prior " << k;
-    for(int i = 0; i < k; i++)
-        os << ' ' << d.mean(i);
-    for(int i = 0; i < k; i++)
-        for(int j = 0; j < k; j++)
-            os << ' ' << d.cov(i, j);
-    os << '\n';
-}
-
-int PathModel::readPseudoPriorState(std::istream& is, PseudoPrior& d){
-    std::string tag;
-    int k = -1;
-    is >> tag >> k;
-    if(tag != "pseudo_prior" || k != (int)d.mean.size())
-        return -1;
-    Eigen::VectorXd mean(k);
-    Eigen::MatrixXd cov(k, k);
-    for(int i = 0; i < k; i++)
-        is >> mean(i);
-    for(int i = 0; i < k; i++)
-        for(int j = 0; j < k; j++)
-            is >> cov(i, j);
-    if(mean == d.mean && cov == d.cov)
-        return 0;
-    d.mean = mean;
-    d.cov = cov;
-    d.chol.compute(cov);
-    return 1;
-}
-
 void PathModel::fitRatePseudoPrior(FBDTreeModel* fm, PseudoPrior& d, const std::vector<bool>& spec, const std::string& path, double burn, const std::string& model){
     SkylineRates& s = fm->a;
     std::vector<std::string> own = fm->getRateNames(s);

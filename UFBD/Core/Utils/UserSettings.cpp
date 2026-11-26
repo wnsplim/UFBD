@@ -929,16 +929,6 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         if (psiTypeNames.size() < 2 || it == psiTypeNames.end())
             Msg::error("psi_rj_main = " + psiRjMainName + " must name one of two or more [psi <type>] sections.");
         psiRjMain = (int)(it - psiTypeNames.begin());
-        if (sbcMode == false) {
-            if (parametersOut.empty())
-                Msg::error("psi_rj_main needs log_output, whose posterior log fits the pseudo-prior.");
-            posteriorBaseA = parametersOut.substr(0, parametersOut.size() - 4);
-            parametersOutBase = parametersOut;
-            treeOutBase = treeOut;
-            parametersOut.insert(parametersOut.size() - 4, "_rj");
-            if (treeOut.empty() == false)
-                treeOut.insert(treeOut.rfind(".trees"), "_rj");
-        }
     }
 
 
@@ -1137,9 +1127,8 @@ MULTIPLE PRESERVATION TYPES  (split psi by type)
     -psi_ou_theta type1:normal:log(0.05),1
   A -psi_* flag without a prefix applies to every type without one of its own.
   -psi_rj_main <name>     reversible jump between model 0 (each type its own psi) and model 1
-                          (every fossil under the psi of type <name>); needs the posterior
-                          <log_output>.log of the same config; tunes the prior odds of model 1
-                          (<log_output>_rj_tune.log), then writes <log_output>_rj.log
+                          (every fossil under the psi of type <name>); tunes the prior odds of
+                          model 1 (<log_output>_tune.log), then writes <log_output>.log
 
 CLOCK & SUBSTITUTION MODEL
   -sequence <file>        alignment (FASTA / PHYLIP / NEXUS)

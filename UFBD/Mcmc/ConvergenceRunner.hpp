@@ -16,6 +16,7 @@ class ConvergenceRunner {
         double              getMinTailEss(void) const { return lastMinTailEss; }
         void                setEmitSummaryTree(bool b) { emitSummary = b; }
         void                setVerbose(bool b) { verbose = b; }
+        static void         printPsiRjBf(const std::vector<ChainRunner*>& chains);
 
     private:
         bool                report(unsigned long gen, bool finalPass);

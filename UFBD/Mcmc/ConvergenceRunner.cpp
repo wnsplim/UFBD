@@ -190,6 +190,7 @@ bool ConvergenceRunner::run(void){
         std::cout << "-----------------------------------------------------------------------\n";
     bool met = report(gen, true);
     writeMerged();
+    printPsiRjBf(replicates);
 
     if(emitSummary && replicates.empty() == false && replicates[0]->getTree() != nullptr){
         const std::vector<std::string>& names = replicates[0]->traceNames();
@@ -323,6 +324,44 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
     }
 
     return nBelow == 0;
+}
+
+void ConvergenceRunner::printPsiRjBf(const std::vector<ChainRunner*>& chains){
+    UserSettings& s = UserSettings::userSettings();
+    if(s.getPsiRjMain() < 0)
+        return;
+    const std::vector<std::string>& names = chains[0]->traceNames();
+    size_t jd = std::find(names.begin(), names.end(), "delta") - names.begin();
+    size_t jt = std::find(names.begin(), names.end(), "log_prior_odds") - names.begin();
+    int nb = s.getBfBatches();
+    double theta = chains[0]->traceColumns()[jt].back();
+    std::vector<double> batch;
+    double sum = 0.0;
+    size_t n = 0;
+    for(ChainRunner* c : chains){
+        const std::vector<double>& d = c->traceColumns()[jd];
+        const std::vector<double>& t = c->traceColumns()[jt];
+        size_t b = (size_t)(d.size() * s.getBurninFraction());
+        size_t m = d.size() - b;
+        if(m < (size_t)nb)
+            Msg::error("psi_rj: " + std::to_string(m) + " samples after burn-in; -bf_batches " + std::to_string(nb) + " needs at least " + std::to_string(nb) + ".");
+        for(int k = 0; k < nb; k++){
+            size_t from = b + m * (size_t)k / (size_t)nb, to = b + m * (size_t)(k + 1) / (size_t)nb;
+            double bs = 0.0;
+            for(size_t i = from; i < to; i++)
+                bs += 1.0 / (1.0 + std::exp(-(d[i] + t[i])));
+            sum += bs;
+            n += to - from;
+            batch.push_back(bs / (double)(to - from));
+        }
+    }
+    double p = sum / (double)n;
+    double mb = 0.0, vb = 0.0;
+    for(double x : batch) mb += x / (double)batch.size();
+    for(double x : batch) vb += (x - mb) * (x - mb) / (double)(batch.size() - 1);
+    double se = std::sqrt(vb / (double)batch.size()) / (p * (1.0 - p));
+    std::cout << "psi_rj: ln BF ([model 1] over [model 0]) = " << std::log(p / (1.0 - p)) - theta << " (SE " << se
+              << ", Rao-Blackwellized over P(model 1 | state), batch means over " << nb << " batches per chain)\n";
 }
 
 void ConvergenceRunner::writeMerged(void){

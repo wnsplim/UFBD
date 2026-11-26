@@ -20,7 +20,6 @@ class ParameterOUField;
 class UserSettings;
 enum class RateMode;
 struct OUHyperSpec;
-struct PseudoPrior;
 
 struct SkylineRates {
     std::vector<ParameterDouble*> lambda;
@@ -136,7 +135,6 @@ class FBDTreeModel : public PhylogeneticModel {
         unsigned long               psiRjCheck = 1;
         std::vector<char>           psiActive;
         std::vector<int>            fossilTypeOrig, backboneTypeOrig;
-        PseudoPrior*                psiPseudo = nullptr;
         double                      fossilTermLn(int i, int spineIdx, int ky = -1, int kz = -1, bool local = false);
         double                      fossilTermLn(ParameterUnresolvedFossils* uf, double gLn, int i, int spineIdx, int ky, int kz, bool local);
         double                      sweepTermLn(int i);
