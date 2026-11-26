@@ -14,6 +14,7 @@
 #include <iostream>
 #include <algorithm>
 #include <limits>
+#include <numeric>
 #include <set>
 #include <vector>
 
@@ -389,19 +390,33 @@ static double ageOf(Node* n, const std::map<Node*,double>& age){
     return it != age.end() ? it->second : (n->getTime() + UserSettings::userSettings().getAgeOffset());
 }
 
-static std::pair<double,double> hpd95(std::vector<double> s){
-    std::sort(s.begin(), s.end());
-    int n = (int)s.size();
-    int m = (int)std::ceil(0.95 * n);
-    if(m < 1) m = 1;
-    if(m >= n) return std::make_pair(s.front(), s.back());
-    double best = std::numeric_limits<double>::max();
-    int bi = 0;
-    for(int i = 0; i + m - 1 < n; i++){
-        double w = s[i + m - 1] - s[i];
-        if(w < best){ best = w; bi = i; }
+static double weightedMean(const std::vector<double>& x, const std::vector<double>& w){
+    double sx = 0.0, sw = 0.0;
+    for(size_t k = 0; k < x.size(); k++){
+        sx += w[k] * x[k];
+        sw += w[k];
     }
-    return std::make_pair(s[bi], s[bi + m - 1]);
+    return sx / sw;
+}
+
+static std::pair<double,double> hpd95(const std::vector<double>& x, const std::vector<double>& w){
+    std::vector<size_t> o(x.size());
+    std::iota(o.begin(), o.end(), 0);
+    std::sort(o.begin(), o.end(), [&](size_t a, size_t b){ return x[a] < x[b]; });
+    std::vector<double> c(o.size() + 1, 0.0);
+    for(size_t k = 0; k < o.size(); k++)
+        c[k + 1] = c[k] + w[o[k]];
+    double need = 0.95 * c.back();
+    double best = std::numeric_limits<double>::max();
+    size_t bi = 0, bj = o.size() - 1;
+    for(size_t i = 0, j = 0; i < o.size(); i++){
+        if(j < i) j = i;
+        while(j < o.size() && c[j + 1] - c[i] < need) j++;
+        if(j == o.size()) break;
+        double d = x[o[j]] - x[o[i]];
+        if(d < best){ best = d; bi = i; bj = j; }
+    }
+    return std::make_pair(x[o[bi]], x[o[bj]]);
 }
 
 static void writeHpdAnnotation(const std::map<Node*,std::pair<double,double>>& hpd, Node* p, double y0, std::stringstream& strm){
@@ -464,6 +479,20 @@ bool writeSummaryTree(Tree* tree, const std::vector<std::string>& names, const s
     std::map<std::string,int> colOf;
     for(size_t j = 0; j < names.size(); j++)
         colOf[names[j]] = (int)j;
+    std::vector<double> rw(cols.empty() ? 0 : cols[0].size(), 1.0);
+    std::map<std::string,int>::iterator im = colOf.find("model"), io = colOf.find("log_prior_odds");
+    if(im != colOf.end() && io != colOf.end()){
+        const std::vector<double>& mc = cols[im->second];
+        const std::vector<double>& oc = cols[io->second];
+        std::vector<double> lw(mc.size());
+        double top = 0.0;
+        for(size_t r = 0; r < mc.size(); r++){
+            lw[r] = (mc[r] == 1.0) ? -oc[r] : 0.0;
+            top = std::max(top, lw[r]);
+        }
+        for(size_t r = 0; r < mc.size(); r++)
+            rw[r] = std::exp(lw[r] - top);
+    }
     std::map<Node*,double> age;
     std::map<Node*,std::pair<double,double>> hpd;
     for(size_t i = 0; i < bb.size(); i++){
@@ -475,10 +504,9 @@ bool writeSummaryTree(Tree* tree, const std::vector<std::string>& names, const s
         std::vector<double> s(col.begin() + b, col.end());
         if(s.empty())
             return false;
-        double sum = 0.0;
-        for(double v : s) sum += v;
-        age[bb[i]] = sum / (double)s.size();
-        hpd[bb[i]] = hpd95(s);
+        std::vector<double> w(rw.begin() + b, rw.end());
+        age[bb[i]] = weightedMean(s, w);
+        hpd[bb[i]] = hpd95(s, w);
     }
     if(keepFossils){
         for(size_t j = 0; j < latentNames.size() && j < latentCols.size(); j++){
@@ -492,10 +520,9 @@ bool writeSummaryTree(Tree* tree, const std::vector<std::string>& names, const s
             std::vector<double> s(col.begin() + bl, col.end());
             if(s.empty())
                 continue;
-            double sum = 0.0;
-            for(double v : s) sum += v;
-            age[tip] = sum / (double)s.size();
-            hpd[tip] = hpd95(s);
+            std::vector<double> w(rw.begin() + bl, rw.end());
+            age[tip] = weightedMean(s, w);
+            hpd[tip] = hpd95(s, w);
         }
     }
     double y0 = std::numeric_limits<double>::infinity();

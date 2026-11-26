@@ -362,6 +362,7 @@ void ConvergenceRunner::printPsiRjBf(const std::vector<ChainRunner*>& chains){
     double se = std::sqrt(vb / (double)batch.size()) / (p * (1.0 - p));
     std::cout << "psi_rj: ln BF ([model 1] over [model 0]) = " << std::log(p / (1.0 - p)) - theta << " (SE " << se
               << ", Rao-Blackwellized over P(model 1 | state), batch means over " << nb << " batches per chain)\n";
+    std::cout << "psi_rj: the log was sampled at log prior odds " << theta << " of model 1 over model 0\n";
 }
 
 void ConvergenceRunner::writeMerged(void){
