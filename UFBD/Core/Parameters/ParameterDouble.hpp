@@ -22,10 +22,10 @@ class ParameterDouble : public Parameter {
         void                        shiftProposed(double d) { value[0] = value[1] + d; }
         void                        commitProposed(void) { value[1] = value[0]; }
         void                        restoreProposed(void) { value[0] = value[1]; }
-        void                        copyState(const ParameterDouble& o) { value[0] = o.value[0]; value[1] = o.value[1]; }
+//         void                        copyState(const ParameterDouble& o) { value[0] = o.value[0]; value[1] = o.value[1]; }
         void                        setPrior(Probability::PriorFamily f, double p1, double p2, double p3 = 0.0);
         double                      lnProbability(void);
-        std::pair<double,double>    support(void);
+//         std::pair<double,double>    support(void);
         void                        print(void);
         double                      update(void);
         void                        updateForAcceptance(void);

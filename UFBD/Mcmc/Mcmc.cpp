@@ -57,8 +57,8 @@ void Mcmc::init(void) {
         tuning = false;
         gen = 0;
     }
-    if(model->psiRjTuning())
-        runPsiRjTuning(model, thinning, runLabel);
+//     if(model->psiRjTuning())
+//         runPsiRjTuning(model, thinning, runLabel);
 }
 
 void Mcmc::advance(unsigned long nGens) {
@@ -67,7 +67,8 @@ void Mcmc::advance(unsigned long nGens) {
     RelaxedClockTreeModel* relaxed = tuning ? dynamic_cast<RelaxedClockTreeModel*>(model) : nullptr;
 
     unsigned long target = gen + nGens;
-    if(gen == 0 && tuning == false && rjTuning == false)
+//     if(gen == 0 && tuning == false && rjTuning == false)
+    if(gen == 0 && tuning == false)
         sample(0, curLnL, curLnP);
     while (gen < target) {
         gen++;
@@ -169,9 +170,9 @@ void Mcmc::advance(unsigned long nGens) {
             }
         }
 
-        if(rjTuning)
-            curLnP += model->psiRjAdapt(gen);
-
+//         if(rjTuning)
+//             curLnP += model->psiRjAdapt(gen);
+// 
         static const bool trc = (getenv("FBD_TRACE") != nullptr);
         if(trc)
             fprintf(stderr, "[t] %lu mv=%d h=%.17g curL=%.17g curP=%.17g a=%d\n", gen,
@@ -183,13 +184,14 @@ void Mcmc::advance(unsigned long nGens) {
             ChainRunner::logLine(os.str());
         }
 
-        if (tuning == false && rjTuning && n % thinning == 0){
-            writeTuneRow(model, n, curLnL + curLnP);
-            if(writeCheckpoints)
-                writeCheckpoint();
-            model->invalidateLikelihoodCache();
-            model->invalidatePriorCache();
-        }else if (tuning == false && n % thinning == 0)
+//         if (tuning == false && rjTuning && n % thinning == 0){
+//             writeTuneRow(model, n, curLnL + curLnP);
+//             if(writeCheckpoints)
+//                 writeCheckpoint();
+//             model->invalidateLikelihoodCache();
+//             model->invalidatePriorCache();
+//         }else if (tuning == false && n % thinning == 0)
+        if (tuning == false && n % thinning == 0)
             sample(n, curLnL, curLnP);
     }
 }
@@ -283,16 +285,16 @@ void Mcmc::sample(unsigned long n, double lnL, double lnP) {
         writeCheckpoint();
     model->invalidateLikelihoodCache();
     model->invalidatePriorCache();
-}
-
-std::vector<double> Mcmc::psiRjState(void) {
-    return model->getPsiRjState();
-}
-
-void Mcmc::setPsiRjWeight(double w) {
-    std::vector<double> s = model->getPsiRjState();
-    s[0] = w;
-    curLnP += model->setPsiRjState(s);
+// }
+// 
+// std::vector<double> Mcmc::psiRjState(void) {
+//     return model->getPsiRjState();
+// }
+// 
+// void Mcmc::setPsiRjWeight(double w) {
+//     std::vector<double> s = model->getPsiRjState();
+//     s[0] = w;
+//     curLnP += model->setPsiRjState(s);
 }
 
 void Mcmc::writeCheckpoint(void) {

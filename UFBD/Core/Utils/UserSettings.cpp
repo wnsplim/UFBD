@@ -43,14 +43,14 @@ static std::string trimmed(const std::string& s){
     return s.substr(a, b - a + 1);
 }
 
-static bool isPriorFamilyKeyword(const std::string& s){
-    std::string k = s;
-    for(char& ch : k) ch = (char)std::tolower((unsigned char)ch);
-    return k == "exp" || k == "exponential" || k == "gamma" || k == "lognormal"
-        || k == "unif" || k == "uniform" || k == "truncnormal" || k == "truncnorm"
-        || k == "normal" || k == "improper" || k == "empirical";
-}
-
+// static bool isPriorFamilyKeyword(const std::string& s){
+//     std::string k = s;
+//     for(char& ch : k) ch = (char)std::tolower((unsigned char)ch);
+//     return k == "exp" || k == "exponential" || k == "gamma" || k == "lognormal"
+//         || k == "unif" || k == "uniform" || k == "truncnormal" || k == "truncnorm"
+//         || k == "normal" || k == "improper" || k == "empirical";
+// }
+// 
 static bool parseGrammarNumber(const std::string& s, double& v){
     std::string t = s;
     while (t.empty() == false && std::isspace((unsigned char)t.back())) t.pop_back();
@@ -72,82 +72,82 @@ std::vector<double> UserSettings::getSkylineTimes(void){
     for(double t : lambdaSkylineTimes) u.insert(t);
     for(double t : muSkylineTimes)     u.insert(t);
     for(double t : psiSkylineTimes)    u.insert(t);
-    for(std::map<std::string, std::vector<double>>::iterator it = psiTimesByName.begin(); it != psiTimesByName.end(); ++it)
-        for(double t : it->second) u.insert(t);
+//     for(std::map<std::string, std::vector<double>>::iterator it = psiTimesByName.begin(); it != psiTimesByName.end(); ++it)
+//         for(double t : it->second) u.insert(t);
     return std::vector<double>(u.begin(), u.end());
 }
 
-Probability::PriorSpec UserSettings::getPsiPrior(int t){
-    if(psiTypeNames.empty() == false){
-        std::map<std::string, Probability::PriorSpec>::iterator it = psiPriorByName.find(psiTypeNames[t]);
-        if(it != psiPriorByName.end()) return it->second;
-    }
-    return psiPrior;
-}
-
-std::vector<double> UserSettings::getPsiSkylineTimes(int t){
-    if(psiTypeNames.empty() == false){
-        std::map<std::string, std::vector<double>>::iterator it = psiTimesByName.find(psiTypeNames[t]);
-        if(it != psiTimesByName.end()) return it->second;
-    }
-    return psiSkylineTimes;
-}
-
-RateMode UserSettings::getPsiMode(int t){
-    if(psiTypeNames.empty() == false){
-        std::map<std::string, RateMode>::iterator it = psiModeByName.find(psiTypeNames[t]);
-        if(it != psiModeByName.end()) return it->second;
-    }
-    return psiMode;
-}
-
-OUHyperSpec UserSettings::getPsiOU(int t){
-    if(psiTypeNames.empty() == false){
-        std::map<std::string, OUHyperSpec>::iterator it = psiOUByName.find(psiTypeNames[t]);
-        if(it != psiOUByName.end()) return it->second;
-    }
-    return psiOU;
-}
-
-std::vector<int> UserSettings::getPsiGroups(int t){
-    if(psiTypeNames.empty() == false){
-        std::map<std::string, std::vector<int>>::iterator it = psiGroupsByName.find(psiTypeNames[t]);
-        if(it != psiGroupsByName.end()) return it->second;
-        return std::vector<int>();
-    }
-    return psiGroups;
-}
-
-std::vector<std::string> UserSettings::getPsiGroupNames(int t){
-    if(psiTypeNames.empty() == false){
-        std::map<std::string, std::vector<std::string>>::iterator it = psiGroupNamesByName.find(psiTypeNames[t]);
-        if(it != psiGroupNamesByName.end()) return it->second;
-        return std::vector<std::string>();
-    }
-    return psiGroupNames;
-}
-
-void UserSettings::setPathPoint(double t, const std::string& text, bool pilot) {
-    pathT = t;
-    pathPilot = pilot;
-    std::string tag = (pilot ? "_pilot_t" : "_t") + text;
-    parametersOut = parametersOutBase;
-    size_t d = parametersOut.rfind(".log");
-    parametersOut.insert(d != std::string::npos ? d : parametersOut.size(), tag);
-    treeOut = treeOutBase;
-    if (treeOut.empty() == false)
-        treeOut.insert(treeOut.rfind(".trees"), tag);
-}
-
-std::map<int,Probability::PriorSpec> UserSettings::getPsiGroupPrior(int t){
-    if(psiTypeNames.empty() == false){
-        std::map<std::string, std::map<int,Probability::PriorSpec>>::iterator it = psiGroupPriorByName.find(psiTypeNames[t]);
-        if(it != psiGroupPriorByName.end()) return it->second;
-        return std::map<int,Probability::PriorSpec>();
-    }
-    return psiGroupPrior;
-}
-
+// Probability::PriorSpec UserSettings::getPsiPrior(int t){
+//     if(psiTypeNames.empty() == false){
+//         std::map<std::string, Probability::PriorSpec>::iterator it = psiPriorByName.find(psiTypeNames[t]);
+//         if(it != psiPriorByName.end()) return it->second;
+//     }
+//     return psiPrior;
+// }
+// 
+// std::vector<double> UserSettings::getPsiSkylineTimes(int t){
+//     if(psiTypeNames.empty() == false){
+//         std::map<std::string, std::vector<double>>::iterator it = psiTimesByName.find(psiTypeNames[t]);
+//         if(it != psiTimesByName.end()) return it->second;
+//     }
+//     return psiSkylineTimes;
+// }
+// 
+// RateMode UserSettings::getPsiMode(int t){
+//     if(psiTypeNames.empty() == false){
+//         std::map<std::string, RateMode>::iterator it = psiModeByName.find(psiTypeNames[t]);
+//         if(it != psiModeByName.end()) return it->second;
+//     }
+//     return psiMode;
+// }
+// 
+// OUHyperSpec UserSettings::getPsiOU(int t){
+//     if(psiTypeNames.empty() == false){
+//         std::map<std::string, OUHyperSpec>::iterator it = psiOUByName.find(psiTypeNames[t]);
+//         if(it != psiOUByName.end()) return it->second;
+//     }
+//     return psiOU;
+// }
+// 
+// std::vector<int> UserSettings::getPsiGroups(int t){
+//     if(psiTypeNames.empty() == false){
+//         std::map<std::string, std::vector<int>>::iterator it = psiGroupsByName.find(psiTypeNames[t]);
+//         if(it != psiGroupsByName.end()) return it->second;
+//         return std::vector<int>();
+//     }
+//     return psiGroups;
+// }
+// 
+// std::vector<std::string> UserSettings::getPsiGroupNames(int t){
+//     if(psiTypeNames.empty() == false){
+//         std::map<std::string, std::vector<std::string>>::iterator it = psiGroupNamesByName.find(psiTypeNames[t]);
+//         if(it != psiGroupNamesByName.end()) return it->second;
+//         return std::vector<std::string>();
+//     }
+//     return psiGroupNames;
+// }
+// 
+// void UserSettings::setPathPoint(double t, const std::string& text, bool pilot) {
+//     pathT = t;
+//     pathPilot = pilot;
+//     std::string tag = (pilot ? "_pilot_t" : "_t") + text;
+//     parametersOut = parametersOutBase;
+//     size_t d = parametersOut.rfind(".log");
+//     parametersOut.insert(d != std::string::npos ? d : parametersOut.size(), tag);
+//     treeOut = treeOutBase;
+//     if (treeOut.empty() == false)
+//         treeOut.insert(treeOut.rfind(".trees"), tag);
+// }
+// 
+// std::map<int,Probability::PriorSpec> UserSettings::getPsiGroupPrior(int t){
+//     if(psiTypeNames.empty() == false){
+//         std::map<std::string, std::map<int,Probability::PriorSpec>>::iterator it = psiGroupPriorByName.find(psiTypeNames[t]);
+//         if(it != psiGroupPriorByName.end()) return it->second;
+//         return std::map<int,Probability::PriorSpec>();
+//     }
+//     return psiGroupPrior;
+// }
+// 
 void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode) {
     // Defaults
     treeOut         = "";
@@ -209,34 +209,37 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     for (int i = 0; i < argc; i++)
         arguments.push_back(std::string(argv[i]));
 
-    BfConfig bf;
+//     BfConfig bf;
     if (sbcMode == false) {
         std::vector<std::string> cfgTokens;
         for (size_t i = 1; i < arguments.size(); ) {
+//             if (arguments[i] == "-config" || arguments[i] == "-config_bf") {
             if (arguments[i] == "-config") {
                 if (i + 1 >= arguments.size()) Msg::error("flag \"" + arguments[i] + "\" expects a file path.");
-                if (arguments[i] == "-config") {
-                    configFilePath = arguments[i + 1];
-                    cfgTokens = ConfigReader::translate(configFilePath);
-                } else {
-                    bfConfigPath = arguments[i + 1];
-                    bf = ConfigReader::translateBf(bfConfigPath);
-                }
+//                 if (arguments[i] == "-config") {
+//                     configFilePath = arguments[i + 1];
+//                     cfgTokens = ConfigReader::translate(configFilePath);
+//                 } else {
+//                     bfConfigPath = arguments[i + 1];
+//                     bf = ConfigReader::translateBf(bfConfigPath);
+//                 }
+                configFilePath = arguments[i + 1];
+                cfgTokens = ConfigReader::translate(configFilePath);
                 arguments.erase(arguments.begin() + i, arguments.begin() + i + 2);
             } else {
                 i++;
             }
         }
-        if (configFilePath.empty() == false && bfConfigPath.empty() == false)
-            Msg::error("-config and -config_bf cannot be used together. -config_bf holds both models and the MCMC settings, so it replaces -config.");
-        cliArgs = arguments;
-        if (bfConfigPath.empty() == false) {
-            for (size_t i = 1; i + 1 < arguments.size(); i++)
-                if (arguments[i] == "-bf_posterior")
-                    bfPosterior = (arguments[i + 1] == "1") ? 1 : 0;
-            cfgTokens = bf.model[bfPosterior == 1 ? 1 : 0];
-            cfgTokens.insert(cfgTokens.end(), bf.shared.begin(), bf.shared.end());
-        }
+//         if (configFilePath.empty() == false && bfConfigPath.empty() == false)
+//             Msg::error("-config and -config_bf cannot be used together. -config_bf holds both models and the MCMC settings, so it replaces -config.");
+//         cliArgs = arguments;
+//         if (bfConfigPath.empty() == false) {
+//             for (size_t i = 1; i + 1 < arguments.size(); i++)
+//                 if (arguments[i] == "-bf_posterior")
+//                     bfPosterior = (arguments[i + 1] == "1") ? 1 : 0;
+//             cfgTokens = bf.model[bfPosterior == 1 ? 1 : 0];
+//             cfgTokens.insert(cfgTokens.end(), bf.shared.begin(), bf.shared.end());
+//         }
         for (size_t i = 0; i < cfgTokens.size(); i++)
             arguments.push_back(cfgTokens[i]);
     }
@@ -257,6 +260,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
 
     std::set<std::string> knownFlags = {
         "-tree_output", "-log_output", "-backbone_tree", "-clade_def", "-fossils", "-unsampled_extants", "-conditioning", "-rho", "-seed", "-chain_length", "-thinning", "-coupled_chains", "-cores", "-help", "-h",
+//         "-lambda_prior", "-mu_prior", "-psi_prior", "-psi_types",
         "-lambda_prior", "-mu_prior", "-psi_prior",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_partitions",
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode",
@@ -269,6 +273,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     };
     std::set<std::string> valueFlags = {
         "-tree_output", "-log_output", "-backbone_tree", "-clade_def", "-fossils", "-unsampled_extants", "-conditioning", "-rho", "-seed", "-chain_length", "-thinning", "-coupled_chains", "-cores",
+//         "-lambda_prior", "-mu_prior", "-psi_prior", "-psi_types",
         "-lambda_prior", "-mu_prior", "-psi_prior",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_partitions",
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode",
@@ -281,44 +286,48 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     };
     knownFlags.insert("-fbd_model");
     valueFlags.insert("-fbd_model");
-    auto parseTs = [](const std::string& flag, const std::string& val, const std::string& expects, std::vector<double>& ts, std::vector<std::string>& text) {
-        ts.clear();
-        text.clear();
-        std::istringstream in(val);
-        std::string tok;
-        while (std::getline(in, tok, ',')) {
-            double t = 0.0;
-            try {
-                t = std::stod(tok);
-            } catch (...) {
-                Msg::error("flag \"" + flag + "\" expects " + expects + ", but got \"" + val + "\".");
-            }
-            if (t < 0.0 || t > 1.0)
-                Msg::error("flag \"" + flag + "\": " + tok + " is not in [0, 1].");
-            if (ts.empty() == false && t <= ts.back())
-                Msg::error("flag \"" + flag + "\": the values must increase, but " + tok + " follows " + text.back() + ".");
-            ts.push_back(t);
-            text.push_back(tok);
-        }
-    };
-    auto parsePositive = [](const std::string& flag, const std::string& val) {
-        double x = 0.0;
-        try {
-            x = std::stod(val);
-        } catch (...) {
-            Msg::error("flag \"" + flag + "\" expects a positive number, but got \"" + val + "\".");
-        }
-        if (x <= 0.0)
-            Msg::error("flag \"" + flag + "\" expects a positive number, but got \"" + val + "\".");
-        return x;
-    };
-    auto parseCount = [&](const std::string& flag, const std::string& val, int least) {
-        double x = parsePositive(flag, val);
-        if (x != std::floor(x) || x < (double)least)
-            Msg::error("flag \"" + flag + "\" expects an integer of at least " + std::to_string(least) + ", but got \"" + val + "\".");
-        return (int)x;
-    };
-    std::string bfFlag;
+//     knownFlags.insert({"-bf_t", "-bf_pilot", "-bf_posterior", "-bf_pilot_frac", "-bf_pilot_nodes", "-bf_intervals", "-bf_bridge_tol", "-bf_bridge_iter", "-bf_batches", "-bf_parallel_runs"});
+//     knownFlags.insert("-psi_rj_main");
+//     valueFlags.insert("-psi_rj_main");
+//     valueFlags.insert({"-bf_t", "-bf_posterior", "-bf_pilot_frac", "-bf_pilot_nodes", "-bf_intervals", "-bf_bridge_tol", "-bf_bridge_iter", "-bf_batches", "-bf_parallel_runs"});
+//     auto parseTs = [](const std::string& flag, const std::string& val, const std::string& expects, std::vector<double>& ts, std::vector<std::string>& text) {
+//         ts.clear();
+//         text.clear();
+//         std::istringstream in(val);
+//         std::string tok;
+//         while (std::getline(in, tok, ',')) {
+//             double t = 0.0;
+//             try {
+//                 t = std::stod(tok);
+//             } catch (...) {
+//                 Msg::error("flag \"" + flag + "\" expects " + expects + ", but got \"" + val + "\".");
+//             }
+//             if (t < 0.0 || t > 1.0)
+//                 Msg::error("flag \"" + flag + "\": " + tok + " is not in [0, 1].");
+//             if (ts.empty() == false && t <= ts.back())
+//                 Msg::error("flag \"" + flag + "\": the values must increase, but " + tok + " follows " + text.back() + ".");
+//             ts.push_back(t);
+//             text.push_back(tok);
+//         }
+//     };
+//     auto parsePositive = [](const std::string& flag, const std::string& val) {
+//         double x = 0.0;
+//         try {
+//             x = std::stod(val);
+//         } catch (...) {
+//             Msg::error("flag \"" + flag + "\" expects a positive number, but got \"" + val + "\".");
+//         }
+//         if (x <= 0.0)
+//             Msg::error("flag \"" + flag + "\" expects a positive number, but got \"" + val + "\".");
+//         return x;
+//     };
+//     auto parseCount = [&](const std::string& flag, const std::string& val, int least) {
+//         double x = parsePositive(flag, val);
+//         if (x != std::floor(x) || x < (double)least)
+//             Msg::error("flag \"" + flag + "\" expects an integer of at least " + std::to_string(least) + ", but got \"" + val + "\".");
+//         return (int)x;
+//     };
+//     std::string bfFlag;
 
     bool coupledChainsProvided = false;
     for (int i = 1; i < (int)arguments.size(); i++) {
@@ -331,12 +340,12 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         if (knownFlags.find(arg) == knownFlags.end())
             Msg::error("unknown flag \"" + arg + "\".");
 
-        if (arg == "-bf_pilot") {
-            pathPilot = true;
-            bfFlag = arg;
-            continue;
-        }
-
+//         if (arg == "-bf_pilot") {
+//             pathPilot = true;
+//             bfFlag = arg;
+//             continue;
+//         }
+// 
         if (arg == "-resume") {
             resume = true;
             continue;
@@ -404,33 +413,33 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 }
                 if (rho <= 0.0 || rho > 1.0)
                     Msg::error("flag \"-rho\" must be in (0, 1].");
-            } else if (arg.rfind("-bf_", 0) == 0) {
-                bfFlag = arg;
-                if (arg == "-bf_t") {
-                    parseTs(arg, val, "numbers separated by commas", bfLadder, bfLadderText);
-                    if (bfLadder.size() > 1 && (bfLadder.front() != 0.0 || bfLadder.back() != 1.0))
-                        Msg::error("flag \"-bf_t\": with several values, the first must be 0 and the last 1, but they are " + bfLadderText.front() + " and " + bfLadderText.back() + ".");
-                } else if (arg == "-bf_pilot_frac") {
-                    bfPilotFrac = parsePositive(arg, val);
-                    if (bfPilotFrac > 1.0)
-                        Msg::error("flag \"" + arg + "\" expects a number in (0, 1], but got \"" + val + "\".");
-                } else if (arg == "-bf_pilot_nodes") {
-                    bfPilotNodes = parseCount(arg, val, 1);
-                } else if (arg == "-bf_intervals") {
-                    bfIntervals = parsePositive(arg, val);
-                } else if (arg == "-bf_bridge_tol") {
-                    bfBridgeTol = parsePositive(arg, val);
-                } else if (arg == "-bf_bridge_iter") {
-                    bfBridgeIter = parseCount(arg, val, 1);
-                } else if (arg == "-bf_batches") {
-                    bfBatches = parseCount(arg, val, 2);
-                } else if (arg == "-bf_parallel_runs") {
-                    bfParallelRuns = parseCount(arg, val, 1);
-                } else if (val != "0" && val != "1") {
-                    Msg::error("flag \"-bf_posterior\" expects 0 or 1, but got \"" + val + "\".");
-                }
-            } else if (arg == "-psi_rj_main") {
-                psiRjMainName = val;
+//             } else if (arg.rfind("-bf_", 0) == 0) {
+//                 bfFlag = arg;
+//                 if (arg == "-bf_t") {
+//                     parseTs(arg, val, "numbers separated by commas", bfLadder, bfLadderText);
+//                     if (bfLadder.size() > 1 && (bfLadder.front() != 0.0 || bfLadder.back() != 1.0))
+//                         Msg::error("flag \"-bf_t\": with several values, the first must be 0 and the last 1, but they are " + bfLadderText.front() + " and " + bfLadderText.back() + ".");
+//                 } else if (arg == "-bf_pilot_frac") {
+//                     bfPilotFrac = parsePositive(arg, val);
+//                     if (bfPilotFrac > 1.0)
+//                         Msg::error("flag \"" + arg + "\" expects a number in (0, 1], but got \"" + val + "\".");
+//                 } else if (arg == "-bf_pilot_nodes") {
+//                     bfPilotNodes = parseCount(arg, val, 1);
+//                 } else if (arg == "-bf_intervals") {
+//                     bfIntervals = parsePositive(arg, val);
+//                 } else if (arg == "-bf_bridge_tol") {
+//                     bfBridgeTol = parsePositive(arg, val);
+//                 } else if (arg == "-bf_bridge_iter") {
+//                     bfBridgeIter = parseCount(arg, val, 1);
+//                 } else if (arg == "-bf_batches") {
+//                     bfBatches = parseCount(arg, val, 2);
+//                 } else if (arg == "-bf_parallel_runs") {
+//                     bfParallelRuns = parseCount(arg, val, 1);
+//                 } else if (val != "0" && val != "1") {
+//                     Msg::error("flag \"-bf_posterior\" expects 0 or 1, but got \"" + val + "\".");
+//                 }
+//             } else if (arg == "-psi_rj_main") {
+//                 psiRjMainName = val;
             } else if (arg == "-seed") {
                 try {
                     seed = (unsigned int)std::stoul(val);
@@ -438,96 +447,108 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                     Msg::error("flag \"-seed\" expects a non-negative integer, but got \"" + val + "\".");
                 }
                 seedSet = true;
-            } else if (arg == "-lambda_prior" || arg == "-mu_prior") {
-                // <prior> (all bins) OR <group_id>:<prior> (per-chunk override)
+//             } else if (arg == "-lambda_prior" || arg == "-mu_prior") {
+//                 // <prior> (all bins) OR <group_id>:<prior> (per-chunk override)
+            } else if (arg == "-lambda_prior" || arg == "-mu_prior" || arg == "-psi_prior") {
                 size_t c = val.find(':');
                 std::string first = (c == std::string::npos) ? val : val.substr(0, c);
                 bool isGid = (c != std::string::npos) && first.empty() == false && std::all_of(first.begin(), first.end(), ::isdigit);
-                Probability::PriorSpec& base = (arg == "-lambda_prior") ? lambdaPrior : muPrior;
-                std::map<int, Probability::PriorSpec>& gp = (arg == "-lambda_prior") ? lambdaGroupPrior : muGroupPrior;
+//                 Probability::PriorSpec& base = (arg == "-lambda_prior") ? lambdaPrior : muPrior;
+//                 std::map<int, Probability::PriorSpec>& gp = (arg == "-lambda_prior") ? lambdaGroupPrior : muGroupPrior;
+                Probability::PriorSpec& base = (arg == "-lambda_prior") ? lambdaPrior : (arg == "-mu_prior") ? muPrior : psiPrior;
+                std::map<int, Probability::PriorSpec>& gp = (arg == "-lambda_prior") ? lambdaGroupPrior : (arg == "-mu_prior") ? muGroupPrior : psiGroupPrior;
                 if (isGid) {
                     Probability::PriorSpec ps; parsePriorInto(val.substr(c + 1), ps.family, ps.p1, ps.p2, ps.p3); ps.set = true;
                     gp[std::stoi(first)] = ps;
                 } else {
                     parsePriorInto(val, base.family, base.p1, base.p2, base.p3); base.set = true;
                 }
-            } else if (arg == "-psi_prior") {
-                // <prior> | <type>:<prior> | <group_id>:<prior> | <type>:<group_id>:<prior>
-                size_t c = val.find(':');
-                std::string first = (c == std::string::npos) ? val : val.substr(0, c);
-                if (c == std::string::npos || isPriorFamilyKeyword(first)) {
-                    parsePriorInto(val, psiPrior.family, psiPrior.p1, psiPrior.p2, psiPrior.p3); psiPrior.set = true;
-                } else if (first.empty() == false && std::all_of(first.begin(), first.end(), ::isdigit)) {
-                    Probability::PriorSpec ps; parsePriorInto(val.substr(c + 1), ps.family, ps.p1, ps.p2, ps.p3); ps.set = true;
-                    psiGroupPrior[std::stoi(first)] = ps;
-                } else {
-                    std::string rest = val.substr(c + 1);
-                    size_t c2 = rest.find(':');
-                    std::string r0 = (c2 == std::string::npos) ? rest : rest.substr(0, c2);
-                    Probability::PriorSpec ps;
-                    if (c2 != std::string::npos && r0.empty() == false && std::all_of(r0.begin(), r0.end(), ::isdigit)) {
-                        parsePriorInto(rest.substr(c2 + 1), ps.family, ps.p1, ps.p2, ps.p3); ps.set = true;
-                        psiGroupPriorByName[first][std::stoi(r0)] = ps;
-                    } else {
-                        parsePriorInto(rest, ps.family, ps.p1, ps.p2, ps.p3); ps.set = true;
-                        psiPriorByName[first] = ps;
-                    }
-                }
+//             } else if (arg == "-psi_prior") {
+//                 // <prior> | <type>:<prior> | <group_id>:<prior> | <type>:<group_id>:<prior>
+//                 size_t c = val.find(':');
+//                 std::string first = (c == std::string::npos) ? val : val.substr(0, c);
+//                 if (c == std::string::npos || isPriorFamilyKeyword(first)) {
+//                     parsePriorInto(val, psiPrior.family, psiPrior.p1, psiPrior.p2, psiPrior.p3); psiPrior.set = true;
+//                 } else if (first.empty() == false && std::all_of(first.begin(), first.end(), ::isdigit)) {
+//                     Probability::PriorSpec ps; parsePriorInto(val.substr(c + 1), ps.family, ps.p1, ps.p2, ps.p3); ps.set = true;
+//                     psiGroupPrior[std::stoi(first)] = ps;
+//                 } else {
+//                     std::string rest = val.substr(c + 1);
+//                     size_t c2 = rest.find(':');
+//                     std::string r0 = (c2 == std::string::npos) ? rest : rest.substr(0, c2);
+//                     Probability::PriorSpec ps;
+//                     if (c2 != std::string::npos && r0.empty() == false && std::all_of(r0.begin(), r0.end(), ::isdigit)) {
+//                         parsePriorInto(rest.substr(c2 + 1), ps.family, ps.p1, ps.p2, ps.p3); ps.set = true;
+//                         psiGroupPriorByName[first][std::stoi(r0)] = ps;
+//                     } else {
+//                         parsePriorInto(rest, ps.family, ps.p1, ps.p2, ps.p3); ps.set = true;
+//                         psiPriorByName[first] = ps;
+//                     }
+//                 }
             } else if (arg == "-lambda_groups" || arg == "-mu_groups" || arg == "-psi_groups") {
-                std::string nm, lst = val;
-                if (arg == "-psi_groups") { size_t c = val.find(':'); if (c != std::string::npos) { nm = val.substr(0, c); lst = val.substr(c + 1); } }
+//                 std::string nm, lst = val;
+//                 if (arg == "-psi_groups") { size_t c = val.find(':'); if (c != std::string::npos) { nm = val.substr(0, c); lst = val.substr(c + 1); } }
                 std::vector<int> g;
-                std::stringstream ss(lst); std::string tok;
+//                 std::stringstream ss(lst); std::string tok;
+                std::stringstream ss(val); std::string tok;
                 while (std::getline(ss, tok, ',')) if (tok.empty() == false) {
                     try { g.push_back(std::stoi(tok)); }
                     catch (...) { Msg::error("flag \"" + arg + "\" expects comma-separated group IDs, but got \"" + val + "\"."); }
                 }
                 if (arg == "-lambda_groups") lambdaGroups = g;
                 else if (arg == "-mu_groups") muGroups = g;
-                else if (nm.empty()) psiGroups = g; else psiGroupsByName[nm] = g;
+//                 else if (nm.empty()) psiGroups = g; else psiGroupsByName[nm] = g;
+                else psiGroups = g;
             } else if (arg == "-lambda_group_names" || arg == "-mu_group_names" || arg == "-psi_group_names") {
-                std::string nm, lst = val;
-                if (arg == "-psi_group_names") { size_t c = val.find(':'); if (c != std::string::npos) { nm = val.substr(0, c); lst = val.substr(c + 1); } }
+//                 std::string nm, lst = val;
+//                 if (arg == "-psi_group_names") { size_t c = val.find(':'); if (c != std::string::npos) { nm = val.substr(0, c); lst = val.substr(c + 1); } }
                 std::vector<std::string> g;
-                std::stringstream ss(lst); std::string tok;
+//                 std::stringstream ss(lst); std::string tok;
+                std::stringstream ss(val); std::string tok;
                 while (std::getline(ss, tok, ',')) if (tok.empty() == false) g.push_back(tok);
                 if (arg == "-lambda_group_names") lambdaGroupNames = g;
                 else if (arg == "-mu_group_names") muGroupNames = g;
-                else if (nm.empty()) psiGroupNames = g; else psiGroupNamesByName[nm] = g;
-            } else if (arg == "-psi_types") {
-                std::stringstream ss(val); std::string tok;
-                while (std::getline(ss, tok, ',')) if (tok.empty() == false) psiTypeNames.push_back(tok);
-            } else if (arg == "-lambda_prior_mode" || arg == "-mu_prior_mode") {
+//                 else if (nm.empty()) psiGroupNames = g; else psiGroupNamesByName[nm] = g;
+//             } else if (arg == "-psi_types") {
+//                 std::stringstream ss(val); std::string tok;
+//                 while (std::getline(ss, tok, ',')) if (tok.empty() == false) psiTypeNames.push_back(tok);
+//             } else if (arg == "-lambda_prior_mode" || arg == "-mu_prior_mode") {
+                else psiGroupNames = g;
+            } else if (arg == "-lambda_prior_mode" || arg == "-mu_prior_mode" || arg == "-psi_prior_mode") {
                 std::string v = val;
                 for (char& ch : v) ch = std::tolower((unsigned char)ch);
                 if (v != "indep" && v != "ou") Msg::error("flag \"" + arg + "\" expects indep or ou, but got \"" + val + "\".");
                 RateMode m = (v == "ou") ? RateMode::OU : RateMode::INDEP;
                 if (arg == "-lambda_prior_mode") lambdaMode = m;
-                else muMode = m;
-            } else if (arg == "-psi_prior_mode") {
-                std::string nm, ms = val;
-                size_t c = val.find(':');
-                if (c != std::string::npos) { nm = val.substr(0, c); ms = val.substr(c + 1); }
-                for (char& ch : ms) ch = std::tolower((unsigned char)ch);
-                if (ms != "indep" && ms != "ou") Msg::error("flag \"-psi_prior_mode\" expects indep or ou, but got \"" + ms + "\".");
-                RateMode m = (ms == "ou") ? RateMode::OU : RateMode::INDEP;
-                if (nm.empty()) psiMode = m; else psiModeByName[nm] = m;
+//                 else muMode = m;
+//             } else if (arg == "-psi_prior_mode") {
+//                 std::string nm, ms = val;
+//                 size_t c = val.find(':');
+//                 if (c != std::string::npos) { nm = val.substr(0, c); ms = val.substr(c + 1); }
+//                 for (char& ch : ms) ch = std::tolower((unsigned char)ch);
+//                 if (ms != "indep" && ms != "ou") Msg::error("flag \"-psi_prior_mode\" expects indep or ou, but got \"" + ms + "\".");
+//                 RateMode m = (ms == "ou") ? RateMode::OU : RateMode::INDEP;
+//                 if (nm.empty()) psiMode = m; else psiModeByName[nm] = m;
+                else if (arg == "-mu_prior_mode") muMode = m;
+                else psiMode = m;
             } else if (arg == "-lambda_ou_theta" || arg == "-mu_ou_theta" || arg == "-psi_ou_theta"
                     || arg == "-lambda_ou_sd" || arg == "-mu_ou_sd" || arg == "-psi_ou_sd"
                     || arg == "-lambda_ou_nu" || arg == "-mu_ou_nu" || arg == "-psi_ou_nu") {
-                bool isPsi = (arg.rfind("-psi_", 0) == 0);
-                std::string nm, body = val;
-                if (isPsi) {
-                    size_t c = val.find(':');
-                    if (c != std::string::npos && isPriorFamilyKeyword(val.substr(0, c)) == false) { nm = val.substr(0, c); body = val.substr(c + 1); }
-                }
+//                 bool isPsi = (arg.rfind("-psi_", 0) == 0);
+//                 std::string nm, body = val;
+//                 if (isPsi) {
+//                     size_t c = val.find(':');
+//                     if (c != std::string::npos && isPriorFamilyKeyword(val.substr(0, c)) == false) { nm = val.substr(0, c); body = val.substr(c + 1); }
+//                 }
                 OUHyperSpec* target;
                 if (arg.rfind("-lambda_", 0) == 0)   target = &lambdaOU;
                 else if (arg.rfind("-mu_", 0) == 0)   target = &muOU;
-                else                                  target = nm.empty() ? &psiOU : &psiOUByName[nm];
+//                 else                                  target = nm.empty() ? &psiOU : &psiOUByName[nm];
+                else                                  target = &psiOU;
                 Probability::PriorSpec& ps = (arg.find("_ou_theta") != std::string::npos) ? target->thetaPrior
                                            : (arg.find("_ou_sd") != std::string::npos) ? target->sdPrior : target->nuPrior;
-                parsePriorInto(body, ps.family, ps.p1, ps.p2, ps.p3);
+//                 parsePriorInto(body, ps.family, ps.p1, ps.p2, ps.p3);
+                parsePriorInto(val, ps.family, ps.p1, ps.p2, ps.p3);
                 ps.set = true;
             } else if (arg == "-age_offset") {
                 try { ageOffset = std::stod(val); } catch (...) { Msg::error("flag \"-age_offset\" expects a number, but got \"" + val + "\"."); }
@@ -543,9 +564,10 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
             } else if (arg == "-mu_skyline_times") {
                 parseSkylineTimes(arg, val, muSkylineTimes);
             } else if (arg == "-psi_skyline_times") {
-                size_t c = val.find(':');
-                if (c == std::string::npos) parseSkylineTimes(arg, val, psiSkylineTimes);
-                else { std::vector<double> tv; parseSkylineTimes(arg, val.substr(c + 1), tv); psiTimesByName[val.substr(0, c)] = tv; }
+//                 size_t c = val.find(':');
+//                 if (c == std::string::npos) parseSkylineTimes(arg, val, psiSkylineTimes);
+//                 else { std::vector<double> tv; parseSkylineTimes(arg, val.substr(c + 1), tv); psiTimesByName[val.substr(0, c)] = tv; }
+                parseSkylineTimes(arg, val, psiSkylineTimes);
             } else if (arg == "-hessian") {
                 hessianFile = val;
             } else if (arg == "-sequence") {
@@ -817,8 +839,8 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         double minCut = 0.0;
         bool haveCut = false;
         std::vector<std::vector<double>*> cutVecs = { &lambdaSkylineTimes, &muSkylineTimes, &psiSkylineTimes };
-        for (std::map<std::string, std::vector<double>>::iterator it = psiTimesByName.begin(); it != psiTimesByName.end(); ++it)
-            cutVecs.push_back(&it->second);
+//         for (std::map<std::string, std::vector<double>>::iterator it = psiTimesByName.begin(); it != psiTimesByName.end(); ++it)
+//             cutVecs.push_back(&it->second);
         for (std::vector<double>* v : cutVecs)
             for (double t : *v) { if (haveCut == false || t < minCut) { minCut = t; haveCut = true; } }
         if (haveCut && ageOffset >= minCut)
@@ -838,100 +860,97 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
         }
     }
 
-    if (bfConfigPath.empty() && bfFlag.empty() == false)
-        Msg::error(bfFlag + " requires -config_bf.");
-    if (bfConfigPath.empty() == false) {
-        typedef std::vector<std::pair<std::string, std::vector<std::string>>> Groups;
-        auto groups = [&](const std::vector<std::string>& v, size_t from) {
-            Groups g;
-            for (size_t i = from; i < v.size(); i++) {
-                if (knownFlags.count(v[i]) > 0 || g.empty())
-                    g.push_back({v[i], {}});
-                else
-                    g.back().second.push_back(v[i]);
-            }
-            return g;
-        };
-        auto select = [&](const Groups& g, const std::string& section) {
-            Groups out;
-            for (const auto& x : g)
-                if (ConfigReader::sectionOf(x.first) == section && (section.empty() == false || (x.first != "-log_output" && x.first != "-tree_output")))
-                    out.push_back(x);
-            return out;
-        };
-        Groups ga = groups(bf.model[0], 0), gb = groups(bf.model[1], 0);
-        Groups na = select(ga, ""), nb = select(gb, "");
-        for (size_t i = 0; i < std::max(na.size(), nb.size()); i++)
-            if (i >= na.size() || i >= nb.size() || na[i] != nb[i])
-                Msg::error("-config_bf " + bfConfigPath + ": [model 1] and [model 0] differ at '" + (i < nb.size() ? nb[i].first : na[i].first)
-                           + "', outside the rate, clock and substitution sections. The two models may differ only in the [lambda], [mu], [psi <type>], [clock] and [substitution] sections.");
-        sharedLambda = select(ga, "lambda") == select(gb, "lambda");
-        sharedMu = select(ga, "mu") == select(gb, "mu");
-        sharedPsi = select(ga, "psi") == select(gb, "psi");
-        auto partitionOf = [](const Groups& g) {
-            for (const auto& x : g)
-                if (x.first == "-partition") return x.second;
-            return std::vector<std::string>();
-        };
-        sharedClock = select(ga, "clock") == select(gb, "clock") && partitionOf(ga) == partitionOf(gb);
-        sharedSubst = select(ga, "substitution") == select(gb, "substitution");
-        if (parametersOut.empty())
-            Msg::error("-config_bf " + bfConfigPath + ": set log_output before [model 0]. Every run of the Bayes factor calculation writes its output files under that prefix.");
-        std::string logBase = parametersOut.substr(0, parametersOut.size() - 4);
-        for (int k = 0; k < 2; k++)
-            priorLogGiven[k] = bf.priorLog[k].empty() == false;
-        posteriorBaseA = priorLogGiven[0] ? bf.priorLog[0] : logBase + "_0";
-        posteriorBaseB = priorLogGiven[1] ? bf.priorLog[1] : logBase + "_1";
-        if (bfPosterior >= 0) {
-            std::string pb = (bfPosterior == 0) ? posteriorBaseA : posteriorBaseB;
-            parametersOut = pb + ".log";
-            if (treeOut.empty() == false)
-                treeOut = pb + ".trees";
-        } else {
-            std::vector<std::string> bArgs = {arguments[0]};
-            for (const auto& x : groups(cliArgs, 1)) {
-                if (x.first.rfind("-bf_", 0) == 0) continue;
-                bArgs.push_back(x.first);
-                bArgs.insert(bArgs.end(), x.second.begin(), x.second.end());
-            }
-            bArgs.insert(bArgs.end(), bf.model[1].begin(), bf.model[1].end());
-            for (const auto& x : groups(bf.shared, 0)) {
-                if (x.first.rfind("-bf_", 0) == 0) continue;
-                bArgs.push_back(x.first);
-                bArgs.insert(bArgs.end(), x.second.begin(), x.second.end());
-            }
-            std::vector<const char*> bArgv;
-            for (const std::string& s : bArgs)
-                bArgv.push_back(s.c_str());
-            modelBSettings = new UserSettings;
-            modelBSettings->initializeSettings((int)bArgv.size(), bArgv.data());
-            std::set<std::string> ta(psiTypeNames.begin(), psiTypeNames.end()), tb(modelBSettings->psiTypeNames.begin(), modelBSettings->psiTypeNames.end());
-            auto joined = [](const std::set<std::string>& x) {
-                std::string s;
-                for (const std::string& t : x) s += (s.empty() ? "" : ",") + t;
-                return s.empty() ? std::string("none") : s;
-            };
-            if (ta.size() > 1 && tb.size() > 1 && ta != tb)
-                Msg::error("-config_bf: when both models have several psi types, they must name the same types, but [model 0] names "
-                           + joined(ta) + " and [model 1] names " + joined(tb) + ". To compare one psi with several types, give one model a single [psi] section.");
-            parametersOutBase = parametersOut;
-            treeOutBase = treeOut;
-            if (bfLadder.size() == 1)
-                setPathPoint(bfLadder[0], bfLadderText[0], pathPilot);
-        }
-    }
-    if (psiPriorByName.size() + psiGroupPriorByName.size() + psiTimesByName.size() + psiGroupsByName.size()
-        + psiGroupNamesByName.size() + psiModeByName.size() + psiOUByName.size() > 0)
-        Msg::error("a -psi_* flag value starts with a type name and ':', but psi has a single type. Write the value without that prefix.");
-    if (psiRjMainName.empty() == false) {
-        if (bfConfigPath.empty() == false)
-            Msg::error("psi_rj_main cannot be combined with -config_bf.");
-        std::vector<std::string>::iterator it = std::find(psiTypeNames.begin(), psiTypeNames.end(), psiRjMainName);
-        if (psiTypeNames.size() < 2 || it == psiTypeNames.end())
-            Msg::error("psi_rj_main = " + psiRjMainName + " must name one of the [psi <type>] sections, and there must be at least two such sections.");
-        psiRjMain = (int)(it - psiTypeNames.begin());
-    }
-
+//     if (bfConfigPath.empty() && bfFlag.empty() == false)
+//         Msg::error(bfFlag + " requires -config_bf.");
+//     if (bfConfigPath.empty() == false) {
+//         typedef std::vector<std::pair<std::string, std::vector<std::string>>> Groups;
+//         auto groups = [&](const std::vector<std::string>& v, size_t from) {
+//             Groups g;
+//             for (size_t i = from; i < v.size(); i++) {
+//                 if (knownFlags.count(v[i]) > 0 || g.empty())
+//                     g.push_back({v[i], {}});
+//                 else
+//                     g.back().second.push_back(v[i]);
+//             }
+//             return g;
+//         };
+//         auto select = [&](const Groups& g, const std::string& section) {
+//             Groups out;
+//             for (const auto& x : g)
+//                 if (ConfigReader::sectionOf(x.first) == section && (section.empty() == false || (x.first != "-log_output" && x.first != "-tree_output")))
+//                     out.push_back(x);
+//             return out;
+//         };
+//         Groups ga = groups(bf.model[0], 0), gb = groups(bf.model[1], 0);
+//         Groups na = select(ga, ""), nb = select(gb, "");
+//         for (size_t i = 0; i < std::max(na.size(), nb.size()); i++)
+//             if (i >= na.size() || i >= nb.size() || na[i] != nb[i])
+//                 Msg::error("-config_bf " + bfConfigPath + ": [model 1] and [model 0] differ at '" + (i < nb.size() ? nb[i].first : na[i].first)
+//                            + "', outside the rate, clock and substitution sections. The two models may differ only in the [lambda], [mu], [psi <type>], [clock] and [substitution] sections.");
+//         sharedLambda = select(ga, "lambda") == select(gb, "lambda");
+//         sharedMu = select(ga, "mu") == select(gb, "mu");
+//         sharedPsi = select(ga, "psi") == select(gb, "psi");
+//         auto partitionOf = [](const Groups& g) {
+//             for (const auto& x : g)
+//                 if (x.first == "-partition") return x.second;
+//             return std::vector<std::string>();
+//         };
+//         sharedClock = select(ga, "clock") == select(gb, "clock") && partitionOf(ga) == partitionOf(gb);
+//         sharedSubst = select(ga, "substitution") == select(gb, "substitution");
+//         if (parametersOut.empty())
+//             Msg::error("-config_bf " + bfConfigPath + ": set log_output before [model 0]. Every run of the Bayes factor calculation writes its output files under that prefix.");
+//         std::string logBase = parametersOut.substr(0, parametersOut.size() - 4);
+//         for (int k = 0; k < 2; k++)
+//             priorLogGiven[k] = bf.priorLog[k].empty() == false;
+//         posteriorBaseA = priorLogGiven[0] ? bf.priorLog[0] : logBase + "_0";
+//         posteriorBaseB = priorLogGiven[1] ? bf.priorLog[1] : logBase + "_1";
+//         if (bfPosterior >= 0) {
+//             std::string pb = (bfPosterior == 0) ? posteriorBaseA : posteriorBaseB;
+//             parametersOut = pb + ".log";
+//             if (treeOut.empty() == false)
+//                 treeOut = pb + ".trees";
+//         } else {
+//             std::vector<std::string> bArgs = {arguments[0]};
+//             for (const auto& x : groups(cliArgs, 1)) {
+//                 if (x.first.rfind("-bf_", 0) == 0) continue;
+//                 bArgs.push_back(x.first);
+//                 bArgs.insert(bArgs.end(), x.second.begin(), x.second.end());
+//             }
+//             bArgs.insert(bArgs.end(), bf.model[1].begin(), bf.model[1].end());
+//             for (const auto& x : groups(bf.shared, 0)) {
+//                 if (x.first.rfind("-bf_", 0) == 0) continue;
+//                 bArgs.push_back(x.first);
+//                 bArgs.insert(bArgs.end(), x.second.begin(), x.second.end());
+//             }
+//             std::vector<const char*> bArgv;
+//             for (const std::string& s : bArgs)
+//                 bArgv.push_back(s.c_str());
+//             modelBSettings = new UserSettings;
+//             modelBSettings->initializeSettings((int)bArgv.size(), bArgv.data());
+//             std::set<std::string> ta(psiTypeNames.begin(), psiTypeNames.end()), tb(modelBSettings->psiTypeNames.begin(), modelBSettings->psiTypeNames.end());
+//             auto joined = [](const std::set<std::string>& x) {
+//                 std::string s;
+//                 for (const std::string& t : x) s += (s.empty() ? "" : ",") + t;
+//                 return s.empty() ? std::string("none") : s;
+//             };
+//             if (ta.size() > 1 && tb.size() > 1 && ta != tb)
+//                 Msg::error("-config_bf: when both models have several psi types, they must name the same types, but [model 0] names "
+//                            + joined(ta) + " and [model 1] names " + joined(tb) + ". To compare one psi with several types, give one model a single [psi] section.");
+//             parametersOutBase = parametersOut;
+//             treeOutBase = treeOut;
+//             if (bfLadder.size() == 1)
+//                 setPathPoint(bfLadder[0], bfLadderText[0], pathPilot);
+//         }
+//     }
+//     if (psiRjMainName.empty() == false) {
+//         if (bfConfigPath.empty() == false)
+//             Msg::error("psi_rj_main cannot be combined with -config_bf.");
+//         std::vector<std::string>::iterator it = std::find(psiTypeNames.begin(), psiTypeNames.end(), psiRjMainName);
+//         if (psiTypeNames.size() < 2 || it == psiTypeNames.end())
+//             Msg::error("psi_rj_main = " + psiRjMainName + " must name one of the [psi <type>] sections, and there must be at least two such sections.");
+//         psiRjMain = (int)(it - psiTypeNames.begin());
+//     }
+// 
 
     if (sbcMode == false) {
         if (treeOut.empty())
@@ -1024,7 +1043,8 @@ void UserSettings::print(void) {
         std::cout << "Mean tree output file:        " << base << ".tree" << std::endl;
     }
     std::cout << "Random number seed:           " << seed << std::endl;
-    if (autoChainLength && pathPilot == false)
+//     if (autoChainLength && pathPilot == false)
+    if (autoChainLength)
         std::cout << "Maximum chain length:         " << maxGen << std::endl;
     else
         std::cout << "Chain length:                 " << chainLength << std::endl;

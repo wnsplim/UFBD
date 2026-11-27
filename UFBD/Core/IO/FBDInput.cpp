@@ -163,6 +163,8 @@ void FBDInput::readFossils(std::string path){
     for(std::vector<std::string>& row : rows){
         if(row.size() < 3)
             Msg::error("fossils row '" + row[0] + "' needs at least the tab-separated columns taxon, min_age, and max_age.");
+        if(row.size() > 5)
+            Msg::error("fossils row '" + row[0] + "' has " + std::to_string(row.size()) + " columns; the columns are taxon, min_age, max_age, clade and assignment.");
         std::string taxon = row[0];
         double minAge = 0.0;
         double maxAge = 0.0;
@@ -172,11 +174,13 @@ void FBDInput::readFossils(std::string path){
         }catch(...){
             Msg::error("fossil '" + taxon + "' has a non-numeric age");
         }
-        addFossil(taxon, minAge, maxAge, (row.size() >= 4) ? row[3] : "", (row.size() >= 5) ? row[4] : "", (row.size() >= 6) ? row[5] : "");
+//         addFossil(taxon, minAge, maxAge, (row.size() >= 4) ? row[3] : "", (row.size() >= 5) ? row[4] : "", (row.size() >= 6) ? row[5] : "");
+        addFossil(taxon, minAge, maxAge, (row.size() >= 4) ? row[3] : "", (row.size() >= 5) ? row[4] : "");
     }
 }
 
-void FBDInput::addFossil(const std::string& taxon, double minAge, double maxAge, const std::string& cladeName, std::string assignStr, const std::string& typeName){
+// void FBDInput::addFossil(const std::string& taxon, double minAge, double maxAge, const std::string& cladeName, std::string assignStr, const std::string& typeName){
+void FBDInput::addFossil(const std::string& taxon, double minAge, double maxAge, const std::string& cladeName, std::string assignStr){
     for(char& ch : assignStr)
         ch = std::toupper((unsigned char)ch);
 
@@ -190,7 +194,8 @@ void FBDInput::addFossil(const std::string& taxon, double minAge, double maxAge,
 
     Node* tip = tree->getTaxonNode(taxon);
     if(tip != nullptr && tip->getIsTip() && UserSettings::userSettings().getModel() != Model::RFBD){
-        fossils.push_back(Fossil(taxon, minAge - off, maxAge - off, "", Assignment::TOTAL, typeName, true));
+//         fossils.push_back(Fossil(taxon, minAge - off, maxAge - off, "", Assignment::TOTAL, typeName, true));
+        fossils.push_back(Fossil(taxon, minAge - off, maxAge - off, "", Assignment::TOTAL, true));
         return;
     }
     if(cladeName.empty() || assignStr.empty())
@@ -231,7 +236,8 @@ void FBDInput::addFossil(const std::string& taxon, double minAge, double maxAge,
         assignment = Assignment::CROWN;
     }
 
-    fossils.push_back(Fossil(taxon, minAge - off, maxAge - off, cladeName, assignment, typeName));
+//     fossils.push_back(Fossil(taxon, minAge - off, maxAge - off, cladeName, assignment, typeName));
+    fossils.push_back(Fossil(taxon, minAge - off, maxAge - off, cladeName, assignment));
 }
 
 void FBDInput::readUnsampledExtants(std::string path){
@@ -274,7 +280,8 @@ void FBDInput::readUnsampledExtants(std::string path){
             std::string taxon = cladeName + "_" + suffix + "_" + std::to_string(i);
             if(taken.insert(taxon).second == false)
                 Msg::error("unsampled extant '" + taxon + "' has a name that is already in use");
-            addFossil(taxon, 0.0, 0.0, cladeName, assignStr, "");
+//             addFossil(taxon, 0.0, 0.0, cladeName, assignStr, "");
+            addFossil(taxon, 0.0, 0.0, cladeName, assignStr);
         }
     }
 }

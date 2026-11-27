@@ -137,65 +137,65 @@ void ChainRunner::resumeOutputs(void) {
     resumeLatentOutput();
 }
 
-std::string ChainRunner::tunePath(const std::string& paramOut) {
-    std::string p = paramOut;
-    size_t dp = p.rfind(".log");
-    p.insert(dp != std::string::npos ? dp : p.size(), "_tune");
-    return p;
-}
-
-void ChainRunner::runPsiRjTuning(PhylogeneticModel* m, unsigned long every, int label) {
-    rjTuning = true;
-    tuneOut = tunePath(paramOut);
-    bool resumed = UserSettings::userSettings().getResume() && std::ifstream(checkpointPath()).good();
-    if(resumed)
-        loadCheckpoint();
-    openTuneLog(m, resumed);
-    while(m->psiRjTuning())
-        advance(every);
-    tune.closeTSV();
-    std::ostringstream os;
-    os << std::setprecision(10) << "chain " << label << ": psi_rj tuning finished after " << gen << " generations, log prior odds " << m->getPsiRjState()[0] << "\n";
-    logLine(os.str());
-    rjTuning = false;
-    gen = 0;
-}
-
-void ChainRunner::openTuneLog(PhylogeneticModel* m, bool resumed) {
-    std::vector<std::string> names = m->getParameterNames();
-    tuneIdx.clear();
-    for(const char* c : {"model", "delta", "log_prior_odds"})
-        tuneIdx.push_back((int)(std::find(names.begin(), names.end(), c) - names.begin()));
-    if(resumed == false){
-        tune.addFilepath(tuneOut, true);
-        tune.addColumnNamesTSV({"n", "posterior", "model", "delta", "log_prior_odds", "modification_factor"});
-        return;
-    }
-    std::ifstream in(tuneOut);
-    std::string header, line;
-    std::vector<std::string> keep;
-    std::getline(in, header);
-    while(std::getline(in, line) && in.eof() == false){
-        if(line.empty())
-            continue;
-        if((unsigned long)std::stod(line.substr(0, line.find('\t'))) > gen)
-            break;
-        keep.push_back(line);
-    }
-    in.close();
-    std::ofstream out(tuneOut, std::ios::out | std::ios::trunc);
-    out << header << '\n';
-    for(const std::string& l : keep)
-        out << l << '\n';
-    out.close();
-    tune.addFilepath(tuneOut, false);
-}
-
-void ChainRunner::writeTuneRow(PhylogeneticModel* m, unsigned long n, double lnPost) {
-    std::vector<double> v = m->getParameterString(), st = m->getPsiRjState();
-    tune.appendDataTSV(std::vector<double>{(double)n, lnPost, v[tuneIdx[0]], v[tuneIdx[1]], v[tuneIdx[2]], std::expm1(st[1])});
-}
-
+// std::string ChainRunner::tunePath(const std::string& paramOut) {
+//     std::string p = paramOut;
+//     size_t dp = p.rfind(".log");
+//     p.insert(dp != std::string::npos ? dp : p.size(), "_tune");
+//     return p;
+// }
+// 
+// void ChainRunner::runPsiRjTuning(PhylogeneticModel* m, unsigned long every, int label) {
+//     rjTuning = true;
+//     tuneOut = tunePath(paramOut);
+//     bool resumed = UserSettings::userSettings().getResume() && std::ifstream(checkpointPath()).good();
+//     if(resumed)
+//         loadCheckpoint();
+//     openTuneLog(m, resumed);
+//     while(m->psiRjTuning())
+//         advance(every);
+//     tune.closeTSV();
+//     std::ostringstream os;
+//     os << std::setprecision(10) << "chain " << label << ": psi_rj tuning finished after " << gen << " generations, log prior odds " << m->getPsiRjState()[0] << "\n";
+//     logLine(os.str());
+//     rjTuning = false;
+//     gen = 0;
+// }
+// 
+// void ChainRunner::openTuneLog(PhylogeneticModel* m, bool resumed) {
+//     std::vector<std::string> names = m->getParameterNames();
+//     tuneIdx.clear();
+//     for(const char* c : {"model", "delta", "log_prior_odds"})
+//         tuneIdx.push_back((int)(std::find(names.begin(), names.end(), c) - names.begin()));
+//     if(resumed == false){
+//         tune.addFilepath(tuneOut, true);
+//         tune.addColumnNamesTSV({"n", "posterior", "model", "delta", "log_prior_odds", "modification_factor"});
+//         return;
+//     }
+//     std::ifstream in(tuneOut);
+//     std::string header, line;
+//     std::vector<std::string> keep;
+//     std::getline(in, header);
+//     while(std::getline(in, line) && in.eof() == false){
+//         if(line.empty())
+//             continue;
+//         if((unsigned long)std::stod(line.substr(0, line.find('\t'))) > gen)
+//             break;
+//         keep.push_back(line);
+//     }
+//     in.close();
+//     std::ofstream out(tuneOut, std::ios::out | std::ios::trunc);
+//     out << header << '\n';
+//     for(const std::string& l : keep)
+//         out << l << '\n';
+//     out.close();
+//     tune.addFilepath(tuneOut, false);
+// }
+// 
+// void ChainRunner::writeTuneRow(PhylogeneticModel* m, unsigned long n, double lnPost) {
+//     std::vector<double> v = m->getParameterString(), st = m->getPsiRjState();
+//     tune.appendDataTSV(std::vector<double>{(double)n, lnPost, v[tuneIdx[0]], v[tuneIdx[1]], v[tuneIdx[2]], std::expm1(st[1])});
+// }
+// 
 void ChainRunner::resumeLatentOutput(void) {
     std::vector<std::string> latNames = resumeLatentNames();
     if(latNames.empty() || UserSettings::userSettings().getWriteLatentLog() == false)

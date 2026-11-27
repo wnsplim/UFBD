@@ -42,9 +42,9 @@ class BranchRateModel : public Parameter {
         double                      getClockGroupSigma2(int g) { return sigma2[0][g]; }
         int                         getNumBranchNodes(void) { return (int)branchNodes.size(); }
         int                         getBranchNodeOffset(int i) { return branchNodes[i]; }
-        double                      getBranchRate(int g, int i) { return rate[0][g][branchNodes[i]]; }
-        void                        setState(int g, double m, double s2, const std::vector<double>& r);
-        void                        copyState(const BranchRateModel& o) { for(int k = 0; k < 2; k++){ mu[k] = o.mu[k]; sigma2[k] = o.sigma2[k]; rate[k] = o.rate[k]; } }
+//         double                      getBranchRate(int g, int i) { return rate[0][g][branchNodes[i]]; }
+//         void                        setState(int g, double m, double s2, const std::vector<double>& r);
+//         void                        copyState(const BranchRateModel& o) { for(int k = 0; k < 2; k++){ mu[k] = o.mu[k]; sigma2[k] = o.sigma2[k]; rate[k] = o.rate[k]; } }
         void                        scaleAll(double sf);
         void                        commitAll(void);
         void                        restoreAll(void);
@@ -145,8 +145,8 @@ class ParameterBranchRates : public BranchRateModel {
         int                         getLastPncpPartition(void) { return lastMove == 8 ? lastPartition : -1; }
         ClockModel                  getClockModel(int g) { return clockModelOf[g]; }
         bool                        allGroupsAre(ClockModel c) { for(ClockModel m : clockModelOf) if(m != c) return false; return true; }
-        double                      standardizedDeviations(const std::vector<double>& muV, const std::vector<double>& s2V, const std::vector<std::vector<double>>& r, std::vector<double>& u);
-        void                        setStandardizedDeviations(const std::vector<double>& muV, const std::vector<double>& s2V, const std::vector<double>& u);
+//         double                      standardizedDeviations(const std::vector<double>& muV, const std::vector<double>& s2V, const std::vector<std::vector<double>>& r, std::vector<double>& u);
+//         void                        setStandardizedDeviations(const std::vector<double>& muV, const std::vector<double>& s2V, const std::vector<double>& u);
 
     private:
         double                      lognormalLnP(double r, double s2, double m);

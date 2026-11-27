@@ -28,32 +28,32 @@ class UserSettings {
                                         return us;
                                         }
         void                        initializeSettings(int argc, const char* argv[], bool sbcMode = false);
-        UserSettings*               getModelBSettings(void) { return modelBSettings; }
-        double                      getPathT(void) { return pathT; }
-        bool                        getPathPilot(void) { return pathPilot; }
-        const std::vector<double>&  getBfLadder(void) { return bfLadder; }
-        const std::vector<std::string>& getBfLadderText(void) { return bfLadderText; }
-        double                      getBfPilotFrac(void) { return bfPilotFrac; }
-        int                         getBfPilotNodes(void) { return bfPilotNodes; }
-        double                      getBfIntervals(void) { return bfIntervals; }
-        double                      getBfBridgeTol(void) { return bfBridgeTol; }
-        int                         getBfBridgeIter(void) { return bfBridgeIter; }
-        int                         getBfBatches(void) { return bfBatches; }
-        int                         getBfParallelRuns(void) { return bfParallelRuns; }
-        const std::string&          getBfConfigPath(void) { return bfConfigPath; }
-        const std::vector<std::string>& getCliArgs(void) { return cliArgs; }
-        bool                        getPriorLogGiven(int k) { return priorLogGiven[k]; }
-        void                        setPathPoint(double t, const std::string& text, bool pilot);
-        void                        setResume(bool r) { resume = r; }
-        void                        setChainLength(unsigned long n) { chainLength = n; }
-        std::string                 getPosteriorBaseA(void) { return posteriorBaseA; }
-        std::string                 getPosteriorBaseB(void) { return posteriorBaseB; }
-        int                         getPsiRjMain(void) { return psiRjMain; }
-        bool                        getSharedLambda(void) { return sharedLambda; }
-        bool                        getSharedMu(void) { return sharedMu; }
-        bool                        getSharedPsi(void) { return sharedPsi; }
-        bool                        getSharedClock(void) { return sharedClock; }
-        bool                        getSharedSubst(void) { return sharedSubst; }
+//         UserSettings*               getModelBSettings(void) { return modelBSettings; }
+//         double                      getPathT(void) { return pathT; }
+//         bool                        getPathPilot(void) { return pathPilot; }
+//         const std::vector<double>&  getBfLadder(void) { return bfLadder; }
+//         const std::vector<std::string>& getBfLadderText(void) { return bfLadderText; }
+//         double                      getBfPilotFrac(void) { return bfPilotFrac; }
+//         int                         getBfPilotNodes(void) { return bfPilotNodes; }
+//         double                      getBfIntervals(void) { return bfIntervals; }
+//         double                      getBfBridgeTol(void) { return bfBridgeTol; }
+//         int                         getBfBridgeIter(void) { return bfBridgeIter; }
+//         int                         getBfBatches(void) { return bfBatches; }
+//         int                         getBfParallelRuns(void) { return bfParallelRuns; }
+//         const std::string&          getBfConfigPath(void) { return bfConfigPath; }
+//         const std::vector<std::string>& getCliArgs(void) { return cliArgs; }
+//         bool                        getPriorLogGiven(int k) { return priorLogGiven[k]; }
+//         void                        setPathPoint(double t, const std::string& text, bool pilot);
+//         void                        setResume(bool r) { resume = r; }
+//         void                        setChainLength(unsigned long n) { chainLength = n; }
+//         std::string                 getPosteriorBaseA(void) { return posteriorBaseA; }
+//         std::string                 getPosteriorBaseB(void) { return posteriorBaseB; }
+//         int                         getPsiRjMain(void) { return psiRjMain; }
+//         bool                        getSharedLambda(void) { return sharedLambda; }
+//         bool                        getSharedMu(void) { return sharedMu; }
+//         bool                        getSharedPsi(void) { return sharedPsi; }
+//         bool                        getSharedClock(void) { return sharedClock; }
+//         bool                        getSharedSubst(void) { return sharedSubst; }
         unsigned long               getChainLength(void) { return chainLength; }
         int                         getNumCoupledChains(void) { return numCoupledChains; }
         int                         getNumRuns(void) { return numRuns; }
@@ -86,25 +86,32 @@ class UserSettings {
         RateMode                    getMuMode(void) { return muMode; }
         const OUHyperSpec&          getLambdaOU(void) { return lambdaOU; }
         const OUHyperSpec&          getMuOU(void) { return muOU; }
-        OUHyperSpec                 getPsiOU(int t);
+//         OUHyperSpec                 getPsiOU(int t);
+        const OUHyperSpec&          getPsiOU(void) { return psiOU; }
         bool                        getCpuTime(void) { return cpuTime; }
         std::vector<double>         getSkylineTimes(void);
         std::vector<double>         getLambdaSkylineTimes(void) { return lambdaSkylineTimes; }
         std::vector<double>         getMuSkylineTimes(void)     { return muSkylineTimes; }
-        int                         getNumPsiTypes(void) { return psiTypeNames.empty() ? 1 : (int)psiTypeNames.size(); }
-        const std::vector<std::string>& getPsiTypeNames(void) { return psiTypeNames; }
-        Probability::PriorSpec      getPsiPrior(int t);
-        std::vector<double>         getPsiSkylineTimes(int t);
-        RateMode                    getPsiMode(int t);
+//         int                         getNumPsiTypes(void) { return psiTypeNames.empty() ? 1 : (int)psiTypeNames.size(); }
+//         const std::vector<std::string>& getPsiTypeNames(void) { return psiTypeNames; }
+//         Probability::PriorSpec      getPsiPrior(int t);
+//         std::vector<double>         getPsiSkylineTimes(int t);
+//         RateMode                    getPsiMode(int t);
+        Probability::PriorSpec      getPsiPrior(void) { return psiPrior; }
+        std::vector<double>         getPsiSkylineTimes(void) { return psiSkylineTimes; }
+        RateMode                    getPsiMode(void) { return psiMode; }
         std::vector<int>            getLambdaGroups(void) { return lambdaGroups; }
         std::vector<int>            getMuGroups(void) { return muGroups; }
-        std::vector<int>            getPsiGroups(int t);
+//         std::vector<int>            getPsiGroups(int t);
+        std::vector<int>            getPsiGroups(void) { return psiGroups; }
         std::vector<std::string>    getLambdaGroupNames(void) { return lambdaGroupNames; }
         std::vector<std::string>    getMuGroupNames(void) { return muGroupNames; }
-        std::vector<std::string>    getPsiGroupNames(int t);
+//         std::vector<std::string>    getPsiGroupNames(int t);
+        std::vector<std::string>    getPsiGroupNames(void) { return psiGroupNames; }
         std::map<int,Probability::PriorSpec> getLambdaGroupPrior(void) { return lambdaGroupPrior; }
         std::map<int,Probability::PriorSpec> getMuGroupPrior(void) { return muGroupPrior; }
-        std::map<int,Probability::PriorSpec> getPsiGroupPrior(int t);
+//         std::map<int,Probability::PriorSpec> getPsiGroupPrior(int t);
+        std::map<int,Probability::PriorSpec> getPsiGroupPrior(void) { return psiGroupPrior; }
         Model                       getModel(void) { return model; }
         double                      getRho(void) { return rho; }
         unsigned int                getSeed(void) { return seed; }
@@ -180,17 +187,17 @@ class UserSettings {
         std::vector<double>         lambdaSkylineTimes;
         std::vector<double>         muSkylineTimes;
         std::vector<double>         psiSkylineTimes;
-        std::vector<std::string>    psiTypeNames;
-        std::map<std::string, Probability::PriorSpec> psiPriorByName;
-        std::map<std::string, std::vector<double>> psiTimesByName;
-        std::map<std::string, RateMode> psiModeByName;
-        std::map<std::string, OUHyperSpec> psiOUByName;
+//         std::vector<std::string>    psiTypeNames;
+//         std::map<std::string, Probability::PriorSpec> psiPriorByName;
+//         std::map<std::string, std::vector<double>> psiTimesByName;
+//         std::map<std::string, RateMode> psiModeByName;
+//         std::map<std::string, OUHyperSpec> psiOUByName;
         std::vector<int>            lambdaGroups, muGroups, psiGroups;
-        std::map<std::string, std::vector<int>> psiGroupsByName;
+//         std::map<std::string, std::vector<int>> psiGroupsByName;
         std::vector<std::string>    lambdaGroupNames, muGroupNames, psiGroupNames;
-        std::map<std::string, std::vector<std::string>> psiGroupNamesByName;
+//         std::map<std::string, std::vector<std::string>> psiGroupNamesByName;
         std::map<int, Probability::PriorSpec> lambdaGroupPrior, muGroupPrior, psiGroupPrior;
-        std::map<std::string, std::map<int, Probability::PriorSpec>> psiGroupPriorByName;
+//         std::map<std::string, std::map<int, Probability::PriorSpec>> psiGroupPriorByName;
         Model                       model;
         double                      rho;
         unsigned int                seed;
@@ -212,28 +219,28 @@ class UserSettings {
         int                         thinning;
         std::string                 hessianFile;
         std::string                 configFilePath;
-        UserSettings*               modelBSettings = nullptr;
-        double                      pathT = 0.0;
-        bool                        pathPilot = false;
-        std::vector<double>         bfLadder;
-        std::vector<std::string>    bfLadderText;
-        double                      bfPilotFrac = 0.2;
-        int                         bfPilotNodes = 8;
-        double                      bfIntervals = 2.0;
-        double                      bfBridgeTol = 1e-10;
-        int                         bfBridgeIter = 10000;
-        int                         bfBatches = 20;
-        int                         bfParallelRuns = 1;
-        int                         bfPosterior = -1;
-        std::string                 bfConfigPath;
-        std::vector<std::string>    cliArgs;
-        bool                        priorLogGiven[2] = {false, false};
-        std::string                 parametersOutBase, treeOutBase;
-        std::string                 posteriorBaseA;
-        std::string                 posteriorBaseB;
-        std::string                 psiRjMainName;
-        int                         psiRjMain = -1;
-        bool                        sharedLambda = false, sharedMu = false, sharedPsi = false, sharedClock = true, sharedSubst = true;
+//         UserSettings*               modelBSettings = nullptr;
+//         double                      pathT = 0.0;
+//         bool                        pathPilot = false;
+//         std::vector<double>         bfLadder;
+//         std::vector<std::string>    bfLadderText;
+//         double                      bfPilotFrac = 0.2;
+//         int                         bfPilotNodes = 8;
+//         double                      bfIntervals = 2.0;
+//         double                      bfBridgeTol = 1e-10;
+//         int                         bfBridgeIter = 10000;
+//         int                         bfBatches = 20;
+//         int                         bfParallelRuns = 1;
+//         int                         bfPosterior = -1;
+//         std::string                 bfConfigPath;
+//         std::vector<std::string>    cliArgs;
+//         bool                        priorLogGiven[2] = {false, false};
+//         std::string                 parametersOutBase, treeOutBase;
+//         std::string                 posteriorBaseA;
+//         std::string                 posteriorBaseB;
+//         std::string                 psiRjMainName;
+//         int                         psiRjMain = -1;
+//         bool                        sharedLambda = false, sharedMu = false, sharedPsi = false, sharedClock = true, sharedSubst = true;
         std::string                 invocation;
         std::string                 clockModelName;
         std::vector<std::string>    clockModelNames = { "ucln" };

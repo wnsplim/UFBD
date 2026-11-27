@@ -46,7 +46,8 @@ bool ConvergenceRunner::run(void){
             replicates[r]->setVerbose(true);
             replicates[r]->setLabel(r);
         }
-    bool autoStop = s.getAutoChainLength() && s.getPathPilot() == false;
+//     bool autoStop = s.getAutoChainLength() && s.getPathPilot() == false;
+    bool autoStop = s.getAutoChainLength();
     unsigned long maxGen = autoStop ? s.getMaxGen() : s.getChainLength();
 
     if(verbose && autoStop){
@@ -69,25 +70,25 @@ bool ConvergenceRunner::run(void){
         runPools.push_back(new ThreadPool(per));
     }
 
-    auto commonWeight = [&](const std::vector<bool>& fresh){
-        if(replicates[0]->psiRjState().empty())
-            return;
-        double w = 0.0;
-        int loaded = 0;
-        for(size_t r = 0; r < replicates.size(); r++)
-            if(fresh[r] == false && loaded++ == 0)
-                w = replicates[r]->psiRjState()[0];
-        if(loaded == 0){
-            for(ChainRunner* c : replicates)
-                w += c->psiRjState()[0] / (double)replicates.size();
-            if(verbose)
-                std::cout << "psi_rj: every chain's main run uses log prior odds " << w << ", the mean of the " << replicates.size() << " chains' tuned values\n";
-        }
-        for(size_t r = 0; r < replicates.size(); r++)
-            if(fresh[r])
-                replicates[r]->setPsiRjWeight(w);
-    };
-
+//     auto commonWeight = [&](const std::vector<bool>& fresh){
+//         if(replicates[0]->psiRjState().empty())
+//             return;
+//         double w = 0.0;
+//         int loaded = 0;
+//         for(size_t r = 0; r < replicates.size(); r++)
+//             if(fresh[r] == false && loaded++ == 0)
+//                 w = replicates[r]->psiRjState()[0];
+//         if(loaded == 0){
+//             for(ChainRunner* c : replicates)
+//                 w += c->psiRjState()[0] / (double)replicates.size();
+//             if(verbose)
+//                 std::cout << "psi_rj: every chain's main run uses log prior odds " << w << ", the mean of the " << replicates.size() << " chains' tuned values\n";
+//         }
+//         for(size_t r = 0; r < replicates.size(); r++)
+//             if(fresh[r])
+//                 replicates[r]->setPsiRjWeight(w);
+//     };
+// 
     unsigned long gen = 0;
     if(s.getResume()){
         int stale = 0;
@@ -110,7 +111,8 @@ bool ConvergenceRunner::run(void){
         std::vector<bool> fresh;
         for(const std::string& pf : repParamFiles){
             fresh.push_back(std::ifstream(pf + ".ckp").good() == false);
-            if(fresh.back() && std::ifstream(ChainRunner::tunePath(pf) + ".ckp").good() == false)
+//             if(fresh.back() && std::ifstream(ChainRunner::tunePath(pf) + ".ckp").good() == false)
+            if(fresh.back())
                 missing += (nMissing++ > 0 ? ", " : "") + pf + ".ckp";
         }
         if(nMissing == (int)repParamFiles.size())
@@ -128,7 +130,7 @@ bool ConvergenceRunner::run(void){
         for(size_t r = 0; r < replicates.size(); r++)
             if(fresh[r])
                 replicates[r]->init();
-        commonWeight(fresh);
+//         commonWeight(fresh);
         for(ChainRunner* c : replicates){
             unsigned long cg = c->currentGen();
             if(cg < gen)
@@ -150,8 +152,8 @@ bool ConvergenceRunner::run(void){
         for(ChainRunner* c : replicates)
             c->init();
     }
-    if(s.getResume() == false)
-        commonWeight(std::vector<bool>(replicates.size(), true));
+//     if(s.getResume() == false)
+//         commonWeight(std::vector<bool>(replicates.size(), true));
 
     long blockGens = 50L * (long)s.getThinning();
     if(blockGens < 1) blockGens = 1;
@@ -190,7 +192,7 @@ bool ConvergenceRunner::run(void){
         std::cout << "-----------------------------------------------------------------------\n";
     bool met = report(gen, true);
     writeMerged();
-    printPsiRjBf(replicates);
+//     printPsiRjBf(replicates);
 
     if(emitSummary && replicates.empty() == false && replicates[0]->getTree() != nullptr){
         const std::vector<std::string>& names = replicates[0]->traceNames();
@@ -314,7 +316,8 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
         lastReportedGen = (long)gen;
     }
 
-    if(verbose && finalPass && nBelow > 0 && s.getAutoChainLength() && s.getPathPilot() == false){
+//     if(verbose && finalPass && nBelow > 0 && s.getAutoChainLength() && s.getPathPilot() == false){
+    if(verbose && finalPass && nBelow > 0 && s.getAutoChainLength()){
         std::string crit = multiChain ? ("R-hat > " + std::to_string(rhatMax) + " or bulk/tail ESS < " + std::to_string((int)essFloor))
                                       : ("bulk/tail ESS < " + std::to_string((int)essFloor));
         std::string msg = std::to_string(nBelow) + " of " + std::to_string(nP) + " metrics have " + crit + ": ";
@@ -324,45 +327,45 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
     }
 
     return nBelow == 0;
-}
-
-void ConvergenceRunner::printPsiRjBf(const std::vector<ChainRunner*>& chains){
-    UserSettings& s = UserSettings::userSettings();
-    if(s.getPsiRjMain() < 0)
-        return;
-    const std::vector<std::string>& names = chains[0]->traceNames();
-    size_t jd = std::find(names.begin(), names.end(), "delta") - names.begin();
-    size_t jt = std::find(names.begin(), names.end(), "log_prior_odds") - names.begin();
-    int nb = s.getBfBatches();
-    double theta = chains[0]->traceColumns()[jt].back();
-    std::vector<double> batch;
-    double sum = 0.0;
-    size_t n = 0;
-    for(ChainRunner* c : chains){
-        const std::vector<double>& d = c->traceColumns()[jd];
-        const std::vector<double>& t = c->traceColumns()[jt];
-        size_t b = (size_t)(d.size() * s.getBurninFraction());
-        size_t m = d.size() - b;
-        if(m < (size_t)nb)
-            Msg::error("psi_rj: " + std::to_string(m) + " samples after burn-in; -bf_batches " + std::to_string(nb) + " needs at least " + std::to_string(nb) + ".");
-        for(int k = 0; k < nb; k++){
-            size_t from = b + m * (size_t)k / (size_t)nb, to = b + m * (size_t)(k + 1) / (size_t)nb;
-            double bs = 0.0;
-            for(size_t i = from; i < to; i++)
-                bs += 1.0 / (1.0 + std::exp(-(d[i] + t[i])));
-            sum += bs;
-            n += to - from;
-            batch.push_back(bs / (double)(to - from));
-        }
-    }
-    double p = sum / (double)n;
-    double mb = 0.0, vb = 0.0;
-    for(double x : batch) mb += x / (double)batch.size();
-    for(double x : batch) vb += (x - mb) * (x - mb) / (double)(batch.size() - 1);
-    double se = std::sqrt(vb / (double)batch.size()) / (p * (1.0 - p));
-    std::cout << "psi_rj: ln BF ([model 1] over [model 0]) = " << std::log(p / (1.0 - p)) - theta << " (SE " << se
-              << ", Rao-Blackwellized over P(model 1 | state), batch means over " << nb << " batches per chain)\n";
-    std::cout << "psi_rj: the log was sampled at log prior odds " << theta << " of model 1 over model 0\n";
+// }
+// 
+// void ConvergenceRunner::printPsiRjBf(const std::vector<ChainRunner*>& chains){
+//     UserSettings& s = UserSettings::userSettings();
+//     if(s.getPsiRjMain() < 0)
+//         return;
+//     const std::vector<std::string>& names = chains[0]->traceNames();
+//     size_t jd = std::find(names.begin(), names.end(), "delta") - names.begin();
+//     size_t jt = std::find(names.begin(), names.end(), "log_prior_odds") - names.begin();
+//     int nb = s.getBfBatches();
+//     double theta = chains[0]->traceColumns()[jt].back();
+//     std::vector<double> batch;
+//     double sum = 0.0;
+//     size_t n = 0;
+//     for(ChainRunner* c : chains){
+//         const std::vector<double>& d = c->traceColumns()[jd];
+//         const std::vector<double>& t = c->traceColumns()[jt];
+//         size_t b = (size_t)(d.size() * s.getBurninFraction());
+//         size_t m = d.size() - b;
+//         if(m < (size_t)nb)
+//             Msg::error("psi_rj: " + std::to_string(m) + " samples after burn-in; -bf_batches " + std::to_string(nb) + " needs at least " + std::to_string(nb) + ".");
+//         for(int k = 0; k < nb; k++){
+//             size_t from = b + m * (size_t)k / (size_t)nb, to = b + m * (size_t)(k + 1) / (size_t)nb;
+//             double bs = 0.0;
+//             for(size_t i = from; i < to; i++)
+//                 bs += 1.0 / (1.0 + std::exp(-(d[i] + t[i])));
+//             sum += bs;
+//             n += to - from;
+//             batch.push_back(bs / (double)(to - from));
+//         }
+//     }
+//     double p = sum / (double)n;
+//     double mb = 0.0, vb = 0.0;
+//     for(double x : batch) mb += x / (double)batch.size();
+//     for(double x : batch) vb += (x - mb) * (x - mb) / (double)(batch.size() - 1);
+//     double se = std::sqrt(vb / (double)batch.size()) / (p * (1.0 - p));
+//     std::cout << "psi_rj: ln BF ([model 1] over [model 0]) = " << std::log(p / (1.0 - p)) - theta << " (SE " << se
+//               << ", Rao-Blackwellized over P(model 1 | state), batch means over " << nb << " batches per chain)\n";
+//     std::cout << "psi_rj: the log was sampled at log prior odds " << theta << " of model 1 over model 0\n";
 }
 
 void ConvergenceRunner::writeMerged(void){

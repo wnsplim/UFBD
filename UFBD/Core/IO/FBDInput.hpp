@@ -28,13 +28,14 @@ class Clade {
 class Fossil {
 
     public:
-                                            Fossil(std::string t, double mn, double mx, std::string c, Assignment a, std::string ty = "", bool bb = false) : taxon(t), minAge(mn), maxAge(mx), clade(c), assignment(a), type(ty), inBackbone(bb) {}
+//                                             Fossil(std::string t, double mn, double mx, std::string c, Assignment a, std::string ty = "", bool bb = false) : taxon(t), minAge(mn), maxAge(mx), clade(c), assignment(a), type(ty), inBackbone(bb) {}
+                                            Fossil(std::string t, double mn, double mx, std::string c, Assignment a, bool bb = false) : taxon(t), minAge(mn), maxAge(mx), clade(c), assignment(a), inBackbone(bb) {}
         std::string                         getTaxon(void) { return taxon; }
         double                              getMinAge(void) { return minAge; }
         double                              getMaxAge(void) { return maxAge; }
         std::string                         getClade(void) { return clade; }
         Assignment                          getAssignment(void) { return assignment; }
-        std::string                         getType(void) { return type; }
+//         std::string                         getType(void) { return type; }
         bool                                getInBackbone(void) { return inBackbone; }
 
     private:
@@ -43,7 +44,7 @@ class Fossil {
         double                              maxAge;
         std::string                         clade;
         Assignment                          assignment;
-        std::string                         type;
+//         std::string                         type;
         bool                                inBackbone;
 };
 
@@ -60,7 +61,8 @@ class FBDInput {
         void                                readClades(std::string path);
         void                                readFossils(std::string path);
         void                                readUnsampledExtants(std::string path);
-        void                                addFossil(const std::string& taxon, double minAge, double maxAge, const std::string& cladeName, std::string assignStr, const std::string& typeName);
+//         void                                addFossil(const std::string& taxon, double minAge, double maxAge, const std::string& cladeName, std::string assignStr, const std::string& typeName);
+        void                                addFossil(const std::string& taxon, double minAge, double maxAge, const std::string& cladeName, std::string assignStr);
         void                                assignFossilAwareAges(void);
         Tree*                               tree;
         std::vector<Clade>                  clades;

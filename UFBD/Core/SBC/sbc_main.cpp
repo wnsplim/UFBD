@@ -179,10 +179,12 @@ int main(int argc, const char* argv[]){
     Probability::PriorSpec lambdaPrior = s.getLambdaPrior();
     Probability::PriorSpec muPrior     = s.getMuPrior();
     bool missing = (s.getLambdaMode() == RateMode::INDEP && lambdaPrior.set == false)
-                || (s.getMuMode() == RateMode::INDEP && muPrior.set == false);
-    for(int t = 0; t < s.getNumPsiTypes(); t++)
-        if(s.getPsiMode(t) == RateMode::INDEP && s.getPsiPrior(t).set == false)
-            missing = true;
+//                 || (s.getMuMode() == RateMode::INDEP && muPrior.set == false);
+//     for(int t = 0; t < s.getNumPsiTypes(); t++)
+//         if(s.getPsiMode(t) == RateMode::INDEP && s.getPsiPrior(t).set == false)
+//             missing = true;
+                || (s.getMuMode() == RateMode::INDEP && muPrior.set == false)
+                || (s.getPsiMode() == RateMode::INDEP && s.getPsiPrior().set == false);
     if(missing)
         Msg::error("-lambda_prior, -mu_prior, and -psi_prior are required for every rate under mode=indep.");
     if(s.getConditionAgePriorSet() == false)
@@ -213,20 +215,27 @@ int main(int argc, const char* argv[]){
     for(double t : s.getLambdaSkylineTimes()) cfg.lambdaTimes.push_back(t);
     cfg.muTimes.push_back(0.0);
     for(double t : s.getMuSkylineTimes())     cfg.muTimes.push_back(t);
-    cfg.numPsiTypes = s.getNumPsiTypes();
-    cfg.psiRjMain = s.getPsiRjMain();
-    cfg.psiTypeNames = s.getPsiTypeNames();
-    for(int t = 0; t < cfg.numPsiTypes; t++){
-        std::vector<double> times;
-        times.push_back(0.0);
-        for(double tv : s.getPsiSkylineTimes(t)) times.push_back(tv);
-        cfg.psiTimes.push_back(times);
-        cfg.psiPriors.push_back(s.getPsiPrior(t));
-        cfg.psiGroups.push_back(s.getPsiGroups(t));
-        cfg.psiGroupPriors.push_back(s.getPsiGroupPrior(t));
-        cfg.psiModes.push_back(s.getPsiMode(t));
-        cfg.psiOU.push_back(s.getPsiOU(t));
-    }
+//     cfg.numPsiTypes = s.getNumPsiTypes();
+//     cfg.psiRjMain = s.getPsiRjMain();
+//     cfg.psiTypeNames = s.getPsiTypeNames();
+//     for(int t = 0; t < cfg.numPsiTypes; t++){
+//         std::vector<double> times;
+//         times.push_back(0.0);
+//         for(double tv : s.getPsiSkylineTimes(t)) times.push_back(tv);
+//         cfg.psiTimes.push_back(times);
+//         cfg.psiPriors.push_back(s.getPsiPrior(t));
+//         cfg.psiGroups.push_back(s.getPsiGroups(t));
+//         cfg.psiGroupPriors.push_back(s.getPsiGroupPrior(t));
+//         cfg.psiModes.push_back(s.getPsiMode(t));
+//         cfg.psiOU.push_back(s.getPsiOU(t));
+//     }
+    cfg.psiTimes.push_back(0.0);
+    for(double t : s.getPsiSkylineTimes())   cfg.psiTimes.push_back(t);
+    cfg.psiPrior = s.getPsiPrior();
+    cfg.psiGroups = s.getPsiGroups();
+    cfg.psiGroupPrior = s.getPsiGroupPrior();
+    cfg.psiMode = s.getPsiMode();
+    cfg.psiOU = s.getPsiOU();
     cfg.lambdaPrior = lambdaPrior;
     cfg.muPrior = muPrior;
     cfg.lambdaMode = s.getLambdaMode();

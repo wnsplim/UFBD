@@ -10,7 +10,7 @@
 #include "Tree.hpp"
 
 #include <deque>
-#include <functional>
+// #include <functional>
 #include <map>
 #include <vector>
 
@@ -24,25 +24,30 @@ struct OUHyperSpec;
 struct SkylineRates {
     std::vector<ParameterDouble*> lambda;
     std::vector<ParameterDouble*> mu;
-    std::vector<std::vector<ParameterDouble*>> psi;
-    std::vector<std::string>    lambdaName, muName;
-    std::vector<std::vector<std::string>> psiName;
+//     std::vector<std::vector<ParameterDouble*>> psi;
+//     std::vector<std::string>    lambdaName, muName;
+//     std::vector<std::vector<std::string>> psiName;
+    std::vector<ParameterDouble*> psi;
+    std::vector<std::string>    lambdaName, muName, psiName;
     ParameterOUField*           lambdaField = nullptr;
     ParameterOUField*           muField = nullptr;
-    std::vector<ParameterOUField*> psiField;
+//     std::vector<ParameterOUField*> psiField;
+    ParameterOUField*           psiField = nullptr;
     std::vector<double>           intervalStart;
     std::vector<int>            lambdaIdx;
     std::vector<int>            muIdx;
-    std::vector<std::vector<int>> psiIdx;
-    int                         numPsiTypes = 1;
-    std::vector<std::string>    psiTypeNames;
-    std::vector<int>            fossilType;
-    std::vector<int>            backboneType;
-    std::map<std::string,int>   fossilTypeByName;
+//     std::vector<std::vector<int>> psiIdx;
+//     int                         numPsiTypes = 1;
+//     std::vector<std::string>    psiTypeNames;
+//     std::vector<int>            fossilType;
+//     std::vector<int>            backboneType;
+//     std::map<std::string,int>   fossilTypeByName;
+    std::vector<int>            psiIdx;
     std::vector<double>         c1Vec;
     std::vector<double>         cpbVec, cmbVec;
     std::vector<double>         ln2LambdaVec;
-    std::vector<std::vector<double> > lnPsiTypeVec;
+//     std::vector<std::vector<double> > lnPsiTypeVec;
+    std::vector<double>         lnPsiVec;
     std::vector<double>         dPrev;
     std::vector<double>         lnDInc;
     std::vector<double>         lamVec, muVec, psiTotVec, lnDenEnd;
@@ -60,11 +65,12 @@ struct SkylineRates {
 
 class FBDTreeModel : public PhylogeneticModel {
 
-    friend class PathModel;
-
+//     friend class PathModel;
+// 
     public:
                                     FBDTreeModel(void) = delete;
-                                    FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, unsigned int seed, UserSettings* rateSettings = nullptr);
+//                                     FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, unsigned int seed, UserSettings* rateSettings = nullptr);
+                                    FBDTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, unsigned int seed);
         std::vector<std::string>    getParameterNames(void);
         std::vector<double>         getParameterString(void);
         std::vector<bool>           getParameterFixedMask(void);
@@ -86,20 +92,23 @@ class FBDTreeModel : public PhylogeneticModel {
         ParameterUnresolvedFossils* getUnresolvedFossils(void) { return unresolvedFossils; }
         int                         getNumFossils(void) { return (int)backboneFossils.size() + (int)unrFossilName.size(); }
         double                      evaluateAtGeneratingState(const std::vector<double>& lam, const std::vector<double>& muV,
-                                                              const std::vector<std::vector<double>>& psiV,
+//                                                               const std::vector<std::vector<double>>& psiV,
+                                                              const std::vector<double>& psiV,
                                                               const std::vector<double>& lamOU, const std::vector<double>& muOU,
-                                                              const std::vector<std::vector<double>>& psiOU, double x0,
+//                                                               const std::vector<std::vector<double>>& psiOU, double x0,
+                                                              const std::vector<double>& psiOU, double x0,
                                                               const std::vector<double>& nodeAges, const std::vector<double>& y,
                                                               const std::vector<double>& z, const std::vector<char>& sa,
-                                                              const std::vector<int>& zoneNode, int model, double& lnPriorOut);
+//                                                               const std::vector<int>& zoneNode, int model, double& lnPriorOut);
+                                                              const std::vector<int>& zoneNode, double& lnPriorOut);
         std::string                 getRateMap(void);
         bool                        hasOrigin(void) { return originAge != nullptr; }
         double                      getOriginAgeValue(void);
         void                        setupNodeAgeFloors(void);
         double                      fossilSweep(void);
-        std::function<double(void)> pathTarget;
-        FBDTreeModel*               pathPartner = nullptr;
-        double                      pathSelfW = 1.0, pathPartnerW = 0.0;
+//         std::function<double(void)> pathTarget;
+//         FBDTreeModel*               pathPartner = nullptr;
+//         double                      pathSelfW = 1.0, pathPartnerW = 0.0;
         double                      relabelAcrossNode(Node* n, double oldAge);
         void                        beginNodeAgeSweep(void){ rebuildStalkIndex(); inNodeAgeSweep = true; }
         void                        endNodeAgeSweep(void){ inNodeAgeSweep = false; }
@@ -110,33 +119,33 @@ class FBDTreeModel : public PhylogeneticModel {
         long                        getRelabelSize(void) { return relSize; }
         long                        getRelabelCross(void) { return relCross; }
         long                        getRelabelCrossSA(void) { return relCrossSA; }
-        double                      psiRjAdapt(unsigned long k);
-        bool                        psiRjTuning(void) { return psiRjMain >= 0 && psiRjStep > 0.0; }
-        std::vector<double>         getPsiRjState(void);
-        double                      setPsiRjState(const std::vector<double>& s);
+//         double                      psiRjAdapt(unsigned long k);
+//         bool                        psiRjTuning(void) { return psiRjMain >= 0 && psiRjStep > 0.0; }
+//         std::vector<double>         getPsiRjState(void);
+//         double                      setPsiRjState(const std::vector<double>& s);
     private:
-        void                        applyPsiModel(int m);
-        double                      lnPsiRjTerm(void);
-        std::vector<double>         psiMainValues(void);
-        void                        setPsiMainValues(const std::vector<double>& v);
-        double                      lnPsiMainPrior(void);
-        std::vector<double>         psiShiftCoords(void);
-        double                      psiRjJacobian(void);
-        void                        scalePsiMain(double sgn);
-        std::vector<double>         psiRjShift, psiRjSaved, psiRjSum[2];
-        std::vector<char>           psiRjShiftable;
-        double                      psiRjShiftSum = 0.0, psiRjN[2] = {0.0, 0.0};
-        int                         psiRjStage = 0;
-        int                         psiRjMain = -1;
-        int                         psiModel = 0, prevPsiModel = 0;
-        long                        rjAcc = 0, rjAtt = 0;
-        double                      psiRjWeight = 0.0, psiRjLab = 0.0, psiRjStep = 1.0;
-        double                      psiRjVisits[2] = {0.0, 0.0};
-        unsigned long               psiRjCheck = 1;
-        std::vector<char>           psiActive;
-        std::vector<int>            fossilTypeOrig, backboneTypeOrig;
+//         void                        applyPsiModel(int m);
+//         double                      lnPsiRjTerm(void);
+//         std::vector<double>         psiMainValues(void);
+//         void                        setPsiMainValues(const std::vector<double>& v);
+//         double                      lnPsiMainPrior(void);
+//         std::vector<double>         psiShiftCoords(void);
+//         double                      psiRjJacobian(void);
+//         void                        scalePsiMain(double sgn);
+//         std::vector<double>         psiRjShift, psiRjSaved, psiRjSum[2];
+//         std::vector<char>           psiRjShiftable;
+//         double                      psiRjShiftSum = 0.0, psiRjN[2] = {0.0, 0.0};
+//         int                         psiRjStage = 0;
+//         int                         psiRjMain = -1;
+//         int                         psiModel = 0, prevPsiModel = 0;
+//         long                        rjAcc = 0, rjAtt = 0;
+//         double                      psiRjWeight = 0.0, psiRjLab = 0.0, psiRjStep = 1.0;
+//         double                      psiRjVisits[2] = {0.0, 0.0};
+//         unsigned long               psiRjCheck = 1;
+//         std::vector<char>           psiActive;
+//         std::vector<int>            fossilTypeOrig, backboneTypeOrig;
         double                      fossilTermLn(int i, int spineIdx, int ky = -1, int kz = -1, bool local = false);
-        double                      fossilTermLn(ParameterUnresolvedFossils* uf, double gLn, int i, int spineIdx, int ky, int kz, bool local);
+//         double                      fossilTermLn(ParameterUnresolvedFossils* uf, double gLn, int i, int spineIdx, int ky, int kz, bool local);
         double                      sweepTermLn(int i);
         double                      lnSurvDecParts(int i, double t, double& linear);
         double                      lnDLocal(double t);
@@ -151,7 +160,8 @@ class FBDTreeModel : public PhylogeneticModel {
         double                      calculateResolvedFBD(void);
         int                         countResolvedSA(void);
         double                      lnD(double t);
-        double                      fossilPqLn(double y, double z, int type, int ky = -1, int kz = -1);
+//         double                      fossilPqLn(double y, double z, int type, int ky = -1, int kz = -1);
+        double                      fossilPqLn(double y, double z, int ky = -1, int kz = -1);
         double                      calculateLnSurvival(double t);
         double                      lnSurvivalWithin(int i, double t);
         double                      lnSurvDecrement(int i, double t);
@@ -214,17 +224,19 @@ class FBDTreeModel : public PhylogeneticModel {
         bool                        subtreeAllFossil(Node* n);
         double                      lambdaAt(int i);
         double                      muAt(int i);
-        double                      psiTotalAt(int i);
-        double                      psiOfTypeAt(int type, int i);
-        std::vector<int>            buildSkylineRates(const std::string& prefix, const std::string& sep, int nBins, const std::vector<double>& times, RateMode mode, const OUHyperSpec& ou, const Probability::PriorSpec& basePrior, double rate0, double avoid, const std::vector<int>& groupIds, const std::vector<std::string>& groupLabels, const std::map<int,Probability::PriorSpec>& groupPrior, std::vector<ParameterDouble*>& outVec, ParameterOUField*& outField, std::vector<std::string>& outNames);
+//         double                      psiTotalAt(int i);
+//         double                      psiOfTypeAt(int type, int i);
+//         std::vector<int>            buildSkylineRates(const std::string& prefix, const std::string& sep, int nBins, const std::vector<double>& times, RateMode mode, const OUHyperSpec& ou, const Probability::PriorSpec& basePrior, double rate0, double avoid, const std::vector<int>& groupIds, const std::vector<std::string>& groupLabels, const std::map<int,Probability::PriorSpec>& groupPrior, std::vector<ParameterDouble*>& outVec, ParameterOUField*& outField, std::vector<std::string>& outNames);
+        double                      psiAt(int i);
+        std::vector<int>            buildSkylineRates(const std::string& prefix, int nBins, const std::vector<double>& times, RateMode mode, const OUHyperSpec& ou, const Probability::PriorSpec& basePrior, double rate0, double avoid, const std::vector<int>& groupIds, const std::vector<std::string>& groupLabels, const std::map<int,Probability::PriorSpec>& groupPrior, std::vector<ParameterDouble*>& outVec, ParameterOUField*& outField, std::vector<std::string>& outNames);
         void                        appendRateMap(const std::vector<double>& times, const std::vector<int>& binToChunk, const std::vector<std::string>& names);
         void                        appendFieldMask(std::vector<bool>& m, ParameterOUField* f, size_t nRates);
         void                        appendRateMask(std::vector<bool>& m, const SkylineRates& s);
         void                        buildRates(UserSettings& us, SkylineRates& s);
         std::vector<std::string>    getRateNames(const SkylineRates& s);
         std::vector<double>         getRateString(const SkylineRates& s);
-        std::vector<std::pair<double,double>> getRateSupports(const SkylineRates& s);
-        std::vector<size_t>         rateBlockSizes(const SkylineRates& s);
+//         std::vector<std::pair<double,double>> getRateSupports(const SkylineRates& s);
+//         std::vector<size_t>         rateBlockSizes(const SkylineRates& s);
         SkylineRates                a;
         double                      rho;
         bool                        haveIid = false, haveLMField = false;
@@ -242,7 +254,8 @@ class FBDTreeModel : public PhylogeneticModel {
         std::vector<Node*>          fossilOrigin;
         std::vector<bool>           fossilIsCrown;
         std::vector<int>            ueFossils;
-        enum MoveKind { MK_PARAM, MK_AZGIBBS, MK_RATESHIFT, MK_RATEVEC, MK_UPDOWN, MK_JOINTSCALE, MK_PSIRJ };
+//         enum MoveKind { MK_PARAM, MK_AZGIBBS, MK_RATESHIFT, MK_RATEVEC, MK_UPDOWN, MK_JOINTSCALE, MK_PSIRJ };
+        enum MoveKind { MK_PARAM, MK_AZGIBBS, MK_RATESHIFT, MK_RATEVEC, MK_UPDOWN, MK_JOINTSCALE };
         MoveKind                    lastMoveKind;
         double                      shiftStep;
         int                         saBatch;

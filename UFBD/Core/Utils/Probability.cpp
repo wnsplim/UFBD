@@ -148,16 +148,16 @@ double Probability::priorLnPdf(PriorFamily family, double p1, double p2, double 
 }
 
 
-std::pair<double,double> Probability::priorSupport(PriorFamily family, double p1, double p2, double lower, double upper, double offset){
-    switch(family){
-        case PriorFamily::UNIFORM:          return {p1, p2};
-        case PriorFamily::TRUNCATED_NORMAL: return {(lower > offset) ? lower : offset, upper};
-        case PriorFamily::NORMAL:           return {lower, upper};
-        case PriorFamily::EMPIRICAL:        return {offset, p2};
-        default:                            return {offset, INFINITY};
-    }
-}
-
+// std::pair<double,double> Probability::priorSupport(PriorFamily family, double p1, double p2, double lower, double upper, double offset){
+//     switch(family){
+//         case PriorFamily::UNIFORM:          return {p1, p2};
+//         case PriorFamily::TRUNCATED_NORMAL: return {(lower > offset) ? lower : offset, upper};
+//         case PriorFamily::NORMAL:           return {lower, upper};
+//         case PriorFamily::EMPIRICAL:        return {offset, p2};
+//         default:                            return {offset, INFINITY};
+//     }
+// }
+// 
 double Probability::priorMean(PriorFamily family, double p1, double p2, double offset){
     switch(family){
         case PriorFamily::IMPROPER:         return offset + 1.0;

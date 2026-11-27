@@ -286,48 +286,56 @@ SimParams Sbc::drawParams(void){
     p.originConditioning = cfg.originConditioning;
     p.condEvent = cfg.condEvent;
     p.startAge = drawPrior(cfg.startAgePrior, rng);
-    int nT = cfg.numPsiTypes;
-    p.psi.assign(nT, std::vector<double>());
-    p.psiIdx.assign(nT, std::vector<int>());
-    int lPrev = -1, mPrev = -1;
-    std::vector<int> pPrev(nT, -1);
-    std::map<int,double> lamChunk, muChunk;
-    std::vector<std::map<int,double>> psiChunk(nT);
-    static const std::vector<int> noGroups;
-    static const std::map<int,Probability::PriorSpec> noGroupPrior;
-    std::vector<double> lamOU, muOU;
-    std::vector<std::vector<double>> psiOU(nT);
-    p.psiOU.assign(nT, std::vector<double>());
+//     int nT = cfg.numPsiTypes;
+//     p.psi.assign(nT, std::vector<double>());
+//     p.psiIdx.assign(nT, std::vector<int>());
+//     int lPrev = -1, mPrev = -1;
+//     std::vector<int> pPrev(nT, -1);
+//     std::map<int,double> lamChunk, muChunk;
+//     std::vector<std::map<int,double>> psiChunk(nT);
+//     static const std::vector<int> noGroups;
+//     static const std::map<int,Probability::PriorSpec> noGroupPrior;
+//     std::vector<double> lamOU, muOU;
+//     std::vector<std::vector<double>> psiOU(nT);
+//     p.psiOU.assign(nT, std::vector<double>());
+    int lPrev = -1, mPrev = -1, pPrev = -1;
+    std::map<int,double> lamChunk, muChunk, psiChunk;
+    std::vector<double> lamOU, muOU, psiOU;
     if(cfg.lambdaMode == RateMode::OU) lamOU = drawOU(cfg.lambdaTimes, cfg.lambdaOU, p.lambdaOU, rng);
     if(cfg.muMode == RateMode::OU)     muOU = drawOU(cfg.muTimes, cfg.muOU, p.muOU, rng);
-    for(int t = 0; t < nT; t++)
-        if(cfg.psiModes[t] == RateMode::OU) psiOU[t] = drawOU(cfg.psiTimes[t], cfg.psiOU[t], p.psiOU[t], rng);
+//     for(int t = 0; t < nT; t++)
+//         if(cfg.psiModes[t] == RateMode::OU) psiOU[t] = drawOU(cfg.psiTimes[t], cfg.psiOU[t], p.psiOU[t], rng);
+    if(cfg.psiMode == RateMode::OU)    psiOU = drawOU(cfg.psiTimes, cfg.psiOU, p.psiOU, rng);
     for(double s : cfg.intervalStart){
-        int li = 0, mi = 0;
+//         int li = 0, mi = 0;
+        int li = 0, mi = 0, pi = 0;
         for(int k = 0; k < (int)cfg.lambdaTimes.size(); k++) if(cfg.lambdaTimes[k] <= s) li = k;
         for(int k = 0; k < (int)cfg.muTimes.size(); k++)     if(cfg.muTimes[k] <= s)     mi = k;
+        for(int k = 0; k < (int)cfg.psiTimes.size(); k++)    if(cfg.psiTimes[k] <= s)    pi = k;
         if(li > lPrev){ p.lambda.push_back(cfg.lambdaMode == RateMode::OU ? lamOU[li] : drawChunk(cfg.lambdaGroups, cfg.lambdaGroupPrior, cfg.lambdaPrior, li, lamChunk, rng)); lPrev = li; }
         if(mi > mPrev){ p.mu.push_back(cfg.muMode == RateMode::OU ? muOU[mi] : drawChunk(cfg.muGroups, cfg.muGroupPrior, cfg.muPrior, mi, muChunk, rng)); mPrev = mi; }
+        if(pi > pPrev){ p.psi.push_back(cfg.psiMode == RateMode::OU ? psiOU[pi] : drawChunk(cfg.psiGroups, cfg.psiGroupPrior, cfg.psiPrior, pi, psiChunk, rng)); pPrev = pi; }
         p.lambdaIdx.push_back(li);
         p.muIdx.push_back(mi);
-        for(int t = 0; t < nT; t++){
-            int pi = 0;
-            for(int k = 0; k < (int)cfg.psiTimes[t].size(); k++) if(cfg.psiTimes[t][k] <= s) pi = k;
-            if(pi > pPrev[t]){
-                const std::vector<int>& g = (t < (int)cfg.psiGroups.size()) ? cfg.psiGroups[t] : noGroups;
-                const std::map<int,Probability::PriorSpec>& gp = (t < (int)cfg.psiGroupPriors.size()) ? cfg.psiGroupPriors[t] : noGroupPrior;
-                p.psi[t].push_back(cfg.psiModes[t] == RateMode::OU ? psiOU[t][pi] : drawChunk(g, gp, cfg.psiPriors[t], pi, psiChunk[t], rng));
-                pPrev[t] = pi;
-            }
-            p.psiIdx[t].push_back(pi);
-        }
-    }
-    if(cfg.psiRjMain >= 0){
-        p.psiRjMain = cfg.psiRjMain;
-        p.model = (rng->uniformRv() < 0.5) ? 1 : 0;
-        if(p.model == 1)
-            for(int t = 0; t < nT; t++)
-                p.typeWeight.push_back(Probability::Exponential::rv(rng, 1.0));
+//         for(int t = 0; t < nT; t++){
+//             int pi = 0;
+//             for(int k = 0; k < (int)cfg.psiTimes[t].size(); k++) if(cfg.psiTimes[t][k] <= s) pi = k;
+//             if(pi > pPrev[t]){
+//                 const std::vector<int>& g = (t < (int)cfg.psiGroups.size()) ? cfg.psiGroups[t] : noGroups;
+//                 const std::map<int,Probability::PriorSpec>& gp = (t < (int)cfg.psiGroupPriors.size()) ? cfg.psiGroupPriors[t] : noGroupPrior;
+//                 p.psi[t].push_back(cfg.psiModes[t] == RateMode::OU ? psiOU[t][pi] : drawChunk(g, gp, cfg.psiPriors[t], pi, psiChunk[t], rng));
+//                 pPrev[t] = pi;
+//             }
+//             p.psiIdx[t].push_back(pi);
+//         }
+//     }
+//     if(cfg.psiRjMain >= 0){
+//         p.psiRjMain = cfg.psiRjMain;
+//         p.model = (rng->uniformRv() < 0.5) ? 1 : 0;
+//         if(p.model == 1)
+//             for(int t = 0; t < nT; t++)
+//                 p.typeWeight.push_back(Probability::Exponential::rv(rng, 1.0));
+        p.psiIdx.push_back(pi);
     }
     return p;
 }
@@ -346,7 +354,7 @@ void Sbc::buildInputs(const SimResult& r, Tree* tree, std::vector<Clade>& clades
     cladeOf[crown] = "whole";
     Assignment asg = cfg.originConditioning ? Assignment::TOTAL : Assignment::CROWN;
     for(size_t i = 0; i < r.fossilAges.size(); i++){
-        std::string ty = (cfg.numPsiTypes > 1) ? cfg.psiTypeNames[r.fossilTypes[i]] : "";
+//         std::string ty = (cfg.numPsiTypes > 1) ? cfg.psiTypeNames[r.fossilTypes[i]] : "";
         double lo = r.fossilAges[i], hi = r.fossilAges[i];
         if(cfg.ageRange > 0.0){
             hi = r.fossilAges[i] + rng->uniformRv() * cfg.ageRange;
@@ -377,7 +385,8 @@ void Sbc::buildInputs(const SimResult& r, Tree* tree, std::vector<Clade>& clades
             }
             zoneNode.push_back(u->getOffset());
         }
-        fossils.push_back(Fossil("F" + std::to_string(i + 1), lo, hi, cladeOf[x], a, ty));
+//         fossils.push_back(Fossil("F" + std::to_string(i + 1), lo, hi, cladeOf[x], a, ty));
+        fossils.push_back(Fossil("F" + std::to_string(i + 1), lo, hi, cladeOf[x], a));
     }
     for(int i = 0; i < r.numUE; i++)
         fossils.push_back(Fossil("U" + std::to_string(i + 1), 0.0, 0.0, "whole", asg));
@@ -510,26 +519,29 @@ void Sbc::runEmit(void){
 
         std::ofstream ff(base + ".fossils");
         for(Fossil& f : fossils){
-            ff << f.getTaxon() << '\t' << f.getMinAge() << '\t' << f.getMaxAge() << '\t' << f.getClade() << '\t' << assignmentName(f.getAssignment());
-            if(f.getType().empty() == false) ff << '\t' << f.getType();
-            ff << '\n';
+//             ff << f.getTaxon() << '\t' << f.getMinAge() << '\t' << f.getMaxAge() << '\t' << f.getClade() << '\t' << assignmentName(f.getAssignment());
+//             if(f.getType().empty() == false) ff << '\t' << f.getType();
+//             ff << '\n';
+            ff << f.getTaxon() << '\t' << f.getMinAge() << '\t' << f.getMaxAge() << '\t' << f.getClade() << '\t' << assignmentName(f.getAssignment()) << '\n';
         }
         ff.close();
 
         std::ofstream xf(base + ".truth");
-        if(cfg.psiRjMain >= 0)
-            xf << "model\t" << truth.model << "\n";
+//         if(cfg.psiRjMain >= 0)
+//             xf << "model\t" << truth.model << "\n";
         xf << "lambda0\t" << truth.lambda[0] << "\nmu0\t" << truth.mu[0];
-        for(int t = 0; t < cfg.numPsiTypes; t++){
-            if(truth.model == 1 && t != truth.psiRjMain)
-                continue;
-            for(size_t b = 0; b < truth.psi[t].size(); b++){
-                std::string lab = (cfg.numPsiTypes > 1)
-                    ? ("psi_" + cfg.psiTypeNames[t] + (truth.psi[t].size() > 1 ? "_" + std::to_string(b) : ""))
-                    : ("psi" + std::to_string(b));
-                xf << "\n" << lab << "\t" << truth.psi[t][b];
-            }
-        }
+//         for(int t = 0; t < cfg.numPsiTypes; t++){
+//             if(truth.model == 1 && t != truth.psiRjMain)
+//                 continue;
+//             for(size_t b = 0; b < truth.psi[t].size(); b++){
+//                 std::string lab = (cfg.numPsiTypes > 1)
+//                     ? ("psi_" + cfg.psiTypeNames[t] + (truth.psi[t].size() > 1 ? "_" + std::to_string(b) : ""))
+//                     : ("psi" + std::to_string(b));
+//                 xf << "\n" << lab << "\t" << truth.psi[t][b];
+//             }
+//         }
+        for(size_t b = 0; b < truth.psi.size(); b++)
+            xf << "\npsi" << b << "\t" << truth.psi[b];
         xf << "\nx\t" << truth.startAge;
         if(r.backboneNodeAges.empty() == false)
             xf << "\ncrown\t" << r.backboneNodeAges[0];
@@ -552,7 +564,8 @@ void Sbc::runSimulateOnly(void){
         SimParams p = drawParams();
         SimResult r = sim.simulate(p);
         sExt += r.numExtantSampled; sFoss += r.numFossils; sBB += r.numBackbone; sUE += r.numUE;
-        sLam += p.lambda[0]; sMu += p.mu[0]; sPsi += p.psi[0][0]; sX += p.startAge;
+//         sLam += p.lambda[0]; sMu += p.mu[0]; sPsi += p.psi[0][0]; sX += p.startAge;
+        sLam += p.lambda[0]; sMu += p.mu[0]; sPsi += p.psi[0]; sX += p.startAge;
         if(r.numBackbone < minB) minB = r.numBackbone;
         if(r.numBackbone > maxB) maxB = r.numBackbone;
         if(r.numExtantSampled < minE) minE = r.numExtantSampled;
@@ -629,7 +642,8 @@ void Sbc::runInference(void){
             FBDTreeModel* model = new FBDTreeModel(tree, clades, fossils, modelSeed);
             truthLnL = model->evaluateAtGeneratingState(truth.lambda, truth.mu, truth.psi,
                                                         truth.lambdaOU, truth.muOU, truth.psiOU, truth.startAge,
-                                                        r.backboneNodeAges, yTrue, zTrue, saTrue, zoneNode, truth.model, truthLnPrior);
+//                                                         r.backboneNodeAges, yTrue, zTrue, saTrue, zoneNode, truth.model, truthLnPrior);
+                                                        r.backboneNodeAges, yTrue, zTrue, saTrue, zoneNode, truthLnPrior);
             models.push_back(model);
             chains.push_back(new Mcmc(ng, thin, model));
             chains.back()->setWriteCheckpoints(false);
@@ -685,31 +699,31 @@ void Sbc::runInference(void){
             if(names[c] == "prior")      iPri = (int)c;
             colOf[names[c]] = (int)c;
         }
-        if(cfg.psiRjMain >= 0){
-            const std::vector<double>& m = post[colOf["model"]];
-            double theta = post[colOf["log_prior_odds"]].back();
-            std::vector<double> cum;
-            double tot = 0.0;
-            for(double v : m){
-                tot += (v == 1.0) ? std::exp(-theta) : 1.0;
-                cum.push_back(tot);
-            }
-            std::vector<size_t> pick(cum.size());
-            for(size_t i = 0; i < pick.size(); i++)
-                pick[i] = std::lower_bound(cum.begin(), cum.end(), rng->uniformRv() * tot) - cum.begin();
-            for(std::vector<double>& col : post){
-                std::vector<double> res(pick.size());
-                for(size_t i = 0; i < pick.size(); i++)
-                    res[i] = col[pick[i]];
-                col = res;
-            }
-            for(size_t i = 0; i < post[iPri].size(); i++)
-                if(post[colOf["model"]][i] == 1.0)
-                    post[iPri][i] -= theta;
-        }
+//         if(cfg.psiRjMain >= 0){
+//             const std::vector<double>& m = post[colOf["model"]];
+//             double theta = post[colOf["log_prior_odds"]].back();
+//             std::vector<double> cum;
+//             double tot = 0.0;
+//             for(double v : m){
+//                 tot += (v == 1.0) ? std::exp(-theta) : 1.0;
+//                 cum.push_back(tot);
+//             }
+//             std::vector<size_t> pick(cum.size());
+//             for(size_t i = 0; i < pick.size(); i++)
+//                 pick[i] = std::lower_bound(cum.begin(), cum.end(), rng->uniformRv() * tot) - cum.begin();
+//             for(std::vector<double>& col : post){
+//                 std::vector<double> res(pick.size());
+//                 for(size_t i = 0; i < pick.size(); i++)
+//                     res[i] = col[pick[i]];
+//                 col = res;
+//             }
+//             for(size_t i = 0; i < post[iPri].size(); i++)
+//                 if(post[colOf["model"]][i] == 1.0)
+//                     post[iPri][i] -= theta;
+//         }
         for(size_t c = 0; c < names.size(); c++){
-            if(names[c] == "delta" || names[c] == "log_prior_odds")
-                continue;
+//             if(names[c] == "delta" || names[c] == "log_prior_odds")
+//                 continue;
             std::map<std::string, double>::iterator t = truthVal.find(names[c]);
             if(t != truthVal.end() && isRankedName(names[c]))
                 addQuantity(names[c], post[c], t->second);
@@ -781,7 +795,8 @@ void Sbc::runInference(void){
                 rankOut << (c ? "\t" : "") << (f != thisRep.end() ? f->second : std::numeric_limits<double>::quiet_NaN());
             }
             rankOut << "\t" << repBulkEss << "\t" << repTailEss << "\t" << repMaxRhat
-                    << "\t" << truth.lambda[0] << "\t" << truth.mu[0] << "\t" << truth.psi[0][0]
+//                     << "\t" << truth.lambda[0] << "\t" << truth.mu[0] << "\t" << truth.psi[0][0]
+                    << "\t" << truth.lambda[0] << "\t" << truth.mu[0] << "\t" << truth.psi[0]
                     << "\t" << truthLnL << "\t" << truthLnPrior << "\t" << r.attempts << "\n";
             rankOut.flush();
         }

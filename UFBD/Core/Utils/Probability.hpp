@@ -30,7 +30,7 @@ namespace  Probability {
     };
 
     double priorLnPdf(PriorFamily family, double p1, double p2, double x, double lower, double upper, double offset = 0.0);
-    std::pair<double,double> priorSupport(PriorFamily family, double p1, double p2, double lower, double upper, double offset = 0.0);
+//     std::pair<double,double> priorSupport(PriorFamily family, double p1, double p2, double lower, double upper, double offset = 0.0);
     double priorMean(PriorFamily family, double p1, double p2, double offset = 0.0);
     double priorRv(PriorFamily family, double p1, double p2, RandomVariable* rng, double offset = 0.0);
 

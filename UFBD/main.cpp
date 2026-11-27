@@ -8,8 +8,8 @@
 #include "ParameterBranchRates.hpp"
 #include "RandomVariable.hpp"
 #include "RelaxedClockTreeModel.hpp"
-#include "PathModel.hpp"
-#include "BridgeSampler.hpp"
+// #include "PathModel.hpp"
+// #include "BridgeSampler.hpp"
 #include "Tree.hpp"
 #include "UserSettings.hpp"
 
@@ -29,9 +29,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <unistd.h>
-#ifdef __linux__
-#include <sys/prctl.h>
-#endif
+// #ifdef __linux__
+// #include <sys/prctl.h>
+// #endif
 
 static void crashBacktrace(int sig){
     void* frames[64];
@@ -83,13 +83,13 @@ static std::string elapsedString(double secs){
 
 int main(int argc, const char* argv[]) {
 
-#ifdef __linux__
-    if(const char* parent = std::getenv("UFBD_PARENT")){
-        prctl(PR_SET_PDEATHSIG, SIGKILL);
-        if(getppid() != (pid_t)std::atol(parent))
-            return 1;
-    }
-#endif
+// #ifdef __linux__
+//     if(const char* parent = std::getenv("UFBD_PARENT")){
+//         prctl(PR_SET_PDEATHSIG, SIGKILL);
+//         if(getppid() != (pid_t)std::atol(parent))
+//             return 1;
+//     }
+// #endif
     signal(SIGSEGV, crashBacktrace);
     signal(SIGABRT, crashBacktrace);
 
@@ -116,13 +116,14 @@ int main(int argc, const char* argv[]) {
 
     std::string logBase = settings.getParamOutput();
     std::string consolePath = "console.txt";
-    std::string bfBase;
-    bool ladder = settings.getModelBSettings() != nullptr && settings.getBfLadder().size() != 1;
+//     std::string bfBase;
+//     bool ladder = settings.getModelBSettings() != nullptr && settings.getBfLadder().size() != 1;
     if(logBase.empty() == false){
         size_t p = logBase.rfind(".log");
         std::string stem = (p != std::string::npos ? logBase.substr(0, p) : logBase);
-        bfBase = stem;
-        consolePath = stem + (ladder ? "_bf" : "") + ".console.txt";
+//         bfBase = stem;
+//         consolePath = stem + (ladder ? "_bf" : "") + ".console.txt";
+        consolePath = stem + ".console.txt";
     }
     for(const std::string& pth : {settings.getParamOutput(), settings.getTreeOutput(), consolePath}){
         if(pth.empty()) continue;
@@ -141,8 +142,8 @@ int main(int argc, const char* argv[]) {
     FBDInput input(settings.getTreeFile(), settings.getCladesFile(), settings.getFossilFile(), settings.getUnsampledExtantsFile());
     Tree* pt = input.getTree();
 
-    if(settings.getPathPilot())
-        settings.setChainLength(BridgeSampler::pilotGenerations());
+//     if(settings.getPathPilot())
+//         settings.setChainLength(BridgeSampler::pilotGenerations());
     settings.print();
     if(Msg::hasDeferredWarnings()){
         Msg::flushWarnings();
@@ -166,7 +167,8 @@ int main(int argc, const char* argv[]) {
     bool autoStop = settings.getAutoChainLength();
     int thin = settings.getThinning();
 
-    auto makeModel = [&](unsigned int sd, int run) -> PhylogeneticModel* {
+//     auto makeModel = [&](unsigned int sd, int run) -> PhylogeneticModel* {
+    auto makeModel = [&](unsigned int sd) -> PhylogeneticModel* {
         PhylogeneticModel* model;
         if(seq)
             model = new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), settings.getSequenceFile(), settings.getPartitionFile(), settings.getModelNStates(), settings.getNumCats(), cm, settings.getRgeneGamma(), settings.getSigma2Gamma(), sd);
@@ -182,29 +184,30 @@ int main(int argc, const char* argv[]) {
             else if(RelaxedClockTreeModel* rc = dynamic_cast<RelaxedClockTreeModel*>(model)) rm = rc->getRateMap();
             if(rm.empty() == false) std::cout << "Rate intervals:\n" << rm;
         }
-        if(settings.getModelBSettings() != nullptr){
-            UserSettings* bs = settings.getModelBSettings();
-            unsigned int sdB = sd + 104729u;
-            std::vector<ClockModel> cmB;
-            for(const std::string& cn : bs->getClockModelNames())
-                cmB.push_back(cn == "gbm" ? ClockModel::GBM : ClockModel::UCLN);
-            PhylogeneticModel* mb;
-            if(seq)
-                mb = new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), bs->getSequenceFile(), bs->getPartitionFile(), bs->getModelNStates(), bs->getNumCats(), cmB, bs->getRgeneGamma(), bs->getSigma2Gamma(), sdB, bs);
-            else if(hessian)
-                mb = new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), bs->getHessianFile(), bs->getTreeFile(), bs->getModelNStates(), cmB, bs->getRgeneGamma(), bs->getSigma2Gamma(), sdB, bs);
-            else
-                mb = new FBDTreeModel(pt, input.getClades(), input.getFossils(), sdB, bs);
-            PathModel* path = new PathModel(model, mb, input.getFossils(), sd + 7919u);
-            path->setStart(run);
-            model = path;
-        }
+//         if(settings.getModelBSettings() != nullptr){
+//             UserSettings* bs = settings.getModelBSettings();
+//             unsigned int sdB = sd + 104729u;
+//             std::vector<ClockModel> cmB;
+//             for(const std::string& cn : bs->getClockModelNames())
+//                 cmB.push_back(cn == "gbm" ? ClockModel::GBM : ClockModel::UCLN);
+//             PhylogeneticModel* mb;
+//             if(seq)
+//                 mb = new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), bs->getSequenceFile(), bs->getPartitionFile(), bs->getModelNStates(), bs->getNumCats(), cmB, bs->getRgeneGamma(), bs->getSigma2Gamma(), sdB, bs);
+//             else if(hessian)
+//                 mb = new RelaxedClockTreeModel(pt, input.getClades(), input.getFossils(), bs->getHessianFile(), bs->getTreeFile(), bs->getModelNStates(), cmB, bs->getRgeneGamma(), bs->getSigma2Gamma(), sdB, bs);
+//             else
+//                 mb = new FBDTreeModel(pt, input.getClades(), input.getFossils(), sdB, bs);
+//             PathModel* path = new PathModel(model, mb, input.getFossils(), sd + 7919u);
+//             path->setStart(run);
+//             model = path;
+//         }
         return model;
     };
 
-    auto runOnce = [&](){
+//     auto runOnce = [&](){
     bool resume = settings.getResume();
-    unsigned int masterSeed = settings.getSeed() + (unsigned int)std::llround(settings.getPathT() * 1e6) * 1000003u + (settings.getPathPilot() ? 999983u : 0u);
+//     unsigned int masterSeed = settings.getSeed() + (unsigned int)std::llround(settings.getPathT() * 1e6) * 1000003u + (settings.getPathPilot() ? 999983u : 0u);
+    unsigned int masterSeed = settings.getSeed();
     auto chainSeed = [&](int r, int c){ return masterSeed + (unsigned int)r * 1000033u + (unsigned int)c * 1000037u; };
 
     if(numRuns == 1 && autoStop == false){
@@ -212,13 +215,16 @@ int main(int argc, const char* argv[]) {
         if(numCoupledChains > 1){
             std::vector<PhylogeneticModel*> models(numCoupledChains);
             for(int c = 0; c < numCoupledChains; c++)
-                models[c] = makeModel(chainSeed(0, c), 0);
+//                 models[c] = makeModel(chainSeed(0, c), 0);
+                models[c] = makeModel(chainSeed(0, c));
             mcmc = new MetropolisCoupledMcmc(settings.getChainLength(), thin, models, chainSeed(0, numCoupledChains));
         }else
-            mcmc = new Mcmc((int)settings.getChainLength(), thin, makeModel(chainSeed(0, 0), 0));
+//             mcmc = new Mcmc((int)settings.getChainLength(), thin, makeModel(chainSeed(0, 0), 0));
+            mcmc = new Mcmc((int)settings.getChainLength(), thin, makeModel(chainSeed(0, 0)));
         mcmc->setVerbose(true);
         mcmc->setLabel(0);
-        if(resume && std::ifstream(settings.getParamOutput() + ".ckp").good() == false && std::ifstream(ChainRunner::tunePath(settings.getParamOutput()) + ".ckp").good() == false)
+//         if(resume && std::ifstream(settings.getParamOutput() + ".ckp").good() == false && std::ifstream(ChainRunner::tunePath(settings.getParamOutput()) + ".ckp").good() == false)
+        if(resume && std::ifstream(settings.getParamOutput() + ".ckp").good() == false)
             Msg::error("-resume: no checkpoint exists (" + settings.getParamOutput() + ".ckp), so there is nothing to resume from.");
         if(resume && std::ifstream(settings.getParamOutput() + ".ckp").good()){
             mcmc->loadCheckpoint();
@@ -234,7 +240,7 @@ int main(int argc, const char* argv[]) {
         }
         if(settings.getArLog())
             mcmc->printMoveDiagnostics(0);
-        ConvergenceRunner::printPsiRjBf({mcmc});
+//         ConvergenceRunner::printPsiRjBf({mcmc});
         std::string sbase = settings.getParamOutput();
         size_t sdp = sbase.rfind(".log"); if(sdp != std::string::npos) sbase = sbase.substr(0, sdp);
         if(sbase.empty()) sbase = "out";
@@ -248,11 +254,13 @@ int main(int argc, const char* argv[]) {
             if(numCoupledChains > 1){
                 std::vector<PhylogeneticModel*> models(numCoupledChains);
                 for(int c = 0; c < numCoupledChains; c++)
-                    models[c] = makeModel(chainSeed(r, c), r);
+//                     models[c] = makeModel(chainSeed(r, c), r);
+                    models[c] = makeModel(chainSeed(r, c));
                 reps.push_back(new MetropolisCoupledMcmc(ncyc, thin, models, chainSeed(r, numCoupledChains)));
             }else{
                 int ng = (ncyc > 2000000000UL) ? 2000000000 : (int)ncyc;
-                reps.push_back(new Mcmc(ng, thin, makeModel(chainSeed(r, 0), r)));
+//                 reps.push_back(new Mcmc(ng, thin, makeModel(chainSeed(r, 0), r)));
+                reps.push_back(new Mcmc(ng, thin, makeModel(chainSeed(r, 0))));
             }
         }
         ConvergenceRunner cr(reps, settings.getParamOutput(), settings.getTreeOutput());
@@ -270,12 +278,12 @@ int main(int argc, const char* argv[]) {
     if(wrote(settings.getParamOutput())) std::cout << "MCMC log               -> " << settings.getParamOutput() << "\n";
     if(wrote(settings.getTreeOutput()))  std::cout << "tree log               -> " << settings.getTreeOutput() << "\n";
     if(wrote(base + ".tree"))            std::cout << "posterior summary tree -> " << base << ".tree\n";
-    };
-
-    if(ladder)
-        BridgeSampler(bfBase).run();
-    else
-        runOnce();
+//     };
+// 
+//     if(ladder)
+//         BridgeSampler(bfBase).run();
+//     else
+//         runOnce();
 
     auto runEnd = std::chrono::system_clock::now();
     std::cout << "Run finished: " << clockString(runEnd)
