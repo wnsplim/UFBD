@@ -42,6 +42,10 @@ class PhylogeneticModel {
         virtual void                            freezePncpTuning(void) {}
         virtual void                            setChainLabel(int) {}
         virtual void                            setPncpReporter(bool) {}
+//         virtual double                          psiRjAdapt(unsigned long) { return 0.0; }
+//         virtual bool                            psiRjTuning(void) { return false; }
+//         virtual std::vector<double>             getPsiRjState(void) { return {}; }
+//         virtual double                          setPsiRjState(const std::vector<double>&) { return 0.0; }
         std::vector<Parameter*>                 parameters;
         Parameter*                              updatedParameter;
         RandomVariable                          rng;

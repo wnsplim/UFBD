@@ -20,7 +20,7 @@ struct SimNode {
     bool      keep;
     bool      retain;
     int       label;
-    int       type;
+//     int       type;
 };
 
 SimNode* newNode(double age, std::vector<SimNode*>& all){
@@ -35,7 +35,7 @@ SimNode* newNode(double age, std::vector<SimNode*>& all){
     n->keep = false;
     n->retain = false;
     n->label = 0;
-    n->type = 0;
+//     n->type = 0;
     all.push_back(n);
     return n;
 }
@@ -193,7 +193,7 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
 
     while(ok == false){
         if(++attempts > maxAttempts)
-            Msg::error("exceeded max attempts");
+            Msg::error("no simulated tree met the -conditioning event in " + std::to_string(maxAttempts) + " attempts.");
 
         for(SimNode* n : allNodes)
             delete n;
@@ -215,13 +215,17 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
         while(ii > 0 && p.intervalStart[ii] > p.startAge)
             ii--;
 
-        int numTypes = (int)p.psi.size();
+//         int numTypes = (int)p.psi.size();
+//         double typeWeightSum = 0.0;
+//         for(double w : p.typeWeight) typeWeightSum += w;
         double curAge = p.startAge;
         while(curAge > 0.0 && active.empty() == false){
             double lam = p.lambda[p.lambdaIdx[ii]];
             double m   = p.mu[p.muIdx[ii]];
-            double ps  = 0.0;
-            for(int t = 0; t < numTypes; t++) ps += p.psi[t][p.psiIdx[t][ii]];
+//             double ps  = 0.0;
+//             if(p.model == 1) ps = p.psi[p.psiRjMain][p.psiIdx[p.psiRjMain][ii]];
+//             else for(int t = 0; t < numTypes; t++) ps += p.psi[t][p.psiIdx[t][ii]];
+            double ps  = p.psi[p.psiIdx[ii]];
             double sum = lam + m + ps;
             int N = (int)active.size();
             double younger = p.intervalStart[ii];
@@ -247,19 +251,24 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
                 active[k] = active.back();
                 active.pop_back();
             }else{
-                int ftype = 0;
-                if(numTypes > 1){
-                    double uu = rng->uniformRv() * ps;
-                    double acc = 0.0;
-                    for(int t = 0; t < numTypes; t++){ acc += p.psi[t][p.psiIdx[t][ii]]; if(uu < acc){ ftype = t; break; } }
-                }
-                SimNode* f = newNode(nextAge, allNodes); f->parent = n; f->isFossil = true; f->type = ftype; n->left = f;
+//                 int ftype = 0;
+//                 if(p.model == 1){
+//                     double uu = rng->uniformRv() * typeWeightSum;
+//                     double acc = 0.0;
+//                     for(int t = 0; t < numTypes; t++){ acc += p.typeWeight[t]; if(uu < acc){ ftype = t; break; } }
+//                 }else if(numTypes > 1){
+//                     double uu = rng->uniformRv() * ps;
+//                     double acc = 0.0;
+//                     for(int t = 0; t < numTypes; t++){ acc += p.psi[t][p.psiIdx[t][ii]]; if(uu < acc){ ftype = t; break; } }
+//                 }
+//                 SimNode* f = newNode(nextAge, allNodes); f->parent = n; f->isFossil = true; f->type = ftype; n->left = f;
+                SimNode* f = newNode(nextAge, allNodes); f->parent = n; f->isFossil = true; n->left = f;
                 SimNode* c = newNode(-1.0, allNodes); c->parent = n; n->right = c;
                 active[k] = c;
             }
             curAge = nextAge;
             if((int)active.size() > maxActiveEdges)
-                Msg::error("tree exceeded " + std::to_string(maxActiveEdges) + " edges (lambda=" + std::to_string(lam) + ", mu=" + std::to_string(m) + ", x0=" + std::to_string(p.startAge) + "); net diversification likely too high for the origin age.");
+                Msg::error("the simulated tree exceeded " + std::to_string(maxActiveEdges) + " lineages alive at once (lambda=" + std::to_string(lam) + ", mu=" + std::to_string(m) + ", x0=" + std::to_string(p.startAge) + "). The net diversification rate is probably too high for the root age.");
         }
 
         for(SimNode* n : active){
@@ -322,7 +331,7 @@ SimResult ForwardSimulator::simulate(const SimParams& p){
         for(SimNode* n : allNodes){
             if(n->isFossil){
                 res.fossilAges.push_back(n->age);
-                res.fossilTypes.push_back(n->type);
+//                 res.fossilTypes.push_back(n->type);
                 std::map<SimNode*,double>::iterator it = zMap.find(n);
                 double z = (it != zMap.end()) ? it->second : -1.0;
                 res.fossilAttachAge.push_back(z);

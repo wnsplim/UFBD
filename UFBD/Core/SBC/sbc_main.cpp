@@ -1,15 +1,23 @@
 #ifdef BUILD_SBC
 
+#include "ChildJobs.hpp"
 #include "Msg.hpp"
 #include "Probability.hpp"
 #include "RandomVariable.hpp"
 #include "Sbc.hpp"
 #include "UserSettings.hpp"
 
+#include <csignal>
 #include <cstdio>
+#include <cstdlib>
+#include <fcntl.h>
+#include <filesystem>
+#include <fstream>
 #include <random>
 #include <sstream>
 #include <string>
+#include <sys/prctl.h>
+#include <unistd.h>
 #include <vector>
 
 static void printSbcHelp(){
@@ -22,7 +30,7 @@ MODES
   emit       write N simulated datasets to disk
   simulate   simulate N datasets and print summary statistics only
   infer      draw -> simulate -> infer -> rank; outputs <prefix>_ranks.tsv
-  summarize  ECDF gamma summary of rank files (e.g. chunk files merged)
+  summarize  ECDF gamma summary of rank files (e.g. merged chunk files)
 
 SBC FLAGS
   -sbc_mode <emit|simulate|infer|summarize>
@@ -42,7 +50,13 @@ SBC FLAGS
   -sbc_ue <prob>          probability that each extant taxon is designated an
                           unsampled extant (UE) (default 0; a value > 0 is
                           incompatible with crown conditioning)
-  -sbc_out <prefix>       output prefix (required for -sbc_mode emit)
+  -sbc_out <prefix>       output prefix (required for -sbc_mode emit and -sbc_chunks)
+  -sbc_chunks <K>         run K chunks of -sbc_reps replicates as separate processes
+                          (infer mode); chunk k uses seed -seed + k and writes to
+                          chunks/c<k>/ in the directory of the prefix; a rerun skips
+                          finished chunks; the merged rank files and their summary
+                          are written to <prefix>_*.tsv and <prefix>_summary.txt
+  -sbc_jobs <N>           number of chunks run at a time (with -sbc_chunks)
   -sbc_age_range <width>  give each fossil an age range of this width placed
                           uniformly at random around its simulated age and
                           truncated at the present, so fossil ages are sampled
@@ -60,7 +74,7 @@ DRAW PRIORS AND CHAIN CONTROL
   These reuse the main ufbd flags: -lambda_prior, -mu_prior, -psi_prior
   (required for every rate under mode=indep), -*_prior_mode, -*_ou_theta,
   -*_ou_sd, -*_ou_nu, -conditioning <event> <prior> (required), -rho,
-  -*_skyline_times, -psi_types, and, for -sbc_mode infer, the MCMC/convergence flags
+  -*_skyline_times, and, for -sbc_mode infer, the MCMC/convergence flags
   -chain_length, -min_ess, -max_gen, -thinning, -burn_in, -parallel_chains,
   -cores, -seed. Run 'ufbd -help' for their descriptions.
 )SBC");
@@ -70,6 +84,12 @@ int main(int argc, const char* argv[]){
 
     for(int i = 1; i < argc; i++)
         if(std::string(argv[i]) == "-help" || std::string(argv[i]) == "-h"){ printSbcHelp(); return 0; }
+
+    if(const char* parent = std::getenv("UFBD_PARENT")){
+        prctl(PR_SET_PDEATHSIG, SIGKILL);
+        if(getppid() != (pid_t)std::atol(parent))
+            return 1;
+    }
 
     std::string invocation;
     for(int i = 0; i < argc; i++){
@@ -82,13 +102,23 @@ int main(int argc, const char* argv[]){
 
     std::string mode, out, ranksList, nodeRanksList, fossilRanksList;
     bool repsSet = false;
-    int reps = 0, numNull = SbcConfig().numNull;
+    int reps = 0, numNull = SbcConfig().numNull, chunks = 0, jobs = 0;
     double ue = 0.0, ageRange = 0.0, zone = -1.0;
     std::vector<const char*> rest;
+    std::vector<std::string> childArgs = {argv[0]};
+    for(int i = 1; i < argc; i++){
+        std::string a = argv[i];
+        if(a == "-sbc_chunks" || a == "-sbc_jobs" || a == "-seed" || a == "-sbc_out")
+            i++;
+        else
+            childArgs.push_back(a);
+    }
     rest.push_back(argv[0]);
     for(int i = 1; i < argc; i++){
         std::string a = argv[i];
-        if(a == "-sbc_mode" && i + 1 < argc)        mode = argv[++i];
+        if(a == "-sbc_chunks" && i + 1 < argc)      chunks = std::stoi(argv[++i]);
+        else if(a == "-sbc_jobs" && i + 1 < argc)   jobs = std::stoi(argv[++i]);
+        else if(a == "-sbc_mode" && i + 1 < argc)        mode = argv[++i];
         else if(a == "-sbc_reps" && i + 1 < argc){  reps = std::stoi(argv[++i]); repsSet = true; }
         else if(a == "-sbc_ue" && i + 1 < argc)     ue = std::stod(argv[++i]);
         else if(a == "-sbc_age_range" && i + 1 < argc) ageRange = std::stod(argv[++i]);
@@ -146,15 +176,17 @@ int main(int argc, const char* argv[]){
     if(repsSet == false)
         Msg::error("-sbc_reps is required.");
     if(mode == "emit" && out.empty())
-        Msg::error("-sbc_out (output file prefix) is required.");
+        Msg::error("-sbc_out (output file prefix) is required with -sbc_mode emit.");
 
     Probability::PriorSpec lambdaPrior = s.getLambdaPrior();
     Probability::PriorSpec muPrior     = s.getMuPrior();
     bool missing = (s.getLambdaMode() == RateMode::INDEP && lambdaPrior.set == false)
-                || (s.getMuMode() == RateMode::INDEP && muPrior.set == false);
-    for(int t = 0; t < s.getNumPsiTypes(); t++)
-        if(s.getPsiMode(t) == RateMode::INDEP && s.getPsiPrior(t).set == false)
-            missing = true;
+//                 || (s.getMuMode() == RateMode::INDEP && muPrior.set == false);
+//     for(int t = 0; t < s.getNumPsiTypes(); t++)
+//         if(s.getPsiMode(t) == RateMode::INDEP && s.getPsiPrior(t).set == false)
+//             missing = true;
+                || (s.getMuMode() == RateMode::INDEP && muPrior.set == false)
+                || (s.getPsiMode() == RateMode::INDEP && s.getPsiPrior().set == false);
     if(missing)
         Msg::error("-lambda_prior, -mu_prior, and -psi_prior are required for every rate under mode=indep.");
     if(s.getConditionAgePriorSet() == false)
@@ -185,19 +217,27 @@ int main(int argc, const char* argv[]){
     for(double t : s.getLambdaSkylineTimes()) cfg.lambdaTimes.push_back(t);
     cfg.muTimes.push_back(0.0);
     for(double t : s.getMuSkylineTimes())     cfg.muTimes.push_back(t);
-    cfg.numPsiTypes = s.getNumPsiTypes();
-    cfg.psiTypeNames = s.getPsiTypeNames();
-    for(int t = 0; t < cfg.numPsiTypes; t++){
-        std::vector<double> times;
-        times.push_back(0.0);
-        for(double tv : s.getPsiSkylineTimes(t)) times.push_back(tv);
-        cfg.psiTimes.push_back(times);
-        cfg.psiPriors.push_back(s.getPsiPrior(t));
-        cfg.psiGroups.push_back(s.getPsiGroups(t));
-        cfg.psiGroupPriors.push_back(s.getPsiGroupPrior(t));
-        cfg.psiModes.push_back(s.getPsiMode(t));
-        cfg.psiOU.push_back(s.getPsiOU(t));
-    }
+//     cfg.numPsiTypes = s.getNumPsiTypes();
+//     cfg.psiRjMain = s.getPsiRjMain();
+//     cfg.psiTypeNames = s.getPsiTypeNames();
+//     for(int t = 0; t < cfg.numPsiTypes; t++){
+//         std::vector<double> times;
+//         times.push_back(0.0);
+//         for(double tv : s.getPsiSkylineTimes(t)) times.push_back(tv);
+//         cfg.psiTimes.push_back(times);
+//         cfg.psiPriors.push_back(s.getPsiPrior(t));
+//         cfg.psiGroups.push_back(s.getPsiGroups(t));
+//         cfg.psiGroupPriors.push_back(s.getPsiGroupPrior(t));
+//         cfg.psiModes.push_back(s.getPsiMode(t));
+//         cfg.psiOU.push_back(s.getPsiOU(t));
+//     }
+    cfg.psiTimes.push_back(0.0);
+    for(double t : s.getPsiSkylineTimes())   cfg.psiTimes.push_back(t);
+    cfg.psiPrior = s.getPsiPrior();
+    cfg.psiGroups = s.getPsiGroups();
+    cfg.psiGroupPrior = s.getPsiGroupPrior();
+    cfg.psiMode = s.getPsiMode();
+    cfg.psiOU = s.getPsiOU();
     cfg.lambdaPrior = lambdaPrior;
     cfg.muPrior = muPrior;
     cfg.lambdaMode = s.getLambdaMode();
@@ -216,6 +256,69 @@ int main(int argc, const char* argv[]){
     cfg.seed = seed;
     RandomVariable rng(seed);
     RandomVariable::setActiveInstance(&rng);
+
+    if(chunks > 0){
+        if(mode != "infer")
+            Msg::error("-sbc_chunks needs -sbc_mode infer.");
+        if(out.empty())
+            Msg::error("-sbc_chunks needs -sbc_out.");
+        if(jobs < 1)
+            Msg::error("-sbc_chunks needs -sbc_jobs >= 1.");
+        std::filesystem::path dir = std::filesystem::path(out).parent_path();
+        auto prefix = [&](int k){ return (dir / "chunks" / ("c" + std::to_string(k)) / "c").string(); };
+        auto lines = [](const std::string& f){
+            std::vector<std::string> v;
+            std::ifstream in(f);
+            for(std::string l; std::getline(in, l); )
+                v.push_back(l);
+            return v;
+        };
+        std::vector<ChildJob> todo;
+        for(int k = 0; k < chunks; k++){
+            if(lines(prefix(k) + "_ranks.tsv").size() == (size_t)reps + 1)
+                continue;
+            std::filesystem::create_directories(std::filesystem::path(prefix(k)).parent_path());
+            ChildJob j{childArgs, "chunk " + std::to_string(k), prefix(k) + ".log", true};
+            j.args.insert(j.args.end(), {"-seed", std::to_string(seed + (unsigned int)k), "-sbc_out", prefix(k)});
+            todo.push_back(j);
+        }
+        runChildJobs(todo, jobs, "sbc");
+        auto merge = [&](const std::string& suffix, bool chunkColumn){
+            if(std::filesystem::exists(prefix(0) + suffix) == false)
+                return std::string();
+            std::ofstream m(out + suffix);
+            for(int k = 0; k < chunks; k++){
+                std::vector<std::string> v = lines(prefix(k) + suffix);
+                for(size_t i = (k == 0) ? 0 : 1; i < v.size(); i++){
+                    if(chunkColumn)
+                        m << (i == 0 ? std::string("chunk") : std::to_string(k)) << "\t";
+                    m << v[i] << "\n";
+                }
+            }
+            return out + suffix;
+        };
+        SbcConfig sc;
+        sc.summarize = true;
+        sc.ranksPaths = {merge("_ranks.tsv", false)};
+        std::string nodePath = merge("_noderanks.tsv", true), fossilPath = merge("_fossilranks.tsv", true);
+        if(nodePath.empty() == false)
+            sc.nodeRanksPaths = {nodePath};
+        if(fossilPath.empty() == false)
+            sc.fossilRanksPaths = {fossilPath};
+        sc.numNull = numNull;
+        sc.seed = seed;
+        fflush(stdout);
+        int console = dup(1);
+        int fd = open((out + "_summary.txt").c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        dup2(fd, 1);
+        close(fd);
+        Sbc(sc, &rng).run();
+        fflush(stdout);
+        dup2(console, 1);
+        close(console);
+        printf("merged %d chunks into %s_ranks.tsv; summary in %s_summary.txt\n", chunks, out.c_str(), out.c_str());
+        return 0;
+    }
 
     Sbc sbc(cfg, &rng);
     sbc.run();

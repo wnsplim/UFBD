@@ -37,8 +37,20 @@ class ChainRunner {
         virtual bool                            loadCheckpoint(void) { return false; }
         void                                    resumeOutputs(void);
         unsigned long                           currentGen(void) { return gen; }
+//         static std::string                      tunePath(const std::string& paramOut);
+//         virtual std::vector<double>             psiRjState(void) { return {}; }
+//         virtual void                            setPsiRjWeight(double w) {}
 
     protected:
+//         void                                    runPsiRjTuning(PhylogeneticModel* m, unsigned long every, int label);
+//         void                                    openTuneLog(PhylogeneticModel* m, bool resumed);
+//         void                                    writeTuneRow(PhylogeneticModel* m, unsigned long n, double lnPost);
+//         std::string                             checkpointPath(void) { return (rjTuning ? tuneOut : paramOut) + ".ckp"; }
+//         bool                                    rjTuning = false;
+//         std::string                             tuneOut;
+//         WriteTSV                                tune;
+//         std::vector<int>                        tuneIdx;
+        std::string                             checkpointPath(void) { return paramOut + ".ckp"; }
         static std::ifstream                    openCheckpoint(const std::string& path);
         static void                             reconcileThinning(int storedSf, int& thinning);
         static void                             writeDataShape(std::ostream& os, PhylogeneticModel* m);
@@ -49,6 +61,7 @@ class ChainRunner {
         virtual RandomVariable*                 resumeRng(void) = 0;
         virtual std::vector<std::string>        resumeParameterNames(void) = 0;
         virtual std::vector<std::string>        resumeLatentNames(void) = 0;
+        virtual std::vector<bool>               resumeFixedMask(void) = 0;
         void                                    resumeLatentOutput(void);
 
         WriteTSV                                params;

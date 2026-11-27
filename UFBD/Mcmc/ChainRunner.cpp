@@ -1,3 +1,6 @@
+#include <algorithm>
+#include <cmath>
+#include <iomanip>
 #include <sstream>
 
 #include "ChainRunner.hpp"
@@ -10,7 +13,7 @@
 std::ifstream ChainRunner::openCheckpoint(const std::string& path) {
     std::ifstream is(path);
     if(is.is_open() == false)
-        Msg::error("could not open checkpoint file for -resume: " + path);
+        Msg::error("-resume: cannot open the checkpoint " + path + ", so there is nothing to resume from.");
     return is;
 }
 
@@ -19,7 +22,7 @@ bool ChainRunner::thinningWarned = false;
 void ChainRunner::reconcileThinning(int storedSf, int& thinning) {
     if(storedSf != thinning){
         if(thinningWarned == false){
-            Msg::warning("-thinning " + std::to_string(thinning) + " differs from the pre-resume thinning " + std::to_string(storedSf) + "; forcing " + std::to_string(storedSf));
+            Msg::warning("-thinning " + std::to_string(thinning) + " differs from the -thinning " + std::to_string(storedSf) + " the checkpoint was written with; the resumed run uses -thinning " + std::to_string(storedSf) + ".");
             thinningWarned = true;
         }
         thinning = storedSf;
@@ -57,7 +60,7 @@ bool ChainRunner::checkpointIsCoupled(std::istream& is) {
 
 void ChainRunner::requireCheckpointIntact(std::istream& is, const std::string& path) {
     if(is.fail())
-        Msg::error("checkpoint file is truncated or corrupt: " + path);
+        Msg::error("the checkpoint file " + path + " is truncated or corrupt.");
 }
 
 void ChainRunner::resumeOutputs(void) {
@@ -71,6 +74,9 @@ void ChainRunner::resumeOutputs(void) {
     for(const std::string& s : headStr)
         traceNms.push_back(s);
     traceCols.assign(traceNms.size(), std::vector<double>());
+    fixedMask.assign(3, false);
+    for(bool fb : resumeFixedMask())
+        fixedMask.push_back(fb);
 
     std::ifstream pin(paramOut);
     std::string header;
@@ -78,7 +84,7 @@ void ChainRunner::resumeOutputs(void) {
     if(pin.is_open()){
         std::getline(pin, header);
         std::string line;
-        while(std::getline(pin, line)){
+        while(std::getline(pin, line) && pin.eof() == false){
             if(line.empty())
                 continue;
             std::stringstream ss(line);
@@ -112,7 +118,7 @@ void ChainRunner::resumeOutputs(void) {
         std::vector<std::string> tkeep;
         std::string tline;
         size_t nTree = 0;
-        while(std::getline(tin, tline)){
+        while(std::getline(tin, tline) && tin.eof() == false){
             bool isTreeLine = (tline.find("TREE STATE_") != std::string::npos);
             if(isTreeLine){
                 if(nTree < keep.size()){ tkeep.push_back(tline); nTree++; }
@@ -131,6 +137,65 @@ void ChainRunner::resumeOutputs(void) {
     resumeLatentOutput();
 }
 
+// std::string ChainRunner::tunePath(const std::string& paramOut) {
+//     std::string p = paramOut;
+//     size_t dp = p.rfind(".log");
+//     p.insert(dp != std::string::npos ? dp : p.size(), "_tune");
+//     return p;
+// }
+// 
+// void ChainRunner::runPsiRjTuning(PhylogeneticModel* m, unsigned long every, int label) {
+//     rjTuning = true;
+//     tuneOut = tunePath(paramOut);
+//     bool resumed = UserSettings::userSettings().getResume() && std::ifstream(checkpointPath()).good();
+//     if(resumed)
+//         loadCheckpoint();
+//     openTuneLog(m, resumed);
+//     while(m->psiRjTuning())
+//         advance(every);
+//     tune.closeTSV();
+//     std::ostringstream os;
+//     os << std::setprecision(10) << "chain " << label << ": psi_rj tuning finished after " << gen << " generations, log prior odds " << m->getPsiRjState()[0] << "\n";
+//     logLine(os.str());
+//     rjTuning = false;
+//     gen = 0;
+// }
+// 
+// void ChainRunner::openTuneLog(PhylogeneticModel* m, bool resumed) {
+//     std::vector<std::string> names = m->getParameterNames();
+//     tuneIdx.clear();
+//     for(const char* c : {"model", "delta", "log_prior_odds"})
+//         tuneIdx.push_back((int)(std::find(names.begin(), names.end(), c) - names.begin()));
+//     if(resumed == false){
+//         tune.addFilepath(tuneOut, true);
+//         tune.addColumnNamesTSV({"n", "posterior", "model", "delta", "log_prior_odds", "modification_factor"});
+//         return;
+//     }
+//     std::ifstream in(tuneOut);
+//     std::string header, line;
+//     std::vector<std::string> keep;
+//     std::getline(in, header);
+//     while(std::getline(in, line) && in.eof() == false){
+//         if(line.empty())
+//             continue;
+//         if((unsigned long)std::stod(line.substr(0, line.find('\t'))) > gen)
+//             break;
+//         keep.push_back(line);
+//     }
+//     in.close();
+//     std::ofstream out(tuneOut, std::ios::out | std::ios::trunc);
+//     out << header << '\n';
+//     for(const std::string& l : keep)
+//         out << l << '\n';
+//     out.close();
+//     tune.addFilepath(tuneOut, false);
+// }
+// 
+// void ChainRunner::writeTuneRow(PhylogeneticModel* m, unsigned long n, double lnPost) {
+//     std::vector<double> v = m->getParameterString(), st = m->getPsiRjState();
+//     tune.appendDataTSV(std::vector<double>{(double)n, lnPost, v[tuneIdx[0]], v[tuneIdx[1]], v[tuneIdx[2]], std::expm1(st[1])});
+// }
+// 
 void ChainRunner::resumeLatentOutput(void) {
     std::vector<std::string> latNames = resumeLatentNames();
     if(latNames.empty() || UserSettings::userSettings().getWriteLatentLog() == false)
@@ -148,7 +213,7 @@ void ChainRunner::resumeLatentOutput(void) {
     if(lin.is_open()){
         std::getline(lin, header);
         std::string line;
-        while(std::getline(lin, line)){
+        while(std::getline(lin, line) && lin.eof() == false){
             if(line.empty())
                 continue;
             std::stringstream ss(line);

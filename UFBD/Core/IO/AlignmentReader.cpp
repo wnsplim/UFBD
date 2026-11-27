@@ -257,7 +257,7 @@ void AlignmentReader::readNexus(std::ifstream& f){
     size_t start = mpos + 6;
     size_t endpos = clean.find(';', start);
     if(endpos == std::string::npos)
-        Msg::error("nexus matrix block is not terminated");
+        Msg::error("the NEXUS matrix block has no terminating ';'.");
     std::string block = clean.substr(start, endpos - start);
 
     std::map<std::string, std::string> seqs;
@@ -407,7 +407,7 @@ void AlignmentReader::parseClockPartition(const std::vector<std::string>& tok){
                 if(idx < 0)
                     Msg::error("charpartition clock references undefined charset '" + part + "'.");
                 if(curGroup < 0)
-                    Msg::error("charpartition clock: charset '" + part + "' precedes any 'name:' clock partition.");
+                    Msg::error("charpartition clock lists charset '" + part + "' before any 'name:' label, so it belongs to no clock partition.");
                 partitionGroup[idx] = curGroup;
             }
         }

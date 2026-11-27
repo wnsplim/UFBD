@@ -12,13 +12,19 @@ struct SimParams {
     std::vector<double> intervalStart;
     std::vector<int>    lambdaIdx;
     std::vector<int>    muIdx;
-    std::vector<std::vector<int>> psiIdx;
+//     std::vector<std::vector<int>> psiIdx;
+    std::vector<int>    psiIdx;
     std::vector<double> lambda;
     std::vector<double> mu;
-    std::vector<std::vector<double>> psi;
+//     std::vector<std::vector<double>> psi;
+    std::vector<double> psi;
     std::vector<double> lambdaOU;
     std::vector<double> muOU;
-    std::vector<std::vector<double>> psiOU;
+//     std::vector<std::vector<double>> psiOU;
+//     int                 model = 0;
+//     int                 psiRjMain = -1;
+//     std::vector<double> typeWeight;
+    std::vector<double> psiOU;
     double              rho = 1.0;
     double              ue = 0.0;
     double              startAge = 0.0;
@@ -29,7 +35,7 @@ struct SimParams {
 struct SimResult {
     std::string         backboneNewick;
     std::vector<double> fossilAges;
-    std::vector<int>    fossilTypes;
+//     std::vector<int>    fossilTypes;
     int                 numExtantSampled = 0;
     int                 numBackbone = 0;
     int                 numUE = 0;

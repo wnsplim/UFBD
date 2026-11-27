@@ -23,14 +23,14 @@
 #include <mutex>
 #include <sstream>
 
-MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int thin, std::vector<PhylogeneticModel*> m, unsigned int masterSeed) : numCycles(ng), thinning(thin),
+MetropolisCoupledMcmc::MetropolisCoupledMcmc(unsigned long ng, int thin, std::vector<PhylogeneticModel*> m, unsigned int swapSeed) : numCycles(ng), thinning(thin),
     models(m),
     numModels(models.size()),
     coldModelIdx(-1),
     deltaT(UserSettings::userSettings().getDeltaTemperature()),
     resampleEvery(UserSettings::userSettings().getResampleEvery()),
     threadPool(std::max(1, std::min((int)m.size(), UserSettings::userSettings().getNumCores()))){
-    swapRng.setSeed(masterSeed + numModels);
+    swapRng.setSeed(swapSeed);
     currLnL.reserve(numModels); //needs to be reserve for pushback
     newLnL.resize(numModels);
     currLnP.reserve(numModels); //needs to be reserve for pushback
@@ -110,7 +110,7 @@ double MetropolisCoupledMcmc::calcHeating(int idx){
 
 void MetropolisCoupledMcmc::init(void) {
     if(numCycles >= std::numeric_limits<unsigned long>::max())
-        Msg::error("number of cycles requested is greater than the largest possible value");
+        Msg::error("the number of generations requested is greater than the largest possible value.");
     RandomVariable::setActiveInstance(&swapRng);
     int idx = 0;
     for(PhylogeneticModel* m : models){
@@ -137,6 +137,8 @@ void MetropolisCoupledMcmc::init(void) {
         tuning = false;
         gen = 0;
     }
+//     if(models[0]->psiRjTuning())
+//         runPsiRjTuning(models[0], thinning, runLabel);
 }
 
 void MetropolisCoupledMcmc::finalize(void) {
@@ -232,6 +234,7 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
         if(indices[i] == 0){ coldModelIdx = i; break; }
 
     unsigned long target = gen + nGens;
+//     if(gen == 0 && tuning == false && rjTuning == false)
     if(gen == 0 && tuning == false)
         sample(0);
 
@@ -295,6 +298,14 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
                         }
                     }
                 }
+//                 if(cold && rjTuning)
+//                     currLnP[i] += models[i]->psiRjAdapt(gen0 + b);
+//                 if(cold && tuning == false && (gen0 + b) % (unsigned long)thinning == 0){
+//                     if(rjTuning)
+//                         writeTuneRow(models[i], gen0 + b, currLnL[i] + currLnP[i]);
+//                     else
+//                         writeColdSample(gen0 + b);
+//                 }
                 if(cold && tuning == false && (gen0 + b) % (unsigned long)thinning == 0)
                     writeColdSample(gen0 + b);
             }
@@ -312,6 +323,11 @@ void MetropolisCoupledMcmc::advance(unsigned long nGens) {
                 runBlock(i);
         }
         gen += blockLen;
+//         if(rjTuning){
+//             std::vector<double> w = models[coldModelIdx]->getPsiRjState();
+//             for(int i = 0; i < numModels; i++)
+//                 currLnP[i] += models[i]->setPsiRjState(w);
+//         }
 
         if(verbose && tuning == false && gen % (unsigned long)thinning == 0){
             double acceptanceRate = 0.0;
@@ -436,10 +452,22 @@ void MetropolisCoupledMcmc::writeColdSample(unsigned long n) {
     tv.insert(tv.end(), parmStr.begin(), parmStr.end());
     for(size_t j = 0; j < traceCols.size() && j < tv.size(); j++)
         traceCols[j].push_back(tv[j]);
+// }
+// 
+// std::vector<double> MetropolisCoupledMcmc::psiRjState(void) {
+//     return models[0]->getPsiRjState();
+// }
+// 
+// void MetropolisCoupledMcmc::setPsiRjWeight(double w) {
+//     for(int i = 0; i < numModels; i++){
+//         std::vector<double> s = models[i]->getPsiRjState();
+//         s[0] = w;
+//         currLnP[i] += models[i]->setPsiRjState(s);
+//     }
 }
 
 void MetropolisCoupledMcmc::writeCheckpoint(void) {
-    std::string path = paramOut + ".ckp";
+    std::string path = checkpointPath();
     std::string tmp = path + ".tmp";
     std::ofstream os(tmp);
     os << std::setprecision(17);
@@ -466,19 +494,19 @@ void MetropolisCoupledMcmc::writeCheckpoint(void) {
 }
 
 bool MetropolisCoupledMcmc::loadCheckpoint(void) {
-    std::string path = paramOut + ".ckp";
+    std::string path = checkpointPath();
     std::ifstream is = openCheckpoint(path);
     int nm, storedSf;
     is >> gen >> storedSf;
     reconcileThinning(storedSf, thinning);
     if(checkpointIsCoupled(is) == false)
-        Msg::error("-coupled_chains " + std::to_string(numModels) + " but the checkpoint was written without Metropolis coupling");
+        Msg::error("-coupled_chains is " + std::to_string(numModels) + ", but the checkpoint was written without Metropolis coupling. Resume with -coupled_chains 1.");
     is >> deltaT >> nm >> swapAdaptCount >> swapAdaptAcc >> swapAdaptAtt
        >> numSwapSweeps >> roundTrips >> chainDecision;
     checkDataShape(is, models[0]);
     if(nm != numModels)
-        Msg::error("-coupled_chains " + std::to_string(numModels) + " differs from the pre-resume -coupled_chains "
-                   + std::to_string(nm));
+        Msg::error("-coupled_chains " + std::to_string(numModels) + " differs from the -coupled_chains " + std::to_string(nm)
+                   + " the checkpoint was written with. Resume with -coupled_chains " + std::to_string(nm) + ".");
     indices.assign(nm, 0);
     coldModelIdx = -1;
     for(int i = 0; i < nm; i++){
@@ -511,6 +539,10 @@ std::vector<std::string> MetropolisCoupledMcmc::resumeParameterNames(void) {
 
 std::vector<std::string> MetropolisCoupledMcmc::resumeLatentNames(void) {
     return models[coldModelIdx]->getLatentNames();
+}
+
+std::vector<bool> MetropolisCoupledMcmc::resumeFixedMask(void) {
+    return models[coldModelIdx]->getParameterFixedMask();
 }
 
 void MetropolisCoupledMcmc::adaptLadder(bool swapAccepted) {

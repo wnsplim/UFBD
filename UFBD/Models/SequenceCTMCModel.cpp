@@ -40,6 +40,7 @@ SequenceCTMCModel::SequenceCTMCModel(PhylogeneticModel* owner, const std::string
     lastSubstParm = nullptr;
 }
 
+// void SequenceCTMCModel::buildParameters(UserSettings& us){
 void SequenceCTMCModel::buildParameters(void){
     UserSettings& us = UserSettings::userSettings();
     std::string fm = us.getFreqMode();
@@ -160,6 +161,15 @@ void SequenceCTMCModel::appendParameterNames(std::vector<std::string>& names){
     }
 }
 
+void SequenceCTMCModel::appendParameterFixedMask(std::vector<bool>& mask){
+    for(int p = 0; p < seqLik->getNumPartitions(); p++){
+        mask.insert(mask.end(), exch[p]->getValue().size(), empirical);
+        mask.insert(mask.end(), freq[p]->getValue().size(), freqEstimated == false);
+        if(useGammaHet) mask.push_back(false);
+        if(useInvariant) mask.push_back(false);
+    }
+}
+
 void SequenceCTMCModel::appendParameterValues(std::vector<double>& values){
     for(int p = 0; p < seqLik->getNumPartitions(); p++){
         for(double x : exch[p]->getValue())
@@ -169,6 +179,69 @@ void SequenceCTMCModel::appendParameterValues(std::vector<double>& values){
         if(useGammaHet) values.push_back(alpha[p]->getValue());
         if(useInvariant) values.push_back(pinv[p]->getValue());
     }
+// }
+// 
+// void SequenceCTMCModel::setParameterValues(const std::vector<double>& values){
+//     std::vector<double>::const_iterator it = values.begin();
+//     for(int p = 0; p < seqLik->getNumPartitions(); p++){
+//         size_t ne = exch[p]->getValue().size(), nf = freq[p]->getValue().size();
+//         exch[p]->setValue(std::vector<double>(it, it + ne)); it += ne;
+//         freq[p]->setValue(std::vector<double>(it, it + nf)); it += nf;
+//         if(useGammaHet) alpha[p]->setValue(*it++);
+//         if(useInvariant) pinv[p]->setValue(*it++);
+//     }
+// }
+// 
+// double SequenceCTMCModel::pseudoPriorCoords(const std::vector<double>& v, std::vector<double>& z){
+//     z.clear();
+//     double jac = 0.0;
+//     size_t k = 0;
+//     auto simplex = [&](size_t n, bool free){
+//         if(free){
+//             double last = std::log(v[k + n - 1]);
+//             for(size_t i = 0; i + 1 < n; i++) z.push_back(std::log(v[k + i]) - last);
+//             for(size_t i = 0; i < n; i++) jac -= std::log(v[k + i]);
+//         }
+//         k += n;
+//     };
+//     for(int p = 0; p < seqLik->getNumPartitions(); p++){
+//         simplex(exch[p]->getValue().size(), empirical == false);
+//         simplex(freq[p]->getValue().size(), freqEstimated);
+//         if(useGammaHet){
+//             z.push_back(std::log(v[k]));
+//             jac -= z.back();
+//             k++;
+//         }
+//         if(useInvariant){
+//             z.push_back(std::log(v[k] / (1.0 - v[k])));
+//             jac -= std::log(v[k]) + std::log(1.0 - v[k]);
+//             k++;
+//         }
+//     }
+//     return jac;
+// }
+// 
+// void SequenceCTMCModel::setFromPseudoPriorCoords(const std::vector<double>& z){
+//     std::vector<double> v;
+//     appendParameterValues(v);
+//     size_t k = 0, j = 0;
+//     auto simplex = [&](size_t n, bool free){
+//         if(free){
+//             double s = 1.0;
+//             for(size_t i = 0; i + 1 < n; i++) s += std::exp(z[j + i]);
+//             for(size_t i = 0; i + 1 < n; i++) v[k + i] = std::exp(z[j + i]) / s;
+//             v[k + n - 1] = 1.0 / s;
+//             j += n - 1;
+//         }
+//         k += n;
+//     };
+//     for(int p = 0; p < seqLik->getNumPartitions(); p++){
+//         simplex(exch[p]->getValue().size(), empirical == false);
+//         simplex(freq[p]->getValue().size(), freqEstimated);
+//         if(useGammaHet) v[k++] = std::exp(z[j++]);
+//         if(useInvariant) v[k++] = 1.0 / (1.0 + std::exp(-z[j++]));
+//     }
+//     setParameterValues(v);
 }
 
 void SequenceCTMCModel::writeState(std::ostream& os){

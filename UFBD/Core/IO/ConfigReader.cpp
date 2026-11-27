@@ -3,6 +3,7 @@
 
 #include <cctype>
 #include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <limits>
 #include <map>
@@ -54,6 +55,29 @@ void emit(std::vector<std::string>& out, const std::string& flag, const std::str
     std::string tok;
     while(is >> tok) out.push_back(tok);
 }
+
+// const std::set<std::string> modelKeys = {
+//     "backbone_tree","fossils","unsampled_extants","clade_def","sequence","hessian","conditioning","rho","psi_rj_main"
+// };
+// const std::set<std::string> runKeys = {
+const std::set<std::string> globalKeys = {
+    "backbone_tree","fossils","unsampled_extants","clade_def","sequence","hessian","conditioning","rho",
+    "log_output","tree_output","chain_length","parallel_chains","thinning","burn_in","coupled_chains","cores","seed",
+    "max_gen","min_ess","rhat","delta_temperature","swap_interval"
+};
+// const std::set<std::string> bfKeys = {
+//     "bf_pilot_nodes","bf_pilot_frac","bf_intervals","bf_bridge_tol","bf_bridge_iter","bf_batches","bf_parallel_runs"
+// };
+const std::set<std::string> substKeys = {
+    "partition","datatype","n_states","ctmc_model","ctmc_gamma_cat","ctmc_inv","ctmc_freq"
+};
+const std::set<std::string> clockKeys = {
+    "clock_partitions","clock_model","rgene_gamma","sigma2_gamma","sigma2_param"
+};
+const std::set<std::string> rateKeys = { "time_bins","prior","mode","ou_theta","ou_sd","ou_nu" };
+const std::set<std::string> pathKeys = {
+    "backbone_tree","fossils","unsampled_extants","clade_def","sequence","hessian","log_output","tree_output","partition","ctmc_model"
+};
 
 std::string getVal(const std::map<std::string,std::string>& kv, const std::string& k){
     std::map<std::string,std::string>::const_iterator it = kv.find(k);
@@ -112,15 +136,16 @@ void translateTimeBins(const std::string& spec, std::map<std::string,int>& nameT
         for(const Iv& iv : ivs)
             if(iv.lo <= mid && mid < iv.hi){ found = iv.gid; count++; }
         if(count == 0)
-            Msg::error("config time_bins leave a gap on [" + fmtNum(los[b]) + ", " + fmtNum(his[b]) + "); bins must tile [" + fmtNum(tmin) + ", inf).");
+            Msg::error("config time_bins leave a gap on [" + fmtNum(los[b]) + ", " + fmtNum(his[b]) + "); the bins must cover [" + fmtNum(tmin) + ", inf) with no gaps.");
         if(count > 1)
             Msg::error("config time_bins overlap on [" + fmtNum(los[b]) + ", " + fmtNum(his[b]) + "); bins must be disjoint.");
         groups.push_back(found);
     }
 }
 
-void translatePrior(const std::string& ratePrefix, const std::string& typeLabel,
-                    const std::string& spec, const std::map<std::string,int>& nameToGid,
+// void translatePrior(const std::string& ratePrefix, const std::string& typeLabel,
+//                     const std::string& spec, const std::map<std::string,int>& nameToGid,
+void translatePrior(const std::string& ratePrefix, const std::string& spec, const std::map<std::string,int>& nameToGid,
                     std::vector<std::string>& out){
     std::string flag = "-" + ratePrefix + "_prior";
     std::vector<std::string> bins = splitChar(spec, '|');
@@ -130,7 +155,8 @@ void translatePrior(const std::string& ratePrefix, const std::string& typeLabel,
         size_t c = t.find(':');
         std::string head = (c == std::string::npos) ? t : t.substr(0, c);
         if(c == std::string::npos || isFamily(head)){
-            emit(out, flag, typeLabel.empty() ? t : typeLabel + ":" + t);
+//             emit(out, flag, typeLabel.empty() ? t : typeLabel + ":" + t);
+            emit(out, flag, t);
             return;
         }
     }
@@ -145,13 +171,16 @@ void translatePrior(const std::string& ratePrefix, const std::string& typeLabel,
         std::map<std::string,int>::const_iterator it = nameToGid.find(name);
         if(it == nameToGid.end())
             Msg::error("config prior references bin '" + name + "' not defined in this rate's time_bins");
-        std::string val = std::to_string(it->second) + ":" + pr;
-        emit(out, flag, typeLabel.empty() ? val : typeLabel + ":" + val);
+//         std::string val = std::to_string(it->second) + ":" + pr;
+//         emit(out, flag, typeLabel.empty() ? val : typeLabel + ":" + val);
+        emit(out, flag, std::to_string(it->second) + ":" + pr);
     }
 }
 
-void translateRateSection(const std::string& ratePrefix, const std::string& typeLabel,
-                          const std::map<std::string,std::string>& kv, std::vector<std::string>& out, double& outTmin){
+// void translateRateSection(const std::string& ratePrefix, const std::string& typeLabel,
+//                           const std::map<std::string,std::string>& kv, std::vector<std::string>& out, double& outTmin){
+void translateRateSection(const std::string& ratePrefix, const std::map<std::string,std::string>& kv,
+                          std::vector<std::string>& out, double& outTmin){
     std::map<std::string,int> nameToGid;
     outTmin = -1.0;
     std::string tb = getVal(kv, "time_bins");
@@ -167,45 +196,90 @@ void translateRateSection(const std::string& ratePrefix, const std::string& type
                 byGid[it->second] = it->first;
             std::string nmStr;
             for(size_t i = 0; i < byGid.size(); i++){ if(i) nmStr += ","; nmStr += byGid[i]; }
-            emit(out, "-" + ratePrefix + "_skyline_times", typeLabel.empty() ? cutStr : typeLabel + ":" + cutStr);
-            emit(out, "-" + ratePrefix + "_groups", typeLabel.empty() ? grpStr : typeLabel + ":" + grpStr);
-            emit(out, "-" + ratePrefix + "_group_names", typeLabel.empty() ? nmStr : typeLabel + ":" + nmStr);
+//             emit(out, "-" + ratePrefix + "_skyline_times", typeLabel.empty() ? cutStr : typeLabel + ":" + cutStr);
+//             emit(out, "-" + ratePrefix + "_groups", typeLabel.empty() ? grpStr : typeLabel + ":" + grpStr);
+//             emit(out, "-" + ratePrefix + "_group_names", typeLabel.empty() ? nmStr : typeLabel + ":" + nmStr);
+            emit(out, "-" + ratePrefix + "_skyline_times", cutStr);
+            emit(out, "-" + ratePrefix + "_groups", grpStr);
+            emit(out, "-" + ratePrefix + "_group_names", nmStr);
         }
     }
     std::string pr = getVal(kv, "prior");
     if(pr.empty() == false)
-        translatePrior(ratePrefix, typeLabel, pr, nameToGid, out);
+//         translatePrior(ratePrefix, typeLabel, pr, nameToGid, out);
+        translatePrior(ratePrefix, pr, nameToGid, out);
     std::string md = getVal(kv, "mode");
     if(md.empty() == false)
-        emit(out, "-" + ratePrefix + "_prior_mode", typeLabel.empty() ? md : typeLabel + ":" + md);
+//         emit(out, "-" + ratePrefix + "_prior_mode", typeLabel.empty() ? md : typeLabel + ":" + md);
+        emit(out, "-" + ratePrefix + "_prior_mode", md);
     std::string ot = getVal(kv, "ou_theta");
     if(ot.empty() == false)
-        emit(out, "-" + ratePrefix + "_ou_theta", typeLabel.empty() ? ot : typeLabel + ":" + ot);
+//         emit(out, "-" + ratePrefix + "_ou_theta", typeLabel.empty() ? ot : typeLabel + ":" + ot);
+        emit(out, "-" + ratePrefix + "_ou_theta", ot);
     std::string os = getVal(kv, "ou_sd");
     if(os.empty() == false)
-        emit(out, "-" + ratePrefix + "_ou_sd", typeLabel.empty() ? os : typeLabel + ":" + os);
+//         emit(out, "-" + ratePrefix + "_ou_sd", typeLabel.empty() ? os : typeLabel + ":" + os);
+        emit(out, "-" + ratePrefix + "_ou_sd", os);
     std::string on = getVal(kv, "ou_nu");
     if(on.empty() == false)
-        emit(out, "-" + ratePrefix + "_ou_nu", typeLabel.empty() ? on : typeLabel + ":" + on);
+//         emit(out, "-" + ratePrefix + "_ou_nu", typeLabel.empty() ? on : typeLabel + ":" + on);
+        emit(out, "-" + ratePrefix + "_ou_nu", on);
 }
 
 } // namespace
 
-std::vector<std::string> ConfigReader::translate(const std::string& path){
+// std::string ConfigReader::sectionOf(const std::string& flag){
+//     std::string k = flag.substr(1);
+//     for(const char* r : {"lambda", "mu", "psi"})
+//         if(k.rfind(std::string(r) + "_", 0) == 0) return r;
+//     if(substKeys.count(k) > 0) return "substitution";
+//     if(clockKeys.count(k) > 0) return "clock";
+//     return "";
+// }
+// 
+static std::vector<std::string> readLines(const std::string& path){
     std::ifstream f(path);
     if(f.is_open() == false)
         Msg::error("could not open config file: " + path);
-
-    std::map<std::string,std::string> global, subst, clock, lambda, mu;
-    std::vector<std::pair<std::string, std::map<std::string,std::string>>> psiSections;
-    std::map<std::string,std::string>* cur = &global;
-
+    std::vector<std::string> lines;
     std::string line;
     while(std::getline(f, line)){
         size_t h = line.find('#');
         if(h != std::string::npos) line = line.substr(0, h);
         std::string t = trim(line);
-        if(t.empty()) continue;
+        if(t.empty() == false) lines.push_back(t);
+    }
+    return lines;
+}
+
+static std::string inDir(const std::filesystem::path& dir, const std::string& v){
+    return std::filesystem::path(v).is_absolute() ? v : (dir / v).lexically_normal().string();
+}
+
+// static std::vector<std::string> translateLines(const std::vector<std::string>& lines, const std::filesystem::path& dir,
+//                                                const std::set<std::string>& allowed, const std::string& where){
+std::vector<std::string> ConfigReader::translate(const std::string& path){
+    std::filesystem::path dir = std::filesystem::path(path).parent_path();
+    auto withEmpiricalPaths = [&](const std::string& v){
+        std::string low = v, out;
+        for(char& c : low) c = (char)std::tolower((unsigned char)c);
+        size_t i = 0;
+        for(size_t p = low.find("empirical:"); p != std::string::npos; p = low.find("empirical:", i)){
+            p += 10;
+            size_t e = low.find_first_of(" \t|,", p);
+            out += v.substr(i, p - i) + inDir(dir, v.substr(p, e == std::string::npos ? std::string::npos : e - p));
+            i = (e == std::string::npos) ? v.size() : e;
+        }
+        return out + v.substr(i);
+    };
+
+//     std::map<std::string,std::string> global, subst, clock, lambda, mu;
+//     std::vector<std::pair<std::string, std::map<std::string,std::string>>> psiSections;
+    std::map<std::string,std::string> global, subst, clock, lambda, mu, psi;
+    std::map<std::string,std::string>* cur = &global;
+
+//     for(const std::string& t : lines){
+    for(const std::string& t : readLines(path)){
         if(t[0] == '['){
             size_t close = t.find(']');
             if(close == std::string::npos) Msg::error("config: malformed section header '" + t + "'");
@@ -216,8 +290,10 @@ std::vector<std::string> ConfigReader::translate(const std::string& path){
             else if(type == "clock") cur = &clock;
             else if(type == "lambda") cur = &lambda;
             else if(type == "mu") cur = &mu;
-            else if(type == "psi"){ psiSections.push_back(std::make_pair(name, std::map<std::string,std::string>())); cur = &psiSections.back().second; }
-            else Msg::error("config: unknown section '[" + type + "]'");
+//             else if(type == "psi"){ psiSections.push_back(std::make_pair(name, std::map<std::string,std::string>())); cur = &psiSections.back().second; }
+//             else Msg::error("config: unknown section '[" + type + "]'");
+            else if(type == "psi" && name.empty()) cur = &psi;
+            else Msg::error("config: unknown section '" + t + "'");
             continue;
         }
         size_t eq = t.find('=');
@@ -225,30 +301,21 @@ std::vector<std::string> ConfigReader::translate(const std::string& path){
         std::string key = trim(t.substr(0, eq));
         std::string val = trim(t.substr(eq + 1));
         if(val.empty()) continue;
-        (*cur)[key] = val;
+        (*cur)[key] = withEmpiricalPaths(val);
     }
 
-    static const std::set<std::string> globalKeys = {
-        "backbone_tree","fossils","unsampled_extants","clade_def","sequence","hessian","log_output","tree_output",
-        "chain_length","parallel_chains","thinning","burn_in","coupled_chains","cores","seed",
-        "max_gen","min_ess","rhat","conditioning","rho","delta_temperature","swap_interval"
+    auto resolved = [&](const std::string& key, const std::string& v){
+        return (pathKeys.count(key) > 0 && (key != "ctmc_model" || v != "gtr")) ? inDir(dir, v) : v;
     };
-    static const std::set<std::string> substKeys = {
-        "partition","datatype","n_states","ctmc_model","ctmc_gamma_cat","ctmc_inv","ctmc_freq"
-    };
-    static const std::set<std::string> clockKeys = {
-        "clock_partitions","clock_model","rgene_gamma","sigma2_gamma","sigma2_param"
-    };
-    static const std::set<std::string> rateKeys = { "time_bins","prior","mode","ou_theta","ou_sd","ou_nu" };
-
     std::vector<std::string> out;
     for(std::map<std::string,std::string>::iterator it = global.begin(); it != global.end(); ++it){
-        if(globalKeys.count(it->first) == 0) Msg::error("config: unknown key '" + it->first + "' in the global section");
-        emit(out, "-" + it->first, it->second);
+//         if(allowed.count(it->first) == 0) Msg::error("config: key '" + it->first + "' is not allowed in " + where);
+        if(globalKeys.count(it->first) == 0) Msg::error("config: key '" + it->first + "' is not allowed in the global section");
+        emit(out, "-" + it->first, resolved(it->first, it->second));
     }
     for(std::map<std::string,std::string>::iterator it = subst.begin(); it != subst.end(); ++it){
         if(substKeys.count(it->first) == 0) Msg::error("config: unknown key '" + it->first + "' in [substitution]");
-        emit(out, "-" + it->first, it->second);
+        emit(out, "-" + it->first, resolved(it->first, it->second));
     }
     for(std::map<std::string,std::string>::iterator it = clock.begin(); it != clock.end(); ++it){
         if(clockKeys.count(it->first) == 0) Msg::error("config: unknown key '" + it->first + "' in [clock]");
@@ -261,26 +328,31 @@ std::vector<std::string> ConfigReader::translate(const std::string& path){
         if(rateKeys.count(it->first) == 0) Msg::error("config: unknown key '" + it->first + "' in [lambda]");
     for(std::map<std::string,std::string>::iterator it = mu.begin(); it != mu.end(); ++it)
         if(rateKeys.count(it->first) == 0) Msg::error("config: unknown key '" + it->first + "' in [mu]");
+    for(std::map<std::string,std::string>::iterator it = psi.begin(); it != psi.end(); ++it)
+        if(rateKeys.count(it->first) == 0) Msg::error("config: unknown key '" + it->first + "' in [psi]");
     std::vector<double> sectionTmins;
     double secTmin = -1.0;
-    translateRateSection("lambda", "", lambda, out, secTmin); if(secTmin >= 0.0) sectionTmins.push_back(secTmin);
-    translateRateSection("mu", "", mu, out, secTmin); if(secTmin >= 0.0) sectionTmins.push_back(secTmin);
-
-    std::vector<std::string> psiTypeOrder;
-    for(size_t s = 0; s < psiSections.size(); s++){
-        std::map<std::string,std::string>& kv = psiSections[s].second;
-        for(std::map<std::string,std::string>::iterator it = kv.begin(); it != kv.end(); ++it)
-            if(rateKeys.count(it->first) == 0) Msg::error("config: unknown key '" + it->first + "' in [psi " + psiSections[s].first + "]");
-        secTmin = -1.0;
-        translateRateSection("psi", psiSections[s].first, kv, out, secTmin);
-        if(secTmin >= 0.0) sectionTmins.push_back(secTmin);
-        if(psiSections[s].first.empty() == false) psiTypeOrder.push_back(psiSections[s].first);
-    }
-    if(psiTypeOrder.empty() == false){
-        std::string joined;
-        for(size_t i = 0; i < psiTypeOrder.size(); i++){ if(i) joined += ","; joined += psiTypeOrder[i]; }
-        emit(out, "-psi_types", joined);
-    }
+//     translateRateSection("lambda", "", lambda, out, secTmin); if(secTmin >= 0.0) sectionTmins.push_back(secTmin);
+//     translateRateSection("mu", "", mu, out, secTmin); if(secTmin >= 0.0) sectionTmins.push_back(secTmin);
+// 
+//     std::vector<std::string> psiTypeOrder;
+//     for(size_t s = 0; s < psiSections.size(); s++){
+//         std::map<std::string,std::string>& kv = psiSections[s].second;
+//         for(std::map<std::string,std::string>::iterator it = kv.begin(); it != kv.end(); ++it)
+//             if(rateKeys.count(it->first) == 0) Msg::error("config: unknown key '" + it->first + "' in [psi " + psiSections[s].first + "]");
+//         secTmin = -1.0;
+//         translateRateSection("psi", psiSections[s].first, kv, out, secTmin);
+//         if(secTmin >= 0.0) sectionTmins.push_back(secTmin);
+//         if(psiSections[s].first.empty() == false) psiTypeOrder.push_back(psiSections[s].first);
+//     }
+//     if(psiTypeOrder.empty() == false){
+//         std::string joined;
+//         for(size_t i = 0; i < psiTypeOrder.size(); i++){ if(i) joined += ","; joined += psiTypeOrder[i]; }
+//         emit(out, "-psi_types", joined);
+//     }
+    translateRateSection("lambda", lambda, out, secTmin); if(secTmin >= 0.0) sectionTmins.push_back(secTmin);
+    translateRateSection("mu", mu, out, secTmin); if(secTmin >= 0.0) sectionTmins.push_back(secTmin);
+    translateRateSection("psi", psi, out, secTmin); if(secTmin >= 0.0) sectionTmins.push_back(secTmin);
     if(sectionTmins.empty() == false){
         double g = sectionTmins[0];
         for(double t : sectionTmins)
@@ -290,4 +362,46 @@ std::vector<std::string> ConfigReader::translate(const std::string& path){
             emit(out, "-age_offset", fmtNum(g));
     }
     return out;
+// }
+// 
+// std::vector<std::string> ConfigReader::translate(const std::string& path){
+//     std::set<std::string> allowed(modelKeys);
+//     allowed.insert(runKeys.begin(), runKeys.end());
+//     return translateLines(readLines(path), std::filesystem::path(path).parent_path(), allowed, "the global section");
+// }
+// 
+// BfConfig ConfigReader::translateBf(const std::string& path){
+//     std::filesystem::path dir = std::filesystem::path(path).parent_path();
+//     std::vector<std::string> shared, block[2];
+//     std::vector<std::string>* cur = &shared;
+//     bool seen[2] = {false, false};
+//     BfConfig bf;
+//     for(const std::string& t : readLines(path)){
+//         if(t.rfind("[model", 0) == 0){
+//             std::string k = trim(t.substr(6, t.find(']') == std::string::npos ? std::string::npos : t.find(']') - 6));
+//             if(t.find(']') == std::string::npos || (k != "0" && k != "1"))
+//                 Msg::error("config " + path + ": expected '[model 0]' or '[model 1]', got '" + t + "'");
+//             if(seen[k == "1"])
+//                 Msg::error("config " + path + ": [model " + k + "] appears twice.");
+//             seen[k == "1"] = true;
+//             cur = &block[k == "1"];
+//             continue;
+//         }
+//         if(cur == &shared && t[0] == '[')
+//             Msg::error("config " + path + ": " + t + " must be inside a [model 0] or [model 1] block.");
+//         size_t eq = t.find('=');
+//         if(cur != &shared && eq != std::string::npos && trim(t.substr(0, eq)) == "prior_log"){
+//             bf.priorLog[cur == &block[1]] = inDir(dir, trim(t.substr(eq + 1)));
+//             continue;
+//         }
+//         cur->push_back(t);
+//     }
+//     if(seen[0] == false || seen[1] == false)
+//         Msg::error("config " + path + ": a Bayes factor config needs a [model 0] and a [model 1] block.");
+//     std::set<std::string> sharedAllowed(runKeys);
+//     sharedAllowed.insert(bfKeys.begin(), bfKeys.end());
+//     bf.shared = translateLines(shared, dir, sharedAllowed, "the part before [model 0] (MCMC and Bayes factor settings)");
+//     for(int k = 0; k < 2; k++)
+//         bf.model[k] = translateLines(block[k], dir, modelKeys, "[model " + std::to_string(k) + "] (MCMC settings belong before [model 0])");
+//     return bf;
 }

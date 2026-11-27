@@ -62,6 +62,7 @@ class ParameterUnresolvedFossils : public Parameter {
         double                      scaleAttachAges(const std::vector<int>& indices, double m);
         void                        updateForAcceptance(void);
         void                        updateForRejection(void);
+//         void                        copyState(const ParameterUnresolvedFossils& o) { for(int k = 0; k < 2; k++){ y[k] = o.y[k]; z[k] = o.z[k]; sa[k] = o.sa[k]; az[k] = o.az[k]; } spineIdx = o.spineIdx; }
         void                        writeState(std::ostream& os);
         void                        readState(std::istream& is);
 

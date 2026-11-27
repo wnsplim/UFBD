@@ -46,6 +46,7 @@ bool ConvergenceRunner::run(void){
             replicates[r]->setVerbose(true);
             replicates[r]->setLabel(r);
         }
+//     bool autoStop = s.getAutoChainLength() && s.getPathPilot() == false;
     bool autoStop = s.getAutoChainLength();
     unsigned long maxGen = autoStop ? s.getMaxGen() : s.getChainLength();
 
@@ -69,6 +70,25 @@ bool ConvergenceRunner::run(void){
         runPools.push_back(new ThreadPool(per));
     }
 
+//     auto commonWeight = [&](const std::vector<bool>& fresh){
+//         if(replicates[0]->psiRjState().empty())
+//             return;
+//         double w = 0.0;
+//         int loaded = 0;
+//         for(size_t r = 0; r < replicates.size(); r++)
+//             if(fresh[r] == false && loaded++ == 0)
+//                 w = replicates[r]->psiRjState()[0];
+//         if(loaded == 0){
+//             for(ChainRunner* c : replicates)
+//                 w += c->psiRjState()[0] / (double)replicates.size();
+//             if(verbose)
+//                 std::cout << "psi_rj: every chain's main run uses log prior odds " << w << ", the mean of the " << replicates.size() << " chains' tuned values\n";
+//         }
+//         for(size_t r = 0; r < replicates.size(); r++)
+//             if(fresh[r])
+//                 replicates[r]->setPsiRjWeight(w);
+//     };
+// 
     unsigned long gen = 0;
     if(s.getResume()){
         int stale = 0;
@@ -84,13 +104,33 @@ bool ConvergenceRunner::run(void){
             stale++;
         }
         if(stale > 0)
-            Msg::error("-parallel_chains " + std::to_string(replicates.size()) + " differs from the pre-resume -parallel_chains "
-                       + std::to_string(replicates.size() + stale));
-        for(ChainRunner* c : replicates){
-            c->loadCheckpoint();
-            c->resumeOutputs();
-            gen = std::max(gen, c->currentGen());
+            Msg::error("-parallel_chains " + std::to_string(replicates.size()) + " differs from the -parallel_chains " + std::to_string(replicates.size() + stale)
+                       + " the checkpoints were written with. Resume with -parallel_chains " + std::to_string(replicates.size() + stale) + ".");
+        std::string missing;
+        int nMissing = 0;
+        std::vector<bool> fresh;
+        for(const std::string& pf : repParamFiles){
+            fresh.push_back(std::ifstream(pf + ".ckp").good() == false);
+//             if(fresh.back() && std::ifstream(ChainRunner::tunePath(pf) + ".ckp").good() == false)
+            if(fresh.back())
+                missing += (nMissing++ > 0 ? ", " : "") + pf + ".ckp";
         }
+        if(nMissing == (int)repParamFiles.size())
+            Msg::error("-resume: no checkpoint exists (" + missing + "), so there is nothing to resume from.");
+        for(size_t r = 0; r < replicates.size(); r++){
+            if(fresh[r])
+                continue;
+            replicates[r]->loadCheckpoint();
+            replicates[r]->resumeOutputs();
+            gen = std::max(gen, replicates[r]->currentGen());
+        }
+        if(nMissing > 0)
+            Msg::warning("-resume: " + missing + (nMissing > 1 ? " do" : " does") + " not exist, so " + (nMissing > 1 ? "those chains start" : "that chain starts")
+                         + " fresh and " + (nMissing > 1 ? "are" : "is") + " advanced to generation " + std::to_string(gen) + " before the run continues.");
+        for(size_t r = 0; r < replicates.size(); r++)
+            if(fresh[r])
+                replicates[r]->init();
+//         commonWeight(fresh);
         for(ChainRunner* c : replicates){
             unsigned long cg = c->currentGen();
             if(cg < gen)
@@ -112,13 +152,15 @@ bool ConvergenceRunner::run(void){
         for(ChainRunner* c : replicates)
             c->init();
     }
+//     if(s.getResume() == false)
+//         commonWeight(std::vector<bool>(replicates.size(), true));
 
     long blockGens = 50L * (long)s.getThinning();
     if(blockGens < 1) blockGens = 1;
 
-    bool stoppedEarly = false;
-    while(gen < maxGen){
-        unsigned long step = (unsigned long)blockGens;
+    bool stoppedEarly = autoStop && gen > 0 && gen % (unsigned long)blockGens == 0 && report(gen, false);
+    while(stoppedEarly == false && gen < maxGen){
+        unsigned long step = (unsigned long)blockGens - gen % (unsigned long)blockGens;
         if(gen + step > maxGen) step = maxGen - gen;
         if(parallelRuns){
             std::vector<std::thread> workers;
@@ -150,6 +192,7 @@ bool ConvergenceRunner::run(void){
         std::cout << "-----------------------------------------------------------------------\n";
     bool met = report(gen, true);
     writeMerged();
+//     printPsiRjBf(replicates);
 
     if(emitSummary && replicates.empty() == false && replicates[0]->getTree() != nullptr){
         const std::vector<std::string>& names = replicates[0]->traceNames();
@@ -181,9 +224,9 @@ bool ConvergenceRunner::run(void){
     if(verbose && autoStop){
         std::string crit = (replicates.size() >= 2) ? "R-hat/ESS" : "ESS";
         if(stoppedEarly)
-            std::cout << "Auto-stop at generation " << gen << ": " << crit << " stopping thresholds reached for all logged metrics.\n";
+            std::cout << "Auto-stop at generation " << gen << ": all logged metrics met the " << crit << " thresholds.\n";
         else
-            Msg::warning("reached the -max-gen limit (" + std::to_string(maxGen) + ") with convergence metric(s) still below the " + crit + " thresholds.");
+            Msg::warning("the run reached -max_gen " + std::to_string(maxGen) + " before all logged metrics met the " + crit + " thresholds.");
     }
     return met;
 }
@@ -273,16 +316,56 @@ bool ConvergenceRunner::report(unsigned long gen, bool finalPass){
         lastReportedGen = (long)gen;
     }
 
+//     if(verbose && finalPass && nBelow > 0 && s.getAutoChainLength() && s.getPathPilot() == false){
     if(verbose && finalPass && nBelow > 0 && s.getAutoChainLength()){
         std::string crit = multiChain ? ("R-hat > " + std::to_string(rhatMax) + " or bulk/tail ESS < " + std::to_string((int)essFloor))
                                       : ("bulk/tail ESS < " + std::to_string((int)essFloor));
-        std::string msg = std::to_string(nBelow) + " of " + std::to_string(nP) + " metrics have " + crit + " : ";
+        std::string msg = std::to_string(nBelow) + " of " + std::to_string(nP) + " metrics have " + crit + ": ";
         for(size_t i = 0; i < bad.size(); i++){ msg += bad[i]; if(i + 1 < bad.size()) msg += ", "; }
         if((int)bad.size() < nBelow) msg += ", ...";
         Msg::warning(msg);
     }
 
     return nBelow == 0;
+// }
+// 
+// void ConvergenceRunner::printPsiRjBf(const std::vector<ChainRunner*>& chains){
+//     UserSettings& s = UserSettings::userSettings();
+//     if(s.getPsiRjMain() < 0)
+//         return;
+//     const std::vector<std::string>& names = chains[0]->traceNames();
+//     size_t jd = std::find(names.begin(), names.end(), "delta") - names.begin();
+//     size_t jt = std::find(names.begin(), names.end(), "log_prior_odds") - names.begin();
+//     int nb = s.getBfBatches();
+//     double theta = chains[0]->traceColumns()[jt].back();
+//     std::vector<double> batch;
+//     double sum = 0.0;
+//     size_t n = 0;
+//     for(ChainRunner* c : chains){
+//         const std::vector<double>& d = c->traceColumns()[jd];
+//         const std::vector<double>& t = c->traceColumns()[jt];
+//         size_t b = (size_t)(d.size() * s.getBurninFraction());
+//         size_t m = d.size() - b;
+//         if(m < (size_t)nb)
+//             Msg::error("psi_rj: " + std::to_string(m) + " samples after burn-in; -bf_batches " + std::to_string(nb) + " needs at least " + std::to_string(nb) + ".");
+//         for(int k = 0; k < nb; k++){
+//             size_t from = b + m * (size_t)k / (size_t)nb, to = b + m * (size_t)(k + 1) / (size_t)nb;
+//             double bs = 0.0;
+//             for(size_t i = from; i < to; i++)
+//                 bs += 1.0 / (1.0 + std::exp(-(d[i] + t[i])));
+//             sum += bs;
+//             n += to - from;
+//             batch.push_back(bs / (double)(to - from));
+//         }
+//     }
+//     double p = sum / (double)n;
+//     double mb = 0.0, vb = 0.0;
+//     for(double x : batch) mb += x / (double)batch.size();
+//     for(double x : batch) vb += (x - mb) * (x - mb) / (double)(batch.size() - 1);
+//     double se = std::sqrt(vb / (double)batch.size()) / (p * (1.0 - p));
+//     std::cout << "psi_rj: ln BF ([model 1] over [model 0]) = " << std::log(p / (1.0 - p)) - theta << " (SE " << se
+//               << ", Rao-Blackwellized over P(model 1 | state), batch means over " << nb << " batches per chain)\n";
+//     std::cout << "psi_rj: the log was sampled at log prior odds " << theta << " of model 1 over model 0\n";
 }
 
 void ConvergenceRunner::writeMerged(void){

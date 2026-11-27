@@ -41,8 +41,8 @@ void Mcmc::init(void) {
     curLnP = model->lnPriorProbability();
     if(std::isfinite(curLnL) == false || std::isfinite(curLnP) == false){
         std::ostringstream os;
-        os << std::setprecision(6) << "the initial state has lnLikelihood " << curLnL
-           << " and lnPrior " << curLnP;
+        os << std::setprecision(6) << "the MCMC cannot start because the initial state has log likelihood " << curLnL
+           << " and log prior " << curLnP << "; both must be finite.";
         Msg::error(os.str());
     }
     gen = 0;
@@ -57,6 +57,8 @@ void Mcmc::init(void) {
         tuning = false;
         gen = 0;
     }
+//     if(model->psiRjTuning())
+//         runPsiRjTuning(model, thinning, runLabel);
 }
 
 void Mcmc::advance(unsigned long nGens) {
@@ -65,6 +67,7 @@ void Mcmc::advance(unsigned long nGens) {
     RelaxedClockTreeModel* relaxed = tuning ? dynamic_cast<RelaxedClockTreeModel*>(model) : nullptr;
 
     unsigned long target = gen + nGens;
+//     if(gen == 0 && tuning == false && rjTuning == false)
     if(gen == 0 && tuning == false)
         sample(0, curLnL, curLnP);
     while (gen < target) {
@@ -167,6 +170,9 @@ void Mcmc::advance(unsigned long nGens) {
             }
         }
 
+//         if(rjTuning)
+//             curLnP += model->psiRjAdapt(gen);
+// 
         static const bool trc = (getenv("FBD_TRACE") != nullptr);
         if(trc)
             fprintf(stderr, "[t] %lu mv=%d h=%.17g curL=%.17g curP=%.17g a=%d\n", gen,
@@ -178,6 +184,13 @@ void Mcmc::advance(unsigned long nGens) {
             ChainRunner::logLine(os.str());
         }
 
+//         if (tuning == false && rjTuning && n % thinning == 0){
+//             writeTuneRow(model, n, curLnL + curLnP);
+//             if(writeCheckpoints)
+//                 writeCheckpoint();
+//             model->invalidateLikelihoodCache();
+//             model->invalidatePriorCache();
+//         }else if (tuning == false && n % thinning == 0)
         if (tuning == false && n % thinning == 0)
             sample(n, curLnL, curLnP);
     }
@@ -276,10 +289,20 @@ void Mcmc::sample(unsigned long n, double lnL, double lnP) {
         writeCheckpoint();
     model->invalidateLikelihoodCache();
     model->invalidatePriorCache();
+// }
+// 
+// std::vector<double> Mcmc::psiRjState(void) {
+//     return model->getPsiRjState();
+// }
+// 
+// void Mcmc::setPsiRjWeight(double w) {
+//     std::vector<double> s = model->getPsiRjState();
+//     s[0] = w;
+//     curLnP += model->setPsiRjState(s);
 }
 
 void Mcmc::writeCheckpoint(void) {
-    std::string path = paramOut + ".ckp";
+    std::string path = checkpointPath();
     std::string tmp = path + ".tmp";
     std::ofstream os(tmp);
     os << std::setprecision(17);
@@ -294,13 +317,13 @@ void Mcmc::writeCheckpoint(void) {
 }
 
 bool Mcmc::loadCheckpoint(void) {
-    std::string path = paramOut + ".ckp";
+    std::string path = checkpointPath();
     std::ifstream is = openCheckpoint(path);
     int storedSf;
     is >> gen >> storedSf;
     reconcileThinning(storedSf, thinning);
     if(checkpointIsCoupled(is))
-        Msg::error("-coupled_chains 1 but the checkpoint was written with Metropolis coupling");
+        Msg::error("-coupled_chains is 1, but the checkpoint was written with Metropolis coupling. Resume with the -coupled_chains of the original run.");
     checkDataShape(is, model);
     is >> curLnL >> curLnP;
     model->getRng()->readState(is);
@@ -360,4 +383,8 @@ std::vector<std::string> Mcmc::resumeParameterNames(void) {
 
 std::vector<std::string> Mcmc::resumeLatentNames(void) {
     return model->getLatentNames();
+}
+
+std::vector<bool> Mcmc::resumeFixedMask(void) {
+    return model->getParameterFixedMask();
 }

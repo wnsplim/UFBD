@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <limits>
+#include <map>
 #include "ApproxBranchLengthLikelihood.hpp"
 #include "FBDTreeModel.hpp"
 #include "Msg.hpp"
@@ -18,9 +19,10 @@
 #include "Tree.hpp"
 #include "UserSettings.hpp"
 
+// void RelaxedClockTreeModel::buildClock(const std::vector<ClockModel>& clockModel, const double* rgeneParam, const double* sigma2Param, UserSettings& us){
 void RelaxedClockTreeModel::buildClock(const std::vector<ClockModel>& clockModel, const double* rgeneParam, const double* sigma2Param){
-    int nPart = (lik != nullptr) ? lik->getNumPartitions() : ctmc->getNumPartitions();
     UserSettings& us = UserSettings::userSettings();
+    int nPart = (lik != nullptr) ? lik->getNumPartitions() : ctmc->getNumPartitions();
     std::vector<std::string> seqNames = (ctmc != nullptr) ? ctmc->getPartitionNames() : std::vector<std::string>();
     std::vector<int> pgroup;
     std::vector<std::string> groupNames;
@@ -163,32 +165,40 @@ double RelaxedClockTreeModel::nodeAgeJump2(void){
     return s;
 }
 
+// RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, const std::string& hessianFile, const std::string& mlTreeFile, int nStates, const std::vector<ClockModel>& clockModel, const double* rgeneParam, const double* sigma2Param, unsigned int seed, UserSettings* modelSettings){
 RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, const std::string& hessianFile, const std::string& mlTreeFile, int nStates, const std::vector<ClockModel>& clockModel, const double* rgeneParam, const double* sigma2Param, unsigned int seed){
     rng.setSeed(seed);
     RandomVariable* prevRng = RandomVariable::getActiveInstance();
     RandomVariable::setActiveInstance(&rng);
     crownInitScale(t, clades, fossils);
+//     fbd = new FBDTreeModel(t, clades, fossils, seed, modelSettings);
     fbd = new FBDTreeModel(t, clades, fossils, seed);
     ctmc = nullptr;
     std::vector<std::string> rogue;
     for(Fossil& f : fossils)
         rogue.push_back(f.getTaxon());
     lik = new ApproxBranchLengthLikelihood(hessianFile, mlTreeFile, rogue, nStates);
+//     buildClock(clockModel, rgeneParam, sigma2Param, modelSettings != nullptr ? *modelSettings : UserSettings::userSettings());
     buildClock(clockModel, rgeneParam, sigma2Param);
     parameters.push_back(fbd->getParameterTree());
     lastMoveType = 2;
     RandomVariable::setActiveInstance(prevRng);
 }
 
+// RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, const std::string& sequenceFile, const std::string& partitionFile, int nStates, int numCats, const std::vector<ClockModel>& clockModel, const double* rgeneParam, const double* sigma2Param, unsigned int seed, UserSettings* modelSettings){
 RelaxedClockTreeModel::RelaxedClockTreeModel(Tree* t, std::vector<Clade>& clades, std::vector<Fossil>& fossils, const std::string& sequenceFile, const std::string& partitionFile, int nStates, int numCats, const std::vector<ClockModel>& clockModel, const double* rgeneParam, const double* sigma2Param, unsigned int seed){
     rng.setSeed(seed);
     RandomVariable* prevRng = RandomVariable::getActiveInstance();
     RandomVariable::setActiveInstance(&rng);
     crownInitScale(t, clades, fossils);
+//     fbd = new FBDTreeModel(t, clades, fossils, seed, modelSettings);
     fbd = new FBDTreeModel(t, clades, fossils, seed);
     lik = nullptr;
     ctmc = new SequenceCTMCModel(this, sequenceFile, partitionFile, nStates, numCats);
 
+//     UserSettings& us = modelSettings != nullptr ? *modelSettings : UserSettings::userSettings();
+//     buildClock(clockModel, rgeneParam, sigma2Param, us);
+//     ctmc->buildParameters(us);
     buildClock(clockModel, rgeneParam, sigma2Param);
     ctmc->buildParameters();
 
@@ -239,6 +249,8 @@ double RelaxedClockTreeModel::nodeAgeSweep(void){
         int j = (int)(r.uniformRv() * (i + 1));
         std::swap(nodes[i], nodes[j]);
     }
+//     double curL = (pathTarget != nullptr) ? pathTarget() : lnLikelihood();
+//     double curP = (pathTarget != nullptr) ? 0.0 : lnPriorProbability();
     double curL = lnLikelihood();
     double curP = lnPriorProbability();
     fbd->beginNodeAgeSweep();
@@ -246,6 +258,8 @@ double RelaxedClockTreeModel::nodeAgeSweep(void){
         double oldAge = n->getTime();
         double ratio = fbd->getTree()->updateNodeAgeOnNode(n, fbd->getParameterTree()->getNodeAgeStep());
         ratio += fbd->relabelAcrossNode(n, oldAge);
+//         double newL = (pathTarget != nullptr) ? pathTarget() : lnLikelihood();
+//         double newP = (pathTarget != nullptr) ? 0.0 : lnPriorProbability();
         double newL = lnLikelihood();
         double newP = lnPriorProbability();
         naSweepAtt++;
@@ -436,6 +450,26 @@ std::vector<std::string> RelaxedClockTreeModel::getParameterNames(void){
     return n;
 }
 
+std::vector<bool> RelaxedClockTreeModel::getParameterFixedMask(void){
+    std::vector<std::string> fbdN = fbd->getParameterNames();
+    std::vector<bool> fbdM = fbd->getParameterFixedMask();
+    std::map<std::string,bool> fixedOf;
+    for(size_t i = 0; i < fbdN.size(); i++)
+        fixedOf[fbdN[i] == "originAge" ? "x0" : fbdN[i]] = fbdM[i];
+    std::vector<std::string> ages;
+    collectNodeAges(&ages, nullptr);
+    std::vector<bool> m;
+    for(const std::string& s : ages)
+        m.push_back(fixedOf[s]);
+    for(size_t i = 0; i < fbdN.size(); i++)
+        if(fbdN[i] != "originAge" && isNodeAgeName(fbdN[i]) == false)
+            m.push_back(fbdM[i]);
+    m.insert(m.end(), 2 * clock->getNumClockGroups(), false);
+    if(ctmc != nullptr)
+        ctmc->appendParameterFixedMask(m);
+    return m;
+}
+
 std::vector<double> RelaxedClockTreeModel::getParameterString(void){
     std::vector<double> v;
     collectNodeAges(nullptr, &v);
@@ -456,6 +490,14 @@ std::vector<double> RelaxedClockTreeModel::getParameterString(void){
 bool RelaxedClockTreeModel::treeIncludesFossils(void){ return fbd->treeIncludesFossils(); }
 
 std::string RelaxedClockTreeModel::getRateMap(void){ return fbd->getRateMap(); }
+// 
+// double RelaxedClockTreeModel::psiRjAdapt(unsigned long k){ return fbd->psiRjAdapt(k); }
+// 
+// bool RelaxedClockTreeModel::psiRjTuning(void){ return fbd->psiRjTuning(); }
+// 
+// std::vector<double> RelaxedClockTreeModel::getPsiRjState(void){ return fbd->getPsiRjState(); }
+// 
+// double RelaxedClockTreeModel::setPsiRjState(const std::vector<double>& s){ return fbd->setPsiRjState(s); }
 
 std::vector<std::string> RelaxedClockTreeModel::getLatentNames(void){
     std::vector<std::string> n = fbd->getLatentNames();

@@ -46,7 +46,7 @@ void SequenceLikelihood::mapTaxaToNodes(Tree* tree){
         for(int t = 0; t < (int)taxonNames[p].size(); t++){
             Node* nd = tree->getTaxonNode(taxonNames[p][t]);
             if(nd == nullptr)
-                Msg::error("taxon '" + taxonNames[p][t] + "' not found in the tree");
+                Msg::error("taxon '" + taxonNames[p][t] + "' in the alignment is not in the tree.");
             int off = nd->getOffset();
             tipStateByOffset[p][off] = patternState[p][t];
             bool allGap = true;

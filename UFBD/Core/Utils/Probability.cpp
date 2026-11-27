@@ -148,6 +148,16 @@ double Probability::priorLnPdf(PriorFamily family, double p1, double p2, double 
 }
 
 
+// std::pair<double,double> Probability::priorSupport(PriorFamily family, double p1, double p2, double lower, double upper, double offset){
+//     switch(family){
+//         case PriorFamily::UNIFORM:          return {p1, p2};
+//         case PriorFamily::TRUNCATED_NORMAL: return {(lower > offset) ? lower : offset, upper};
+//         case PriorFamily::NORMAL:           return {lower, upper};
+//         case PriorFamily::EMPIRICAL:        return {offset, p2};
+//         default:                            return {offset, INFINITY};
+//     }
+// }
+// 
 double Probability::priorMean(PriorFamily family, double p1, double p2, double offset){
     switch(family){
         case PriorFamily::IMPROPER:         return offset + 1.0;
@@ -394,7 +404,7 @@ double Probability::ChiSquare::quantile(double prob, double v) {
 		p1 = 0.5*ch;
 		if ( (t = Probability::Helper::incompleteGamma(p1, xx, g)) < 0.0 )
 			{
-			std::cerr << "Error in function \"IncompleteGamma" << std::endl;
+			std::cerr << "Error in ChiSquare::quantile. The incomplete gamma function was called with a negative argument." << std::endl;
 			return (-1.0);
 			}
 		p2 = p-t;
@@ -425,7 +435,7 @@ double Probability::Dirichlet::pdf(const std::vector<double> &a, const std::vect
 	double tol = 0.0001;
 	if ( tol < fabs( zSum - 1.0 ) )
 		{
-		std::cout << "Fatal error in dirichletPdf" << std::endl;
+		std::cout << "Fatal error in Dirichlet::pdf. The values sum to " << zSum << " instead of 1." << std::endl;
 		exit(1);
 		}
 
@@ -1867,7 +1877,7 @@ double Probability::Helper::rndGamma(RandomVariable* rng, double s) {
 
     double r = 0.0;
     if (s <= 0.0)
-        std::cout << "Gamma parameter less than zero" << std::endl;
+        Msg::error("cannot draw from a gamma distribution with shape " + std::to_string(s) + "; the shape must be positive.");
     else if (s < 1.0)
         r = Probability::Helper::rndGamma1(rng, s);
     else if (s > 1.0)

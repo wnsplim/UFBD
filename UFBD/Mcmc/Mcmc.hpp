@@ -21,6 +21,8 @@ class Mcmc : public ChainRunner {
         void                    printMoveDiagnostics(int rep);
         void                    writeCheckpoint(void);
         bool                    loadCheckpoint(void);
+//         std::vector<double>     psiRjState(void);
+//         void                    setPsiRjWeight(double w);
         Tree*                   getTree(void);
         void                    setVerbose(bool b) { verbose = b; }
         void                    setLabel(int i) { runLabel = i; }
@@ -30,6 +32,7 @@ class Mcmc : public ChainRunner {
         RandomVariable*         resumeRng(void);
         std::vector<std::string> resumeParameterNames(void);
         std::vector<std::string> resumeLatentNames(void);
+        std::vector<bool>        resumeFixedMask(void);
 
     private:
         void                    sample(unsigned long n, double lnL, double lnP);

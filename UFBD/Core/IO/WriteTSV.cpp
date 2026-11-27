@@ -43,7 +43,7 @@ void WriteTSV::addFilepath(std::string fp, bool overwrite){
     fout << std::setprecision(17);
     numRows = 0;
     if (!fout.is_open())
-        Msg::error("file stream is not open: " + filepath);
+        Msg::error("could not open output file '" + filepath + "' for writing.");
 }
 
 void WriteTSV::appendDataTSV(std::vector<double> data){

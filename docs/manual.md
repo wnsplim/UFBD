@@ -24,7 +24,7 @@ ufbd -config config_file.cfg
 ufbd -help
 ```
 
-You can set the options in a config file, or as flags on the command line. If you give both, the config file is prioritized. UFBD reads every path relative to the directory you run the command from.
+You can set the options in a config file, or as flags on the command line. If you give both, the config file is prioritized. UFBD reads a relative path in a config file relative to that file's directory, and a relative path given as a flag relative to the directory you run the command from.
 
 Two options are available only as a command-line flag:
 
@@ -59,12 +59,12 @@ whole	taxa1,taxa2
 genus1	taxa1,taxa3
 ```
 
-`fossils` — Tab-separated, with an optional header. `assignment` sets where a fossil can attach, relative to its `clade`. A `CROWN` fossil attaches inside the crown group. A `TOTAL` fossil attaches anywhere in the total group. A `STEM` fossil attaches only on the stem stalk. A row with `max_age` 0 is treated as an unsampled extant, and takes only `CROWN` or `TOTAL`. The optional sixth column gives the fossil preservation type.
+`fossils` — Tab-separated, with an optional header. `assignment` sets where a fossil can attach, relative to its `clade`. A `CROWN` fossil attaches inside the crown group. A `TOTAL` fossil attaches anywhere in the total group. A `STEM` fossil attaches only on the stem stalk. A row with `max_age` 0 is treated as an unsampled extant, and takes only `CROWN` or `TOTAL`.
 
 ```
-taxon	min_age	max_age	clade	assignment	type
-taxa1	45.9000	48.8000	whole	STEM	lithic
-taxa3	4.5000	4.9000	genus1	TOTAL	amber
+taxon	min_age	max_age	clade	assignment
+taxa1	45.9000	48.8000	whole	STEM
+taxa3	4.5000	4.9000	genus1	TOTAL
 ```
 
 `unsampled_extants` — Tab-separated, with an optional header. Each row gives a count of unsampled extants instead of a name for each one. UFBD names the taxa of a row `<clade>_<crown|total>_1` through `<clade>_<crown|total>_<number>`. A clade can appear once as `CROWN` and once as `TOTAL`. This is a good replacement input format when you have many (say, thousands of) unsampled extants.
@@ -214,22 +214,6 @@ ou_nu     = exp:2        # prior on the reversion rate per Myr
 
 `ou_nu` sets how strongly bins are tied. The log rates of two bins whose midpoints are $$\Delta$$ Myr apart have correlation $$e^{-\nu\Delta}$$. For a median correlation $$c$$ between neighboring bins of width $$\Delta$$, use `ou_nu = exp:r` with $$r = 0.693\,\Delta/(-\ln c)$$. For $$c = 0.7$$ this is $$r \approx 1.94\,\Delta$$, close to the default `exp:2`. The data rarely inform $$\nu$$, so this prior largely sets the smoothing.
 
-### `[psi <type>]`
-
-The sixth optional column of the `fossils` file gives an optional preservation type. When multiple preservation types are set, write one section for each type, with a matching label. Each type has its own `time_bins`, so the types can use different bins:
-
-```ini
-[psi amber]
-time_bins = early:(0,30) | old:(30,inf)
-prior     = early:exp:5 | old:exp:20
-mode      = indep
-
-[psi lithic]
-prior = exp:5
-```
-
-Only the preservation rate splits into types. With one type, leave `<type>` out and write `[psi]` in the same way as `[lambda]` and `[mu]`.
-
 ### `[substitution]`
 
 ```ini
@@ -315,8 +299,6 @@ nSA                                            number of sampled ancestors
 lambda mu psi                                  a rate with when no time_bins are set
 lambda_early lambda_mid ...                    a rate with time_bins set, one per bin label
 ou_lambda_theta ou_lambda_sdEq ou_lambda_nu    added by mode = ou
-psi_amber_early psi_amber_old psi_lithic       psi split by preservation type
-ou_psi_amber_theta ...                         mode = ou on one preservation type
 clockMean clockSigma2                          when only one clock partition is set
 clockMean_0 clockSigma2_0 ...                  when multiple clock partitions are set
 exch<k>_* freq<k>_* alpha<k> pinv<k>           sequence model of sequence partition k
@@ -344,7 +326,7 @@ delta_temperature = 0.1
 swap_interval     = 1000
 ```
 
-The same defaults hold in `[lambda]`, `[mu]` and every `[psi <type>]`:
+The same defaults hold in `[lambda]`, `[mu]` and `[psi]`:
 
 ```ini
 prior    = exp:5

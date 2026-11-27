@@ -45,6 +45,10 @@ double ParameterDouble::lnProbability(void){
     return Probability::priorLnPdf(priorFamily, priorP1, priorP2, value[0], lowerBound, upperBound, priorP3);
 }
 
+// std::pair<double,double> ParameterDouble::support(void){
+//     return Probability::priorSupport(priorFamily, priorP1, priorP2, lowerBound, upperBound, priorP3);
+// }
+// 
 void ParameterDouble::print(void){
 
 }

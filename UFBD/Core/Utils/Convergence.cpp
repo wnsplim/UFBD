@@ -220,11 +220,14 @@ Diagnostic diagnose(const std::vector<std::vector<double>>& raw){
     else
         d.rhat = std::fmax(std::isnan(rB) ? 0.0 : rB, std::isnan(rF) ? 0.0 : rF);
 
-    d.bulkEss = multiChainEss(bulk);
+    Chains ess = (raw.size() > 1) ? split : raw;
+    Chains bulkEss = ess;
+    rankNormalize(bulkEss);
+    d.bulkEss = multiChainEss(bulkEss);
 
     double q05 = quantileSorted(sorted, 0.05);
     double q95 = quantileSorted(sorted, 0.95);
-    Chains lo = split, hi = split;
+    Chains lo = ess, hi = ess;
     for(std::vector<double>& c : lo)
         for(double& v : c) v = (v <= q05) ? 1.0 : 0.0;
     for(std::vector<double>& c : hi)

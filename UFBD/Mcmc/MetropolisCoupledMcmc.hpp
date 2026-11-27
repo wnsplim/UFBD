@@ -15,7 +15,7 @@ class PhylogeneticModel;
 class MetropolisCoupledMcmc : public ChainRunner {
     public:
                                             MetropolisCoupledMcmc(void) = delete;
-                                            MetropolisCoupledMcmc(unsigned long ng, int thin, std::vector<PhylogeneticModel*> m, unsigned int masterSeed);
+                                            MetropolisCoupledMcmc(unsigned long ng, int thin, std::vector<PhylogeneticModel*> m, unsigned int swapSeed);
                                             ~MetropolisCoupledMcmc(void);
         void                                init(void);
         void                                advance(unsigned long nGens);
@@ -24,6 +24,8 @@ class MetropolisCoupledMcmc : public ChainRunner {
         void                                printMoveDiagnostics(int rep);
         void                                writeCheckpoint(void);
         bool                                loadCheckpoint(void);
+//         std::vector<double>                 psiRjState(void);
+//         void                                setPsiRjWeight(double w);
         void                                setVerbose(bool b) { verbose = b; }
         void                                setLabel(int i) { runLabel = i; }
         Tree*                               getTree(void);
@@ -32,6 +34,7 @@ class MetropolisCoupledMcmc : public ChainRunner {
         RandomVariable*                     resumeRng(void);
         std::vector<std::string>            resumeParameterNames(void);
         std::vector<std::string>            resumeLatentNames(void);
+        std::vector<bool>                   resumeFixedMask(void);
 
     private:
         //functions

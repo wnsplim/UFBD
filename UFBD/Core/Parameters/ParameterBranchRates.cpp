@@ -214,6 +214,13 @@ double BranchRateModel::globalRateBranchRatesScale(int p){
     return (1.0 + (double)branchNodes.size()) * std::log(sf);
 }
 
+// void BranchRateModel::setState(int g, double m, double s2, const std::vector<double>& r){
+//     mu[0][g] = mu[1][g] = m;
+//     sigma2[0][g] = sigma2[1][g] = s2;
+//     for(size_t i = 0; i < branchNodes.size(); i++)
+//         rate[0][g][branchNodes[i]] = rate[1][g][branchNodes[i]] = r[i];
+// }
+// 
 void BranchRateModel::scaleAll(double sf){
     for(int p = 0; p < numClockGroups; p++){
         mu[0][p] *= sf;
@@ -324,6 +331,7 @@ void BranchRateModel::writeState(std::ostream& os){
     Serialize::write2D(os, sigEllB);
     os << pncpFrozen << '\n';
     os << rasStep << ' ' << rasAccW << ' ' << rasAttW << '\n';
+    os << "ras " << rasAcc << ' ' << rasAtt << '\n';
 }
 
 void BranchRateModel::readState(std::istream& is){
@@ -353,6 +361,14 @@ void BranchRateModel::readState(std::istream& is){
     Serialize::read2D(is, sigEllB);
     is >> pncpFrozen;
     is >> rasStep >> rasAccW >> rasAttW;
+    std::streampos at = is.tellg();
+    std::string tag;
+    if((is >> tag) && tag == "ras")
+        is >> rasAcc >> rasAtt;
+    else{
+        is.clear();
+        is.seekg(at);
+    }
 }
 
 double BranchRateModel::constantDistanceMove(void){
@@ -694,6 +710,81 @@ double ParameterBranchRates::lognormalLnP(double r, double s2, double m){
         return -INFINITY;
     double logr = std::log(r);
     return Probability::Normal::lnPdf(std::log(m) - 0.5 * s2, s2, logr) - logr;
+// }
+// 
+// double ParameterBranchRates::standardizedDeviations(const std::vector<double>& muV, const std::vector<double>& s2V, const std::vector<std::vector<double>>& r, std::vector<double>& u){
+//     int B = (int)branchNodes.size();
+//     std::vector<int> idx(numNodes, -1);
+//     for(int i = 0; i < B; i++) idx[branchNodes[i]] = i;
+//     u.assign((size_t)numClockGroups * B, 0.0);
+//     double lnJac = 0.0;
+//     Node* root = tree->getRoot();
+//     for(int p = 0; p < numClockGroups; p++){
+//         double s2 = s2V[p], s = std::sqrt(s2);
+//         double* up = &u[(size_t)p * B];
+//         if(clockModelOf[p] != ClockModel::GBM){
+//             for(int i = 0; i < B; i++){
+//                 double lr = std::log(r[p][i]);
+//                 up[i] = (lr - std::log(muV[p]) + 0.5 * s2) / s;
+//                 lnJac -= lr + std::log(s);
+//             }
+//             continue;
+//         }
+//         for(Node* inode : tree->getDownPassSequence()){
+//             const std::vector<Node*>& sons = tree->getBackboneChildren(inode);
+//             if(sons.size() != 2) continue;
+//             double t = inode->getTime();
+//             double tA = (inode == root) ? 0.0 : (tree->getBackboneParent(inode)->getTime() - t) / 2.0;
+//             double t1 = (t - sons[0]->getTime()) / 2.0;
+//             double t2 = (t - sons[1]->getTime()) / 2.0;
+//             double a = tA + t1, d = tA + t2, detT = t1 * t2 + tA * (t1 + t2);
+//             double lrA = std::log((inode == root) ? muV[p] : r[p][idx[inode->getOffset()]]);
+//             double lr1 = std::log(r[p][idx[sons[0]->getOffset()]]), lr2 = std::log(r[p][idx[sons[1]->getOffset()]]);
+//             double y1 = lr1 - lrA + a * s2 / 2.0, y2 = lr2 - lrA + d * s2 / 2.0;
+//             double l11 = std::sqrt(a), l21 = tA / l11, l22 = std::sqrt(detT / a);
+//             double z1 = y1 / (s * l11);
+//             up[idx[sons[0]->getOffset()]] = z1;
+//             up[idx[sons[1]->getOffset()]] = (y2 / s - l21 * z1) / l22;
+//             lnJac -= 0.5 * std::log(detT * s2 * s2) + lr1 + lr2;
+//         }
+//     }
+//     return lnJac;
+// }
+// 
+// void ParameterBranchRates::setStandardizedDeviations(const std::vector<double>& muV, const std::vector<double>& s2V, const std::vector<double>& u){
+//     int B = (int)branchNodes.size();
+//     std::vector<int> idx(numNodes, -1);
+//     for(int i = 0; i < B; i++) idx[branchNodes[i]] = i;
+//     Node* root = tree->getRoot();
+//     std::vector<Node*>& dp = tree->getDownPassSequence();
+//     for(int p = 0; p < numClockGroups; p++){
+//         double s2 = s2V[p], s = std::sqrt(s2);
+//         const double* up = &u[(size_t)p * B];
+//         mu[0][p] = mu[1][p] = muV[p];
+//         sigma2[0][p] = sigma2[1][p] = s2;
+//         if(clockModelOf[p] != ClockModel::GBM){
+//             for(int i = 0; i < B; i++)
+//                 rate[0][p][branchNodes[i]] = rate[1][p][branchNodes[i]] = std::exp(std::log(muV[p]) - 0.5 * s2 + s * up[i]);
+//             continue;
+//         }
+//         for(int k = (int)dp.size() - 1; k >= 0; k--){
+//             Node* inode = dp[k];
+//             const std::vector<Node*>& sons = tree->getBackboneChildren(inode);
+//             if(sons.size() != 2) continue;
+//             double t = inode->getTime();
+//             double tA = (inode == root) ? 0.0 : (tree->getBackboneParent(inode)->getTime() - t) / 2.0;
+//             double t1 = (t - sons[0]->getTime()) / 2.0;
+//             double t2 = (t - sons[1]->getTime()) / 2.0;
+//             double a = tA + t1, d = tA + t2, detT = t1 * t2 + tA * (t1 + t2);
+//             double lrA = std::log((inode == root) ? muV[p] : rate[0][p][inode->getOffset()]);
+//             double l11 = std::sqrt(a), l21 = tA / l11, l22 = std::sqrt(detT / a);
+//             double z1 = up[idx[sons[0]->getOffset()]], z2 = up[idx[sons[1]->getOffset()]];
+//             double y1 = s * l11 * z1, y2 = s * (l21 * z1 + l22 * z2);
+//             int o1 = sons[0]->getOffset(), o2 = sons[1]->getOffset();
+//             rate[0][p][o1] = rate[1][p][o1] = std::exp(y1 + lrA - a * s2 / 2.0);
+//             rate[0][p][o2] = rate[1][p][o2] = std::exp(y2 + lrA - d * s2 / 2.0);
+//         }
+//     }
 }
 
 // WN clock: halt — detached dead code (kept, never constructed)
