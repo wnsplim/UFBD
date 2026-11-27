@@ -73,7 +73,7 @@ DRAW PRIORS AND CHAIN CONTROL
   These reuse the main ufbd flags: -lambda_prior, -mu_prior, -psi_prior
   (required for every rate under mode=indep), -*_prior_mode, -*_ou_theta,
   -*_ou_sd, -*_ou_nu, -conditioning <event> <prior> (required), -rho,
-  -*_skyline_times, -psi_types, and, for -sbc_mode infer, the MCMC/convergence flags
+  -*_skyline_times, and, for -sbc_mode infer, the MCMC/convergence flags
   -chain_length, -min_ess, -max_gen, -thinning, -burn_in, -parallel_chains,
   -cores, -seed. Run 'ufbd -help' for their descriptions.
 )SBC");

@@ -57,7 +57,7 @@ void emit(std::vector<std::string>& out, const std::string& flag, const std::str
 }
 
 const std::set<std::string> modelKeys = {
-    "backbone_tree","fossils","unsampled_extants","clade_def","sequence","hessian","conditioning","rho","psi_rj_main"
+    "backbone_tree","fossils","unsampled_extants","clade_def","sequence","hessian","conditioning","rho"
 };
 const std::set<std::string> runKeys = {
     "log_output","tree_output","chain_length","parallel_chains","thinning","burn_in","coupled_chains","cores","seed",
@@ -271,8 +271,8 @@ static std::vector<std::string> translateLines(const std::vector<std::string>& l
             else if(type == "clock") cur = &clock;
             else if(type == "lambda") cur = &lambda;
             else if(type == "mu") cur = &mu;
-            else if(type == "psi"){ psiSections.push_back(std::make_pair(name, std::map<std::string,std::string>())); cur = &psiSections.back().second; }
-            else Msg::error("config: unknown section '[" + type + "]'");
+            else if(type == "psi" && name.empty()){ psiSections.push_back(std::make_pair(name, std::map<std::string,std::string>())); cur = &psiSections.back().second; }
+            else Msg::error("config: unknown section '" + t + "'");
             continue;
         }
         size_t eq = t.find('=');

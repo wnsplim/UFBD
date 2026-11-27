@@ -213,7 +213,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     if (sbcMode == false) {
         std::vector<std::string> cfgTokens;
         for (size_t i = 1; i < arguments.size(); ) {
-            if (arguments[i] == "-config" || arguments[i] == "-config_bf") {
+            if (arguments[i] == "-config") {
                 if (i + 1 >= arguments.size()) Msg::error("flag \"" + arguments[i] + "\" expects a file path.");
                 if (arguments[i] == "-config") {
                     configFilePath = arguments[i + 1];
@@ -257,7 +257,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
 
     std::set<std::string> knownFlags = {
         "-tree_output", "-log_output", "-backbone_tree", "-clade_def", "-fossils", "-unsampled_extants", "-conditioning", "-rho", "-seed", "-chain_length", "-thinning", "-coupled_chains", "-cores", "-help", "-h",
-        "-lambda_prior", "-mu_prior", "-psi_prior", "-psi_types",
+        "-lambda_prior", "-mu_prior", "-psi_prior",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_partitions",
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode",
         "-lambda_ou_theta", "-mu_ou_theta", "-psi_ou_theta", "-lambda_ou_sd", "-mu_ou_sd", "-psi_ou_sd", "-lambda_ou_nu", "-mu_ou_nu", "-psi_ou_nu",
@@ -269,7 +269,7 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     };
     std::set<std::string> valueFlags = {
         "-tree_output", "-log_output", "-backbone_tree", "-clade_def", "-fossils", "-unsampled_extants", "-conditioning", "-rho", "-seed", "-chain_length", "-thinning", "-coupled_chains", "-cores",
-        "-lambda_prior", "-mu_prior", "-psi_prior", "-psi_types",
+        "-lambda_prior", "-mu_prior", "-psi_prior",
         "-lambda_skyline_times", "-mu_skyline_times", "-psi_skyline_times", "-clock_partitions",
         "-lambda_prior_mode", "-mu_prior_mode", "-psi_prior_mode",
         "-lambda_ou_theta", "-mu_ou_theta", "-psi_ou_theta", "-lambda_ou_sd", "-mu_ou_sd", "-psi_ou_sd", "-lambda_ou_nu", "-mu_ou_nu", "-psi_ou_nu",
@@ -281,10 +281,6 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
     };
     knownFlags.insert("-fbd_model");
     valueFlags.insert("-fbd_model");
-    knownFlags.insert({"-bf_t", "-bf_pilot", "-bf_posterior", "-bf_pilot_frac", "-bf_pilot_nodes", "-bf_intervals", "-bf_bridge_tol", "-bf_bridge_iter", "-bf_batches", "-bf_parallel_runs"});
-    knownFlags.insert("-psi_rj_main");
-    valueFlags.insert("-psi_rj_main");
-    valueFlags.insert({"-bf_t", "-bf_posterior", "-bf_pilot_frac", "-bf_pilot_nodes", "-bf_intervals", "-bf_bridge_tol", "-bf_bridge_iter", "-bf_batches", "-bf_parallel_runs"});
     auto parseTs = [](const std::string& flag, const std::string& val, const std::string& expects, std::vector<double>& ts, std::vector<std::string>& text) {
         ts.clear();
         text.clear();
@@ -924,6 +920,9 @@ void UserSettings::initializeSettings(int argc, const char* argv[], bool sbcMode
                 setPathPoint(bfLadder[0], bfLadderText[0], pathPilot);
         }
     }
+    if (psiPriorByName.size() + psiGroupPriorByName.size() + psiTimesByName.size() + psiGroupsByName.size()
+        + psiGroupNamesByName.size() + psiModeByName.size() + psiOUByName.size() > 0)
+        Msg::error("a -psi_* flag value starts with a type name and ':', but psi has a single type. Write the value without that prefix.");
     if (psiRjMainName.empty() == false) {
         if (bfConfigPath.empty() == false)
             Msg::error("psi_rj_main cannot be combined with -config_bf.");
@@ -1058,7 +1057,7 @@ Any number may be written log(x) (base e), e.g. normal:log(0.2),1.6
 
 REQUIRED
   -fossils <file>         tab-separated: taxon, min age, max age, clade,
-                          CROWN|TOTAL|STEM, and an optional preservation type
+                          CROWN|TOTAL|STEM
   -conditioning <event> [prior]
                           event = crown | origin | anysample | extinct;
                           prior = the prior on the root age (default improper)
@@ -1123,18 +1122,6 @@ SKYLINE  (piecewise-constant rates; write lambda, mu, or psi for <r>)
                           the clade went extinct by t_min and requires -conditioning extinct
                           (default 0)
 
-MULTIPLE PRESERVATION TYPES  (split psi by type)
-  -psi_types <name,...>   declare types; names must match the fossil table's 6th column
-  Give per-type flags a 'name:' prefix, e.g.
-    -psi_prior type1:unif:0.01,0.04
-    -psi_skyline_times type1:20,40
-    -psi_prior_mode type1:ou
-    -psi_ou_theta type1:normal:log(0.05),1
-  A -psi_* flag without a prefix applies to every type without one of its own.
-  -psi_rj_main <name>     reversible jump between model 0 (each type has its own psi) and model 1
-                          (all fossils share the psi of type <name>); tunes the prior odds of
-                          model 1 (<log_output>_tune.log), then writes <log_output>.log
-
 CLOCK & SUBSTITUTION MODEL
   -sequence <file>        alignment (FASTA / PHYLIP / NEXUS)
   -hessian <file>         Hessian for approximate dating (PAML in.BV format)
@@ -1159,29 +1146,6 @@ CLOCK & SUBSTITUTION MODEL
                           partition, the prior is gamma(a,b)
   -sigma2_param <c|nc>    parameterization of the sigma2 move: centered (default) or
                           non-centered; or one per clock partition, "name:value | name:value"
-
-BAYES FACTOR (ln BF of [model 1] over [model 0], by bridge sampling along the model-switch
-path. Without -bf_t, UFBD runs the posterior of each model that has no prior_log, then the
-pilot runs, then the MCMC at the selected path points, and then calculates ln BF.)
-  -config_bf <file>       Bayes factor config, used instead of -config. It holds the MCMC and
-                          bf_* settings first, then [model 0] and [model 1], each a full model
-                          config that may name an existing posterior with prior_log. The
-                          models must differ only in the rate, clock and substitution sections
-  -bf_parallel_runs <n>   number of runs (posteriors, pilot runs, path points) to run in
-                          parallel, each with -cores cores, so n x cores cores in total
-                          (default 1)
-  -bf_t <t|t1,t2,...>     run only the path point(s) t in [0,1], without a pilot run; several
-                          points must start at 0 and end at 1
-  -bf_pilot               with one -bf_t point, run it as a pilot run
-  -bf_posterior <0|1>     run only the posterior of [model 0] or [model 1]
-  -bf_pilot_nodes <n>     number of Gauss-Legendre nodes for the pilot run (default 8)
-  -bf_pilot_frac <x>      pilot run length as a fraction of the generations in the posterior
-                          runs of the two models (default 0.2)
-  -bf_intervals <x>       path intervals per unit of thermodynamic length (default 2)
-  -bf_bridge_tol <x>      bridge iteration stops when ln BF changes by less than x
-                          (default 1e-10)
-  -bf_bridge_iter <n>     maximum number of bridge iterations (default 10000)
-  -bf_batches <n>         batches per run for the standard error (default 20)
 
 OTHER
   -config <file>          read a config file (its format is in README.md)
